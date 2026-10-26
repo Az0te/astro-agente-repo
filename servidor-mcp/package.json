@@ -1,0 +1,29 @@
+{
+  "name": "astro-agente-mcp",
+  "version": "0.4.1",
+  "description": "Servidor MCP para que un asistente de IA controle PixInsight en Windows (derivado de pixinsight-mcp de Alain Escaffre)",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js"
+  },
+  "keywords": [
+    "pixinsight",
+    "mcp",
+    "astrophotography",
+    "model-context-protocol",
+    "windows"
+  ],
+  "author": "Rafael Vidal",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

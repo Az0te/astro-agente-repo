@@ -1,0 +1,19 @@
+node_modules/
+build/
+dist/
+*.js.map
+.env
+.DS_Store
+Thumbs.db
+*.bak
+
+# Imagenes de trabajo (pesadas y con datos del observatorio en cabeceras)
+*.xisf
+*.fit
+*.fits
+*.fts
+*.tif
+*.tiff
+
+# Perfil personal (rutas, equipo y preferencias): no se publica
+guia/perfil.md

@@ -1,0 +1,42 @@
+# Paletas para objetos de emisión
+
+**Cuándo:** nebulosa de emisión (región HII, nebulosa difusa), resto de supernova o nebulosa planetaria con datos de banda estrecha o dual band, y el usuario no ha dicho qué paleta quiere. Antes de componer el color final, generar previews pequeñas de varias paletas y pedirle que elija (pregunta de una palabra, con una recomendada). Mientras contesta, seguir con lo que no depende de la paleta (estrellas, máscaras). No aplicar a reflexión, nebulosas oscuras ni galaxias (su color es continuo de banda ancha, ver punto 10 de la sección anterior). Sin banda estrecha no hay paletas: RGB o LHa-RHaGB.
+### Herramientas instaladas
+- **AutoPalette Studio v1.2.0** (Raúl Hussein, Suite Astrocitas, GPL v3; se instala en la carpeta de scripts de PixInsight). Es un **script**: no se puede lanzar desde el watcher y no tiene API de scripting (la documentación oficial sólo describe el diálogo). Pensado para imágenes **no lineales**; con lineales trabaja sobre copias estiradas.
+- **NarrowbandNormalization 1.0** (Bill Blanshan y Mike Cranfield, cosmicphotons.com): es un **proceso** (módulo `NarrowbandNormalization-pxm.dll`), así que sí se ejecuta desde el watcher (`new NarrowbandNormalization`, `executeOn(view)`).
+- También instalados: Perfect Palette Picker (SetiAstro), ForaxxPalette_V8 y AutoPalette_V8 (MoPV8), NBColourMapper (CosmicPhotons), NarrowbandHueCombination y CreateHubblePaletteFromOSC (Toolbox). Todos scripts: los lanza el usuario.
+### Qué hace AutoPalette Studio por dentro (leído del código v1.2.0)
+- **Fuente "OSC Dualband"**: separa R, G, B con ChannelExtraction y usa **R como Hα, G como "SII" y B como OIII**, sin desmezclar. Con el Antlia HO el verde es ≈ 0,11·Hα + 0,93·OIII (QE del IMX571): no es SII, y toda paleta con S sale de un canal inventado. Con dual band usar siempre DBXtract (o su emulación con PixelMath) y la fuente **"DBXtract / Mono"**.
+- **Sin SII real** crea un SII sintético: 0,6·Hα + 0,4·OIII con Blend Soft (Neutral 0,5/0,5, Hard 0,7/0,3); para las Foraxx usa otro más cercano a Hα (0,85·Hα + 0,15·OIII en Soft). Cualquier paleta S con sólo Hα/OIII es pseudo-SHO: decirlo.
+- **Normalization mode**: None (defecto, canales tal cual); Ha/SII/OIII as reference = LinearFit (rejectHigh 0,92) de los otros canales al de referencia; Auto = puntúa cada canal con (p90 − p25)/(0,01 + σ), penaliza saturación (p98 > 0,94) y fondo alto, y se queda con Hα si su puntuación es ≥ 0,7 de la mejor.
+- **Blend mode** (mezcla del canal compartido): Neutral 50/50, **Soft 60/40 (defecto)**, Hard 70/30. HOO: G = b·Hα + (1−b)·OIII. SHO: R = b·S + (1−b)·H, G = b·H + (1−b)·O. HSO: R = b·H + (1−b)·O, G = b·S + (1−b)·H. "All modes" genera las cuatro (pura y las tres mezclas).
+- **Entrada lineal**: si mediana < 0,12 y p98 < 0,55 la toma por lineal y estira **cada canal por separado** (punto negro mediana − 2,7σ y MTF a mediana 0,25, como Perfect Palette Picker), lo que cambia la proporción Hα/OIII. Para ser fieles, darle Hα y OIII ya estirados con el mismo estirado y anotarlo.
+- **Fórmulas** (H, O, S = canales; `~x` = 1 − x; mapa PIP `p(x) = x^~x`; o = p(O), ho = p(H·O)):
+  - Classic HOO: R = H, G = O (o la mezcla del Blend), B = O. Classic SHO: S, H, O. Classic Hubble (HSO): H, S, O.
+  - **Foraxx Classic** con SII real: R = o·S + ~o·H; G = ho·H + ~ho·O; B = O.
+  - **Foraxx Classic bicolor** (sin SII): R = H; G = ho·H + ~ho·O; B = O.
+  - **Foraxx HOS** sin SII (variante "subtle"): R = H; G = 0,88·(ho·H + ~ho·O) + 0,12·O; B = o·S' + ~o·O, con S' = 0,78·O + 0,22·(ho·H + ~ho·max(0, H − 0,22·O)) en Soft.
+  - Foraxx SHO/HOS/OHS/HOO/HSO/OSH/SOH: cada familia da 6 variantes con los mapas o y ho (p. ej. Foraxx_SHO_HOO: R = o·S + ~o·H, G = ho·H + ~ho·O, B = O). Están en las funciones `foraxSHO`…`foraxSOH` (líneas ~1652–1790 del script): copiarlas de allí al reproducirlas, no de memoria. Exigen SII real.
+  - Paletas por defecto de la herramienta: Original, Classic HOO, Foraxx Classic y Foraxx HOS; el resto con "Show advanced combinations".
+- Boosted, Advanced (Gold Accent, Structure Lift), Cosmetic Presets y Masks son retoques estéticos sobre la paleta: no usarlos en las previews de elección (se comparan paletas base).
+### NarrowbandNormalization (documentación instalada en `doc/tools/NarrowbandNormalization`)
+- Equilibra la intensidad de los canales con **Hα siempre como referencia**: aplica a cada canal una MTF para que su desviación positiva media sobre la mediana iguale la del Hα, sólo por encima del punto de sombra (shadowpoint 1 = desde la mediana; 0 = toda la imagen). Es un ajuste estético: cambia las proporciones entre rayas (documentarlo).
+- Vale en lineal o no lineal, pero con **Lightness = Off en lineal**.
+- Paleta: SHO, HOO, HSO, HOS (dual band OSC → HOO). En HOO toma el OIII del canal verde (más SNR en OSC); R = Hα, B = OIII normalizado y G = (1 − amount)·base + amount·mezcla, con Mode1 = Hα original sobre OIII normalizado, Mode2 = OIII normalizado sobre OIII original, Mode3 = Hα original sobre OIII original.
+- Otros: SCNR (`G = min(G, (R+B)/2)`, no en HOO), OIII boost y SII boost (dividen el parámetro m de la MTF), Highlight reduction, Brightness. Orden interno: normalización → SCNR → Lightness → Highlight reduction → Brightness.
+- Nombres de parámetros PJSR leídos del módulo (confirmar con `describe_process NarrowbandNormalization` la primera vez, porque PixInsight estaba cerrado): `palette` (`Palette_SHO/HOO/HSO/HOS`), `lightness` (`Lightness_Off/Preserve/Ha/OIII/SII`), `blendMode` (`Blend_Mode1..3`), `haBlend` (probablemente la cantidad de mezcla), `scnr`, `o3Boost`, `s2Boost`, `shadowpoint`, `highlightReduction`, `brightness`.
+### Protocolo de previews desde el watcher
+1. Capas: Hα y OIII (y SII si hay) **sin estrellas**, con gradiente corregido, continuo restado si procede, registradas y estiradas **con el mismo estirado** (o MAS al mismo fondo, ~0,15). Con dual band, Hα/OIII de DBXtract o de su emulación.
+2. Reducir a ~1200 px de lado largo (IntegerResample Average) o tomar un recorte representativo con Hα y OIII.
+3. Generar con PixelMath (símbolos y comprobando el valor devuelto, ver Trampas) el juego por defecto:
+   - **Sin SII** (dual band, o mono con H y O): Classic HOO Soft, Classic HOO Hard, Foraxx Classic bicolor, Foraxx HOS (marcada pseudo), HOO + NBN (Mode1, shadowpoint 1, Lightness Off, resto por defecto) y la composición natural (Hα/OIII + RGB, sección anterior) como referencia.
+   - **Con SII real**: Classic SHO, Classic Hubble (HSO), Foraxx Classic, Foraxx HOS, Classic HOO, SHO + NBN y la natural.
+4. Guardar cada una como JPG en `<versión>/prev/paletas/NN_<Paleta>.jpg` y una plancha con todas (copiar cada preview en su casilla de una ImageWindow grande con `setSamples`; poner los nombres en las casillas con Bitmap/Graphics está sin probar: si falla, numerar casillas y dar la leyenda en el mensaje).
+5. Enseñar la plancha al usuario y preguntarle cuál quiere, marcando una recomendada (abajo).
+6. Con la elegida: aplicar la misma fórmula a resolución completa (o, si prefiere usar AutoPalette Studio, que la lance él pausando el watcher con fuente DBXtract/Mono sobre nuestras capas estiradas, Normalization None, o Auto si los canales vienen de cámaras o exposiciones distintas, Blend Soft, Create Previews y Generate Final Image). Después, estrellas RGB en screen. En el dossier: paleta, fórmula, normalización, parámetros de NBN y que **una paleta es una convención, no el color real**.
+### Qué recomendar (fichas C10-34/36 y C15-27/28/29 de astro-photographie, contrastadas con el script)
+- Región HII o nebulosa difusa: HOO (simple, rojo/cian) o Foraxx (transiciones oro → azul más suaves). Con SII real: SHO/Hubble para separar zonas de ionización.
+- Resto de supernova: SHO o Foraxx (HOO con dual band); filamentos finos; validar el OIII débil antes de realzarlo (ver "Fidelidad").
+- Planetaria: colores próximos a los reales (OIII azul-verde, Hα/NII rojo), HOO o RGB + banda estrecha; núcleo con HDR o tomas cortas.
+- OIII débil: mezcla no lineal o HOS; OIII boost de NBN moderado, nunca hasta llenar el campo de cian.
+- Avisos de las fichas: no presentar como SHO fiel una paleta derivada sólo de Hα/OIII; en SHO el verde es esperable si domina Hα (no quitarlo todo con SCNR); no hay fórmula Foraxx oficial única; normalizar cambia las proporciones. La ficha C10-34 llama "Foraxx" a Hα→R, OIII→G, SII→B, que no coincide con la fórmula del script (R mezcla S/H, G mezcla H/O, B = O): usar la del script. Las masterclass están generadas con IA según su autor.

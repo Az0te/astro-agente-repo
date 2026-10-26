@@ -1,0 +1,36 @@
+# Fuentes
+
+Resúmenes y referencias usados para escribir esta guía. Todo el contenido está redactado con palabras propias; consulta los originales para los detalles.
+
+- astro-photographie.fr (Philippe Bernhard): flujos PixInsight OSC/RGB/HOO/SHO (https://astro-photographie.fr/traitement_pixinsight_osc.html, …_rgb.html, …_hoo.html, …_sho.html; diagramas RGB2, RGB4A/B, HOO2B, HOO3, SHO5A, Photometric Continuum Subtraction en https://astro-photographie.fr/wa_res/files/), MasterClass 01–18 (https://astro-photographie.fr/masterclass.html; fichas usadas: Tech-mono-osc, C10-01 luminance synthétique, C10-18 combinaisons, LRGBHa, rapports_SHO, OIII_trs_faible, etoilesRGB, C08-10 rééchantillonnage, C15-29 échantillonnage, C05-13 multi-nuits). Nota: el autor indica que las masterclass se generaron con IA y pueden contener errores; contrastar.
+- pixinsight.com.ar (ejemplos en español): Joyero/HDRComposition (https://pixinsight.com.ar/es/processing-examples/jewel-box-42.html), M42 (…/m42-50.html), MaskedStretch y centros de estrellas (…/maskedstretch-stars-sores-28.html), M101 y NGC 6960 reducción de halos azules (…/m101-blue-halos-reduction-31.html, …/ngc6960-blue-halos-reduction-27.html), Protegiendo fondo y estrellas (…/mask-background-stars-35.html), vdBH 15 reflexión (…/vdbh-15-37.html). Índice: https://pixinsight.com.ar/es/
+- Foro PixInsight, hilo HDR Composition Script (pág. 2, saturación desigual por canal en OSC): https://pixinsight.com/forum/index.php?threads/hdr-composition-script.870/page-2
+- Astrónomo.org, recopilación de scripts y trucos de PixInsight: https://www.astronomo.org/foro/index.php?topic=33224.0
+- Bernd Landmann, "Preprocessing of Raw Image Data with PixInsight" (rev. 4 nov 2025, PI 1.9.3 / WBPP 2.8.9): https://pixinsight.com/forum/index.php?threads/guide-to-preprocessing-of-raw-data-with-pixinsight.11547/
+- Urban Astrophotography, PixInsight pre-processing: https://urbanastrophotography.com/pixinsight-guide-pre-processing/
+- Sky & Telescope, Astrophotography primer for PixInsight: https://skyandtelescope.org/astronomy-resources/astrophotography-primer-for-pixinsight/
+- AstroBackyard, processing workflow: https://astrobackyard.com/astrophotography-processing-workflow/
+- Astrocamp, processing improvements: https://astrocamp.eu/en/processing-improvements-in-pixinsight-workflow/
+- Tutorial básico de PixInsight 1.8 (Joan Josep Isach, AVA, sobre el método de Raúl López): https://rumboalasestrellas.com/wp-content/uploads/2020/07/tutorial-basico-pix-1.8.pdf. Flujo antiguo: ColorCalibration, ACDNR, ExponentialTransformation y MMT de ruido ya los sustituyen SPCC, NXT, MAS/GHS; se tomaron sólo comprobaciones y trucos que siguen valiendo.
+- Reflected Space, PixInsight beginner tutorial (Blink, WBPP, GraXpert, SPCC, BXT/NXT, GHS, LRGB, estrellas): https://www.reflected-space.com/tutorials/pixinsight-beginner-tutorial
+- "Welcome to PixInsight" (Starter Pack oficial, © WeDoArt, todos los derechos reservados): presentación general (PCL/PJSR con V8 desde 1.9.4, MGC/MARS, Gaia, XISF); sin pasos de procesado nuevos y con reproducción prohibida: sólo se cita.
+- Vídeos oficiales PixInsight (YouTube): The Linear Image, Histograms, MGC The Tool (I), SPCC 1–4, MAS The Tool, LRGB Composition I–II (la guía en PDF de WeDoArt prohíbe su uso por IA; sólo se citan los títulos de los vídeos).
+- aescaffre/pixinsight-mcp (Alain Escaffre, licencia MIT; revisado hasta el commit db5b1e2 del 30 may 2026): https://github.com/aescaffre/pixinsight-mcp — `.claude/skills/pixinsight-pipeline/` (SKILL.md, pjsr-gotchas, processing-knowledge, xterminator-tools, ghs-stretch), `agents/target-taxonomy.json`, `agents/ops/quality-gates.mjs`, `agents/llm/repair-policies.mjs` y `agents/llm/prompts/` (ha-integration, star-policy, rgb-cleanliness, composition, aesthetic-critic). Lecciones de la Burbuja, M81/M82, NGC 891, M27, M97, Abell 2151…
+- measurethepixels/NOVA (Jeff Henry, licencia MIT; revisado el commit f7ff0d8 del 21 oct 2026): https://github.com/measurethepixels/nova — `nas_server/handbook_content*/` (artículos con evidencia medida: separación lineal de estrellas, HDR de núcleo, reducción de halos, verde del cielo, neutralización de fondo, saturación, curvas, contraste local, dual band, selección de subs). Pipeline para Seestar S50; tomar sus valores como punto de partida, no como óptimos.
+- mickpletcher/AI-Skills, astrophotography-processing (guía general): https://claudskills.com/skills/astrophotography-processing/
+- RC-Astro, BlurXTerminator 2.0/AI4 release: https://www.rc-astro.com/?p=30720
+- RC-Astro, StarXTerminator usage notes: https://www.rc-astro.com/?p=1781
+- AstroBin, halos con filtros duales: https://app.astrobin.com/forum/topic/137779/the-cause-and-the-elimination-of-halos-around-stars-with-some-duo-narrowband-filters
+- AstroBin, Star Halo Removal In PixInsight: https://ssr.app.astrobin.com/forum/topic/89830/star-halo-removal-in-pixinsight
+- AstroBin, How do you remove halos?: https://app.astrobin.com/forum/topic/63133/how-do-you-remove-halos/
+- Astrodoc, halos OIII: https://astrodoc.ca/wp-content/uploads/2017/01/REMOVING-HALOES-FROM-BRIGHT-STARS.pdf
+- DBXtract (Raúl Hussein), documentación y tabla de QE del IMX571: https://dbxtract.astrocitas.com/DBXtract.html
+- AutoPalette Studio (Raúl Hussein), documentación: https://dbxtract.astrocitas.com/AutoPaletteStudio.html; fórmulas leídas del script instalado v1.2.0 (ago 2026).
+- NarrowbandNormalization (Blanshan y Cranfield): https://www.cosmicphotons.com/pi-modules/narrowbandnormalization/ y la documentación instalada en PixInsight.
+- Masterclass 10 "Couleurs" (fichas C10-32 a C10-36, palettes narrowband) y 15 "Méthodes" (C15-18 a C15-20, C15-27 a C15-29): https://astro-photographie.fr/masterclass_10_couleurs.html y https://astro-photographie.fr/masterclass_15_methodes.html
+- Halos púrpura con PixelMath: https://discuss.pixls.us/t/removing-purple-star-halos-in-siril-using-pixel-math/28617
+- MAS: https://www.martinkaessler.com/multiscale-adaptive-stretch-in-pixinsight/
+- Nitidez no lineal: https://ssr.app.astrobin.com/forum/topic/175861/what-is-your-preferred-way-of-non-linear-sharpening
+- PixInsight, Dynamic Range and Local Contrast: https://pixinsight.com/tutorials/NGC7023-HDR/
+- MARS DR2 / MGC: https://app.astrobin.com/forum/topic/242060/mars-dr2-release-for-pixinsight-msgc
+- PhotometricContinuumSubtraction (repositorio caído): https://ssr.app.astrobin.com/forum/topic/138868/new-script-photometriccontinuumsubtraction-pixinsight
