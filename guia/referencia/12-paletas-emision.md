@@ -16,7 +16,7 @@
   - **Foraxx Classic** con SII real: R = o·S + ~o·H; G = ho·H + ~ho·O; B = O.
   - **Foraxx Classic bicolor** (sin SII): R = H; G = ho·H + ~ho·O; B = O.
   - **Foraxx HOS** sin SII (variante "subtle"): R = H; G = 0,88·(ho·H + ~ho·O) + 0,12·O; B = o·S' + ~o·O, con S' = 0,78·O + 0,22·(ho·H + ~ho·max(0, H − 0,22·O)) en Soft.
-  - Foraxx SHO/HOS/OHS/HOO/HSO/OSH/SOH: cada familia da 6 variantes con los mapas o y ho (p. ej. Foraxx_SHO_HOO: R = o·S + ~o·H, G = ho·H + ~ho·O, B = O). Están en las funciones `foraxSHO`…`foraxSOH` (líneas ~1652–1790 del script): copiarlas de allí al reproducirlas, no de memoria. Exigen SII real.
+  - Foraxx SHO/HOS/OHS/HOO/HSO/OSH/SOH: cada familia da 6 variantes con los mapas o y ho (p. ej. Foraxx_SHO_HOO: R = o·S + ~o·H, G = ho·H + ~ho·O, B = O). Están en las funciones `foraxSHO`…`foraxSOH` (líneas ~1652–1790 del script): consultarlas en el script instalado en vez de reproducirlas de memoria (el script tiene licencia GPL v3: no copiar su código en este repositorio). Exigen SII real.
   - Paletas por defecto de la herramienta: Original, Classic HOO, Foraxx Classic y Foraxx HOS; el resto con "Show advanced combinations".
 - Boosted, Advanced (Gold Accent, Structure Lift), Cosmetic Presets y Masks son retoques estéticos sobre la paleta: no usarlos en las previews de elección (se comparan paletas base).
 ### NarrowbandNormalization (documentación instalada en `doc/tools/NarrowbandNormalization`)

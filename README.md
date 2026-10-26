@@ -71,7 +71,7 @@ Ctrl+F11 puede no llegar al watcher en Windows: usa el botón o el `.bat`.
 - Los **scripts** de PixInsight (ImageSolver, WBPP, DBXtract, AutoDBE…) no se pueden lanzar desde el watcher: los lanzas tú con el watcher en pausa. Los **procesos** sí funcionan.
 - Las llamadas de más de ~60 s devuelven un aviso de tiempo agotado, pero el proceso sigue en PixInsight; `watcher_status` informa de su estado.
 - La comprobación de que PixInsight responde usa PowerShell: en macOS o Linux esa parte no funciona sin adaptarla.
-- La guía se ha probado sobre todo con una cámara OSC (IMX571) y filtro dual band Hα/OIII. Para otros equipos, sus valores son puntos de partida.
+- La guía se ha probado sobre todo con una cámara OSC (IMX571) y varios filtros: sin filtro, tribanda y dual band Hα/OIII, SII/OIII y SII/Hβ. Para otros equipos, sus valores son puntos de partida.
 
 ## ⚠️ Seguridad
 
