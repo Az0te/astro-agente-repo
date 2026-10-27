@@ -52,12 +52,14 @@ Carga sólo la sección que necesites:
 | `referencia/17-controles-calidad.md` | Controles objetivos: ringing, núcleos quemados, estrellas |
 | `referencia/18-validacion.md` | Validación y revisión crítica final |
 | `referencia/19-verificacion-entrega.md` | Verificación y entrega de cada versión |
+| `referencia/20-graxpert-comparativa-gradientes.md` | GraXpert y protocolo para comparar métodos de gradiente con medidas |
+| `referencia/21-bxt-nxt.md` | BlurXTerminator y NoiseXTerminator: orden, ajustes por objeto, rejilla de variantes con medidas |
 | `FUENTES.md` | Fuentes consultadas |
 
 ## Flujo de trabajo resumido
 1. Leer el perfil e inspeccionar los masters (estadísticas, escala, rotación, píxeles saturados).
 2. Clasificar el objeto y decidir qué es "el tema" (`16-por-tipo-de-objeto.md`).
-3. Procesado lineal (`06-flujo-lineal.md`), estrellas separadas pronto (`08-estrellas.md`).
+3. Procesado lineal (`06-flujo-lineal.md`): gradiente elegido por comparativa medida (`20`), BXT Correct Only antes de SPCC y parámetros de BXT/NXT elegidos con rejilla de variantes (`21`); estrellas separadas pronto (`08-estrellas.md`).
 4. Estirado y combinación (`11`, `13`, `14`), con variantes en los pasos dudosos.
 5. Controles objetivos y revisión crítica (`17`, `18`), comparando siempre con "no hacer nada".
 6. Entregar cada versión con nombre nuevo y un dossier de qué se hizo y por qué (`19`).

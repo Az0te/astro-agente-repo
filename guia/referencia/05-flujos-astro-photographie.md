@@ -11,11 +11,11 @@ RGB: Gradient Correction → Background Neutralization → BXT Correct Only → 
 ### OSC2 — sólo dual band
 HOO → Gradient Correction → BXT → SXT → NXT → DBXtract → NXT + MAS por canal → HOO Mix (Perfect Palette Picker) → NXT → Narrowband Normalization → Boost → Screen Stars. Estrellas NB → **NB to RGB Star Combination + Star Stretch** (SETI Astro).
 ### Ajustes RC-Astro (EXT1)
-- BXT Correct Only (pasada 1, lineal, antes de SPCC; además mejora la solución astrométrica, aunque la vista resultante pierde la WCS: copiarla de nuevo). NXT "ligero" opcional: denoise 0,50, iterations 5.
+- BXT Correct Only (pasada 1, lineal, antes de SPCC; además mejora la solución astrométrica, aunque la vista resultante pierde la WCS: copiarla de nuevo). ~~NXT "ligero" opcional antes de BXT~~: **descartado** (oct 2026), RC-Astro: ninguna reducción de ruido antes de la deconvolución. Ver `21-bxt-nxt.md`.
 - BXT pasada 2: sharpen stars 0,30, adjust star halos **−0,30**, automatic PSF, sharpen nonstellar 0,50. **Contraste:** aescaffre (pixinsight-mcp) usa halos 0,00 porque los valores negativos le daban ringing visible antes de SXT, sobre todo en galaxias. Usar −0,30 sólo si hay blue bloat y comprobar anillos oscuros al 100 % alrededor de estrellas brillantes (o con el control de ringing de abajo); si aparecen, volver a 0,00.
 - Rangos de partida de reflected-space (cursos básicos): BXT sharpen stars 0,25–0,35, adjust star halos −0,10 a +0,10, automatic PSF, sharpen nonstellar 0,90; NXT denoise ≤ 0,70 y detail ≤ 0,25 (a menudo menos), siempre después de la deconvolución. El nonstellar 0,90 es para datos bien muestreados o submuestreados: con drizzle 2x (sobremuestreado) mantener ~0,45–0,55 y comprobar "gusanos" al 100 %.
-- Orden: RC-Astro desaconseja el denoise fuerte antes de la deconvolución (quita detalle fino que BXT necesita); cualquier NXT previo a BXT, sólo ligero.
-- NXT ligero opcional antes de SXT (denoise 0,50). SXT con Generate star image + Large overlap, unscreen off en lineal.
+- Orden: RC-Astro desaconseja **cualquier** reducción de ruido antes de la deconvolución (el ruido fino es información que BXT usa). Nada de NXT antes de BXT completo.
+- NXT ligero opcional después de BXT completo y antes de SXT (denoise 0,50). SXT con Generate star image + Large overlap, unscreen off en lineal.
 - NXT "full" tras SXT (starless lineal): intensity/color separation + frequency separation, HF intensity 0,80, HF color 0,80, LF intensity 0,80, LF color 0,80, HF/LF scale 5, iterations 5.
 - Alternativa de aescaffre para NXT: **varias pasadas suaves** mejor que una fuerte (denoise 0,20–0,25, detail 0,15 en lineal antes de SXT, tras estirar la L y tras estirar la RGB; 0,15 final tras LHE/HDRMT). Una pasada fuerte da aspecto de cera/plástico, pierde estrellas débiles y emborrona color. Elegir la estrategia comparando a 100 %.
 - GHS → NXT final igual que el anterior.
