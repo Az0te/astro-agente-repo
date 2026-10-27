@@ -33,3 +33,8 @@ Resúmenes y referencias usados para escribir esta guía. Todo el contenido est�
 - PixInsight, Dynamic Range and Local Contrast: https://pixinsight.com/tutorials/NGC7023-HDR/
 - MARS DR2 / MGC: https://app.astrobin.com/forum/topic/242060/mars-dr2-release-for-pixinsight-msgc
 - PhotometricContinuumSubtraction (repositorio caído): https://ssr.app.astrobin.com/forum/topic/138868/new-script-photometriccontinuumsubtraction-pixinsight
+- GraXpert, documentación (algoritmos: muestras con sigma-clipping, RBF/splines/kriging, fórmulas de sustracción y división): https://graxpert.com/docs/ (casi todo sin escribir; lo útil está en la página "Algorithms")
+- GraXpert, script para PixInsight (carpeta temporal, siempre IA, suavizado gaussiano del modelo): https://ideviceapps.de/graxpert-script.html
+- Siril, interfaz con GraXpert (parámetros smoothing y correction type; modelos de denoise y deconvolución en 3.1): https://siril.readthedocs.io/de/stable/processing/graxpert.html
+- AstroBin, gradiente en M31 que GraXpert no quitó (jul 2026; MGC/DBE como alternativa): https://app.astrobin.com/forum/topic/245723/weird-gradient-i-cant-remove-through-pixinsight-m31
+- Dosieres sobre BlurXTerminator y NoiseXTerminator generados con IA (oct 2026): se usaron sólo las partes coherentes con RC-Astro (ver `21-bxt-nxt.md`).
