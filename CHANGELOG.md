@@ -1,5 +1,9 @@
 # Historial de cambios
 
+## Sin publicar
+
+- Caso práctico de IC 63 en `docs/casos/IC63/` (selección de subs, HDR con tomas cortas, gradiente, continuo, estrellas), enlazado desde el README.
+
 ## v0.4.1 (2026-10-26)
 
 Primera versión publicada. Derivada de [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) de Alain Escaffre.

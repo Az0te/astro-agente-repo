@@ -22,6 +22,10 @@ El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para
 - **Servidor MCP** con `watcher_status` y detección de comandos bloqueados.
 - **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC.
 
+## Ejemplo: IC 63
+
+El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) muestra el proceso completo con imágenes: selección de subs con índice de halo, HDR con tomas cortas para γ Cas, gradiente urbano, Hα de un dual band con sustracción de continuo y acabado.
+
 ## Requisitos
 
 - Windows 10/11 (probado en Windows 11).
