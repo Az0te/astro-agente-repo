@@ -75,7 +75,7 @@ var COMMANDS_DIR = BRIDGE_DIR + "/commands";
 var RESULTS_DIR = BRIDGE_DIR + "/results";
 var LOGS_DIR = BRIDGE_DIR + "/logs";
 var POLL_INTERVAL_MS = 1000;
-var WATCHER_VERSION = "0.4.3";
+var WATCHER_VERSION = "0.4.9";
 // Archivo con el comando en curso (lo lee el servidor MCP para avisar de cuelgues).
 var CURRENT_FILE = BRIDGE_DIR + "/current.json";
 // Minutos sin comandos tras los cuales el watcher se detiene solo (0 = nunca).
@@ -179,12 +179,28 @@ function handleSaveImage(command) {
 
    var window = findWindowByViewId(viewId);
    if (!window) {
-      throw new Error("Image not found: " + viewId);
+      throw new Error(notFoundMessage("Image", viewId));
    }
+   if (!filePath) throw new Error("save_image: falta filePath");
+   filePath = String(filePath).replace(/\\/g, "/");
    if (File.exists(filePath) && !overwrite) {
       throw new Error("File already exists (set overwrite=true): " + filePath);
    }
-   window.saveAs(filePath, false, false, false, false);
+   // Crear la carpeta de destino si no existe (PixInsight no la crea y falla en silencio)
+   var slash = filePath.lastIndexOf("/");
+   if (slash > 0) {
+      var dir = filePath.substring(0, slash);
+      if (!File.directoryExists(dir)) {
+         try { File.createDirectory(dir, true); } catch (e) {
+            throw new Error("No se pudo crear la carpeta " + dir + ": " + e);
+         }
+      }
+   }
+   var ok = window.saveAs(filePath, false, false, false, false);
+   if (ok === false || !File.exists(filePath)) {
+      throw new Error("PixInsight no guardo el fichero: " + filePath +
+                      " (revisa la consola: ruta, formato o permisos)");
+   }
    return {
       status: "success",
       outputs: { filePath: filePath },
@@ -196,7 +212,7 @@ function handleCloseImage(command) {
    var viewId = command.parameters.viewId;
    var window = findWindowByViewId(viewId);
    if (!window) {
-      throw new Error("Image not found: " + viewId);
+      throw new Error(notFoundMessage("Image", viewId));
    }
    window.forceClose();
    return {
@@ -210,7 +226,7 @@ function handleGetImageStatistics(command) {
    var viewId = command.parameters.viewId;
    var window = findWindowByViewId(viewId);
    if (!window) {
-      throw new Error("Image not found: " + viewId);
+      throw new Error(notFoundMessage("Image", viewId));
    }
    var img = window.mainView.image;
    var stats = [];
@@ -290,7 +306,7 @@ function handleRunPixelMath(command) {
 
    if (command.targetView) {
       var view = findViewById(command.targetView);
-      if (!view) throw new Error("View not found: " + command.targetView);
+      if (!view) throw new Error(notFoundMessage("View", command.targetView));
       var before = P.createNewImage ? null : viewSignature(view);
       var nWindows = ImageWindow.windows.length;
       ok = P.executeOn(view);
@@ -331,8 +347,8 @@ function handleRemoveGradient(command) {
    P.tolerance = command.parameters.tolerance || 1.0;
 
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    return {
       status: "success",
       outputs: {},
@@ -340,20 +356,31 @@ function handleRemoveGradient(command) {
    };
 }
 
+// Aplica un proceso y lanza un error si PixInsight no lo ejecuto (executeOn devuelve false
+// cuando el proceso falla: p. ej. SPCC sin solucion astrometrica). Antes se respondia "success".
+function mustExecute(P, view, name) {
+   var ok = P.executeOn(view);
+   if (ok === false)
+      throw new Error((name || "El proceso") + " fallo sobre " + view.id +
+                      " (PixInsight devolvio false; el motivo esta en la consola de PixInsight)");
+   return ok;
+}
+
 function handleColorCalibrate(command) {
    var method = command.parameters.method || "spcc";
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
 
+   if ((method === "spcc" || method === "pcc") && !view.window.hasAstrometricSolution)
+      throw new Error(method.toUpperCase() + ": " + view.id + " no tiene solucion astrometrica. " +
+                      "Resolverla antes con ImageSolver (es un script: lo lanza el usuario pausando el watcher) " +
+                      "o copiarla de una imagen con la misma geometria (copyAstrometricSolution).");
    if (method === "spcc") {
-      var P = new SpectrophotometricColorCalibration;
-      P.executeOn(view);
+      mustExecute(new SpectrophotometricColorCalibration, view, "SPCC");
    } else if (method === "pcc") {
-      var P = new PhotometricColorCalibration;
-      P.executeOn(view);
+      mustExecute(new PhotometricColorCalibration, view, "PCC");
    } else {
-      var P = new ColorCalibration;
-      P.executeOn(view);
+      mustExecute(new ColorCalibration, view, "ColorCalibration");
    }
    return {
       status: "success",
@@ -368,8 +395,8 @@ function handleRemoveGreenCast(command) {
    P.amount = command.parameters.amount !== undefined ? command.parameters.amount : 1.0;
 
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    return {
       status: "success",
       outputs: {},
@@ -380,21 +407,52 @@ function handleRemoveGreenCast(command) {
 function handleStretchImage(command) {
    var method = command.parameters.method || "auto";
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
 
    if (method === "auto") {
       var P = new AutoHistogram;
-      P.executeOn(view);
+      mustExecute(P, view);
    } else if (method === "stf") {
-      // Apply STF auto-stretch then apply permanently via HistogramTransformation
-      var stf = new ScreenTransferFunction;
-      stf.executeOn(view);
-      // Read STF values and apply as permanent HT
-      // For now, just apply STF (non-destructive preview)
+      // Autoestirado tipo STF APLICADO A LA IMAGEN (antes solo cambiaba la visualizacion y el
+      // agente seguia como si la imagen estuviera estirada). Punto negro por canal (cada canal de
+      // un master OSC sin calibrar tiene su propio pedestal; uno comun deja un canal a 0) y los
+      // mismos medios en los tres canales.
+      var tb = command.parameters.targetBackground || 0.25;
+      if (!(tb > 0 && tb < 0.5)) throw new Error("targetBackground fuera de rango (0, 0.5): " + tb);
+      var im = view.image, nC = im.numberOfChannels, c0s = [], sx = 0;
+      for (var c = 0; c < nC; ++c) {
+         im.selectedChannel = c;
+         var med = im.median(), madn = 1.4826 * im.MAD(med);
+         if (med > 0.1) {
+            im.resetSelections();
+            throw new Error("stretch_image stf: la imagen ya no es lineal (mediana del canal " + c + " = " +
+                            med.toFixed(3) + "). Estirarla otra vez la quema: usa curvas suaves o GHS con LP.");
+         }
+         var c0 = Math.max(0, med - 2.8 * madn);
+         c0s.push(c0);
+         sx += (med - c0) / (1 - c0);
+      }
+      im.resetSelections();
+      var x = sx / nC;
+      if (!(x > 0)) throw new Error("stretch_image stf: no se pudo calcular el estirado (mediana <= punto negro)");
+      // MTF(m, x) = (m-1)x / ((2m-1)x - m); buscamos m tal que MTF(m, x) = tb
+      var mt = (x * (tb - 1)) / ((2 * tb - 1) * x - tb);
+      var H = new HistogramTransformation;
+      var rows = [];
+      for (var k = 0; k < 3; ++k) rows.push([nC > 1 ? c0s[k] : 0, nC > 1 ? mt : 0.5, 1.0, 0, 1.0]);
+      rows.push(nC > 1 ? [0, 0.5, 1.0, 0, 1.0] : [c0s[0], mt, 1.0, 0, 1.0]);
+      rows.push([0, 0.5, 1.0, 0, 1.0]);
+      H.H = rows;
+      mustExecute(H, view, "HistogramTransformation (autoestirado)");
+      var c0txt = [];
+      for (var q = 0; q < c0s.length; ++q) c0txt.push(c0s[q].toExponential(3));
       return {
          status: "success",
-         outputs: {},
-         message: "STF auto-stretch applied to " + command.targetView + " (preview only, non-destructive)"
+         outputs: { shadows: c0s, midtones: mt },
+         message: "Autoestirado aplicado a " + command.targetView + " (fondo objetivo " + tb +
+                  ", sombras por canal " + c0txt.join("/") + ", medios " + mt.toExponential(3) +
+                  "). La imagen ya NO es lineal. Ojo: el punto negro por canal neutraliza el fondo; " +
+                  "no sustituye a la calibracion de color (SPCC)."
       };
    } else {
       // Manual HistogramTransformation
@@ -423,7 +481,7 @@ function handleStretchImage(command) {
          [sc, mt, 1.0, 0, 1.0],
          [0, 0.5, 1.0, 0, 1.0]
       ];
-      P.executeOn(view);
+      mustExecute(P, view);
    }
    return {
       status: "success",
@@ -450,8 +508,8 @@ function handleApplyCurves(command) {
    P[ch] = curvePoints;
 
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    return {
       status: "success",
       outputs: {},
@@ -477,8 +535,8 @@ function handleDenoise(command) {
    P.layers = layerConfig;
 
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    var amounts = [];
    for (var j = 0; j < layers; ++j) amounts.push(layerConfig[j][5]);
    return {
@@ -501,8 +559,8 @@ function handleSharpen(command) {
    P.amount = amount;
 
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    return {
       status: "success",
       outputs: {},
@@ -512,21 +570,32 @@ function handleSharpen(command) {
 
 function handleDeconvolve(command) {
    var P = new Deconvolution;
-   // Use a Gaussian PSF
+   var sigma = command.parameters.psfSigma || 2.5;
+   var iters = command.parameters.iterations || 50;
+   if (!(sigma > 0 && sigma <= 50)) throw new Error("psfSigma fuera de rango (0, 50]: " + sigma);
+   iters = Math.round(iters);
+   if (!(iters >= 1 && iters <= 500)) throw new Error("iterations fuera de rango [1, 500]: " + iters);
+   // PSF parametrica gaussiana (psfShape 2). En PI 1.9.5 los nombres son psfMode/psfSigma/
+   // numberOfIterations; P.iterations es otra tabla (no el numero de iteraciones).
    P.algorithm = Deconvolution.prototype.RichardsonLucy;
-   P.psfMode = Deconvolution.prototype.Gaussian;
-   P.psfGaussianSigma = command.parameters.psfSigma || 2.5;
-   P.iterations = [
-      [command.parameters.iterations || 50, false, 0, 0, 0, false, 0, 0]
-   ];
+   P.psfMode = Deconvolution.prototype.Parametric;
+   P.psfSigma = sigma;
+   P.psfShape = 2.0;
+   P.psfAspectRatio = 1.0;
+   P.numberOfIterations = iters;
+   // Deringing activado por defecto para no crear anillos oscuros en estrellas
+   P.deringing = command.parameters.deringing !== false;
+   P.deringingDark = 0.1;
+   P.deringingBright = 0.0;
+   P.toLuminance = true;
 
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    return {
       status: "success",
       outputs: {},
-      message: "Deconvolved " + command.targetView
+      message: "Deconvolved " + command.targetView + " (RL, PSF gaussiana sigma " + sigma + ", " + iters + " iteraciones, deringing " + (P.deringing ? "si" : "no") + ")"
    };
 }
 
@@ -540,8 +609,8 @@ function handleCombineLRGB(command) {
 
    // Execute on the RGB image
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    return {
       status: "success",
       outputs: {},
@@ -584,8 +653,8 @@ function handleBlendNarrowband(command) {
    P.createNewImage = false;
 
    var view = findViewById(command.targetView);
-   if (!view) throw new Error("View not found: " + command.targetView);
-   P.executeOn(view);
+   if (!view) throw new Error(notFoundMessage("View", command.targetView));
+   mustExecute(P, view);
    return {
       status: "success",
       outputs: {},
@@ -606,8 +675,27 @@ function handleRunScript(command) {
          message: "Script executed successfully"
       };
    } catch (e) {
-      throw new Error("Script error: " + e.message);
+      throw new Error("Script error: " + e.message + pjsrHint(String(e.message)));
    }
+}
+
+// Pistas para errores tipicos de PJSR escrito de memoria (sobre todo por modelos locales)
+function pjsrHint(msg) {
+   var h = [];
+   if (/\.(process|execute|run|apply) is not a function/.test(msg))
+      h.push("Los procesos se aplican con P.executeOn(ventana.mainView) (o P.executeGlobal()), no con .process(), .execute(), .run() ni .apply().");
+   if (/is not defined/.test(msg))
+      h.push("Esa funcion o variable no existe en PJSR. Usa ImageWindow.windowById(id) o View.viewById(id) " +
+             "(comprobar .isNull), o findViewById(id) del watcher; para un proceso, describe_process.");
+   if (/\.image\b/.test(msg) || /undefined property .*\.image/.test(msg))
+      h.push("Una ventana no tiene .image: usa ventana.mainView.image.");
+   if (/null|isNull/.test(msg))
+      h.push("windowById/viewById nunca devuelven null: comprobar .isNull.");
+   if (/SyntaxError|unexpected token|missing ;/i.test(msg))
+      h.push("PJSR es ECMAScript 5: solo var y function(){}; nada de let/const, flechas, plantillas ni clases.");
+   if (!h.length) return "";
+   var ids = openViewIds();
+   return "\nPista: " + h.join(" ") + " Vistas abiertas: " + (ids.length ? ids.join(", ") : "ninguna") + ".";
 }
 
 // Lista constantes (p. ej. IntegerResample.prototype.Average) y parametros con su
@@ -618,8 +706,26 @@ function handleDescribeProcess(command) {
       throw new Error("Nombre de proceso no valido: " + name);
    var ctor;
    try { ctor = eval(name); } catch (e) { ctor = undefined; }
-   if (typeof ctor !== "function")
-      throw new Error("Proceso desconocido: " + name);
+   if (typeof ctor !== "function") {
+      var alias = {
+         GHS: "GeneralizedHyperbolicStretch", GreenHyperbolicStretch: "GeneralizedHyperbolicStretch",
+         GeneralisedHyperbolicStretch: "GeneralizedHyperbolicStretch",
+         BXT: "BlurXTerminator", NXT: "NoiseXTerminator", SXT: "StarXTerminator",
+         MAS: "MultiscaleAdaptiveStretch", HT: "HistogramTransformation",
+         Curves: "CurvesTransformation", CurvesTransform: "CurvesTransformation",
+         SPCC: "SpectrophotometricColorCalibration", SPFC: "SpectrophotometricFluxCalibration",
+         MGC: "MultiscaleGradientCorrection", LHE: "LocalHistogramEqualization",
+         HDRMT: "HDRMultiscaleTransform", MLT: "MultiscaleLinearTransform", MMT: "MultiscaleMedianTransform"
+      };
+      var hint = "";
+      if (alias[name]) {
+         var t; try { t = typeof eval(alias[name]); } catch (e2) { t = "undefined"; }
+         hint = (t === "function") ? " Quizas quieres: " + alias[name] + "." :
+                " El nombre real seria " + alias[name] + ", pero no esta instalado.";
+      }
+      throw new Error("Proceso desconocido: " + name + "." + hint +
+                      " Ojo: los scripts (ImageSolver, DBXtract, GraXpert, AutoPalette...) no son procesos.");
+   }
 
    var proto = ctor.prototype;
    var names = [];
@@ -665,6 +771,23 @@ function findWindowByViewId(viewId) {
       }
    }
    return null;
+}
+
+function openViewIds() {
+   var ids = [];
+   var windows = ImageWindow.windows;
+   for (var i = 0; i < windows.length; ++i) {
+      ids.push(windows[i].mainView.id);
+      for (var j = 0; j < windows[i].previews.length; ++j) ids.push(windows[i].previews[j].id);
+   }
+   return ids;
+}
+
+function notFoundMessage(kind, viewId) {
+   var ids = openViewIds();
+   return kind + " not found: " + viewId + ". Vistas abiertas: " +
+          (ids.length ? ids.join(", ") : "ninguna") +
+          ". Usa uno de estos IDs exactos (list_open_images los muestra).";
 }
 
 function findViewById(viewId) {

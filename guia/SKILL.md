@@ -10,6 +10,15 @@ Guía de trabajo para que Claude procese astrofotografías de cielo profundo en 
 ## Principio innegociable
 **Ceñirse a los datos, no inventar nada**, y sacar la máxima información que contengan. "Revelar, no inventar": cualquier estructura débil se confirma antes de realzarla, y cada paso se compara con la versión sin tocar.
 
+## Reglas que no se saltan (leer `referencia/00-reglas-y-api-basica.md` antes de empezar)
+1. Si falla un paso esencial (gradiente, SPCC, BXT, estirado), **para y avisa**: no lo sustituyas por un apaño ni lo des por resuelto.
+2. **Nunca** ajustes el color multiplicando canales a mano ni con curvas por canal a ojo; el color sale de SPCC.
+3. **Nunca** estires con fórmulas de PixelMath inventadas: usa MAS, GHS o HistogramTransformation.
+4. Comprueba cada paso (estadísticas por canal e historial `view.processing`); no te fíes del "success".
+5. No inventes funciones, procesos ni IDs: `describe_process` y `list_open_images`. Los procesos se aplican con `P.executeOn(ventana.mainView)`; `.process()`/`.execute()` no existen y la imagen está en `ventana.mainView.image`.
+6. BXT, NXT, SXT, SPCC, MGC, MAS y GHS son **procesos** (se ejecutan desde el watcher); ImageSolver, WBPP, DBXtract y GraXpert son **scripts** (los lanza el usuario).
+7. Trabaja sobre una copia con nombre de versión y documenta lo que dice el historial, no lo que pretendías.
+
 ## Antes de empezar: el perfil del usuario
 Lee primero `perfil.md` (cópialo de `perfil-ejemplo.md` y rellénalo): equipo, escala de muestreo, filtros, cielo, rutas de trabajo, iconos de PixInsight disponibles, scripts instalados y preferencias estéticas. Esta guía es genérica; el perfil decide los valores concretos. Cuando el usuario exprese una preferencia nueva (elige una versión frente a otra, pide más o menos saturación…), propón añadirla al perfil.
 
@@ -33,6 +42,7 @@ Carga sólo la sección que necesites:
 
 | Fichero | Tema |
 |---|---|
+| `referencia/00-reglas-y-api-basica.md` | **Leer siempre primero.** Reglas de trabajo, API básica de PJSR, proceso vs script, requisitos que hacen fallar pasos |
 | `referencia/01-trampas-pjsr.md` | Trampas de PJSR y del watcher (ES5, ventanas, PixelMath, memoria) |
 | `referencia/02-preprocesado.md` | Calibración, WBPP, selección de subs, índice de halo por sub |
 | `referencia/03-hdr-tomas-cortas.md` | HDR con tomas cortas, HDRComposition, de dónde salen las estrellas |
