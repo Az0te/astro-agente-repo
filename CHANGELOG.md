@@ -4,6 +4,13 @@
 
 - Caso práctico de IC 63 en `docs/casos/IC63/` (selección de subs, HDR con tomas cortas, gradiente, continuo, estrellas), enlazado desde el README.
 
+### Watcher v0.4.3 (2026-10-27)
+- `sharpen`: valida `amount` (0,1–1,0) y `sigma` (0,1–250), los rangos de UnsharpMask, con un mensaje claro en vez del error de PixInsight.
+
+### Watcher v0.4.2 (2026-10-27)
+- Corregido `denoise`: la columna de iteraciones de `MultiscaleLinearTransform.layers` era `false` en vez de un número (error "numeric value expected"), y el parámetro `strength` se ignoraba; ahora fija el amount de cada capa (0–1).
+- Corregido `stretch_image` en modo manual: las filas de `HistogramTransformation.H` tenían el orden equivocado (error "numeric value out of range" y los medios se usaban como punto de luces). Ahora valida los rangos y rechaza un punto negro por encima de la mediana de algún canal.
+
 ## v0.4.1 (2026-10-26)
 
 Primera versión publicada. Derivada de [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) de Alain Escaffre.

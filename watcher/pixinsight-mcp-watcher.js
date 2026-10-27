@@ -75,7 +75,7 @@ var COMMANDS_DIR = BRIDGE_DIR + "/commands";
 var RESULTS_DIR = BRIDGE_DIR + "/results";
 var LOGS_DIR = BRIDGE_DIR + "/logs";
 var POLL_INTERVAL_MS = 1000;
-var WATCHER_VERSION = "0.4.1";
+var WATCHER_VERSION = "0.4.3";
 // Archivo con el comando en curso (lo lee el servidor MCP para avisar de cuelgues).
 var CURRENT_FILE = BRIDGE_DIR + "/current.json";
 // Minutos sin comandos tras los cuales el watcher se detiene solo (0 = nunca).
@@ -401,19 +401,35 @@ function handleStretchImage(command) {
       var P = new HistogramTransformation;
       var sc = command.parameters.shadowsClipping || 0.0;
       var mt = command.parameters.midtones || 0.5;
+      if (!(sc >= 0 && sc < 1)) throw new Error("shadowsClipping fuera de rango [0,1): " + sc);
+      if (!(mt > 0 && mt < 1)) throw new Error("midtones fuera de rango (0,1): " + mt);
+      // No recortar a negro mas de la mitad de la imagen: punto negro por debajo de la mediana
+      var img = view.image;
+      for (var c = 0; c < img.numberOfChannels; ++c) {
+         img.selectedChannel = c;
+         var med = img.median();
+         if (sc >= med) {
+            img.resetSelections();
+            throw new Error("shadowsClipping " + sc + " >= mediana del canal " + c + " (" +
+                            med.toExponential(3) + "): recortaria a negro mas de la mitad de la imagen");
+         }
+      }
+      img.resetSelections();
+      // Filas de H: [c0 (sombras), m (medios), c1 (luces), r0, r1]; filas R, G, B, RGB/K, alfa
       P.H = [
-         [0, 0.5, 0.5, 0.5, 1.0],
-         [0, 0.5, 0.5, 0.5, 1.0],
-         [0, 0.5, 0.5, 0.5, 1.0],
-         [sc, 0.5, mt, 0.5, 1.0],
-         [0, 0.5, 0.5, 0.5, 1.0]
+         [0, 0.5, 1.0, 0, 1.0],
+         [0, 0.5, 1.0, 0, 1.0],
+         [0, 0.5, 1.0, 0, 1.0],
+         [sc, mt, 1.0, 0, 1.0],
+         [0, 0.5, 1.0, 0, 1.0]
       ];
       P.executeOn(view);
    }
    return {
       status: "success",
       outputs: {},
-      message: "Stretched " + command.targetView + " using " + method + " method"
+      message: "Stretched " + command.targetView + " using " + method + " method" +
+               (method === "manual" ? " (sombras " + command.parameters.shadowsClipping + ", medios " + command.parameters.midtones + ")" : "")
    };
 }
 
@@ -446,31 +462,43 @@ function handleApplyCurves(command) {
 function handleDenoise(command) {
    var P = new MultiscaleLinearTransform;
    var layers = command.parameters.layers || 4;
-   // MLT uses an array of layer configurations
-   // Default: enable noise reduction on first N layers
+   var strength = command.parameters.strength || [];
+   // Fila: [enabled, biasEnabled, bias, noiseReductionEnabled,
+   //        noiseReductionThreshold, noiseReductionAmount, noiseReductionIterations]
+   // La ultima columna es un entero (iteraciones), no un booleano.
    var layerConfig = [];
    for (var i = 0; i < layers; ++i) {
-      // [enabled, biasEnabled, bias, noiseReductionEnabled, noiseReductionThreshold, noiseReductionAmount, ...]
-      layerConfig.push([true, true, 0.000, true, 3.000, 1.00, false]);
+      var amount = (i < strength.length && typeof strength[i] === "number") ? strength[i] : 1.0;
+      amount = Math.max(0, Math.min(1, amount));
+      layerConfig.push([true, true, 0.000, amount > 0, 3.000, amount, 1]);
    }
-   // Add the residual layer (no noise reduction)
-   layerConfig.push([true, true, 0.000, false, 3.000, 1.00, false]);
+   // Capa residual, sin reduccion de ruido
+   layerConfig.push([true, true, 0.000, false, 3.000, 1.00, 1]);
    P.layers = layerConfig;
 
    var view = findViewById(command.targetView);
    if (!view) throw new Error("View not found: " + command.targetView);
    P.executeOn(view);
+   var amounts = [];
+   for (var j = 0; j < layers; ++j) amounts.push(layerConfig[j][5]);
    return {
       status: "success",
       outputs: {},
-      message: "Denoised " + command.targetView + " (MLT, " + layers + " layers)"
+      message: "Denoised " + command.targetView + " (MLT, " + layers +
+               " layers, amounts " + amounts.join("/") + ")"
    };
 }
 
 function handleSharpen(command) {
    var P = new UnsharpMask;
-   P.sigma = command.parameters.sigma || 2.0;
-   P.amount = command.parameters.amount || 0.8;
+   var sigma = command.parameters.sigma || 2.0;
+   var amount = command.parameters.amount || 0.8;
+   // Rangos que admite UnsharpMask en PixInsight 1.9.5
+   if (!(sigma >= 0.1 && sigma <= 250)) throw new Error("sigma fuera de rango [0.1, 250]: " + sigma);
+   if (!(amount >= 0.1 && amount <= 1.0)) throw new Error("amount fuera de rango [0.1, 1.0]: " + amount +
+      " (UnsharpMask no admite mas de 1.0; para mas efecto, repetir con amount menor o subir sigma)");
+   P.sigma = sigma;
+   P.amount = amount;
 
    var view = findViewById(command.targetView);
    if (!view) throw new Error("View not found: " + command.targetView);
