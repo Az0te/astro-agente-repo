@@ -12,6 +12,12 @@ Este tema recoge los fallos de un procesado real de M31 (oct 2026) hecho por un 
 7. **El dosier describe lo que dice el historial de la vista**, no lo que se pretendía: listar `view.processing` al final. No afirmar que se aplicó un proceso que falló.
 8. **No inventar nombres.** Si no sabes cómo se llama un proceso o un parámetro, usa `describe_process`; si no sabes el ID de una vista, `list_open_images`. Ante la duda, pregunta.
 
+## Orden lineal: BXT antes que NXT
+- **Nunca reducir ruido antes de BXT** (RC-Astro): el ruido fino es información para la deconvolución. Orden: gradiente → BXT Correct Only → SPCC → BXT completo → SXT → NXT.
+- **El NXT principal (denoise 0,70–0,80) va sobre la capa sin estrellas, en lineal, después de BXT y SXT.** Ese valor no es "suave": sobre la imagen con estrellas o antes de BXT es demasiado.
+- Tras estirar, como mucho una pasada final suave (0,15–0,30). Varias pasadas suaves mejor que una fuerte (una fuerte da aspecto de cera).
+- Detalle, ajustes por objeto y la rejilla de variantes: `21-bxt-nxt.md`.
+
 ## Diagnósticos que no hay que confundir
 - **Fondo más azul que rojo antes de calibrar ≠ blue bloat.** Es el color del cielo y de la cámara sin calibrar; lo corrige SPCC. Blue bloat son halos azules *alrededor de las estrellas* (comparar el tamaño de las estrellas por canal).
 - **Pedestales distintos por canal** (mínimos de R, G y B muy por encima de 0 y diferentes) son normales en un master OSC sin calibrar; no son un fallo de color.
@@ -33,6 +39,14 @@ var P = new HistogramTransformation;
 if (!P.executeOn(v)) throw new Error("HistogramTransformation no se aplicó");
 // NO existen: P.process(), P.execute(), P.run(), P.apply()
 
+// Duplicar una imagen (no existe img.clone()): ventana nueva + assign, y copiar la astrometría
+var src = ImageWindow.windowById("MasterLight");
+var im = src.mainView.image;
+var w2 = new ImageWindow(im.width, im.height, im.numberOfChannels, 32, true, im.isColor, "M31_v3");
+w2.mainView.beginProcess(); w2.mainView.image.assign(im); w2.mainView.endProcess();
+w2.copyAstrometricSolution(src);   // método de la VENTANA: destino.copyAstrometricSolution(origen)
+w2.show();
+
 // Usar un icono del workspace del usuario (con sus ajustes)
 var spcc = ProcessInstance.fromIcon("SPCC_RGB");
 if (!spcc.executeOn(v)) throw new Error("SPCC falló");
@@ -43,7 +57,13 @@ for (var c = 0; c < img.numberOfChannels; ++c) {
    console.writeln(c + ": mediana " + img.median() + " max " + img.maximum());
 }
 img.resetSelections();
+
+// Leer píxeles de un canal (no existe getChannelData): por filas, con Float32Array
+var fila = new Float32Array(img.width);
+img.getSamples(fila, new Rect(0, 100, img.width, 101), 0);   // fila y = 100, canal 0
+var v = img.sample(50, 100, 1);                                // un píxel: x, y, canal
 ```
+Métodos reales de `Image`: `median()`, `mean()`, `MAD()`, `stdDev()`, `minimum()`, `maximum()` (sobre `selectedChannel`), `resetSelections()`, `sample()`, `getSamples()`, `setSamples()` (entre `beginProcess()` y `endProcess()`), `assign()`. Cualquier otro nombre, antes de usarlo, compruébalo.
 
 ## Qué es un proceso y qué es un script
 - **Procesos** (se ejecutan desde el watcher con `new Nombre` o `ProcessInstance.fromIcon`): BlurXTerminator, NoiseXTerminator, StarXTerminator, SpectrophotometricColorCalibration, SpectrophotometricFluxCalibration, MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, GeneralizedHyperbolicStretch, HistogramTransformation, CurvesTransformation, PixelMath, LocalHistogramEqualization, HDRMultiscaleTransform, HDRComposition, NarrowbandNormalization, AutomaticBackgroundExtractor, DynamicBackgroundExtraction, SCNR.
@@ -51,8 +71,10 @@ img.resetSelections();
 - Si un proceso "no existe", casi siempre el nombre está mal (p. ej. es `GeneralizedHyperbolicStretch`, no `GreenHyperbolicStretch`): `describe_process` sugiere el real.
 
 ## Requisitos que hacen fallar pasos
-- **SPCC/SPFC/MGC necesitan solución astrométrica.** Sin ella fallan ("The image has no valid astrometric solution"). Resolver con ImageSolver (lo lanza el usuario) o copiarla desde una imagen con la misma geometría: `ventanaDestino.copyAstrometricSolution(ventanaOrigen)` (método de la **ventana**, no de la vista) y comprobar después `ventanaDestino.hasAstrometricSolution`.
-- **SPCC sólo sobre datos lineales.** Nunca calibrar una imagen ya estirada o con el color retocado: volver al master lineal. Recortar, rotar y a veces BXT la eliminan: comprobar `w.hasAstrometricSolution` antes.
+- **SPCC/SPFC/MGC necesitan solución astrométrica.** Sin ella fallan ("The image has no valid astrometric solution"). Resolver con ImageSolver (lo lanza el usuario) o copiarla desde una imagen con la misma geometría: `ventanaDestino.copyAstrometricSolution(ventanaOrigen)` (método de la **ventana**, no de la vista) y comprobar después `ventanaDestino.hasAstrometricSolution`. Recortar, rotar y a veces BXT la eliminan: comprobarlo antes de SPCC.
+- **SPCC sólo sobre datos lineales.** Nunca calibrar una imagen ya estirada o con el color retocado: volver al master lineal.
+- **SPCC: usar el icono del usuario** (`ProcessInstance.fromIcon("SPCC_RGB")`, o el de su filtro), que ya trae las curvas de cámara y filtros y la referencia de blanco. No escribir `P.whiteReferenceSpectrum = "Average Spiral Galaxy"`: ese parámetro es la tabla de datos del espectro (longitud de onda, valor…), no el nombre, y da "Parsing 32-bit floating point expression: conversion error". El nombre va en `P.whiteReferenceName`, y "Average Spiral Galaxy" ya es el valor por defecto. Un `new SpectrophotometricColorCalibration` sin más usa curvas genéricas, no las de la cámara.
 - **`stretch_image` con "stf"** aplica un autoestirado real desde la v0.4.9 del watcher y se niega si la imagen ya no es lineal. Con watchers anteriores sólo cambiaba la visualización: la imagen seguía lineal.
 - **`save_image`** crea la carpeta de destino desde la v0.4.5; antes, una carpeta inexistente hacía fallar el guardado en silencio.
+- **Historial de una vista:** `view.processing` es un contenedor, no un array: `h.length` y `h.at(i)` (no `h[i]`); `h.at(i).toSource()` da el código del paso.
 - **PixelMath por canal:** `P.useSingleExpression = false` y `P.expression` (R), `P.expression1` (G), `P.expression2` (B); dentro de cada expresión el canal es `$T`. Expresiones largas fallan en silencio: usar símbolos y comprobar el valor devuelto.

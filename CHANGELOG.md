@@ -2,11 +2,21 @@
 
 ## Sin publicar
 
+- Guía: regla de orden lineal en `SKILL.md` y `00-reglas-y-api-basica.md`: nunca NXT antes de BXT; el NXT principal (0,70–0,80) sólo sobre la capa sin estrellas en lineal.
 - Guía: nuevo tema `00-reglas-y-api-basica.md`, de lectura obligatoria (reglas de parar en vez de improvisar, prohibido ajustar el color a mano, API básica de PJSR, proceso frente a script, requisitos que hacen fallar SPCC), a partir de los fallos de un procesado de M31 hecho por un agente local; las reglas clave también en `SKILL.md`.
 - Guía: nuevo tema `20-graxpert-comparativa-gradientes.md` (cómo funciona GraXpert y protocolo con métricas para comparar MGC, GraXpert, plano robusto y DBE en cada objeto).
 - Guía: nuevo tema `21-bxt-nxt.md` (orden lineal con BXT Correct Only antes de SPCC, ajustes por tipo de objeto, PSF manual, iteraciones y separación HF/LF de NXT, rejilla de variantes con medidas).
 - Guía: quitado el NXT ligero antes de BXT (RC-Astro desaconseja reducir ruido antes de deconvolucionar); `05`, `06`, `07` y `SKILL.md` enlazan los temas nuevos.
 - Caso práctico de IC 63 en `docs/casos/IC63/` (selección de subs, HDR con tomas cortas, gradiente, continuo, estrellas), enlazado desde el README.
+
+### Watcher v0.4.13 (2026-10-28)
+- Pista general para cualquier método inexistente (p. ej. `img.getChannelData`), con los métodos reales de `Image`.
+
+### Watcher v0.4.12 (2026-10-28)
+- Pistas para `view.processing[i]` (es un contenedor: `.at(i)`) y para SPCC con `whiteReferenceSpectrum` puesto a un nombre.
+
+### Watcher v0.4.11 (2026-10-28)
+- Corregida la pista de `.image`: salía con cualquier error que mencionara `.image` (p. ej. `vista.image.clone`) y daba un consejo equivocado. Nueva pista para duplicar una imagen (no existe `.clone()`).
 
 ### Watcher v0.4.10 (2026-10-28)
 - Pista para `vista.copyAstrometricSolution`: el método es de la ventana, y SPCC necesita que la imagen siga lineal.

@@ -18,6 +18,7 @@ Guía de trabajo para que Claude procese astrofotografías de cielo profundo en 
 5. No inventes funciones, procesos ni IDs: `describe_process` y `list_open_images`. Los procesos se aplican con `P.executeOn(ventana.mainView)`; `.process()`/`.execute()` no existen y la imagen está en `ventana.mainView.image`.
 6. BXT, NXT, SXT, SPCC, MGC, MAS y GHS son **procesos** (se ejecutan desde el watcher); ImageSolver, WBPP, DBXtract y GraXpert son **scripts** (los lanza el usuario).
 7. Trabaja sobre una copia con nombre de versión y documenta lo que dice el historial, no lo que pretendías.
+8. Orden lineal: gradiente → BXT Correct Only → SPCC → BXT → SXT → NXT. **Nunca NXT antes de BXT**; el NXT fuerte (0,70–0,80) sólo sobre la capa sin estrellas en lineal (`21-bxt-nxt.md`).
 
 ## Antes de empezar: el perfil del usuario
 Lee primero `perfil.md` (cópialo de `perfil-ejemplo.md` y rellénalo): equipo, escala de muestreo, filtros, cielo, rutas de trabajo, iconos de PixInsight disponibles, scripts instalados y preferencias estéticas. Esta guía es genérica; el perfil decide los valores concretos. Cuando el usuario exprese una preferencia nueva (elige una versión frente a otra, pide más o menos saturación…), propón añadirla al perfil.

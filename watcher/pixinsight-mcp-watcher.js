@@ -75,7 +75,7 @@ var COMMANDS_DIR = BRIDGE_DIR + "/commands";
 var RESULTS_DIR = BRIDGE_DIR + "/results";
 var LOGS_DIR = BRIDGE_DIR + "/logs";
 var POLL_INTERVAL_MS = 1000;
-var WATCHER_VERSION = "0.4.10";
+var WATCHER_VERSION = "0.4.13";
 // Archivo con el comando en curso (lo lee el servidor MCP para avisar de cuelgues).
 var CURRENT_FILE = BRIDGE_DIR + "/current.json";
 // Minutos sin comandos tras los cuales el watcher se detiene solo (0 = nunca).
@@ -687,15 +687,29 @@ function pjsrHint(msg) {
    if (/is not defined/.test(msg))
       h.push("Esa funcion o variable no existe en PJSR. Usa ImageWindow.windowById(id) o View.viewById(id) " +
              "(comprobar .isNull), o findViewById(id) del watcher; para un proceso, describe_process.");
+   if (/processing\[/.test(msg))
+      h.push("view.processing no es un array: usa h.length y h.at(i) (h.at(i).toSource() da el codigo del paso).");
+   if (/Parsing 32-bit floating point|whiteReferenceSpectrum/.test(msg))
+      h.push("SPCC: whiteReferenceSpectrum es la tabla del espectro, no el nombre. Usa el icono del usuario " +
+             "(ProcessInstance.fromIcon(\"SPCC_RGB\")); \"Average Spiral Galaxy\" ya es la referencia por defecto.");
    if (/copyAstrometricSolution is not a function/.test(msg))
       h.push("copyAstrometricSolution es de la VENTANA: ventanaDestino.copyAstrometricSolution(ventanaOrigen), " +
              "y solo entre imagenes con la misma geometria. SPCC exige ademas que la imagen siga LINEAL.");
-   if (/\.image\b/.test(msg) || /undefined property .*\.image/.test(msg))
+   if (/undefined property \S*\.image\b/.test(msg) || /\.image is undefined/.test(msg))
       h.push("Una ventana no tiene .image: usa ventana.mainView.image.");
+   if (/\.(clone|copy|duplicate) is not a function/.test(msg))
+      h.push("Para duplicar una imagen: var w2 = new ImageWindow(img.width, img.height, img.numberOfChannels, 32, true, " +
+             "img.isColor, \"Nombre_v3\"); w2.mainView.beginProcess(); w2.mainView.image.assign(img); " +
+             "w2.mainView.endProcess(); w2.copyAstrometricSolution(ventanaOrigen); w2.show();");
    if (/null|isNull/.test(msg))
       h.push("windowById/viewById nunca devuelven null: comprobar .isNull.");
    if (/SyntaxError|unexpected token|missing ;/i.test(msg))
       h.push("PJSR es ECMAScript 5: solo var y function(){}; nada de let/const, flechas, plantillas ni clases.");
+   if (/is not a function/.test(msg) && !h.length)
+      h.push("Ese metodo no existe en ese objeto: no lo inventes. Metodos reales de Image: " +
+             "selectedChannel = c y luego median(), mean(), MAD(), stdDev(), minimum(), maximum(); " +
+             "resetSelections(); sample(x, y, c); getSamples(new Float32Array(n), rect, c); setSamples(...); " +
+             "assign(otraImagen). Para procesos, describe_process.");
    if (!h.length) return "";
    var ids = openViewIds();
    return "\nPista: " + h.join(" ") + " Vistas abiertas: " + (ids.length ? ids.join(", ") : "ninguna") + ".";
