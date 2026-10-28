@@ -8,6 +8,9 @@
 - Guía: quitado el NXT ligero antes de BXT (RC-Astro desaconseja reducir ruido antes de deconvolucionar); `05`, `06`, `07` y `SKILL.md` enlazan los temas nuevos.
 - Caso práctico de IC 63 en `docs/casos/IC63/` (selección de subs, HDR con tomas cortas, gradiente, continuo, estrellas), enlazado desde el README.
 
+### Watcher v0.4.10 (2026-10-28)
+- Pista para `vista.copyAstrometricSolution`: el método es de la ventana, y SPCC necesita que la imagen siga lineal.
+
 ### Watcher v0.4.9 (2026-10-28)
 - `stretch_image` con `method: "stf"` aplica de verdad el autoestirado a la imagen (HistogramTransformation con punto negro por canal y medios comunes, fondo objetivo 0,25 o `targetBackground`). Antes sólo cambiaba la visualización y respondía "success", y el agente seguía como si la imagen estuviera estirada. Se niega si la imagen ya no es lineal.
 - Pista también para `.execute()`, `.run()` y `.apply()`, que no existen en los procesos de PixInsight.

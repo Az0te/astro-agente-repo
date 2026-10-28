@@ -75,7 +75,7 @@ var COMMANDS_DIR = BRIDGE_DIR + "/commands";
 var RESULTS_DIR = BRIDGE_DIR + "/results";
 var LOGS_DIR = BRIDGE_DIR + "/logs";
 var POLL_INTERVAL_MS = 1000;
-var WATCHER_VERSION = "0.4.9";
+var WATCHER_VERSION = "0.4.10";
 // Archivo con el comando en curso (lo lee el servidor MCP para avisar de cuelgues).
 var CURRENT_FILE = BRIDGE_DIR + "/current.json";
 // Minutos sin comandos tras los cuales el watcher se detiene solo (0 = nunca).
@@ -687,6 +687,9 @@ function pjsrHint(msg) {
    if (/is not defined/.test(msg))
       h.push("Esa funcion o variable no existe en PJSR. Usa ImageWindow.windowById(id) o View.viewById(id) " +
              "(comprobar .isNull), o findViewById(id) del watcher; para un proceso, describe_process.");
+   if (/copyAstrometricSolution is not a function/.test(msg))
+      h.push("copyAstrometricSolution es de la VENTANA: ventanaDestino.copyAstrometricSolution(ventanaOrigen), " +
+             "y solo entre imagenes con la misma geometria. SPCC exige ademas que la imagen siga LINEAL.");
    if (/\.image\b/.test(msg) || /undefined property .*\.image/.test(msg))
       h.push("Una ventana no tiene .image: usa ventana.mainView.image.");
    if (/null|isNull/.test(msg))

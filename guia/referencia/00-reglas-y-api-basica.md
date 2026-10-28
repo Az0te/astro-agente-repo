@@ -51,7 +51,8 @@ img.resetSelections();
 - Si un proceso "no existe", casi siempre el nombre está mal (p. ej. es `GeneralizedHyperbolicStretch`, no `GreenHyperbolicStretch`): `describe_process` sugiere el real.
 
 ## Requisitos que hacen fallar pasos
-- **SPCC/SPFC/MGC necesitan solución astrométrica.** Sin ella fallan ("The image has no valid astrometric solution"). Resolver con ImageSolver (lo lanza el usuario) o copiarla con `copyAstrometricSolution` desde una imagen con la misma geometría. Recortar, rotar y a veces BXT la eliminan: comprobar `w.hasAstrometricSolution` antes.
+- **SPCC/SPFC/MGC necesitan solución astrométrica.** Sin ella fallan ("The image has no valid astrometric solution"). Resolver con ImageSolver (lo lanza el usuario) o copiarla desde una imagen con la misma geometría: `ventanaDestino.copyAstrometricSolution(ventanaOrigen)` (método de la **ventana**, no de la vista) y comprobar después `ventanaDestino.hasAstrometricSolution`.
+- **SPCC sólo sobre datos lineales.** Nunca calibrar una imagen ya estirada o con el color retocado: volver al master lineal. Recortar, rotar y a veces BXT la eliminan: comprobar `w.hasAstrometricSolution` antes.
 - **`stretch_image` con "stf"** aplica un autoestirado real desde la v0.4.9 del watcher y se niega si la imagen ya no es lineal. Con watchers anteriores sólo cambiaba la visualización: la imagen seguía lineal.
 - **`save_image`** crea la carpeta de destino desde la v0.4.5; antes, una carpeta inexistente hacía fallar el guardado en silencio.
 - **PixelMath por canal:** `P.useSingleExpression = false` y `P.expression` (R), `P.expression1` (G), `P.expression2` (B); dentro de cada expresión el canal es `$T`. Expresiones largas fallan en silencio: usar símbolos y comprobar el valor devuelto.
