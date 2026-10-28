@@ -47,6 +47,14 @@ w2.mainView.beginProcess(); w2.mainView.image.assign(im); w2.mainView.endProcess
 w2.copyAstrometricSolution(src);   // método de la VENTANA: destino.copyAstrometricSolution(origen)
 w2.show();
 
+// Identificadores y datos de imagen: el id es de la VISTA, el formato de la IMAGEN
+var id = w.mainView.id;                 // w.id no existe
+var bits = img.bitsPerSample;           // 32; img.isReal indica coma flotante
+
+// Devolver resultados: la última expresión del script (o un return) es la respuesta de run_script.
+// No hace falta escribir un fichero y leerlo después.
+"mediana R = " + img.median();
+
 // Usar un icono del workspace del usuario (con sus ajustes)
 var spcc = ProcessInstance.fromIcon("SPCC_RGB");
 if (!spcc.executeOn(v)) throw new Error("SPCC falló");
@@ -77,4 +85,18 @@ Métodos reales de `Image`: `median()`, `mean()`, `MAD()`, `stdDev()`, `minimum(
 - **`stretch_image` con "stf"** aplica un autoestirado real desde la v0.4.9 del watcher y se niega si la imagen ya no es lineal. Con watchers anteriores sólo cambiaba la visualización: la imagen seguía lineal.
 - **`save_image`** crea la carpeta de destino desde la v0.4.5; antes, una carpeta inexistente hacía fallar el guardado en silencio.
 - **Historial de una vista:** `view.processing` es un contenedor, no un array: `h.length` y `h.at(i)` (no `h[i]`); `h.at(i).toSource()` da el código del paso.
+- **GHS es un proceso instalado** (`GeneralizedHyperbolicStretch`): no reprogramarlo en PixelMath. Fase 1 desde lineal:
+  ```js
+  var P = new GeneralizedHyperbolicStretch;
+  P.stretchType = GeneralizedHyperbolicStretch.prototype.ST_GeneralisedHyperbolic;
+  P.stretchChannel = GeneralizedHyperbolicStretch.prototype.SC_RGB;
+  P.stretchFactor = 2.5;        // D
+  P.localIntensity = 12;        // b
+  P.symmetryPoint = mediana;    // SP = mediana actual (medirla antes de cada pasada)
+  P.shadowProtection = 0;       // LP
+  P.highlightProtection = 0.95; // HP
+  if (!P.executeOn(v)) throw new Error("GHS falló");
+  ```
+  Antes de estirar, comprobar que la imagen sigue lineal (mediana < ~0,01). Si ya está estirada, otra fase 1 la quema: medir y seguir con las fases 2–3 (`14-estirado.md`) o con curvas suaves.
+- **PixelMath no es JavaScript:** no tiene `if` (es `iif(cond, a, b)`) ni `pow` (es `^` o `exp(e*ln(b))`), y las variables (`s = 11.97; …`) hay que declararlas en `P.symbols = "s, B, SP"`; si no, da "Expected lvalue (variable) operand".
 - **PixelMath por canal:** `P.useSingleExpression = false` y `P.expression` (R), `P.expression1` (G), `P.expression2` (B); dentro de cada expresión el canal es `$T`. Expresiones largas fallan en silencio: usar símbolos y comprobar el valor devuelto.

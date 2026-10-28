@@ -9,6 +9,10 @@
 - Guía: quitado el NXT ligero antes de BXT (RC-Astro desaconseja reducir ruido antes de deconvolucionar); `05`, `06`, `07` y `SKILL.md` enlazan los temas nuevos.
 - Caso práctico de IC 63 en `docs/casos/IC63/` (selección de subs, HDR con tomas cortas, gradiente, continuo, estrellas), enlazado desde el README.
 
+### Watcher v0.4.14 (2026-10-28)
+- `run_script` acepta `return` fuera de una función (lo envuelve en una función; el valor devuelto es la respuesta) en vez de fallar con "return not in function".
+- Pista para errores de fichero (`Unable to open file`): no hace falta escribir ficheros para devolver datos.
+
 ### Watcher v0.4.13 (2026-10-28)
 - Pista general para cualquier método inexistente (p. ej. `img.getChannelData`), con los métodos reales de `Image`.
 

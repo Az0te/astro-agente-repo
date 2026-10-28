@@ -75,7 +75,7 @@ var COMMANDS_DIR = BRIDGE_DIR + "/commands";
 var RESULTS_DIR = BRIDGE_DIR + "/results";
 var LOGS_DIR = BRIDGE_DIR + "/logs";
 var POLL_INTERVAL_MS = 1000;
-var WATCHER_VERSION = "0.4.13";
+var WATCHER_VERSION = "0.4.14";
 // Archivo con el comando en curso (lo lee el servidor MCP para avisar de cuelgues).
 var CURRENT_FILE = BRIDGE_DIR + "/current.json";
 // Minutos sin comandos tras los cuales el watcher se detiene solo (0 = nunca).
@@ -668,7 +668,17 @@ function handleRunScript(command) {
    var consoleOutput = "";
    try {
       // Execute the code
-      var result = eval(code);
+      var result;
+      try {
+         result = eval(code);
+      } catch (e0) {
+         // "return" fuera de funcion es un error de sintaxis: no se ha ejecutado nada, asi que
+         // se puede repetir envolviendo el codigo en una funcion (el return pasa a ser la respuesta)
+         if (/return not in function/.test(String(e0.message)))
+            result = eval("(function(){\n" + code + "\n})()");
+         else
+            throw e0;
+      }
       return {
          status: "success",
          outputs: { consoleOutput: String(result !== undefined ? result : "Script executed.") },
@@ -687,6 +697,10 @@ function pjsrHint(msg) {
    if (/is not defined/.test(msg))
       h.push("Esa funcion o variable no existe en PJSR. Usa ImageWindow.windowById(id) o View.viewById(id) " +
              "(comprobar .isNull), o findViewById(id) del watcher; para un proceso, describe_process.");
+   if (/File I\/O Error|Unable to open file/.test(msg))
+      h.push("No hace falta escribir ficheros para devolver datos: la ultima expresion del script (o su return) es la respuesta. " +
+             "Si de verdad hay que escribir: File.writeTextFile(ruta, texto) (crea el fichero); leer solo si File.exists(ruta). " +
+             "Una ruta 'undefined/...' es una variable sin definir.");
    if (/processing\[/.test(msg))
       h.push("view.processing no es un array: usa h.length y h.at(i) (h.at(i).toSource() da el codigo del paso).");
    if (/Parsing 32-bit floating point|whiteReferenceSpectrum/.test(msg))
