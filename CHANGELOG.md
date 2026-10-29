@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- Guía: **prueba medida de GraXpert 4.0.0** en M31, LDN 1235, IC 1396 e IC 63. El método predeterminado pasa a ser **sample_free con escala 10** (antes IA): la IA se comió el 18–21 % de M31 y copió las nubes de IC 1396 en el modelo; su suavizado y la protección de estructuras de sample_free casi no influyen. Tabla de resultados en `20`; `SKILL.md`, `06`, `07` y `21` actualizados.
+- Herramientas: `graxpertBGE()` usa sample_free escala 10 por defecto (opción `scale`); `gradcompare.js` añade `gcStructCopy`, la medida más fiable de cuánto objeto copia un modelo de fondo.
 - Guía: **GraXpert IA pasa a ser el método predeterminado de corrección de gradientes**; la comparativa con MGC, plano robusto y DBE queda para cuando su modelo no convence o en objetos de riesgo (nebulosas oscuras, polvo/IFN, objetos que llenan el campo). Cambios en `SKILL.md`, `00`, `06`, `07`, `20`, `21` y el perfil de ejemplo.
 - Guía: nueva herramienta `guia/herramientas/gradcompare.js` con métricas para comparar correcciones de gradiente sobre la luminancia binada: señal del objeto que se come el modelo (abombamiento frente a un polinomio de grado 2 ajustado en el cielo), señal conservada, gradiente residual del cielo y anillo oscuro. Validada con casos sintéticos; pendiente de probar en PixInsight.
 - Guía: nueva herramienta `guia/herramientas/graxpert.js` para usar GraXpert desde el watcher llamando a su ejecutable por línea de comandos (el script de PixInsight no se puede lanzar): fondo con IA, RBF, Kriging, Splines o sample_free, modelo de fondo, denoise, y astrometría copiada del original.

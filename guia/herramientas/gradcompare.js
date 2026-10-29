@@ -5,6 +5,15 @@
 //   var base = gcPrepare("master", 8);            // luminancia binada (mediana) del original
 //   var m = gcMetrics(base, "GC_GraXpert_AI_s01", 8);   // métricas de una corrección
 //   var p = gcPlaneMetrics(base);                 // control: plano robusto de grado 1
+//   var c = gcStructCopy(base, "GC_GraXpert_SF_esc10_model");  // LA MEDIDA MÁS FIABLE (ver abajo)
+//
+// gcStructCopy: qué parte de la estructura de gran escala del original (sin estrellas y sin un gradiente
+//   liso de grado 2) aparece copiada en el modelo de fondo. Devuelve {copy, corr}. corr > 0,5 = el modelo
+//   reproduce la forma del objeto (se lo come); < 0,15 = modelo limpio. No necesita máscara del objeto,
+//   así que sirve en nebulosas que llenan el campo y en nebulosas oscuras. Comprobarlo SIEMPRE a la vista
+//   con el modelo menos su gradiente liso (estructura en el modelo = señal perdida).
+// Las métricas eat/keep/flat/ring dependen de la máscara automática del objeto, que en campos llenos de
+//   nebulosa o con estrellas muy brillantes marca estrellas o el campo entero (IC 63: 98 %): no fiarse ahí.
 //
 // Todo se mide sobre la luminancia (media de canales) binada con mediana (quita estrellas)
 // y en las mismas unidades que la imagen. Métricas:
@@ -326,4 +335,40 @@ function gcMetrics(base, viewId, bin) {
 function gcFormat(s) {
   return s.label + ': come ' + (100 * s.eat).toFixed(1) + '%  conserva ' + (100 * s.keep).toFixed(0) + '%  cielo ' +
     (100 * s.flat).toFixed(1) + '%  anillo ' + (100 * s.ring).toFixed(1) + '%';
+}
+
+// --- estructura copiada en el modelo (probada en M31, LDN 1235, IC 1396 e IC 63, oct 2026) ---
+function gcStarExcl(base) {
+  var w = base.O.w, h = base.O.h, n = w * h, i;
+  var Ob = gcBlur(base.O.a, w, h, 3, 2), hfv = [];
+  for (i = 0; i < n; i += 3) hfv.push(base.O.a[i] - Ob[i]);
+  var sd = gcMAD(hfv, gcMedian(hfv));
+  var star = new Float32Array(n);
+  for (i = 0; i < n; i++) star[i] = (base.O.a[i] - Ob[i] > 4 * sd) ? 1 : 0;
+  var sb = gcBlur(star, w, h, 3, 2), excl = new Uint8Array(n);
+  for (i = 0; i < n; i++) excl[i] = sb[i] > 0.02 ? 1 : 0;
+  return excl;
+}
+
+function gcStructCopy(base, modelViewId) {
+  var w = base.O.w, h = base.O.h, n = w * h, i, k;
+  if (!base.starExcl) base.starExcl = gcStarExcl(base);
+  var excl = base.starExcl;
+  if (!base.Orl) {
+    var Po = gcPoly2(base.O, excl), Or = new Float32Array(n);
+    for (i = 0; i < n; i++) Or[i] = base.O.a[i] - Po[i];
+    base.Orl = gcBlur(Or, w, h, 6, 3);
+  }
+  var Orl = base.Orl;
+  var M = gcLumBinned(modelViewId, base.bin);
+  if (M.w != w || M.h != h) throw new Error('Geometría distinta: ' + modelViewId);
+  var Pm = gcPoly2(M, excl), Mr = new Float32Array(n);
+  for (i = 0; i < n; i++) Mr[i] = M.a[i] - Pm[i];
+  var Mrl = gcBlur(Mr, w, h, 6, 3);
+  var mo = 0, mm = 0, c = 0;
+  for (i = 0; i < n; i++) if (!excl[i]) { mo += Orl[i]; mm += Mrl[i]; c++; }
+  mo /= c; mm /= c;
+  var sOO = 0, sMM = 0, sMO = 0;
+  for (i = 0; i < n; i++) if (!excl[i]) { var a = Mrl[i] - mm, b = Orl[i] - mo; sMO += a * b; sMM += a * a; sOO += b * b; }
+  return { label: modelViewId, copy: sMO / sOO, corr: sMO / Math.sqrt(sOO * sMM) };
 }

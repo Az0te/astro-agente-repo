@@ -7,12 +7,14 @@
 // Uso:
 //   var GX_EXE = "C:/ruta/a/GraXpert.exe";   // opcional, antes del eval; si no, se busca en las rutas habituales
 //   eval(File.readTextFile("<carpeta del repo>/guia/herramientas/graxpert.js"));
-//   var r = graxpertBGE("master", {smoothing: 0.1});   // IA, sustracción
+//   var r = graxpertBGE("master");                   // sample_free, escala 10, sustracción (predeterminado)
+//   var a = graxpertBGE("master", {method: "AI"});    // IA
 //   // r = {corrected, model, seconds, log}: vistas GC_GraXpert_<tag> y GC_GraXpert_<tag>_model,
 //   // con la solución astrométrica copiada del original.
 //   var d = graxpertDenoise("starless", {strength: 0.5}); // d = {result, seconds, log}
 //
-// Opciones de graxpertBGE: method (AI, RBF, Kriging, Splines, sample_free), smoothing 0-1,
+// Opciones de graxpertBGE: method (sample_free por defecto, AI, RBF, Kriging, Splines), scale 1-10 (sample_free,
+//   por defecto 10), smoothing 0-1,
 //   correction (Subtraction, Division), aiVersion, gpu:false, prefs (fichero de preferencias con
 //   puntos de muestra), extra (argumentos -sample_free_*), tag, keepFiles, maxMinutes.
 // Opciones de graxpertDenoise: strength, batch, aiVersion, gpu:false, tag, keepFiles, maxMinutes.
@@ -109,7 +111,8 @@ function graxpertBGE(viewId, o) {
   o = o || {};
   var v = View.viewById(viewId);
   if (v.isNull) throw new Error('No existe la vista ' + viewId);
-  var method = o.method || 'AI';
+  var method = o.method || 'sample_free';
+  var scale = (o.scale === undefined) ? 10 : o.scale;
   var smoothing = (o.smoothing === undefined) ? 0.1 : o.smoothing;
   var correction = o.correction || 'Subtraction';
   var base = gxSafeId('bge_' + viewId).replace(/_\d+$/, '');
@@ -120,10 +123,11 @@ function graxpertBGE(viewId, o) {
   if (o.aiVersion) args += ' -ai_version ' + o.aiVersion;
   if (o.gpu === false) args += ' -gpu false';
   if (o.prefs) args += ' -preferences_file "' + gxWin(o.prefs) + '"';
+  if (method == 'sample_free' && scale && (!o.extra || o.extra.indexOf('-sample_free_scale') < 0)) args += ' -sample_free_scale ' + scale;
   if (o.extra) args += ' ' + o.extra;
   args += ' -bg';
   var r = gxRun(args, o.maxMinutes);
-  var tag = o.tag || (method + '_s' + String(smoothing).replace('.', '') + (correction == 'Division' ? '_div' : ''));
+  var tag = o.tag || ((method == 'sample_free' ? 'SF_esc' + scale : method + '_s' + String(smoothing).replace('.', '')) + (correction == 'Division' ? '_div' : ''));
   var cor = gxImport(outBase + '.fits', 'GC_GraXpert_' + tag, v);
   var mod = gxImport(outBase + '_background.fits', 'GC_GraXpert_' + tag + '_model', v);
   if (!o.keepFiles) gxClean([inp, outBase + '.fits', outBase + '_background.fits']);
