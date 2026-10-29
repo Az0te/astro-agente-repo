@@ -28,6 +28,8 @@ Copia este fichero como `perfil.md` y rellénalo. Claude lo lee antes de procesa
 - Iconos de procesos guardados en el workspace: _(nombres y para qué sirve cada uno)_
 - Scripts instalados que puedes pedirme que lance: _(SetiAstro, Toolbox, DBXtract…)_
 - Módulos de terceros: _(BlurXTerminator, NoiseXTerminator, StarXTerminator, GraXpert…)_
+- GraXpert: _(ruta del ejecutable, sólo si `guia/herramientas/graxpert.js` no lo encuentra solo)_
+- Carpeta `guia/` de este repositorio en tu PC: _(para cargar `herramientas/*.js` desde el watcher)_
 
 ## Preferencias estéticas
 - Nivel de fondo final: _(p. ej. mediana ≈ 0,17, nunca negro puro)_

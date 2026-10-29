@@ -75,7 +75,8 @@ Métodos reales de `Image`: `median()`, `mean()`, `MAD()`, `stdDev()`, `minimum(
 
 ## Qué es un proceso y qué es un script
 - **Procesos** (se ejecutan desde el watcher con `new Nombre` o `ProcessInstance.fromIcon`): BlurXTerminator, NoiseXTerminator, StarXTerminator, SpectrophotometricColorCalibration, SpectrophotometricFluxCalibration, MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, GeneralizedHyperbolicStretch, HistogramTransformation, CurvesTransformation, PixelMath, LocalHistogramEqualization, HDRMultiscaleTransform, HDRComposition, NarrowbandNormalization, AutomaticBackgroundExtractor, DynamicBackgroundExtraction, SCNR.
-- **Scripts** (NO se pueden lanzar desde el watcher; los lanza el usuario pausando el watcher): ImageSolver, WBPP, DBXtract, AutoPalette Studio, GraXpert, Perfect Palette Picker, Star Stretch y el resto de SetiAstro.
+- **Scripts** (NO se pueden lanzar desde el watcher; los lanza el usuario pausando el watcher): ImageSolver, WBPP, DBXtract, AutoPalette Studio, Perfect Palette Picker, Star Stretch y el resto de SetiAstro.
+- **GraXpert** es un programa externo: su script de PixInsight no se lanza desde el watcher, pero el ejecutable sí, con `guia/herramientas/graxpert.js` (`20-graxpert-comparativa-gradientes.md`).
 - Si un proceso "no existe", casi siempre el nombre está mal (p. ej. es `GeneralizedHyperbolicStretch`, no `GreenHyperbolicStretch`): `describe_process` sugiere el real.
 
 ## Requisitos que hacen fallar pasos
