@@ -3,6 +3,7 @@
 ## Sin publicar
 
 - Guía: **GraXpert IA pasa a ser el método predeterminado de corrección de gradientes**; la comparativa con MGC, plano robusto y DBE queda para cuando su modelo no convence o en objetos de riesgo (nebulosas oscuras, polvo/IFN, objetos que llenan el campo). Cambios en `SKILL.md`, `00`, `06`, `07`, `20`, `21` y el perfil de ejemplo.
+- Guía: nueva herramienta `guia/herramientas/gradcompare.js` con métricas para comparar correcciones de gradiente sobre la luminancia binada: señal del objeto que se come el modelo (abombamiento frente a un polinomio de grado 2 ajustado en el cielo), señal conservada, gradiente residual del cielo y anillo oscuro. Validada con casos sintéticos; pendiente de probar en PixInsight.
 - Guía: nueva herramienta `guia/herramientas/graxpert.js` para usar GraXpert desde el watcher llamando a su ejecutable por línea de comandos (el script de PixInsight no se puede lanzar): fondo con IA, RBF, Kriging, Splines o sample_free, modelo de fondo, denoise, y astrometría copiada del original.
 - Guía: regla de orden lineal en `SKILL.md` y `00-reglas-y-api-basica.md`: nunca NXT antes de BXT; el NXT principal (0,70–0,80) sólo sobre la capa sin estrellas en lineal.
 - Guía: nuevo tema `00-reglas-y-api-basica.md`, de lectura obligatoria (reglas de parar en vez de improvisar, prohibido ajustar el color a mano, API básica de PJSR, proceso frente a script, requisitos que hacen fallar SPCC), a partir de los fallos de un procesado de M31 hecho por un agente local; las reglas clave también en `SKILL.md`.
