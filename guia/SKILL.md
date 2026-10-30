@@ -16,7 +16,7 @@ Guía de trabajo para que Claude procese astrofotografías de cielo profundo en 
 3. **Nunca** estires con fórmulas de PixelMath inventadas: usa MAS, GHS o HistogramTransformation.
 4. Comprueba cada paso (estadísticas por canal e historial `view.processing`); no te fíes del "success".
 5. No inventes funciones, procesos ni IDs: `describe_process` y `list_open_images`. Los procesos se aplican con `P.executeOn(ventana.mainView)`; `.process()`/`.execute()` no existen y la imagen está en `ventana.mainView.image`.
-6. BXT, NXT, SXT, SPCC, MGC, MAS y GHS son **procesos** (se ejecutan desde el watcher); ImageSolver, WBPP y DBXtract son **scripts** (los lanza el usuario). GraXpert se usa desde el watcher llamando a su ejecutable con `guia/herramientas/graxpert.js`, no con su script.
+6. BXT, NXT, SXT, SPCC, MGC, MAS y GHS son **procesos** (se ejecutan desde el watcher); WBPP y DBXtract son **scripts** (los lanza el usuario). La astrometría se resuelve desde el watcher v8 con `blindSolve("<vista>")` (motor de BlindSolver integrado; ver `00-reglas-y-api-basica.md`). GraXpert se usa desde el watcher llamando a su ejecutable con `guia/herramientas/graxpert.js`, no con su script.
 7. Trabaja sobre una copia con nombre de versión y documenta lo que dice el historial, no lo que pretendías.
 8. Gradientes: **GraXpert sample_free con escala 10 es el método predeterminado** (`graxpertBGE()` sin opciones; medido en oct 2026, ver `20-graxpert-comparativa-gradientes.md`). La IA de GraXpert se come parte de los objetos extensos. Revisa siempre el modelo con `gcStructCopy` y a la vista; la comparativa completa, si el modelo no convence.
 9. Orden lineal: gradiente → BXT Correct Only → SPCC → BXT → SXT → NXT. **Nunca NXT antes de BXT**; el NXT fuerte (0,70–0,80) sólo sobre la capa sin estrellas en lineal (`21-bxt-nxt.md`).
@@ -32,7 +32,8 @@ Los nombres de iconos que aparecen en la guía (SPFC_RGB, SPCC_RGB, NoiseX_075�
 - Cada llamada empieza sin estado: guardar funciones reutilizables en `<versión>/tools/*.js` y cargarlas con `eval(File.readTextFile(ruta))`.
 - `describe_process` lista los parámetros y constantes reales de un proceso en la versión de PixInsight instalada: úsalo antes de adivinar nombres de parámetros.
 - **GraXpert sí se usa desde el watcher**, sin su script: `guia/herramientas/graxpert.js` llama al ejecutable por línea de comandos (`eval(File.readTextFile("<ruta de guia>/herramientas/graxpert.js"))` y `graxpertBGE("<vista>")`; ruta en el perfil). Detalles en `20-graxpert-comparativa-gradientes.md`.
-- **No se pueden lanzar scripts (ImageSolver, AutoDBE, DBXtract, WBPP, RepairedHSVSeparation…) desde el watcher** (error "Script instance recursively" y un diálogo modal que el usuario debe cerrar). Los procesos sí (`ProcessInstance.fromIcon("Nombre")`, SubframeSelector, ImageIntegration, StarAlignment, HDRComposition…). Pide al usuario que lance él los scripts, con el watcher en pausa (`mcp-pause.bat`).
+- **Astrometría para SPCC, SPFC y MGC: `blindSolve("<vista>")`** en `run_script` (watcher v8, PixInsight 1.9.6+). Resuelve a ciegas en ~1 s y escribe la solución en la ventana; no hace falta que el usuario lance ImageSolver. Con el watcher clásico no existe: pedir al usuario que resuelva él.
+- **No se pueden lanzar scripts (ImageSolver, AutoDBE, DBXtract, WBPP, RepairedHSVSeparation…) desde el watcher** (error "Script instance recursively" y un diálogo modal que el usuario debe cerrar). Los procesos sí (`ProcessInstance.fromIcon("Nombre")`, SubframeSelector, ImageIntegration, StarAlignment, HDRComposition…). Pide al usuario que lance él los scripts, con el watcher **parado** (botón Pause/Abort o `mcp-stop.bat`): mientras corre, aunque esté en pausa, PixInsight bloquea el menú Script.
 - Si el watcher deja de responder sin diálogo visible, no insistir con más llamadas pesadas: avisar al usuario. Para parar el watcher: botón Pause/Abort de la consola o `mcp-stop.bat`.
 - Para VER resultados: guardar JPG reducidos (IntegerResample) o recortes al 100 % en `<carpeta>/prev/` y leerlos. Es mucho mejor que las capturas de pantalla.
 - Descargar desde PJSR: `NetworkTransfer` + `onDownloadDataAvailable` escribiendo a un `File`.
@@ -46,7 +47,7 @@ Carga sólo la sección que necesites:
 | Fichero | Tema |
 |---|---|
 | `referencia/00-reglas-y-api-basica.md` | **Leer siempre primero.** Reglas de trabajo, API básica de PJSR, proceso vs script, requisitos que hacen fallar pasos |
-| `referencia/01-trampas-pjsr.md` | Trampas de PJSR y del watcher (ES5, ventanas, PixelMath, memoria) |
+| `referencia/01-trampas-pjsr.md` | Trampas de PJSR y del watcher (motor v8 o ES5, ventanas, PixelMath, memoria) |
 | `referencia/02-preprocesado.md` | Calibración, WBPP, selección de subs, índice de halo por sub |
 | `referencia/03-hdr-tomas-cortas.md` | HDR con tomas cortas, HDRComposition, de dónde salen las estrellas |
 | `referencia/04-mono-osc-dualband.md` | Mezclar mono, OSC y dual band; LRGB; Hα con RGB; HOO/SHO |

@@ -1,7 +1,7 @@
 # BXT y NXT: sacarles todo el partido (revisión oct 2026)
 Hasta ahora sólo se usó BXT completo (IC 63, halos 0,00) y NXT en una o dos pasadas con denoise fijo (0,75; LDN 1235 con separación de color). Quedaban sin usar: Correct Only, PSF manual, ajustes por objeto, iteraciones, separación HF/LF y, sobre todo, **elegir los parámetros con medidas**.
 ## Orden lineal (OSC)
-Recorte → ImageSolver (usuario) → **BXT Correct Only** → copiar astrometría → corrección de gradiente (**GraXpert sample_free escala 10** por defecto, que ya devuelve la astrometría copiada; SPFC antes sólo si se usa MGC) → SPCC → (HDR con la corta si procede) → **BXT completo** → SXT (`unscreen=false`) → **NXT** sobre la starless (y suave sobre las estrellas si hace falta) → estirado → NXT final suave opcional.
+Recorte → astrometría (`blindSolve`) → **BXT Correct Only** → copiar astrometría (o volver a resolver con `blindSolve`) → corrección de gradiente (**GraXpert sample_free escala 10** por defecto, que ya devuelve la astrometría copiada; SPFC antes sólo si se usa MGC) → SPCC → (HDR con la corta si procede) → **BXT completo** → SXT (`unscreen=false`) → **NXT** sobre la starless (y suave sobre las estrellas si hace falta) → estirado → NXT final suave opcional.
 - **Nunca NR antes de BXT** (RC-Astro): el ruido fino es información para la deconvolución. BXT siempre antes de SXT (usa las estrellas como referencia de PSF).
 - BXT y NXT sólo en lineal para la deconvolución; NXT funciona también en no lineal (se entrenó con imágenes estiradas): pasada final suave tras estirar es válida.
 ## BlurXTerminator
