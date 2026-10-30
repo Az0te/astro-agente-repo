@@ -1,6 +1,7 @@
 # Trampas de PJSR y del watcher
 
-- ECMAScript 5: sólo `var`, `function(){}`, concatenación de cadenas; nada de let/const, flechas, plantillas, clases, for…of, Promise.
+- Motor de JavaScript: el **watcher v8** (PixInsight 1.9.6+) admite JavaScript moderno (`let`/`const`, flechas, clases, `for…of`). El **watcher clásico** es ECMAScript 5: sólo `var`, `function(){}`, concatenación de cadenas; nada de let/const, flechas, plantillas, clases, for…of, Promise. Si no sabes cuál corre, la consola de PixInsight muestra la versión al arrancar (`v0.5.0-v8`), o prueba `typeof blindSolve` ("function" sólo en el v8).
+- **Lanzar un script con `new Script` o `ProcessInstance.fromIcon` desde el watcher** no funciona: "Attempt to execute a Script instance recursively" y un diálogo modal. Arrastrar el icono del script sobre la imagen o usar el menú Script tampoco hace nada mientras el watcher corre. Para la astrometría, `blindSolve`.
 - `ImageWindow.windowById(id)` y `View.viewById(id)` NUNCA devuelven null: comprobar `.isNull`.
 - Abrir un XISF de WBPP puede crear ventanas `crop_mask` extra: cerrarlas (`id.indexOf('crop_mask')>=0`).
 - PixelMath no tiene `pow()`: usar `exp(e*ln(b))` (`^` también funciona); envolver negativos entre paréntesis; para precisión `use64BitWorkingImage=true`.
@@ -14,7 +15,7 @@
 - Trampas vistas en LDN 1235 (PI 1.9.5, watcher):
   - Desde el watcher, constantes como `SubframeSelector.MeasureSubframes` o `IntegerResample.Average` dan "invalid argument type": dejar el valor por defecto o mirar `describe_process`.
   - `Rect(x0,y0,x1,y1)` usa esquinas, no anchura y altura: `new Rect(0,y,W,y+1)` para una fila.
-  - `Math.hypot` no existe (ES5).
+  - `Math.hypot` no existe en el watcher clásico (ES5).
   - Si un error salta entre `beginProcess()` y `endProcess()` la vista queda bloqueada: llamar a `endProcess()` en un script aparte, y en scripts nuevos calcular todo antes y escribir dentro de un `try/finally`.
   - `ImageWindow.windowById` con un id inexistente no falla: un `w.mask` así aplica el proceso **sin máscara**. Comprobar `.isNull` y lanzar error.
   - `IntegerResample` sobre un FITS de 16 bits deja la imagen en enteros: binar a mano en JS (Float32Array) para medir anillos de halo.

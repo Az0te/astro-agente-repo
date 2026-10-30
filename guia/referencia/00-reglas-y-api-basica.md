@@ -23,7 +23,7 @@ Este tema recoge los fallos de un procesado real de M31 (oct 2026) hecho por un 
 - **Pedestales distintos por canal** (mínimos de R, G y B muy por encima de 0 y diferentes) son normales en un master OSC sin calibrar; no son un fallo de color.
 - **El núcleo de una galaxia a 0,9 en lineal** se protege con máscaras o HDR, no aplastando las luces con curvas sobre toda la imagen.
 
-## API básica (PixInsight 1.9.5, ECMAScript 5)
+## API básica (PixInsight 1.9.5+; ECMAScript 5 con el watcher clásico, v8 con el watcher v8)
 ```js
 // Ventana y vista: los procesos se aplican a la VISTA
 var w = ImageWindow.windowById("MasterLight");   // nunca es null: comprobar isNull
@@ -75,12 +75,24 @@ Métodos reales de `Image`: `median()`, `mean()`, `MAD()`, `stdDev()`, `minimum(
 
 ## Qué es un proceso y qué es un script
 - **Procesos** (se ejecutan desde el watcher con `new Nombre` o `ProcessInstance.fromIcon`): BlurXTerminator, NoiseXTerminator, StarXTerminator, SpectrophotometricColorCalibration, SpectrophotometricFluxCalibration, MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, GeneralizedHyperbolicStretch, HistogramTransformation, CurvesTransformation, PixelMath, LocalHistogramEqualization, HDRMultiscaleTransform, HDRComposition, NarrowbandNormalization, AutomaticBackgroundExtractor, DynamicBackgroundExtraction, SCNR.
-- **Scripts** (NO se pueden lanzar desde el watcher; los lanza el usuario pausando el watcher): ImageSolver, WBPP, DBXtract, AutoPalette Studio, Perfect Palette Picker, Star Stretch y el resto de SetiAstro.
+- **Scripts** (NO se pueden lanzar desde el watcher; los lanza el usuario con el watcher **parado**, porque mientras corre, aunque esté en pausa, el menú Script está bloqueado): ImageSolver, WBPP, DBXtract, AutoPalette Studio, Perfect Palette Picker, Star Stretch y el resto de SetiAstro.
+- **BlindSolver** es la excepción: su motor va incluido en el watcher v8 y se usa con `blindSolve("<vista>")` (ver abajo).
 - **GraXpert** es un programa externo: su script de PixInsight no se lanza desde el watcher, pero el ejecutable sí, con `guia/herramientas/graxpert.js` (`20-graxpert-comparativa-gradientes.md`).
 - Si un proceso "no existe", casi siempre el nombre está mal (p. ej. es `GeneralizedHyperbolicStretch`, no `GreenHyperbolicStretch`): `describe_process` sugiere el real.
 
 ## Requisitos que hacen fallar pasos
-- **SPCC/SPFC/MGC necesitan solución astrométrica.** Sin ella fallan ("The image has no valid astrometric solution"). Resolver con ImageSolver (lo lanza el usuario) o copiarla desde una imagen con la misma geometría: `ventanaDestino.copyAstrometricSolution(ventanaOrigen)` (método de la **ventana**, no de la vista) y comprobar después `ventanaDestino.hasAstrometricSolution`. Recortar, rotar y a veces BXT la eliminan: comprobarlo antes de SPCC.
+- **SPCC/SPFC/MGC necesitan solución astrométrica.** Sin ella fallan ("The image has no valid astrometric solution"). Recortar, rotar, BXT y GraXpert pueden eliminarla: comprobar `hasAstrometricSolution` antes de cada uno.
+  - **Con el watcher v8 (PixInsight 1.9.6+): resolverla con `blindSolve`**, sin parar el watcher (~1 s):
+    ```js
+    var r = blindSolve("MasterLight");                                  // a ciegas
+    // var r = blindSolve("MasterLight", { minScale: 1.8, maxScale: 2.3 }); // con la escala del perfil, más rápido
+    // var r = blindSolve("MasterLight", { regionRA: 332.6, regionDec: 73.1, regionRadius: 5 });
+    if (!ImageWindow.windowById("MasterLight").hasAstrometricSolution) throw new Error("Sin solución");
+    JSON.stringify(r);   // ra, dec (grados), scale (″/px), rotation, flipped, matches, solution
+    ```
+    Necesita el índice astrométrico de Gaia configurado en las preferencias del proceso Gaia; si falta, el error lo dice. Resolver la imagen **con estrellas**, nunca la capa sin estrellas. Si la imagen ya tenía solución, la conserva (`solution: "existing"`) y devuelve la comparación (`centerOffsetArcsec`, `resolutionDifference`, `rotationDifference`, `parityMatch`): sirve para verificar una solución dudosa. Tras recortar, rotar, BXT o GraXpert, volver a resolver es más sencillo que trasladar la solución a mano.
+  - Con el watcher clásico: el usuario resuelve con ImageSolver o BlindSolver (parando el watcher).
+  - Entre imágenes con la misma geometría también vale copiarla: `ventanaDestino.copyAstrometricSolution(ventanaOrigen)` (método de la **ventana**, no de la vista) y comprobar después `ventanaDestino.hasAstrometricSolution`.
 - **SPCC sólo sobre datos lineales.** Nunca calibrar una imagen ya estirada o con el color retocado: volver al master lineal.
 - **SPCC: usar el icono del usuario** (`ProcessInstance.fromIcon("SPCC_RGB")`, o el de su filtro), que ya trae las curvas de cámara y filtros y la referencia de blanco. No escribir `P.whiteReferenceSpectrum = "Average Spiral Galaxy"`: ese parámetro es la tabla de datos del espectro (longitud de onda, valor…), no el nombre, y da "Parsing 32-bit floating point expression: conversion error". El nombre va en `P.whiteReferenceName`, y "Average Spiral Galaxy" ya es el valor por defecto. Un `new SpectrophotometricColorCalibration` sin más usa curvas genéricas, no las de la cámara.
 - **`stretch_image` con "stf"** aplica un autoestirado real desde la v0.4.9 del watcher y se niega si la imagen ya no es lineal. Con watchers anteriores sólo cambiaba la visualización: la imagen seguía lineal.

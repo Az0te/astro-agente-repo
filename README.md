@@ -17,8 +17,9 @@ Incluye dos partes:
 
 El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para macOS y datos mono LRGB/HaLRGB. Este proyecto parte de su puente y añade:
 
-- **Soporte de Windows**: rutas de ImageSolver, scripts `.bat` para pausar, reanudar y parar el watcher.
-- **Watcher v0.4.14**: pausa y parada por fichero, botón Pause/Abort de la consola activo, corrección de un fallo que impedía detenerlo, aviso de cuelgues (`current.json`), verificación de que PixelMath cambió la imagen y herramienta `describe_process`.
+- **Soporte de Windows**: rutas de Windows, scripts `.bat` para pausar, reanudar y parar el watcher.
+- **Watcher v8 (v0.5.0-v8, PixInsight 1.9.6+)**: motor JavaScript v8 y **BlindSolver integrado**: `blindSolve("<vista>")` resuelve la astrometría a ciegas desde el watcher, sin pararlo y en un segundo, para SPCC, SPFC y MGC.
+- **Watcher clásico v0.4.14** (PixInsight anterior a 1.9.6): pausa y parada por fichero, botón Pause/Abort de la consola activo, corrección de un fallo que impedía detenerlo, aviso de cuelgues (`current.json`), verificación de que PixelMath cambió la imagen y herramienta `describe_process`.
 - **Servidor MCP** con `watcher_status` y detección de comandos bloqueados.
 - **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC.
 
@@ -29,7 +30,8 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
 ## Requisitos
 
 - Windows 10/11 (probado en Windows 11).
-- [PixInsight](https://pixinsight.com) 1.9 o superior (licencia propia).
+- [PixInsight](https://pixinsight.com) 1.9.6 o superior para el watcher v8 (con BlindSolver); con 1.9 a 1.9.5, el watcher clásico (licencia propia).
+- Para `blindSolve`: un índice astrométrico de Gaia configurado en las preferencias del proceso Gaia (es el mismo que usa el script BlindSolver).
 - [Node.js](https://nodejs.org) 22 o superior.
 - Un cliente de IA compatible con MCP, por ejemplo la app de escritorio de Claude o Claude Code.
 - Opcional, pero la guía los usa mucho: BlurXTerminator, NoiseXTerminator y StarXTerminator (RC-Astro, de pago), GraXpert, scripts de SetiAstro y Toolbox. **No se incluyen**: cada uno debe instalarlos con su licencia.
@@ -54,7 +56,8 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
      }
    }
    ```
-4. En PixInsight: **Script → Run Script… → `watcher/pixinsight-mcp-watcher.js`**. En la consola debe aparecer `PixInsight MCP Watcher v0.4.14`.
+4. En PixInsight: **Script → Execute Script File… → `watcher/pixinsight-mcp-watcher-v8.js`**. En la consola debe aparecer `PixInsight MCP Watcher v0.5.0-v8`.
+   Con PixInsight anterior a 1.9.6, usa `watcher/pixinsight-mcp-watcher.js` (v0.4.14, sin BlindSolver).
    Si PixInsight no está en `C:/Program Files/PixInsight`, cambia esa ruta en el bloque `#else` del principio del watcher.
 5. Carga la guía como *skill* en tu cliente de Claude (la carpeta `guia/`, cuyo punto de entrada es `guia/SKILL.md`).
 6. Copia `guia/perfil-ejemplo.md` como `guia/perfil.md` y rellénalo con tu equipo, tu cielo, tus rutas y tus gustos. Ese fichero está excluido de Git.
@@ -63,16 +66,17 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
 
 | Acción | Cómo |
 |---|---|
-| Arrancar | Script → Run Script… → `pixinsight-mcp-watcher.js` |
-| Pausar (p. ej. para lanzar tú un script) | `watcher/mcp-pause.bat` |
+| Arrancar | Script → Execute Script File… → `pixinsight-mcp-watcher-v8.js` |
+| Pausar (deja de atender comandos) | `watcher/mcp-pause.bat` |
 | Reanudar | `watcher/mcp-resume.bat` |
 | Parar y liberar PixInsight | Botón **Pause/Abort** de la consola, o `watcher/mcp-stop.bat` |
+| Lanzar tú un script del menú | Para el watcher, lanza el script y vuelve a arrancarlo: mientras el watcher corre, aunque esté en pausa, PixInsight bloquea el menú Script |
 
 Ctrl+F11 puede no llegar al watcher en Windows: usa el botón o el `.bat`.
 
 ## Limitaciones conocidas
 
-- Los **scripts** de PixInsight (ImageSolver, WBPP, DBXtract, AutoDBE…) no se pueden lanzar desde el watcher: los lanzas tú con el watcher en pausa. Los **procesos** sí funcionan.
+- Los **scripts** de PixInsight (WBPP, DBXtract, AutoDBE…) no se pueden lanzar desde el watcher ("Script instance recursively"): los lanzas tú con el watcher parado. Los **procesos** sí funcionan. La excepción es **BlindSolver**, cuyo motor va incluido en el watcher v8 (`blindSolve`).
 - Las llamadas de más de ~60 s devuelven un aviso de tiempo agotado, pero el proceso sigue en PixInsight; `watcher_status` informa de su estado.
 - La comprobación de que PixInsight responde usa PowerShell: en macOS o Linux esa parte no funciona sin adaptarla.
 - La guía se ha probado sobre todo con una cámara OSC (IMX571) y varios filtros: sin filtro, tribanda y dual band Hα/OIII, SII/OIII y SII/Hβ. Para otros equipos, sus valores son puntos de partida.

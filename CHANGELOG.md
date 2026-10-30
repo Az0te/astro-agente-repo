@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- Guía: la astrometría para SPCC, SPFC y MGC se resuelve con `blindSolve("<vista>")` desde el watcher v8, sin pedir al usuario que lance ImageSolver. Tras recortar, rotar, BXT o GraXpert se puede volver a resolver en vez de trasladar la solución a mano. Corregido además que para lanzar un script del menú no basta con pausar el watcher: hay que pararlo. Cambios en `SKILL.md`, `00`, `01`, `06`, `07`, `12`, `21` y el README.
+
+### Watcher v0.5.0-v8 (2026-10-30)
+- Nuevo `watcher/pixinsight-mcp-watcher-v8.js` para **PixInsight 1.9.6+**, con el motor JavaScript v8 (`let`/`const`, flechas y clases en `run_script`). El watcher clásico v0.4.14 se mantiene para versiones anteriores.
+- **BlindSolver integrado**: `blindSolve("<vista>", opciones)` desde `run_script` (y comando `blind_solve`) resuelve la astrometría a ciegas con el índice de Gaia, sin parar el watcher y sin diálogos (≈1 s en 2427×1894 y 3008×3008). Opciones: escala (`minScale`/`maxScale`, ″/px), diagonal (`minField`/`maxField`, grados), región del cielo (`regionRA`, `regionDec`, `regionRadius`) y `timeLimit`. Si la imagen ya tenía solución, la conserva y devuelve la comparación (desplazamiento del centro, escala, rotación, paridad).
+- Quitados los includes del ImageSolver antiguo de AdP, que no usaba ningún comando.
+- `File.searchDirectory` y `System.msleep` en lugar de las funciones obsoletas, con respaldo para versiones que no las tengan.
+
 - Guía: **prueba medida de GraXpert 4.0.0** en M31, LDN 1235, IC 1396 e IC 63. El método predeterminado pasa a ser **sample_free con escala 10** (antes IA): la IA se comió el 18–21 % de M31 y copió las nubes de IC 1396 en el modelo; su suavizado y la protección de estructuras de sample_free casi no influyen. Tabla de resultados en `20`; `SKILL.md`, `06`, `07` y `21` actualizados.
 - Herramientas: `graxpertBGE()` usa sample_free escala 10 por defecto (opción `scale`); `gradcompare.js` añade `gcStructCopy`, la medida más fiable de cuánto objeto copia un modelo de fondo.
 - Guía: **GraXpert IA pasa a ser el método predeterminado de corrección de gradientes**; la comparativa con MGC, plano robusto y DBE queda para cuando su modelo no convence o en objetos de riesgo (nebulosas oscuras, polvo/IFN, objetos que llenan el campo). Cambios en `SKILL.md`, `00`, `06`, `07`, `20`, `21` y el perfil de ejemplo.

@@ -1,6 +1,6 @@
 # MARS / MGC
 
-- Modelo: I ≈ k·R + G + ε. Prerrequisitos en orden: master lineal recortado (sin bordes de apilado) → ImageSolver → SPFC → MGC → SPCC.
+- Modelo: I ≈ k·R + G + ε. Prerrequisitos en orden: master lineal recortado (sin bordes de apilado) → astrometría (`blindSolve`) → SPFC → MGC → SPCC.
 - Parámetros: Gradient scale (pequeña = riesgo de absorber cielo real; grande = subcorrección), Structure separation, Model smoothness, Scale factors R/G/B (corregir si el objeto imprime en el modelo), Gray filter en mono.
 - Diagnóstico: modelo liso, sin objeto fantasma, sin bordes, fondo corregido no aplastado, mismo STF antes/después, control por canal. "El modelo de gradiente es la prueba." Si la nebulosa aparece en el modelo, el brillo de los objetos está infravalorado (subir escala); si aparece en negativo, sobrevalorado. En banda estrecha o multibanda verificar cobertura y compatibilidad espectral.
 - **Medirlo, no sólo mirarlo** (LDN 1235): medianas en cajas de 300 px sobre el objeto y sobre el cielo cercano, antes y después de MGC. En la nebulosa oscura LDN 1235, con escala 2048 y 4096 el modelo reproducía el borde del tiburón y el contraste polvo−cielo bajaba de 1,16 a 0,26–0,30 ×10⁻⁴ (−75 %): MARS no recoge ese polvo débil y lo toma por gradiente. **En nebulosas oscuras, IFN y polvo extenso, desconfiar de MGC.**
