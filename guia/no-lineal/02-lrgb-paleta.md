@@ -65,7 +65,7 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 - "Vale en lineal o no lineal, pero con **Lightness = Off en lineal**."
 - Paleta: SHO, HOO, HSO, HOS (dual band OSC → HOO). En HOO toma el OIII del canal verde (más SNR en OSC); R = Hα, B = OIII normalizado y G = (1−amount)·base + amount·mezcla, con Mode1 = Hα original sobre OIII normalizado, Mode2 = OIII normalizado sobre OIII original, Mode3 = Hα original sobre OIII original.
 - Otros: SCNR (`G = min(G, (R+B)/2)`, no en HOO), OIII boost y SII boost, Highlight reduction, Brightness. Orden interno: normalización → SCNR → Lightness → Highlight reduction → Brightness.
-- Nombres PJSR leídos del módulo: `palette` (`Palette_SHO/HOO/HSO/HOS`), `lightness` (`Lightness_Off/Preserve/Ha/OIII/SII`), `blendMode` (`Blend_Mode1..3`), `haBlend`, `scnr`, `o3Boost`, `s2Boost`, `shadowpoint`, `highlightReduction`, `brightness`. "Confirmar con `describe_process NarrowbandNormalization` la primera vez."
+- Nombres PJSR: `palette` (`Palette_SHO/HOO/HSO/HOS`), `lightness` (`Lightness_Off/Preserve/Ha/OIII/SII`), `blendMode` (`Blend_Mode1..3`), `haBlend`, `scnr`, `o3Boost`, `s2Boost`, `shadowpoint`, `highlightReduction`, `brightness`. Comprobados en PixInsight 1.9.6; en v8 las constantes van en el constructor (`NarrowbandNormalization.Palette_HOO`).
 
 **Qué recomendar**
 
