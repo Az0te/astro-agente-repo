@@ -27,8 +27,9 @@ var SA = new StarAlignment;
 SA.targets = [[true, true, "C:/ASTRO/IC63/LIGHT/Ha_120s_001.xisf"],
               [true, true, "C:/ASTRO/IC63/LIGHT/OIII_120s_001.xisf"]];
 SA.outputDirectory = "C:/ASTRO/IC63/registered";   // ruta sin espacios si falla en silencio
-// La referencia del proceso se indica con su parámetro correspondiente:
-// confirmar el nombre exacto con describe_process StarAlignment (regla 8) antes de fijarlo.
+SA.referenceImage = "C:/ASTRO/IC63/LIGHT/Ha_120s_ref.xisf";   // referencia común del proyecto
+SA.referenceIsFile = true;
+SA.distortionCorrection = true;      // con surface splines (rbfType = StarAlignment.DDMThinPlateSpline)
 if (!SA.executeGlobal()) throw new Error("StarAlignment no registró");
 "registro lanzado";
 ```

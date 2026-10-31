@@ -125,15 +125,18 @@ var rAI = graxpertBGE("MasterLight", { method: "AI", tag: "ai" });
 ```
 
 ```javascript
-// MGC: SPFC -> MGC -> SPCC (los tres necesitan WCS). Nombres a confirmar con
-// describe_process MultiscaleGradientCorrection / SpectrophotometricFluxCalibration.
+// MGC: SPFC -> MGC -> SPCC (los tres necesitan WCS). Nombres comprobados en PixInsight 1.9.6.
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 if (!ImageWindow.windowById("MasterLight").hasAstrometricSolution) throw new Error("Sin WCS: Parar");
 var spfc = ProcessInstance.fromIcon("SPFC_RGB");
 if (!spfc.executeOn(v)) throw new Error("SPFC falló");
-var mgc = new MultiscaleGradientCorrection;   // MARS
-// mgc.gradientScale / structureSeparation / modelSmoothness: confirmar nombres
+var mgc = ProcessInstance.fromIcon("MGC");   // icono del usuario, con la base MARS ya configurada
+if (mgc === null) throw new Error("Falta el icono MGC: sin base MARS, MGC necesita imagen de referencia");
+mgc.gradientScale = 2048;          // 1024 / 2048 / 4096 en la comparativa
+mgc.structureSeparation = 3;
+mgc.modelSmoothness = 1.0;
+mgc.showGradientModel = true;      // para revisar el modelo
 if (!mgc.executeOn(v)) throw new Error("MGC falló");
 "SPFC + MGC aplicados";
 ```

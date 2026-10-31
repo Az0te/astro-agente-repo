@@ -35,7 +35,7 @@ PM.symbols = "k, c";
 PM.expression = "k = 0.293;\nc = 0.00155;\n$T - k*RGB_starless[0] - c";
 PM.createNewImage = true;
 PM.newImageId = "Ha_CS";
-// confirmar color space y formato del resultado con describe_process PixelMath
+// con executeOn(view) basta: el resultado hereda color space y formato (newImageColorSpace = PixelMath.SameAsTarget)
 if (!PM.executeOn(View.viewById("Ha_starless"))) throw new Error("Resta de continuo falló");
 "Ha_CS creada";
 ```

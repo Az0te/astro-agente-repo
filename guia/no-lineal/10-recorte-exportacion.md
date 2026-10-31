@@ -23,7 +23,8 @@
 var v = View.viewById("Final");
 if (v.isNull) throw new Error("No existe Final");
 var icc = new ICCProfileTransformation;
-icc.profile = ICCProfileTransformation.prototype.sRGB;   // constantes .prototype
+icc.targetProfile = "sRGB IEC61966-2.1";   // comprobado en PixInsight 1.9.6
+icc.toDefaultProfile = false;
 if (!icc.executeOn(v)) throw new Error("ICC sRGB falló");
 var w = ImageWindow.windowById("Final");
 if (!w.saveAs("C:/ASTRO/IC63/final/IC63_v4.xisf", false, false, false, false))

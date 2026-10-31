@@ -24,7 +24,7 @@
 
 ```javascript
 var P = new SCNR;           // no llamar a la variable SCNR: tapa el constructor
-P.amount = 0.65;            // aescaffre; "nosotros preferimos suave" (confirmar nombres con describe_process SCNR)
+P.amount = 0.65;            // aescaffre; "nosotros preferimos suave" ; colorToRemove = SCNR.Green y protectionMethod = SCNR.AverageNeutral por defecto (comprobado en 1.9.6)
 if (!P.executeOn(View.viewById("Starless"))) throw new Error("SCNR falló");
 
 // Alternativa quirúrgica sin tocar el OIII real:

@@ -48,7 +48,8 @@ PM.expression1 = "0";
 PM.expression2 = "0";
 PM.createNewImage = true;
 PM.newImageId = "Ha_raw";
-// Color space y sample format del resultado: confirmar nombres con describe_process PixelMath
+// Desde executeOn(view) el resultado hereda color space y formato; para cambiarlos:
+// PM.newImageColorSpace = PixelMath.Gray; PM.newImageSampleFormat = PixelMath.f32;  (v8, comprobado en 1.9.6)
 if (!PM.executeOn(View.viewById("MasterLight"))) throw new Error("Desmezcla Hα falló");
 "Ha_raw: el Hα queda en el canal R";
 ```

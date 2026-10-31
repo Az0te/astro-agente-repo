@@ -28,6 +28,8 @@ Regla: "Cuando el usuario exprese una preferencia nueva (elige una versión fren
 | Cada llamada empieza sin estado | Guardar funciones reutilizables en `<versión>/tools/*.js` y cargarlas con `eval(File.readTextFile(ruta))` |
 | Herramientas de la guía | `herramientas/graxpert.js` (GraXpert desde el watcher) y `herramientas/gradcompare.js` (medir modelos de gradiente): `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))` |
 | Astrometría | `blindSolve("<vista>")` en el watcher v8 (PixInsight 1.9.6+); con el clásico la resuelve el usuario (Paso 8 lineal) |
+| Iconos del workspace | `ProcessInstance.icons()` vacío = no están cargados (tras reiniciar PixInsight no vuelven solos): pedir al usuario que cargue su fichero de iconos o su proyecto antes de usar `fromIcon` |
+| Proceso que no existe en el script (`typeof BlurXTerminator`) | El módulo no está cargado en PixInsight: avisar al usuario; no sustituirlo por otro proceso |
 | Duda con un nombre | `describe_process` (parámetros y constantes reales de la versión instalada) |
 | Lanzar un script | No se puede desde el watcher ("Script instance recursively" + diálogo modal). El usuario lo lanza con el watcher **parado** (Pause/Abort o `mcp-stop.bat`): mientras corre, aunque esté en pausa, el menú Script está bloqueado |
 | Watcher que deja de responder sin diálogo | No insistir con más llamadas pesadas: avisar y parar (Pause/Abort o `mcp-stop.bat`) |

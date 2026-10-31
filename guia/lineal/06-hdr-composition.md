@@ -34,8 +34,8 @@ var HDR = new HDRComposition;
 // De mayor a menor exposición; cada elemento: [enabled, path]
 HDR.images = [[true, "C:/ASTRO/IC63/master/M120.xisf"],
               [true, "C:/ASTRO/IC63/master/M030.xisf"]];
-// Nombres a confirmar con describe_process HDRComposition (regla 8):
-HDR.binarizingThreshold = 0.80;   // por debajo de la meseta medida por canal (0,89-0,96)
+// Nombres comprobados con describe_process (PixInsight 1.9.6):
+HDR.maskBinarizingThreshold = 0.80;   // por debajo de la meseta medida por canal (0,89-0,96)
 HDR.maskSmoothness      = 7;      // suavizado de la transición
 HDR.maskGrowth          = 1;      // crecimiento de la máscara
 if (!HDR.executeGlobal()) throw new Error("HDRComposition falló");

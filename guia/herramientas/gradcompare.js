@@ -2,6 +2,8 @@
 //
 // Uso:
 //   eval(File.readTextFile("<carpeta del repo>/guia/herramientas/gradcompare.js"));
+// Funciona con el watcher clásico (ES5) y con el v8: las constantes de los procesos se leen con gcK(),
+// porque en v8 están en el constructor (PixelMath.Gray) y en el motor clásico en .prototype.
 //   var base = gcPrepare("master", 8);            // luminancia binada (mediana) del original
 //   var m = gcMetrics(base, "GC_GraXpert_AI_s01", 8);   // métricas de una corrección
 //   var p = gcPlaneMetrics(base);                 // control: plano robusto de grado 1
@@ -25,6 +27,14 @@
 //   ring     cielo junto al objeto menos cielo lejano, en unidades de ruido (negativo = anillo oscuro).
 //   objFrac  fracción del campo marcada como objeto.
 
+
+// Constante de un proceso en los dos motores de PJSR (v8: Clase.X; clásico: Clase.prototype.X).
+function gcK(C, name) {
+  if (C[name] !== undefined) return C[name];
+  if (C.prototype && C.prototype[name] !== undefined) return C.prototype[name];
+  throw new Error('Constante no encontrada: ' + name);
+}
+
 function gcLumBinned(viewId, bin) {
   var v = View.viewById(viewId);
   if (v.isNull) throw new Error('No existe la vista ' + viewId);
@@ -42,8 +52,8 @@ function gcLumBinnedNative(v, bin) {
   PM.useSingleExpression = true;
   PM.createNewImage = true; PM.showNewImage = false; PM.newImageId = id;
   PM.newImageWidth = 0; PM.newImageHeight = 0;
-  PM.newImageColorSpace = PixelMath.prototype.Gray;
-  PM.newImageSampleFormat = PixelMath.prototype.f32;
+  PM.newImageColorSpace = gcK(PixelMath, 'Gray');
+  PM.newImageSampleFormat = gcK(PixelMath, 'f32');
   PM.rescale = false; PM.truncate = false;
   if (!PM.executeOn(v, false)) throw new Error('PixelMath no se ejecutó');
   var g = View.viewById(id);
@@ -51,7 +61,7 @@ function gcLumBinnedNative(v, bin) {
   try {
     var IR = new IntegerResample;
     IR.zoomFactor = -bin;
-    IR.downsamplingMode = IntegerResample.prototype.Median;
+    IR.downsamplingMode = gcK(IntegerResample, 'Median');
     if (!IR.executeOn(g, false)) throw new Error('IntegerResample no se ejecutó');
     var im = g.image, w = im.width, h = im.height;
     var out = new Float32Array(w * h), row = new Float32Array(w);

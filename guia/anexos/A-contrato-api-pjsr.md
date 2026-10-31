@@ -119,6 +119,7 @@ h.at(i).toSource();          // código del paso i
 | PixelMath por canal | `P.useSingleExpression = false`, `P.expression` (R), `P.expression1` (G), `P.expression2` (B); dentro de cada una el canal es `$T` |
 | Otra imagen en PixelMath | Se usa por su id en la expresión (`Ha`, `RGB_starless[0]`) |
 | `new Script` desde el watcher | "Attempt to execute a Script instance recursively" |
+| `Clase.prototype.CONSTANTE` en el watcher v8 | `Clase.CONSTANTE` (`PixelMath.RGB`, `SCNR.Green`): con `.prototype` sale `undefined` sin error. En el clásico era `.prototype` |
 | Proceso que "no existe" | Casi siempre el nombre está mal (es `GeneralizedHyperbolicStretch`, no `GreenHyperbolicStretch`): `describe_process` sugiere el real |
 | Guardar en una carpeta que no existe | `save_image` la crea desde el watcher v0.4.5; antes fallaba en silencio |
 

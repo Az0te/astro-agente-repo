@@ -90,13 +90,13 @@ PM.expression1 = "0.6*Ha + 0.4*OIII";
 PM.expression2 = "OIII";
 PM.createNewImage = true;
 PM.newImageId = "HOO";
-PM.newImageColorSpace = PixelMath.prototype.RGB;   // confirmar con describe_process PixelMath
+PM.newImageColorSpace = PixelMath.RGB;   // watcher v8; en el clásico, PixelMath.prototype.RGB
 if (!PM.executeGlobal()) throw new Error("HOO falló");   // executeGlobal exige además newImageWidth/Height
 
 // Variante con NarrowbandNormalization sobre la HOO:
 var NBN = new NarrowbandNormalization;
-NBN.palette = NarrowbandNormalization.prototype.Palette_HOO;
-NBN.lightness = NarrowbandNormalization.prototype.Lightness_Off;
+NBN.palette = NarrowbandNormalization.Palette_HOO;        // v8: constantes en el constructor
+NBN.lightness = NarrowbandNormalization.Lightness_Off;
 NBN.shadowpoint = 1;
 if (!NBN.executeOn(View.viewById("HOO"))) throw new Error("NBN falló");
 "NBN HOO aplicado";

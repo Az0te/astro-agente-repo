@@ -4,12 +4,14 @@
 
 Puntos que el flujo necesita y que todavía no están medidos ni comprobados. No se rellenan con conocimiento general: cuando se resuelva uno, se pasa al paso que corresponda y se quita de aquí.
 
+Comprobados el 31 oct 2026 en PixInsight 1.9.6 (watcher v8) y ya corregidos en los pasos: HDRComposition (`maskBinarizingThreshold`, `maskSmoothness`, `maskGrowth`), StarAlignment (`referenceImage`, `referenceIsFile`, `distortionCorrection`), LinearFit (`referenceViewId`), SCNR, PixelMath (otras imágenes por id, `newImageColorSpace`), CurvesTransformation (canales), LocalHistogramEqualization, ICCProfileTransformation (`targetProfile`), MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, SPCC y las constantes en v8 (`Clase.CONSTANTE`).
+
 | Punto | Estado |
 |---|---|
-| Nombres PJSR de los parámetros de BlurXTerminator, NoiseXTerminator, StarXTerminator, HDRComposition, StarAlignment (referencia), LinearFit (`referenceViewId`), SCNR y PixelMath (`newImageColorSpace`) | Los bloques de código los marcan: confirmarlos con `describe_process` la primera vez y corregir aquí |
-| Canales de CurvesTransformation en PJSR | Sólo se conoce `Kt = CurvesTransformation.prototype.AkimaSubsplines`; si no, aplicar la curva desde un icono |
+| Nombres PJSR de BlurXTerminator, NoiseXTerminator y StarXTerminator (módulo RCAstroSuite), GeneralizedHyperbolicStretch y NarrowbandNormalization | No se pudieron comprobar: en esa sesión los módulos de terceros no estaban cargados. Confirmarlos con `describe_process` y corregir los pasos 11, 13, 14 y 15 lineales y 1, 2 y 6 no lineales |
 | Corrección de gradiente antes de BXT Correct Only | Es el orden del flujo; la tabla de GraXpert se midió con BXT CO previo. Comprobar en un objeto que el ganador no cambia |
 | Comparativa de gradientes en nebulosas que llenan el campo | sample_free 10 aún copia un 14 % en IC 1396: sin criterio cerrado |
+| Proceso GraXpert nativo (módulo `GraXpert-pxm`) | Instalado como módulo de PixInsight; probar si sustituye a `herramientas/graxpert.js` |
 | Receta de sharpening no lineal (proceso, radio, amount) | Sólo están el orden, la máscara y la verificación |
 | Calidad y tamaño de los JPG de entrega | Sólo está el orden: ICC sRGB y redimensionar al final |
 | Número de subs integrados por grupo desde PJSR | Se lee del log de WBPP |

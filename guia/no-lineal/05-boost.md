@@ -34,6 +34,13 @@ if (!LHE.executeOn(v)) throw new Error("LHE falló");
 "Núcleos/estrellas protegidos por mask_L_g20";
 ```
 
-Para las curvas, `CurvesTransformation` con `Kt = CurvesTransformation.prototype.AkimaSubsplines`; los puntos de la curva se cargan como lista de pares (los de arriba). Los nombres PJSR de los canales de la curva están pendientes (Anexo C): si no se conocen, aplicar la curva desde un icono.
+Para las curvas, `CurvesTransformation`: cada curva es una lista de pares `[x, y]` en `R`, `G`, `B`, `K` (RGB/K, todos los canales), `A` (alfa), `L`, `a`, `b`, `c` (CIE L*a*b* y croma), `H` (tono) y `S` (saturación), con su interpolación en `Rt`, `Gt`, `Bt`, `Kt`… (`CurvesTransformation.AkimaSubsplines` en v8). Comprobado en PixInsight 1.9.6.
+
+```javascript
+var C = new CurvesTransformation;
+C.K = [[0, 0.04], [0.04, 0.12], [0.10, 0.16], [0.20, 0.24], [0.50, 0.50], [1, 1]];   // levantar sombras
+C.Kt = CurvesTransformation.AkimaSubsplines;
+if (!C.executeOn(View.viewById("Starless"))) throw new Error("Curvas fallaron");
+```
 
 **Control.** 100 % y en negativo (imagen invertida): bandas de color, anillos alrededor de estrellas, ruido moteado, bordes de máscara. Porcentaje de píxeles > 0,98 antes y después. Textura en altas luces: "conservar ≥ 60 %; < 40 % = textura aplastada". "Señales de sobreprocesado: aspecto 'diseñado' en vez de 'observado', transiciones nebulosa–fondo demasiado limpias, bordes 'ilustrados', pérdida de grano en zonas débiles → bajar LHE, quitar HDRMT, curvas más suaves."

@@ -40,7 +40,7 @@ La mezcla, en fórmula: `R' = (1−α)·R + α·Hα`, con `α ≈ 0,2–0,6` y s
 
 ```javascript
 // LinearFit del Hα a la R (vista de referencia por su id).
-// Nombre del parámetro a confirmar con describe_process LinearFit la primera vez.
+// Comprobado en PixInsight 1.9.6 (rejectHigh = 0,92 por defecto).
 var vHa = View.viewById("Ha");
 if (vHa.isNull) throw new Error("No existe Ha");
 var LF = new LinearFit;

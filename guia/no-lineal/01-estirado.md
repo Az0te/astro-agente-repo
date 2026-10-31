@@ -66,7 +66,18 @@
 
 Documentación citada por el PDF: `ghsastro.co.uk/doc/tools/GeneralizedHyperbolicStretch/` y `ghsastro.co.uk/updates/`.
 
-**MAS (MultiscaleAdaptiveStretch)** — protocolo
+**MAS (MultiscaleAdaptiveStretch)** — parámetros PJSR comprobados en PixInsight 1.9.6 (valor por defecto entre paréntesis): `targetBackground` (0,15), `aggressiveness` (0,70), `dynamicRangeCompression` (0,40), `contrastRecovery` (true), `scaleSeparation` (1024), `contrastRecoveryIntensity` (1,0), `saturationEnabled` (true), `saturationAmount` (0,75), `backgroundROIEnabled` y `backgroundROIX0/Y0/Width/Height`.
+
+```javascript
+var M = new MultiscaleAdaptiveStretch;
+M.targetBackground = 0.15;
+M.aggressiveness = 0.6;
+M.contrastRecoveryIntensity = 0.5;
+M.saturationEnabled = false;          // Hα o capas que se combinarán después
+if (!M.executeOn(View.viewById("Starless"))) throw new Error("MAS falló");
+```
+
+Protocolo:
 
 Background Reference (ROI en fondo limpio; imprescindible si el objeto llena el campo) → Target Background → Aggressiveness → DRC → Large-scale preview / Scale separation → Contrast Recovery Intensity → Color saturation (opcional) → validación global.
 
@@ -95,8 +106,8 @@ img.resetSelections();
 if (med > 0.01) throw new Error("La imagen ya no es lineal: no repetir fase 1");
 
 var P = new GeneralizedHyperbolicStretch;
-P.stretchType = GeneralizedHyperbolicStretch.prototype.ST_GeneralisedHyperbolic;
-P.stretchChannel = GeneralizedHyperbolicStretch.prototype.SC_RGB;
+P.stretchType = GeneralizedHyperbolicStretch.ST_GeneralisedHyperbolic;   // v8; en el clásico, .prototype.
+P.stretchChannel = GeneralizedHyperbolicStretch.SC_RGB;
 P.stretchFactor = 2.5;           // D
 P.localIntensity = 12;           // b
 P.symmetryPoint = med;           // SP
