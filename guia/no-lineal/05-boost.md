@@ -11,6 +11,11 @@
 - "No saturar con una dominante de fondo sin resolver (la amplifica); los núcleos de estrella ya recortados no recuperan color. Si el ruido de color del cielo es visible o el objeto llena el campo, mejor saturación selectiva por tono o con máscara que global."
 - Puntos de curva para levantar sombras sin quemar el objeto: `[[0,0.04],[0.04,0.12],[0.10,0.16],[0.20,0.24],[0.50,0.50],[1,1]]`; "las curvas S que hunden sombras matan esa señal". Oscurecer sombras sólo en el fondo verdadero y con transición suave (p. ej. 0,05→0,003, 0,10→0,015, 0,15→0,05).
 
+**Realces de los scripts BackgroundEnhance y DarkStructureEnhance** (integrados en el watcher, `herramientas/realces.js`; mismo resultado que los scripts)
+
+- `backgroundEnhance("Starless", { amount: 0.5, ssAmount: 0.9, maskAmount: 0.6, layers: 8 })`: suma a la imagen su gran escala (sin estructuras pequeñas), con peso `amount`, a través de una máscara invertida de luminancia suavizada: levanta nebulosidad débil y polvo sin tocar lo brillante. Sobre la starless no lineal; empezar con `amount` 0,2–0,3 y comparar con la versión sin tocar, porque también levanta el fondo y su ruido.
+- `darkStructureEnhance("Starless", { median: 0.7, iterations: 1, layers: 8, scalingFunction: "B3" })`: oscurece, a través de una máscara de estructuras oscuras (gran escala − imagen), con HistogramTransformation de medios `median` (más alto = más oscuro). Es el mapa por diferencia de escalas que se desaconseja más abajo para IC 63: usarlo sólo si la máscara (`keepMask: true` la deja abierta) sigue estructuras reales y no ruido, y comparar con la versión sin tocar.
+
 **Contraste local (LHE)**
 
 - Receta de la v4B que gustó: "LocalHistogramEqualization **radio 256, amount 0,35, slopeLimit 2,0** sobre la capa sin estrellas no lineal, con máscara de fondo `1 − clip((L64 − 0,20)/0,25)`, seguida de **NXT 0,75** bajo esa misma máscara y **NXT 0,30** global."

@@ -2,6 +2,9 @@
 
 ## Sin publicar
 
+### Watcher v0.5.1-v8 (2026-10-31)
+- Nuevo `guia/herramientas/realces.js`, incluido en el watcher v8: **Star Stretch** (`starStretch`), **ScreenStars** (`screenStarsCombine`, `screenStarsExtract`), **DarkStructureEnhance** (`darkStructureEnhance`) y **BackgroundEnhance** (`backgroundEnhance`), que no se podían lanzar desde el watcher. Son reimplementaciones de sus algoritmos con los mismos procesos y parámetros (créditos a sus autores en el fichero); comparadas con los originales en PixInsight 1.9.6, la diferencia máxima es 0 en todos los casos probados. Guía actualizada: Anexo A, `00` y pasos 1, 5, 8 y 9 no lineales.
+
 - Guía **reestructurada como flujo de trabajo** (propuesta del autor, revisada): `guia/referencia/` se sustituye por `lineal/` (17 pasos), `no-lineal/` (11 pasos) y `anexos/` (A–G), con un fichero por paso (por qué, parámetros, código PJSR y control). `SKILL.md` queda como índice ligero con las reglas y el mapa de decisión. Se incorporó el contenido que faltaba de los temas anteriores (composición natural Hα/OIII + RGB, protocolo de paletas, blue bloat, controles de calidad, rejilla BXT/NXT, flujo OSC5) y se corrigió: orden único gradiente → BXT Correct Only → SPCC; NXT principal sobre la starless en lineal; umbrales del checkpoint lineal; mezclas y restas con PixelMath usando otras imágenes por su id (sin iconos inventados); variable que tapaba el constructor de SCNR.
 
 - Guía: la astrometría para SPCC, SPFC y MGC se resuelve con `blindSolve("<vista>")` desde el watcher v8, sin pedir al usuario que lance ImageSolver. Tras recortar, rotar, BXT o GraXpert se puede volver a resolver en vez de trasladar la solución a mano. Corregido además que para lanzar un script del menú no basta con pausar el watcher: hay que pararlo. Cambios en `SKILL.md`, `00`, `01`, `06`, `07`, `12`, `21` y el README.

@@ -125,9 +125,9 @@ h.at(i).toSource();          // código del paso i
 
 ### A.9 Watcher clásico (ES5) frente a v8
 
-- **v8** (PixInsight 1.9.6+): `let`/`const`, flechas, clases, `for…of`, `Promise`, `blindSolve`.
+- **v8** (PixInsight 1.9.6+): `let`/`const`, flechas, clases, `for…of`, `Promise`, `blindSolve` y las funciones de `realces.js`.
 - **Clásico**: sólo `var`, `function(){}`, concatenación de cadenas. Nada de `let`, flechas, plantillas, clases, `for…of`, `Promise`.
-- Si no sabes cuál corre: la consola muestra `v0.5.0-v8` al arrancar, o `typeof blindSolve === "function"` sólo en v8.
+- Si no sabes cuál corre: la consola muestra `v0.5.x-v8` al arrancar, o `typeof blindSolve === "function"` sólo en v8.
 - **Procesos** (se lanzan desde el watcher): BlurXTerminator, NoiseXTerminator, StarXTerminator, SpectrophotometricColorCalibration, SpectrophotometricFluxCalibration, MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, GeneralizedHyperbolicStretch, HistogramTransformation, CurvesTransformation, PixelMath, LocalHistogramEqualization, HDRMultiscaleTransform, HDRComposition, NarrowbandNormalization, AutomaticBackgroundExtractor, DynamicBackgroundExtraction, SCNR.
 - **Scripts:** la guía no los usa. Desde el watcher no se pueden lanzar ("Script instance recursively"), así que cada uno tiene su equivalente:
 
@@ -140,11 +140,14 @@ h.at(i).toSource();          // código del paso i
 | Combine Ha with RGB / CombineRGBAndNarrowband / Mix SHORGB | PixelMath (Paso 10 lineal y Paso 2 no lineal) |
 | PhotometricContinuumSubtraction | Fotometría de estrellas + PixelMath (Paso 16 lineal) |
 | AutoPalette Studio / Perfect Palette Picker / Foraxx | Fórmulas con PixelMath (Paso 2 no lineal) |
-| Statistical Stretch / Star Stretch | MAS o GHS; fórmula de Star Stretch con PixelMath (Paso 1 no lineal) |
+| Statistical Stretch | MAS o GHS (Paso 1 no lineal) |
+| Star Stretch | `starStretch` (Paso 1 no lineal) |
+| ScreenStars | `screenStarsCombine` / `screenStarsExtract` (Pasos 8 y 9 no lineales) |
 | NB to RGB Star Combination | PixelMath (Paso 8 no lineal) |
 | Halo-B-Gon / Star Reduction / RepairStarCores / Repaired HSV Separation | Recetas de halos y relleno con ley de potencias (Paso 8 no lineal); HDR con tomas cortas |
-| DarkStructureEnhance | LHE con máscara de fondo (Paso 5 no lineal) |
-- **BlindSolver** es la excepción: `blindSolve("<vista>")`.
+| DarkStructureEnhance | `darkStructureEnhance` (Paso 5 no lineal) |
+| BackgroundEnhance | `backgroundEnhance` (Paso 5 no lineal) |
+- **Integrados en el watcher v8**: `blindSolve` (motor de BlindSolver) y los realces de `herramientas/realces.js` (`starStretch`, `screenStarsCombine`, `screenStarsExtract`, `darkStructureEnhance`, `backgroundEnhance`), que reproducen los scripts originales píxel a píxel. Con el watcher clásico, `realces.js` se carga con `eval`.
 - **GraXpert**: el proceso de PixInsight (`new GraXpert`) para el fondo por defecto; `herramientas/graxpert.js` llama al programa externo para el resto.
 
 ---

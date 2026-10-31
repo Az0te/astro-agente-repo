@@ -7,6 +7,7 @@
 **Reglas**
 
 - Screen en no lineal. "Con fuerza ajustable `~(~$T * ~(k*stars))` (**k ≈ 0,5–0,6** para estrellas discretas en galaxias)."
+- **ScreenStars desde el watcher**: `screenStarsCombine("Starless", "Stars", { newId: "Final" })` crea la imagen recombinada con screen (`method: "add"` para suma). Si la starless está estirada (mediana > 0,005), lleva las dos capas a casi lineal con una MTF, combina ahí y vuelve a estirar con la inversa (`reverseStretch: false` lo desactiva): las estrellas se integran mejor que con el screen directo. Es la opción por defecto; el PixelMath de abajo sirve para el screen con fuerza `k`.
 - Suma `Starless + Stars` **sólo en lineal**; `S + k·E` con máscara para casos difíciles.
 - "Nunca combinar estrellas lineales sin estirar con una starless estirada."
 - Invariante: "el resultado nunca es menor que la base (`1−(1−B)(1−S) ≥ B`); si el fondo baja tras recombinar, hay un error en otro sitio. Lo que ya está a 1 en cualquier capa no se recupera."

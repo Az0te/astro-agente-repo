@@ -18,7 +18,7 @@ Incluye dos partes:
 El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para macOS y datos mono LRGB/HaLRGB. Este proyecto parte de su puente y añade:
 
 - **Soporte de Windows**: rutas de Windows, scripts `.bat` para pausar, reanudar y parar el watcher.
-- **Watcher v8 (v0.5.0-v8, PixInsight 1.9.6+)**: motor JavaScript v8 y **BlindSolver integrado**: `blindSolve("<vista>")` resuelve la astrometría a ciegas desde el watcher, sin pararlo y en un segundo, para SPCC, SPFC y MGC.
+- **Watcher v8 (v0.5.1-v8, PixInsight 1.9.6+)**: motor JavaScript v8 y **BlindSolver integrado**: `blindSolve("<vista>")` resuelve la astrometría a ciegas desde el watcher, sin pararlo y en un segundo, para SPCC, SPFC y MGC. También incluye **Star Stretch, ScreenStars, DarkStructureEnhance y BackgroundEnhance** (`guia/herramientas/realces.js`), reimplementados con resultado idéntico al de los scripts.
 - **Watcher clásico v0.4.14** (PixInsight anterior a 1.9.6): pausa y parada por fichero, botón Pause/Abort de la consola activo, corrección de un fallo que impedía detenerlo, aviso de cuelgues (`current.json`), verificación de que PixelMath cambió la imagen y herramienta `describe_process`.
 - **Servidor MCP** con `watcher_status` y detección de comandos bloqueados.
 - **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC.
@@ -56,7 +56,7 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
      }
    }
    ```
-4. En PixInsight: **Script → Execute Script File… → `watcher/pixinsight-mcp-watcher-v8.js`**. En la consola debe aparecer `PixInsight MCP Watcher v0.5.0-v8`.
+4. En PixInsight: **Script → Execute Script File… → `watcher/pixinsight-mcp-watcher-v8.js`**. En la consola debe aparecer `PixInsight MCP Watcher v0.5.1-v8`.
    Con PixInsight anterior a 1.9.6, usa `watcher/pixinsight-mcp-watcher.js` (v0.4.14, sin BlindSolver).
    Si PixInsight no está en `C:/Program Files/PixInsight`, cambia esa ruta en el bloque `#else` del principio del watcher.
 5. Carga la guía como *skill* en tu cliente de Claude (la carpeta `guia/`, cuyo punto de entrada es `guia/SKILL.md`).

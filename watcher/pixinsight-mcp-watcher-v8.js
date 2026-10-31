@@ -39,6 +39,11 @@
 #include "C:/Program Files/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
 #endif
 
+// Realces de los scripts BackgroundEnhance, DarkStructureEnhance, ScreenStars y Star Stretch,
+// reimplementados para usarlos desde run_script: starStretch, screenStarsCombine, screenStarsExtract,
+// darkStructureEnhance y backgroundEnhance (ver el fichero para opciones y creditos).
+#include "../guia/herramientas/realces.js"
+
 // processEvents()/msleep() del motor antiguo, con respaldo por si v8 no los trae
 function mcpProcessEvents() {
    if (typeof CoreApplication !== "undefined" && typeof CoreApplication.processEvents === "function")
@@ -63,7 +68,7 @@ var COMMANDS_DIR = BRIDGE_DIR + "/commands";
 var RESULTS_DIR = BRIDGE_DIR + "/results";
 var LOGS_DIR = BRIDGE_DIR + "/logs";
 var POLL_INTERVAL_MS = 1000;
-var WATCHER_VERSION = "0.5.0-v8";
+var WATCHER_VERSION = "0.5.1-v8";
 // Archivo con el comando en curso (lo lee el servidor MCP para avisar de cuelgues).
 var CURRENT_FILE = BRIDGE_DIR + "/current.json";
 // Minutos sin comandos tras los cuales el watcher se detiene solo (0 = nunca).

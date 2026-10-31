@@ -13,7 +13,7 @@
 - Si hay que contenerlas: "atenuar brillo (p. ej. `iif($T > 0.02, $T*0.65, $T)`) en vez de erosionar".
 - **Suelo antes del screen** (NOVA): "punto negro por canal = mediana + 2·MAD de la capa, reescalando para no tocar los núcleos; si no, el screen añade al fondo el grano estirado entre estrellas. Pero en campos densos ese 'grano' puede ser estrellas débiles reales (Cocoon: 94 % de la varianza del fondo eran estrellas): no subir el suelo hasta borrarlas."
 
-**Extracción en no lineal** (alternativa para evitar halos hinchados): "guardar un clon antes de SXT; SXT lineal para la starless; estirar la starless; aplicar al clon **exactamente el mismo estirado**; SXT con `unscreen=true` sobre el clon estirado → estrellas ya en rango de pantalla, listas para screen."
+**Extracción en no lineal** (alternativa para evitar halos hinchados): "guardar un clon antes de SXT; SXT lineal para la starless; estirar la starless; aplicar al clon **exactamente el mismo estirado**; SXT con `unscreen=true` sobre el clon estirado → estrellas ya en rango de pantalla, listas para screen." Si ya existen la imagen con estrellas y la starless estiradas igual, `screenStarsExtract("Original", "Starless")` (script ScreenStars) saca la capa de estrellas con unscreen sin repetir SXT.
 
 **Estrellas de banda estrecha** (si no hay RGB), fórmula de NB to RGB Stars con PixelMath: " R = 0,5·Hα + 0,5·SII, G = 0,3·Hα + 0,7·OIII, B = OIII (sin SII: R = Hα). Color plausible, no fotometría; una estrella saturada en las tres capas queda blanca."
 

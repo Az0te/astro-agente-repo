@@ -2,7 +2,7 @@
 
 [← Índice](SKILL.md)
 
-**Por qué.** "Esta guía es genérica; el perfil decide los valores concretos". La guía no usa iconos del escritorio ni scripts: todo se ejecuta desde el watcher con procesos configurados en código (`herramientas/procesos.js` para SPCC, SPFC y MGC). Los valores de cada equipo (nombres de filtro y QE de `filters.xspd`, base MARS, preferencias) salen del perfil. Sin perfil, la escala de muestreo, los filtros y las rutas son suposiciones.
+**Por qué.** "Esta guía es genérica; el perfil decide los valores concretos". La guía no usa iconos del escritorio ni scripts: todo se ejecuta desde el watcher con procesos configurados en código (`herramientas/procesos.js` para SPCC, SPFC y MGC) y los scripts necesarios reimplementados en `herramientas/realces.js`. Los valores de cada equipo (nombres de filtro y QE de `filters.xspd`, base MARS, preferencias) salen del perfil. Sin perfil, la escala de muestreo, los filtros y las rutas son suposiciones.
 
 **Perfil del usuario** (plantilla en `guia/perfil-ejemplo.md`; copiar como `perfil.md` y rellenar antes del primer paso)
 
@@ -26,7 +26,7 @@ Regla: "Cuando el usuario exprese una preferencia nueva (elige una versión fren
 | `watcher_status` | Dice qué comando está en curso y si PixInsight responde |
 | Bucles largos (medir cientos de subs) | Funciones que trabajen ~50 s, guarden el resultado en un CSV incremental y devuelvan el índice siguiente |
 | Cada llamada empieza sin estado | Guardar funciones reutilizables en `<versión>/tools/*.js` y cargarlas con `eval(File.readTextFile(ruta))` |
-| Herramientas de la guía | `herramientas/procesos.js` (SPCC, SPFC y MGC sin iconos), `herramientas/graxpert.js` (GraXpert por línea de comandos, para lo que no ofrece el proceso GraXpert) y `herramientas/gradcompare.js` (medir modelos de gradiente): `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))` |
+| Herramientas de la guía | `herramientas/procesos.js` (SPCC, SPFC y MGC sin iconos), `herramientas/graxpert.js` (GraXpert por línea de comandos, para lo que no ofrece el proceso GraXpert) y `herramientas/gradcompare.js` (medir modelos de gradiente): `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))`. `herramientas/realces.js` (Star Stretch, ScreenStars, DarkStructureEnhance, BackgroundEnhance) ya va incluido en el watcher v8 |
 | Astrometría | `blindSolve("<vista>")` en el watcher v8 (PixInsight 1.9.6+); con el clásico la resuelve el usuario (Paso 8 lineal) |
 | Proceso que no existe en el script (`typeof BlurXTerminator`) | El módulo no está cargado en PixInsight: avisar al usuario; no sustituirlo por otro proceso |
 | Duda con un nombre | `describe_process` (parámetros y constantes reales de la versión instalada) |
