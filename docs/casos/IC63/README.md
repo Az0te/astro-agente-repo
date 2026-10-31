@@ -32,7 +32,7 @@ Se midió un **índice de halo** en cada sub: el brillo de un anillo alrededor d
 
 *Mismo recorte y mismo estirado en un sub limpio (izquierda) y en uno con nube fina (derecha): el halo difuso es lo que el índice detecta.*
 
-Técnica: [`guia/referencia/02-preprocesado.md`](../../../guia/referencia/02-preprocesado.md) (índice de halo por sub).
+Técnica: [Blink / SubframeSelector](../../../guia/lineal/03-blink-subframeselector.md) (índice de halo por sub).
 
 ## 2. HDR con tomas cortas para γ Cas
 
@@ -56,7 +56,7 @@ Los píxeles del núcleo por encima de 0,9 pasaron de unos 2300 a unos 790. Fuer
 
 Lección: la diferencia **no se ve en previsualizaciones estiradas** de cada imagen por separado, porque el estirado satura el disco en las dos. Hay que compararlas en lineal, con el mismo estirado.
 
-Técnica: [`guia/referencia/03-hdr-tomas-cortas.md`](../../../guia/referencia/03-hdr-tomas-cortas.md).
+Técnica: [HDRComposition](../../../guia/lineal/06-hdr-composition.md).
 
 ## 3. Gradiente de cielo urbano
 
@@ -66,25 +66,25 @@ El gradiente se corrigió con **MGC (MARS)** antes de calibrar el color con SPCC
 
 *Modelo de gradiente restado: suave, sin rastro de la nebulosa.*
 
-Técnica: [`guia/referencia/07-mars-mgc.md`](../../../guia/referencia/07-mars-mgc.md).
+Técnica: [Corrección de gradiente](../../../guia/lineal/09-correccion-gradiente.md).
 
 ## 4. Hα del dual band y sustracción de continuo
 
 El Hα se extrajo del master dual band con la **emulación de DBXtract por PixelMath** (coeficientes de QE del IMX571), porque el script no se puede lanzar desde el watcher. Como IC 63 tiene mucha luz de reflexión, el filtro también deja pasar continuo; se restó con el canal R de la HDR calibrada, con un factor **k = 0,332** medido como mediana sobre 3000 estrellas. El "OIII" del dual band en esta nebulosa es sobre todo continuo de reflexión, y no se interpretó como emisión.
 
-Técnica: [`guia/referencia/05-flujos-astro-photographie.md`](../../../guia/referencia/05-flujos-astro-photographie.md) (DBXtract y continuo).
+Técnica: [Extracción de canales](../../../guia/lineal/07-extraccion-canales.md) y [sustracción de continuo](../../../guia/lineal/16-linearfit-continuo.md).
 
 ## 5. Estrellas y restos de estrellas brillantes
 
 Las estrellas se separaron en lineal con StarXTerminator y salen de la RGB HDR, nunca del Hα. StarXTerminator deja un borde en el disco de las estrellas muy brillantes: en γ Cas y otras dos se rellenó la capa sin estrellas con la **continuación de su propio perfil radial medido** (ley de potencias), en vez de con un círculo plano.
 
-Técnica: [`guia/referencia/08-estrellas.md`](../../../guia/referencia/08-estrellas.md) y [`guia/referencia/09-halos-estrellas-brillantes.md`](../../../guia/referencia/09-halos-estrellas-brillantes.md).
+Técnica: [Procesado de estrellas](../../../guia/no-lineal/08-estrellas.md).
 
 ## 6. Combinación y acabado
 
 Hα y RGB sin estrellas se estiraron por separado y se combinaron en no lineal; el polvo y los cirros se realzaron con LocalHistogramEqualization de radio grande bajo una máscara de fondo; el ruido se trató con NoiseXTerminator en varias pasadas suaves, y las estrellas se reincorporaron por *screen*.
 
-Técnica: [`guia/referencia/11-combinacion-ha-oiii-rgb.md`](../../../guia/referencia/11-combinacion-ha-oiii-rgb.md).
+Técnica: [LRGB / Paleta](../../../guia/no-lineal/02-lrgb-paleta.md).
 
 ## Lo que no funcionó
 

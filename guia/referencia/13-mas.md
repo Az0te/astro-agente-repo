@@ -1,7 +1,0 @@
-# MultiscaleAdaptiveStretch (MAS)
-
-- Protocolo: Background Reference (ROI en fondo limpio; imprescindible si el objeto llena el campo) → Target Background → Aggressiveness → DRC → Large-scale preview / Scale separation → Contrast Recovery Intensity → Color saturation (opcional) → validación global.
-- Aggressiveness alta: más contraste en tonos medios pero más ruido y recorte en bajas luces. Para ver más señal débil: subir un poco el fondo objetivo y bajar la agresividad. DRC actúa durante el estirado (protege estrellas brillantes y núcleos); demasiada aplana. DRC ≠ HDRMT (HDRMT después, si aún sobra dinámica).
-- Contrast Recovery: variante de MMT por escalas; intensidad 0–1 (0,25 sutil, 0,5 moderado, 1 completo); scale separation define qué escalas se recuperan (subirla hasta que la vista "large scale" quede casi vacía). Riesgos: ringing/halos en estrellas brillantes, microcontraste granuloso, ruido amplificado, núcleo aplanado. Validar en la imagen entera, no sólo en un recorte (depende del tamaño).
-- Clases: nebulosa débil = estirado suave, recuperación moderada; nebulosa compleja = equilibrio recuperación/DRC; galaxia = DRC para bulbo, recuperación medida; núcleo muy brillante (M42) = **HDRComposition con tomas cortas → MAS con saturación off → HDRMT → Curves saturación**.
-- MAS no sustituye HDRMT ni repara datos recortados. Como usa estadísticas, da estirados parecidos en imágenes distintas (útil para igualar capas antes de combinar, p. ej. L y RGB).

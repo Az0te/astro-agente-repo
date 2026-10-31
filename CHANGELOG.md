@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- Guía **reestructurada como flujo de trabajo** (propuesta del autor, revisada): `guia/referencia/` se sustituye por `lineal/` (17 pasos), `no-lineal/` (11 pasos) y `anexos/` (A–G), con un fichero por paso (por qué, parámetros, código PJSR y control). `SKILL.md` queda como índice ligero con las reglas y el mapa de decisión. Se incorporó el contenido que faltaba de los temas anteriores (composición natural Hα/OIII + RGB, protocolo de paletas, blue bloat, controles de calidad, rejilla BXT/NXT, flujo OSC5) y se corrigió: orden único gradiente → BXT Correct Only → SPCC; NXT principal sobre la starless en lineal; umbrales del checkpoint lineal; mezclas y restas con PixelMath usando otras imágenes por su id (sin iconos inventados); variable que tapaba el constructor de SCNR.
+
 - Guía: la astrometría para SPCC, SPFC y MGC se resuelve con `blindSolve("<vista>")` desde el watcher v8, sin pedir al usuario que lance ImageSolver. Tras recortar, rotar, BXT o GraXpert se puede volver a resolver en vez de trasladar la solución a mano. Corregido además que para lanzar un script del menú no basta con pausar el watcher: hay que pararlo. Cambios en `SKILL.md`, `00`, `01`, `06`, `07`, `12`, `21` y el README.
 
 ### Watcher v0.5.0-v8 (2026-10-30)

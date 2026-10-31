@@ -38,4 +38,4 @@ Resúmenes y referencias usados para escribir esta guía. Todo el contenido est�
 - GraXpert, script para PixInsight (carpeta temporal, siempre IA, suavizado gaussiano del modelo): https://ideviceapps.de/graxpert-script.html
 - Siril, interfaz con GraXpert (parámetros smoothing y correction type; modelos de denoise y deconvolución en 3.1): https://siril.readthedocs.io/de/stable/processing/graxpert.html
 - AstroBin, gradiente en M31 que GraXpert no quitó (jul 2026; MGC/DBE como alternativa): https://app.astrobin.com/forum/topic/245723/weird-gradient-i-cant-remove-through-pixinsight-m31
-- Dosieres sobre BlurXTerminator y NoiseXTerminator generados con IA (oct 2026): se usaron sólo las partes coherentes con RC-Astro (ver `21-bxt-nxt.md`).
+- Dosieres sobre BlurXTerminator y NoiseXTerminator generados con IA (oct 2026): se usaron sólo las partes coherentes con RC-Astro (ver los pasos 13 y 15 de la fase lineal).

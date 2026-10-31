@@ -7,7 +7,7 @@ Este proyecto permite que un asistente de IA (Claude, a través del protocolo MC
 Incluye dos partes:
 
 1. **Watcher + servidor MCP** (`watcher/`, `servidor-mcp/`): el puente entre la IA y PixInsight, adaptado y probado en Windows.
-2. **Guía de procesado** (`guia/`): un manual detallado, en español, que Claude carga como *skill*. Es la parte principal: recoge técnicas, trampas, valores de partida y controles de calidad aprendidos en sesiones reales de procesado.
+2. **Guía de procesado** (`guia/`): un manual detallado, en español, que Claude carga como *skill*. Está ordenada como el flujo de trabajo: 17 pasos de la fase lineal, 11 de la no lineal y anexos (API de PJSR, controles de calidad, anti-patrones, flujos por tipo de objeto, glosario); cada paso es un fichero con el porqué, los parámetros, el código y el control para comprobarlo. Es la parte principal: recoge técnicas, trampas, valores de partida y controles de calidad aprendidos en sesiones reales de procesado.
 
 ## Principio
 

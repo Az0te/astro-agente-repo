@@ -1,80 +1,101 @@
 ---
 name: "astro-procesado-pixinsight"
-description: "Procesado de astrofotografía de cielo profundo en PixInsight controlado por Claude a través del watcher MCP: OSC + dual band, HDR con tomas cortas, estrellas y halos, blue bloat, combinación Hα/OIII + RGB, paletas de banda estrecha y controles objetivos de calidad. Fiel a los datos."
+description: "Procesado de astrofotografía de cielo profundo en PixInsight controlado por Claude a través del watcher MCP, paso a paso desde el análisis del objeto hasta la entrega: OSC + dual band, HDR con tomas cortas, gradientes, BXT/NXT/SXT, SPCC, estrellas y halos, paletas de banda estrecha y controles objetivos de calidad. Fiel a los datos."
 ---
 
-# Procesado de astrofotografía en PixInsight con Claude
+# Procesado de astrofotografía en PixInsight
 
-Guía de trabajo para que Claude procese astrofotografías de cielo profundo en PixInsight a través del watcher MCP de este repositorio. Está escrita para Claude (le habla en segunda persona del "usuario"), pero también se puede leer como manual.
+Guía de trabajo para que Claude procese astrofotografía de cielo profundo en PixInsight a través del watcher MCP de este repositorio (PixInsight 1.9.5+; `blindSolve` necesita el watcher v8 y PixInsight 1.9.6+). Está escrita para Claude, pero se puede leer como manual. Cada paso vive en su propio fichero: carga sólo el que vayas a ejecutar.
 
 ## Principio innegociable
+
 **Ceñirse a los datos, no inventar nada**, y sacar la máxima información que contengan. "Revelar, no inventar": cualquier estructura débil se confirma antes de realzarla, y cada paso se compara con la versión sin tocar.
 
-## Reglas que no se saltan (leer `referencia/00-reglas-y-api-basica.md` antes de empezar)
-1. Si falla un paso esencial (gradiente, SPCC, BXT, estirado), **para y avisa**: no lo sustituyas por un apaño ni lo des por resuelto.
-2. **Nunca** ajustes el color multiplicando canales a mano ni con curvas por canal a ojo; el color sale de SPCC.
-3. **Nunca** estires con fórmulas de PixelMath inventadas: usa MAS, GHS o HistogramTransformation.
-4. Comprueba cada paso (estadísticas por canal e historial `view.processing`); no te fíes del "success".
-5. No inventes funciones, procesos ni IDs: `describe_process` y `list_open_images`. Los procesos se aplican con `P.executeOn(ventana.mainView)`; `.process()`/`.execute()` no existen y la imagen está en `ventana.mainView.image`.
-6. BXT, NXT, SXT, SPCC, MGC, MAS y GHS son **procesos** (se ejecutan desde el watcher); WBPP y DBXtract son **scripts** (los lanza el usuario). La astrometría se resuelve desde el watcher v8 con `blindSolve("<vista>")` (motor de BlindSolver integrado; ver `00-reglas-y-api-basica.md`). GraXpert se usa desde el watcher llamando a su ejecutable con `guia/herramientas/graxpert.js`, no con su script.
-7. Trabaja sobre una copia con nombre de versión y documenta lo que dice el historial, no lo que pretendías.
-8. Gradientes: **GraXpert sample_free con escala 10 es el método predeterminado** (`graxpertBGE()` sin opciones; medido en oct 2026, ver `20-graxpert-comparativa-gradientes.md`). La IA de GraXpert se come parte de los objetos extensos. Revisa siempre el modelo con `gcStructCopy` y a la vista; la comparativa completa, si el modelo no convence.
-9. Orden lineal: gradiente → BXT Correct Only → SPCC → BXT → SXT → NXT. **Nunca NXT antes de BXT**; el NXT fuerte (0,70–0,80) sólo sobre la capa sin estrellas en lineal (`21-bxt-nxt.md`).
+## Reglas no negociables
 
-## Antes de empezar: el perfil del usuario
-Lee primero `perfil.md` (cópialo de `perfil-ejemplo.md` y rellénalo): equipo, escala de muestreo, filtros, cielo, rutas de trabajo, iconos de PixInsight disponibles, scripts instalados y preferencias estéticas. Esta guía es genérica; el perfil decide los valores concretos. Cuando el usuario exprese una preferencia nueva (elige una versión frente a otra, pide más o menos saturación…), propón añadirla al perfil.
+1. **Si falla un paso esencial, PARA y avisa.** Esenciales: corrección de gradiente, SPCC, BXT, estirado. Nunca sustituirlos por un apaño (curvas en lugar de calibración de color, PixelMath en lugar de estirado, UnsharpMask en lugar de BXT) ni marcar el error como "resuelto con alternativa".
+2. **Nunca ajustar el color multiplicando canales a mano** ni con curvas por canal "a ojo". El color sale de SPCC (o, sin SPCC, de BackgroundNeutralization + ColorCalibration). Si SPCC no se puede aplicar, se para.
+3. **Nunca estirar con fórmulas de PixelMath inventadas.** Estirar con MAS, GHS o HistogramTransformation, y luego curvas suaves.
+4. **Comprobar cada paso**, sin fiarse del "success": estadísticas por canal antes y después y el historial `view.processing`. Un paso que no cambió nada no se ha hecho.
+5. **Ningún canal puede acabar recortado.** Fondo final de una galaxia ~0,10; de una nebulosa ~0,15–0,25 (o el que diga el perfil).
+6. **Trabajar sobre una copia con nombre de versión**, nunca sobre el master ni sobrescribiendo versiones. Nunca borrar subs ni masters: los descartes van a `_rechazados` y el usuario confirma.
+7. **El dossier describe lo que dice el historial de la vista**, no lo que se pretendía.
+8. **No inventar nombres.** Procesos y parámetros: `describe_process`. IDs de vistas: `list_open_images`. Los procesos se aplican con `P.executeOn(ventana.mainView)`; la imagen está en `ventana.mainView.image`.
+9. **Antes de aplicar nada, repasar los anti-patrones** ([Anexo F](anexos/F-anti-patrones.md)): casi todos los fallos de una sesión están ahí, y el criterio de parada también.
 
-Los nombres de iconos que aparecen en la guía (SPFC_RGB, SPCC_RGB, NoiseX_075…) son ejemplos del espacio de trabajo del autor: usa los equivalentes del perfil.
+**Orden lineal:** gradiente → BXT Correct Only → SPCC → BXT completo → SXT → NXT principal sobre la starless. Nunca reducir ruido antes de BXT: el ruido fino es información para la deconvolución.
 
-## Herramientas y límites del entorno
-- PixInsight se controla con la herramienta `run_script` del servidor MCP (código PJSR en el parámetro `code`). Las llamadas de más de ~60 s dan timeout pero siguen ejecutándose: esperar y comprobar (lista de ventanas, historial `view.processing`, ficheros guardados), no relanzar a ciegas. `watcher_status` dice qué comando está en curso y si PixInsight responde.
-- Para bucles largos (p. ej. medir cientos de subs), escribir funciones que trabajen ~50 s, guarden el resultado en un CSV incremental y devuelvan el índice siguiente.
-- Cada llamada empieza sin estado: guardar funciones reutilizables en `<versión>/tools/*.js` y cargarlas con `eval(File.readTextFile(ruta))`.
-- `describe_process` lista los parámetros y constantes reales de un proceso en la versión de PixInsight instalada: úsalo antes de adivinar nombres de parámetros.
-- **GraXpert sí se usa desde el watcher**, sin su script: `guia/herramientas/graxpert.js` llama al ejecutable por línea de comandos (`eval(File.readTextFile("<ruta de guia>/herramientas/graxpert.js"))` y `graxpertBGE("<vista>")`; ruta en el perfil). Detalles en `20-graxpert-comparativa-gradientes.md`.
-- **Astrometría para SPCC, SPFC y MGC: `blindSolve("<vista>")`** en `run_script` (watcher v8, PixInsight 1.9.6+). Resuelve a ciegas en ~1 s y escribe la solución en la ventana; no hace falta que el usuario lance ImageSolver. Con el watcher clásico no existe: pedir al usuario que resuelva él.
-- **No se pueden lanzar scripts (ImageSolver, AutoDBE, DBXtract, WBPP, RepairedHSVSeparation…) desde el watcher** (error "Script instance recursively" y un diálogo modal que el usuario debe cerrar). Los procesos sí (`ProcessInstance.fromIcon("Nombre")`, SubframeSelector, ImageIntegration, StarAlignment, HDRComposition…). Pide al usuario que lance él los scripts, con el watcher **parado** (botón Pause/Abort o `mcp-stop.bat`): mientras corre, aunque esté en pausa, PixInsight bloquea el menú Script.
-- Si el watcher deja de responder sin diálogo visible, no insistir con más llamadas pesadas: avisar al usuario. Para parar el watcher: botón Pause/Abort de la consola o `mcp-stop.bat`.
-- Para VER resultados: guardar JPG reducidos (IntegerResample) o recortes al 100 % en `<carpeta>/prev/` y leerlos. Es mucho mejor que las capturas de pantalla.
-- Descargar desde PJSR: `NetworkTransfer` + `onDownloadDataAvailable` escribiendo a un `File`.
-- `beginProcess()` sin `endProcess()` deja la vista bloqueada: si pasa, clonar la imagen a una ventana nueva y cerrar la vieja.
-- El historial de cada vista (`view.processing`) permite reconstruir qué se hizo y con qué parámetros.
-- Nunca borrar subs ni masters del usuario: mover los descartes a una subcarpeta `_rechazados` y que el usuario confirme. Nunca sobrescribir versiones (v1, v2…).
+## Antes de empezar
 
-## Referencia por temas
-Carga sólo la sección que necesites:
+Leer [Perfil del usuario y entorno](00-perfil-y-entorno.md) y el `perfil.md` del usuario (plantilla en `perfil-ejemplo.md`; es privado y no se sube a Git). La guía es genérica: el perfil decide equipo, escala, rutas, iconos, scripts instalados y preferencias. Cuando el usuario exprese una preferencia nueva, propón añadirla al perfil.
 
-| Fichero | Tema |
+## Mapa de decisión rápido
+
+| Señal de partida | Combinación | Pasos que cambian |
+|---|---|---|
+| OSC sin filtro (RGB natural) | RGB; LRGB si hay L de mono | 7 y 10 se saltan la desmezcla; SPCC con curva QE 'Ideal' |
+| OSC dual band (Hα/OIII) | HOO o Hα+RGB; SHO sólo si hay SII real | 7 obligatorio (DBXtract o emulación), 10 y paso 2 no lineal |
+| Mono con rueda de filtros | LRGB, HOO, SHO | 7 no aplica; SPCC con QE real y filtros de la rueda |
+| Mono + OSC | LRGB / LHa-RHaGB / HOO+RGB | 10 con LinearFit y `w ∝ 1/σ²` |
+
+Sin banda estrecha no hay paletas: RGB o LHa-RHaGB. Una paleta es una convención, no el color real: decirlo en el dossier. Para galaxias, nebulosas oscuras, planetarias, cúmulos e IFN, el [Anexo D](anexos/D-flujos-por-tipo-objeto.md) dice qué pasos cambian.
+
+## Índice de carga
+
+### Fase lineal
+
+| Paso | Parte | Tokens aprox. |
+|---|---|---|
+| 1 | [Análisis del objeto](lineal/01-analisis-del-objeto.md) | ~1000 |
+| 2 | [Inventario](lineal/02-inventario.md) | ~780 |
+| 3 | [Blink / SubframeSelector](lineal/03-blink-subframeselector.md) | ~1180 |
+| 4 | [Preprocesado](lineal/04-preprocesado.md) | ~1670 |
+| 5 | [StarAlignment + crop común](lineal/05-staralignment-crop.md) | ~800 |
+| 6 | [HDRComposition](lineal/06-hdr-composition.md) | ~1570 |
+| 7 | [Extracción de canales (OSC dual band)](lineal/07-extraccion-canales.md) | ~1040 |
+| 8 | [Plate solve](lineal/08-plate-solve.md) | ~720 |
+| 9 | [Corrección de Gradiente](lineal/09-correccion-gradiente.md) | ~3660 |
+| 10 | [Combinación RGB / NB](lineal/10-combinacion-rgb-nb.md) | ~1710 |
+| 11 | [BlurX correct only](lineal/11-bxt-correct-only.md) | ~910 |
+| 12 | [SPCC](lineal/12-spcc.md) | ~840 |
+| 13 | [BlurX completo](lineal/13-bxt-completo.md) | ~1000 |
+| 14 | [NoiseX suave (opcional)](lineal/14-noisex-suave.md) | ~560 |
+| 15 | [StarX y NXT de la starless](lineal/15-starx.md) | ~1050 |
+| 16 | [LinearFit / sustracción de continuo](lineal/16-linearfit-continuo.md) | ~1070 |
+| 17 | [Checkpoint](lineal/17-checkpoint.md) | ~630 |
+
+### Fase no lineal
+
+| Paso | Parte | Tokens aprox. |
+|---|---|---|
+| 1 | [Estirado (starless y estrellas por separado)](no-lineal/01-estirado.md) | ~2580 |
+| 2 | [LRGB / Paleta](no-lineal/02-lrgb-paleta.md) | ~2940 |
+| 3 | [SCNR](no-lineal/03-scnr.md) | ~730 |
+| 4 | [Máscaras](no-lineal/04-mascaras.md) | ~800 |
+| 5 | [Boost (curvas, contraste, saturación)](no-lineal/05-boost.md) | ~1130 |
+| 6 | [NoiseX](no-lineal/06-noisex.md) | ~720 |
+| 7 | [Nitidez](no-lineal/07-nitidez.md) | ~500 |
+| 8 | [Procesado de estrellas](no-lineal/08-estrellas.md) | ~2170 |
+| 9 | [Recombinación](no-lineal/09-recombinacion.md) | ~530 |
+| 10 | [Recorte y exportación](no-lineal/10-recorte-exportacion.md) | ~680 |
+| 11 | [Dossier](no-lineal/11-dossier.md) | ~560 |
+
+### Anexos
+
+| Anexo | Contenido | Tokens aprox. |
+|---|---|---|
+| A | [Contrato de API (PJSR)](anexos/A-contrato-api-pjsr.md) | ~1900 |
+| B | [Controles de calidad y checklist de entrega](anexos/B-checklist-entrega.md) | ~990 |
+| C | [Pendiente de documentar](anexos/C-pendiente-documentar.md) | ~470 |
+| D | [Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) | ~1670 |
+| E | [Parámetros y detalles complementarios](anexos/E-parametros-detalle.md) | ~3230 |
+| F | [Anti-patrones y criterio de parada](anexos/F-anti-patrones.md) | ~1770 |
+| G | [Glosario](anexos/G-glosario.md) | ~1210 |
+
+### Herramientas y fuentes
+
+| Fichero | Para qué |
 |---|---|
-| `referencia/00-reglas-y-api-basica.md` | **Leer siempre primero.** Reglas de trabajo, API básica de PJSR, proceso vs script, requisitos que hacen fallar pasos |
-| `referencia/01-trampas-pjsr.md` | Trampas de PJSR y del watcher (motor v8 o ES5, ventanas, PixelMath, memoria) |
-| `referencia/02-preprocesado.md` | Calibración, WBPP, selección de subs, índice de halo por sub |
-| `referencia/03-hdr-tomas-cortas.md` | HDR con tomas cortas, HDRComposition, de dónde salen las estrellas |
-| `referencia/04-mono-osc-dualband.md` | Mezclar mono, OSC y dual band; LRGB; Hα con RGB; HOO/SHO |
-| `referencia/05-flujos-astro-photographie.md` | Flujos de referencia OSC5, HRGB1, OSC2; RC-Astro; continuo; DBXtract y su emulación |
-| `referencia/06-flujo-lineal.md` | Flujo lineal probado paso a paso |
-| `referencia/07-mars-mgc.md` | Gradientes con MARS / MGC |
-| `referencia/08-estrellas.md` | Separación, estirado y recombinación de estrellas |
-| `referencia/09-halos-estrellas-brillantes.md` | Halos de estrellas brillantes |
-| `referencia/10-blue-bloat-halos-azules.md` | Blue bloat, halos azules, dominantes de color |
-| `referencia/11-combinacion-ha-oiii-rgb.md` | Combinación Hα/OIII + RGB en no lineal |
-| `referencia/12-paletas-emision.md` | Previews de paletas para objetos de emisión |
-| `referencia/13-mas.md` | MultiscaleAdaptiveStretch |
-| `referencia/14-estirado.md` | Elegir método de estirado; GHS en detalle |
-| `referencia/15-contraste-nitidez.md` | Contraste local, LHE, HDRMT, nitidez |
-| `referencia/16-por-tipo-de-objeto.md` | Emisión, reflexión, oscuras, planetarias, galaxias, cúmulos… |
-| `referencia/17-controles-calidad.md` | Controles objetivos: ringing, núcleos quemados, estrellas |
-| `referencia/18-validacion.md` | Validación y revisión crítica final |
-| `referencia/19-verificacion-entrega.md` | Verificación y entrega de cada versión |
-| `referencia/20-graxpert-comparativa-gradientes.md` | GraXpert (método predeterminado, uso desde el watcher) y protocolo para comparar métodos de gradiente con medidas |
-| `herramientas/graxpert.js` | Funciones PJSR para usar GraXpert (fondo y denoise) desde el watcher |
-| `referencia/21-bxt-nxt.md` | BlurXTerminator y NoiseXTerminator: orden, ajustes por objeto, rejilla de variantes con medidas |
+| `herramientas/graxpert.js` | GraXpert desde el watcher (fondo y denoise), sin su script |
+| `herramientas/gradcompare.js` | Medir modelos de gradiente (`gcStructCopy` y comparativa) |
 | `FUENTES.md` | Fuentes consultadas |
-
-## Flujo de trabajo resumido
-1. Leer el perfil e inspeccionar los masters (estadísticas, escala, rotación, píxeles saturados).
-2. Clasificar el objeto y decidir qué es "el tema" (`16-por-tipo-de-objeto.md`).
-3. Procesado lineal (`06-flujo-lineal.md`): gradiente con GraXpert sample_free escala 10, revisando su modelo, y comparativa medida si no convence o el objeto es de riesgo (`20`), BXT Correct Only antes de SPCC y parámetros de BXT/NXT elegidos con rejilla de variantes (`21`); estrellas separadas pronto (`08-estrellas.md`).
-4. Estirado y combinación (`11`, `13`, `14`), con variantes en los pasos dudosos.
-5. Controles objetivos y revisión crítica (`17`, `18`), comparando siempre con "no hacer nada".
-6. Entregar cada versión con nombre nuevo y un dossier de qué se hizo y por qué (`19`).
