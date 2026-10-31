@@ -102,7 +102,8 @@ var img = v.image;
 img.selectedChannel = 0;
 var med = img.median();          // SP = mediana actual (medir ANTES de cada pasada)
 img.resetSelections();
-if (med > 0.01) throw new Error("La imagen ya no es lineal: no repetir fase 1");
+if (med > 0.05) throw new Error("La imagen parece estirada: no repetir la fase 1 (mirar el historial)");
+// Un master lineal con pedestal puede pasar de 0,01 (LDN 1235: 0,0102); estirado suele estar por encima de 0,1.
 
 var P = new GeneralizedHyperbolicStretch;
 P.stretchType = GeneralizedHyperbolicStretch.ST_GeneralisedHyperbolic;   // v8; en el clásico, .prototype.

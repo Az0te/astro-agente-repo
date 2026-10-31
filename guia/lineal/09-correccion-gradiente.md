@@ -38,6 +38,19 @@ var r = graxpertBGE("<vista>");      // sample_free, escala 10 por defecto
 
 - El ejecutable se busca en las rutas habituales; si no está, definir `var GX_EXE = "ruta"` antes del `eval`.
 - Opciones: `method` (sample_free por defecto, AI, RBF, Kriging, Splines), `scale` (sample_free, 1–10, por defecto 10), `smoothing` 0–1, `correction` (Subtraction o Division), `aiVersion`, `gpu: false`, `prefs`, `extra` (`-sample_free_scale`, `-sample_free_smoothness`, `-sample_free_protect`, `-sample_free_protect_threshold`, `-sample_free_protect_amount`, `-sample_free_simplified`, `-sample_free_degree`, `-sample_free_downsample`), `tag`, `keepFiles`, `maxMinutes`.
+- **Proceso GraXpert nativo** (módulo de PixInsight, comprobado en 1.9.6): se ejecuta desde el watcher sin el ejecutable aparte. Crea `GraXpert_sample_free_background_extraction` (corregida, con la astrometría conservada) y `GraXpert_background` (el modelo); ~10 s en 1504×1611. Falta compararlo con `graxpert.js` en la misma imagen (Anexo C); hasta entonces `graxpert.js` sigue siendo el método de referencia.
+
+```javascript
+var G = new GraXpert;
+G.backgroundExtraction = true;
+G.backgroundExtractionSampleFree = true;
+G.sampleFreeScale = 10;
+G.correction = "Subtraction";
+G.createBackground = true;       // ventana con el modelo, para revisarlo
+G.replaceImage = false;
+if (!G.executeOn(View.viewById("MasterLight"))) throw new Error("GraXpert falló");
+```
+
 - Denoise: `graxpertDenoise("<vista>", {strength: 0.5})`; "es una alternativa a comparar con NXT, no un sustituto".
 - Si cambia la versión de GraXpert, confirmar las opciones con `GraXpert -cli -cmd background-extraction -h`.
 

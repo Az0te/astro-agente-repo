@@ -28,7 +28,7 @@
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 var BXT = new BlurXTerminator;
-// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+// nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
 BXT.correct_only = false;
 BXT.auto_nonstellar_psf = true;
 BXT.sharpen_stars = 0.30;

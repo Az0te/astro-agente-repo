@@ -24,7 +24,7 @@
 - SPFC deja en la vista `PCL:SPFC:FWHMx/FWHMy` por canal: "en IC63 v4 (R 4,4 / G 3,7 / B 4,0 px) no había blue bloat y se usó halos 0,00".
 - Regla: "Usar −0,30 sólo si hay blue bloat y comprobar anillos oscuros al 100 % alrededor de estrellas brillantes".
 
-**Astrometría.** "BlurXTerminator elimina la solución astrométrica de la vista (aescaffre): tras BXT, `copyAstrometricSolution` desde el master original antes de SPFC/SPCC". Matiz del mismo archivo: "BXT, en cambio, la conservó en PI 1.9.5: comprobar `hasAstrometricSolution` en vez de suponer". Tras BXT CO: volver a resolver con `blindSolve` (más simple) o copiar la solución.
+**Astrometría.** "BlurXTerminator elimina la solución astrométrica de la vista (aescaffre): tras BXT, `copyAstrometricSolution` desde el master original antes de SPFC/SPCC". Matiz del mismo archivo: "BXT, en cambio, la conservó en PI 1.9.5: comprobar `hasAstrometricSolution` en vez de suponer". Tras BXT CO: volver a resolver con `blindSolve` (más simple) o copiar la solución. En PixInsight 1.9.6 BXT Correct Only y BXT completo la conservaron (prueba del 31 oct 2026), pero se comprueba igual.
 
 **Código**
 
@@ -32,7 +32,7 @@
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 var BXT = new BlurXTerminator;
-// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+// nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
 BXT.correct_only = true;
 BXT.auto_nonstellar_psf = true;   // o PSF manual: false y nonstellar_diameter = FWHM medido
 if (!BXT.executeOn(v)) throw new Error("BXT Correct Only falló");

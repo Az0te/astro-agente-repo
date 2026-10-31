@@ -24,7 +24,7 @@
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 var NXT = new NoiseXTerminator;
-// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+// nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
 NXT.denoise = 0.50;       // pasada ligera antes de SXT
 NXT.detail = 0.15;
 NXT.iterations = 2;

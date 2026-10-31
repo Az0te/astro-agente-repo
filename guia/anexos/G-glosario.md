@@ -24,7 +24,7 @@ Términos que la guía usa sin explicar. Las definiciones son de uso común en a
 | **IFN** | Integrated Flux Nebula: polvo galáctico muy débil; señal de bajo contraste que cualquier extractor agresivo se come. |
 | **k (continuo)** | Coeficiente de la sustracción de continuo: cuánto se resta de la banda ancha a la estrecha. Se mide por fotometría de estrellas. |
 | **LHE** | LocalHistogramEqualization: contraste local. Necesita máscara y radios moderados. |
-| **Lineal** | Imagen sin estirar (mediana < ~0,01). Es donde se calibra el color y se deconvoluciona. |
+| **Lineal** | Imagen sin estirar (mediana del orden de 0,001–0,02; con pedestal puede pasar de 0,01). Es donde se calibra el color y se deconvoluciona. |
 | **MAD** | Desviación absoluta mediana; medida de ruido robusta frente a estrellas. |
 | **MARS / MGC** | Modelo `I ≈ k·R + G + ε` de corrección de gradiente que compara con cielo real medido. |
 | **MAS** | MultiscaleAdaptiveStretch: estirado multiescala con agresividad, DRC y recuperación de contraste. |

@@ -45,4 +45,4 @@ img.resetSelections();
 out.join("\n");
 ```
 
-**Control.** La mediana de un master lineal debe ser < ~0,01 . Si la mediana es mucho mayor, la imagen ya está estirada y no es la entrada correcta. Máximos por canal muy distintos = saturación desigual, no fallo de color.
+**Control.** La mediana de un master lineal está en torno a 0,001–0,02 (con pedestal puede pasar de 0,01: el de LDN 1235 da 0,0102). Si es mucho mayor (> 0,05), la imagen ya está estirada y no es la entrada correcta. Máximos por canal muy distintos = saturación desigual, no fallo de color.

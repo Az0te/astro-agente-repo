@@ -8,7 +8,7 @@
 
 | Control | Umbral |
 |---|---|
-| Sigue lineal | mediana < ~0,01 (los objetivos de fondo 0,10 / 0,15–0,25 son para después de estirar) |
+| Sigue lineal | mediana del orden de 0,001–0,02 (con pedestal puede pasar de 0,01) y ningún estirado en el historial. Los objetivos de fondo 0,10 / 0,15–0,25 son para después de estirar |
 | Color del fondo | medianas R, G y B de cielo limpio parecidas tras SPCC |
 | Canales recortados | % de píxeles a 1 por canal anotado; ningún paso del procesado ha recortado un canal |
 | Solución astrométrica | `hasAstrometricSolution === true` |
