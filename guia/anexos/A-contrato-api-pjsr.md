@@ -30,7 +30,7 @@ var img = v.image;           // la imagen está en la vista, NO en la ventana
 |---|---|---|
 | Aplicar sobre una vista | `P.executeOn(v)` → `false` si falló | `P.process()`, `P.execute()`, `P.run()`, `P.apply()` |
 | Proceso que crea imágenes | `P.executeGlobal()` | — |
-| Proceso con los ajustes del usuario | `ProcessInstance.fromIcon("SPCC_RGB")` | — |
+| Proceso con los ajustes del equipo | `pxSPCC()`, `pxSPFC()`, `pxMGC()` de `herramientas/procesos.js`, o `new Proceso` con los valores del perfil | `ProcessInstance.fromIcon`: la guía no usa iconos |
 | Proceso desde cero | `new BlurXTerminator` (etc.) | Nombres mal escritos → `describe_process` |
 
 ```javascript
@@ -129,7 +129,21 @@ h.at(i).toSource();          // código del paso i
 - **Clásico**: sólo `var`, `function(){}`, concatenación de cadenas. Nada de `let`, flechas, plantillas, clases, `for…of`, `Promise`.
 - Si no sabes cuál corre: la consola muestra `v0.5.0-v8` al arrancar, o `typeof blindSolve === "function"` sólo en v8.
 - **Procesos** (se lanzan desde el watcher): BlurXTerminator, NoiseXTerminator, StarXTerminator, SpectrophotometricColorCalibration, SpectrophotometricFluxCalibration, MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, GeneralizedHyperbolicStretch, HistogramTransformation, CurvesTransformation, PixelMath, LocalHistogramEqualization, HDRMultiscaleTransform, HDRComposition, NarrowbandNormalization, AutomaticBackgroundExtractor, DynamicBackgroundExtraction, SCNR.
-- **Scripts** (los lanza el usuario, con el watcher **parado**): ImageSolver, WBPP, DBXtract, AutoPalette Studio, Perfect Palette Picker, Star Stretch, el resto de SetiAstro.
+- **Scripts:** la guía no los usa. Desde el watcher no se pueden lanzar ("Script instance recursively"), así que cada uno tiene su equivalente:
+
+| Script | Equivalente desde el watcher |
+|---|---|
+| ImageSolver / BlindSolver | `blindSolve` (Paso 8 lineal) |
+| WBPP | Cadena de procesos de calibración, registro e integración (Paso 4 lineal) |
+| DBXtract / NBExtractPI | Emulación con PixelMath (Paso 7 lineal) |
+| GraXpert (script) / AutoDBE | `herramientas/graxpert.js`, MGC con `pxMGC` o plano robusto (Paso 9 lineal) |
+| Combine Ha with RGB / CombineRGBAndNarrowband / Mix SHORGB | PixelMath (Paso 10 lineal y Paso 2 no lineal) |
+| PhotometricContinuumSubtraction | Fotometría de estrellas + PixelMath (Paso 16 lineal) |
+| AutoPalette Studio / Perfect Palette Picker / Foraxx | Fórmulas con PixelMath (Paso 2 no lineal) |
+| Statistical Stretch / Star Stretch | MAS o GHS; fórmula de Star Stretch con PixelMath (Paso 1 no lineal) |
+| NB to RGB Star Combination | PixelMath (Paso 8 no lineal) |
+| Halo-B-Gon / Star Reduction / RepairStarCores / Repaired HSV Separation | Recetas de halos y relleno con ley de potencias (Paso 8 no lineal); HDR con tomas cortas |
+| DarkStructureEnhance | LHE con máscara de fondo (Paso 5 no lineal) |
 - **BlindSolver** es la excepción: `blindSolve("<vista>")`.
 - **GraXpert** es externo: se llama con `guia/herramientas/graxpert.js`.
 

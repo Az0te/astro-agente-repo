@@ -18,7 +18,7 @@
 1. Estirar por separado con MAS (fondo 0,15) la RGB sin estrellas y el Hα (saturación de MAS desactivada).
 2. `hx = max(Has − mediana(Has), 0)`, anulado cerca de estrellas muy brillantes. R += ~1,5·hx, G += ~0,2·hx, B += ~0,45·hx (rosa natural Hα + Hβ). En IC 63 se eligió un rojo de 1,40–1,49 frente a 1,65: más rojo tapa los blancos.
 3. La suma satura el rojo en las zonas brillantes: calcular sin truncar y aplicar la **rodilla suave** sobre el máximo de los tres canales (Anexo E).
-4. El Hα de un dual band OSC sale de la desmezcla (Paso 7 lineal) con el continuo restado (Paso 16 lineal). Alternativas: CombineRGBAndNarrowband / CombineHaWithRGB (scripts), o la inyección en tres partes de aescaffre (R condicional + realce de luminancia + capa de detalle) con máscara de nebulosa derivada del Hα (clipLow 0,04, blur 8; fuerza ~0,65, umbral 0,3).
+4. El Hα de un dual band OSC sale de la desmezcla (Paso 7 lineal) con el continuo restado (Paso 16 lineal). Alternativa: la inyección en tres partes de aescaffre (R condicional + realce de luminancia + capa de detalle) con máscara de nebulosa derivada del Hα (clipLow 0,04, blur 8; fuerza ~0,65, umbral 0,3).
 5. Blancos y azules de reflexión, nebulosidad de fondo en Hα y compresión de altas luces: Anexo E. Curvas y saturación: Paso 5. NXT tras los realces: Paso 6.
 6. Ajustar el nivel del fondo al final con una curva K (el valor objetivo está en el perfil).
 7. El OIII de un dual band en una nebulosa sin OIII sólo aporta continuo de reflexión y ruido: medirlo y descartarlo si no añade señal (NOVA descarta la paleta bicolor si Hα/OIII > 20). Una nebulosa de reflexión captada con dual band no pasa por una paleta: su color es continuo de banda ancha (RGB).
@@ -46,19 +46,18 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 - "Sin SII real crea un SII sintético: 0,6·Hα + 0,4·OIII con Blend Soft (Neutral 0,5/0,5, Hard 0,7/0,3); para las Foraxx usa otro más cercano a Hα (0,85·Hα + 0,15·OIII en Soft). Cualquier paleta S con sólo Hα/OIII es pseudo-SHO: decirlo."
 **Herramientas**
 
-- **AutoPalette Studio v1.2.0** (Raúl Hussein, Suite Astrocitas): **script**, sin API de scripting; pensado para imágenes no lineales. Si recibe una imagen lineal (mediana < 0,12 y p98 < 0,55) estira cada canal por separado, lo que cambia la proporción Hα/OIII: darle las capas ya estiradas con el mismo estirado.
+- Las fórmulas de paleta vienen de **AutoPalette Studio v1.2.0** (Raúl Hussein, Suite Astrocitas), leídas de su código; aquí se aplican con PixelMath sobre capas estiradas con el mismo estirado (el script estiraba cada canal por separado si recibía imágenes lineales, lo que cambia la proporción Hα/OIII).
 - Blend mode (mezcla del canal compartido): Neutral 50/50, **Soft 60/40 (defecto)**, Hard 70/30. HOO: G = b·Hα + (1−b)·OIII. SHO: R = b·S + (1−b)·H, G = b·H + (1−b)·O.
-- Familias Foraxx (SHO, HOS, OHS, HOO, HSO, OSH, SOH, 6 variantes cada una): están en las funciones `foraxSHO`…`foraxSOH` del script; copiarlas de allí, no de memoria. Exigen SII real. Paletas por defecto de la herramienta: Original, Classic HOO, Foraxx Classic y Foraxx HOS.
-- Otros scripts de paleta (los lanza el usuario): Perfect Palette Picker, ForaxxPalette_V8, AutoPalette_V8, NBColourMapper, NarrowbandHueCombination, CreateHubblePaletteFromOSC.
-- **Aviso de AutoPalette Studio:** "Fuente 'OSC Dualband': separa R, G, B con ChannelExtraction y usa R como Hα, G como 'SII' y B como OIII, sin desmezclar... toda paleta con S sale de un canal inventado. Con dual band usar siempre DBXtract (o su emulación con PixelMath) y la fuente 'DBXtract / Mono'."
+- Familias Foraxx (SHO, HOS, OHS, HOO, HSO, OSH, SOH, 6 variantes cada una): están en las funciones `foraxSHO`…`foraxSOH` de AutoPalette Studio; copiarlas de allí, no de memoria. Exigen SII real. Paletas por defecto de la herramienta: Original, Classic HOO, Foraxx Classic y Foraxx HOS.
+- Con dual band, el canal "SII" no existe: un G sin desmezclar es ≈ 0,11·Hα + 0,93·OIII. Usar siempre la desmezcla del Paso 7 lineal.
 
 **Juego de previews por defecto** (PixelMath con símbolos, comprobando el valor devuelto)
 
 - **Sin SII** (dual band, o mono con H y O): Classic HOO Soft, Classic HOO Hard, Foraxx Classic bicolor, Foraxx HOS (marcada pseudo), HOO + NBN (Mode1, shadowpoint 1, Lightness Off) y la composición natural como referencia.
 - **Con SII real**: Classic SHO, Classic Hubble (HSO), Foraxx Classic, Foraxx HOS, Classic HOO, SHO + NBN y la natural.
 - Plancha: copiar cada preview en su casilla de una ImageWindow grande con `setSamples`; si los rótulos con Bitmap/Graphics fallan, numerar las casillas y dar la leyenda en el mensaje.
-- Con la elegida: aplicar la misma fórmula a resolución completa (o AutoPalette Studio lanzado por el usuario con el watcher parado: fuente DBXtract/Mono sobre nuestras capas estiradas, Normalization None, o Auto si los canales vienen de cámaras o exposiciones distintas, Blend Soft). Después, estrellas RGB en screen.
-- Avisos: no hay fórmula Foraxx oficial única (la ficha C10-34 de astro-photographie no coincide con el script: usar la del script); en SHO el verde es esperable si domina Hα.
+- Con la elegida: aplicar la misma fórmula con PixelMath a resolución completa y después las estrellas RGB en screen.
+- Avisos: no hay fórmula Foraxx oficial única (la ficha C10-34 de astro-photographie no coincide con AutoPalette Studio: usar la de AutoPalette); en SHO el verde es esperable si domina Hα.
 
 **NarrowbandNormalization 1.0** (proceso, sí se ejecuta desde el watcher)
 

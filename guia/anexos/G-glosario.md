@@ -11,7 +11,7 @@ Términos que la guía usa sin explicar. Las definiciones son de uso común en a
 | **Bayer / CFA / debayer** | Mosaico de filtros sobre el sensor (OSC) y su reconstrucción a color por interpolación (VNG en esta guía). |
 | **BXT** | BlurXTerminator (RC-Astro): deconvolución por IA. "Correct Only" corrige la óptica sin tocar lo no estelar. |
 | **CFA flat scaling** | Ajuste de WBPP que conserva la escala relativa de cada canal Bayer en los flats. |
-| **DBXtract** | Script que separa Hα y OIII de un OSC dual band con un modelo lineal `C = A·L + P`. |
+| **DBXtract** | Script de Raúl Hussein que separa Hα y OIII de un OSC dual band con un modelo lineal `C = A·L + P`; la guía usa su emulación con PixelMath. |
 | **Drizzle** | Remuestreo que reparte cada píxel de entrada entre varios de salida; recomendado en OSC aunque no haya submuestreo. |
 | **DRC** | Dynamic Range Compression de MAS: protege luces durante el estirado. No es HDRMT. |
 | **Estirado / stretch** | Pasar de lineal (señal ∝ flujo) a rango de pantalla. Irreversible en la práctica. |

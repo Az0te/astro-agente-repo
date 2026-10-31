@@ -4,11 +4,13 @@
 
 Puntos que el flujo necesita y que todavía no están medidos ni comprobados. No se rellenan con conocimiento general: cuando se resuelva uno, se pasa al paso que corresponda y se quita de aquí.
 
-Comprobados el 31 oct 2026 en PixInsight 1.9.6 (watcher v8) y ya corregidos en los pasos: HDRComposition (`maskBinarizingThreshold`, `maskSmoothness`, `maskGrowth`), StarAlignment (`referenceImage`, `referenceIsFile`, `distortionCorrection`), LinearFit (`referenceViewId`), SCNR, PixelMath (otras imágenes por id, `newImageColorSpace`), CurvesTransformation (canales), LocalHistogramEqualization, ICCProfileTransformation (`targetProfile`), MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, SPCC y las constantes en v8 (`Clase.CONSTANTE`).
+Comprobados el 31 oct 2026 en PixInsight 1.9.6 (watcher v8) y ya corregidos en los pasos: HDRComposition (`maskBinarizingThreshold`, `maskSmoothness`, `maskGrowth`), StarAlignment (`referenceImage`, `referenceIsFile`, `distortionCorrection`), LinearFit (`referenceViewId`), SCNR, PixelMath (otras imágenes por id, `newImageColorSpace`), CurvesTransformation (canales), LocalHistogramEqualization, ICCProfileTransformation (`targetProfile`), MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, SPCC las constantes en v8 (`Clase.CONSTANTE`) y SPFC → MGC (base MARS) → SPCC configurados con `herramientas/procesos.js`, sin iconos.
 
 | Punto | Estado |
 |---|---|
-| Nombres PJSR de BlurXTerminator, NoiseXTerminator y StarXTerminator (módulo RCAstroSuite), GeneralizedHyperbolicStretch y NarrowbandNormalization | No se pudieron comprobar: en esa sesión los módulos de terceros no estaban cargados. Confirmarlos con `describe_process` y corregir los pasos 11, 13, 14 y 15 lineales y 1, 2 y 6 no lineales |
+| Nombres PJSR de BlurXTerminator, NoiseXTerminator y StarXTerminator (módulo RCAstroSuite) | Leídos de instancias guardadas en los proyectos (oct 2026): `correct_only`, `sharpen_stars`, `adjust_star_halos`, `sharpen_nonstellar`, `auto_nonstellar_psf`, `nonstellar_diameter`; `denoise`, `detail`, `iterations`, `enable_color_separation`, `denoise_color`, `denoise_intensity`, `enable_frequency_separation`, `frequency_scale`; `output_stars`, `unscreen`, `overlap`. Confirmar con `describe_process` cuando el módulo esté cargado |
+| Nombres PJSR de GeneralizedHyperbolicStretch y NarrowbandNormalization | Sin comprobar: los módulos no estaban cargados |
+| Preprocesado completo desde el watcher (cadena que sustituye a WBPP) | Los procesos existen y se ejecutan desde el watcher; falta probar la cadena entera con ficheros y fijar sus parámetros PJSR |
 | Corrección de gradiente antes de BXT Correct Only | Es el orden del flujo; la tabla de GraXpert se midió con BXT CO previo. Comprobar en un objeto que el ganador no cambia |
 | Comparativa de gradientes en nebulosas que llenan el campo | sample_free 10 aún copia un 14 % en IC 1396: sin criterio cerrado |
 | Proceso GraXpert nativo (módulo `GraXpert-pxm`) | Instalado como módulo de PixInsight; probar si sustituye a `herramientas/graxpert.js` |

@@ -6,7 +6,7 @@
 
 **Reglas**
 
-- `stars=true`, `unscreen=false` en lineal → **suma exacta**: starless + estrellas = original.
+- `output_stars=true`, `unscreen=false` en lineal → **suma exacta**: starless + estrellas = original.
 - La imagen de estrellas se llama `<id>_stars`: detectarla comparando la lista de ventanas antes y después.
 - "`P.starmask` y `P.linear` no existen".
 - Overlap: 0,20 normal; 0,50 sólo con estrellas muy grandes, campos densos o costuras (×3 tiempo).
@@ -21,7 +21,8 @@
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 var SXT = new StarXTerminator;
-SXT.stars = true;        // genera la capa de estrellas
+// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+SXT.output_stars = true; // genera la capa de estrellas
 SXT.unscreen = false;    // lineal: suma exacta starless + stars
 // SXT.overlap = 0.20;   // 0,50 solo con estrellas muy grandes / campos densos (x3 tiempo)
 if (!SXT.executeOn(v)) throw new Error("StarX falló");
@@ -48,9 +49,12 @@ Elegir con una rejilla sobre la starless de la BXT ganadora (Paso 13): denoise 0
 var v = View.viewById("MasterLight_starless");
 if (v.isNull) throw new Error("No existe la starless");
 var NXT = new NoiseXTerminator;
-NXT.denoise = 0.75;      // confirmar nombres con describe_process NoiseXTerminator
+// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+NXT.denoise = 0.75;
 NXT.detail = 0.15;
 NXT.iterations = 3;
+// Separación de color: NXT.enable_color_separation = true; NXT.denoise_color = 0.90; NXT.denoise_intensity = 0.40;
+// Separación de frecuencia: NXT.enable_frequency_separation = true; denoise_high_freq / denoise_low_freq; frequency_scale = 5
 if (!NXT.executeOn(v)) throw new Error("NXT principal falló");
 "NXT principal sobre la starless";
 ```

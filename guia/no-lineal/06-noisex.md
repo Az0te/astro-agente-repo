@@ -36,7 +36,7 @@ if (v.isNull) throw new Error("No existe Starless");
 var NXT = new NoiseXTerminator;
 NXT.denoise = 0.30;        // pasada final suave
 NXT.detail = 0.15;
-NXT.iterations = 2;        // confirmar nombres con describe_process NoiseXTerminator
+NXT.iterations = 2;        // nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
 if (!NXT.executeOn(v)) throw new Error("NXT final falló");
 "NXT final 0,30 sobre starless";
 ```

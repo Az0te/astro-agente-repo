@@ -8,7 +8,7 @@
 
 **Adquisición**
 
-- Grupos integrados por separado con los mismos parámetros, registrados sobre la misma referencia y recortados igual (ideal: misma ejecución de WBPP).
+- Grupos integrados por separado con los mismos parámetros, registrados sobre la misma referencia y recortados igual (ideal: el mismo preprocesado con la misma referencia).
 - **Razón entre exposiciones moderada:** Tombolini, con 300 s → 30 s (10×), vio una transición visible y recomienda un escalón intermedio de 1–2 min. El 120 s / 30 s (4×) es cómodo. Si la estrella más brillante sigue saturada en 30 s, añadir un grupo de 5 s (o menos); en M42 se sugieren 30, 10, 5 y 1 s.
 
 **Parámetros y diagnóstico**
@@ -48,4 +48,4 @@ if (!HDR.executeGlobal()) throw new Error("HDRComposition falló");
 
 **HDR sólo en el núcleo (`hdr_core_blend`, NOVA).** "Cuando sólo una zona pequeña (0,3–3 % del campo) necesita compresión, aplicar HDRMT/HDR multiescala y mezclarlo sólo bajo una máscara de luminancia del núcleo suavizada (**umbral ~0,72 nebulosas / 0,80 galaxias, σ 6 px, difuminado 20 px**). En M42 y M31 el HDR global hacía legible el núcleo pero apagaba la señal débil del resto. Revisar el borde de la máscara (escalones, halos, costuras de color). No en cúmulos. El color de un núcleo blanco rellenado con el de alrededor es una reconstrucción, no color medido."
 
-**Núcleos saturados que quedan.** "Script **Repaired HSV Separation** (lo lanza el usuario) en lineal: reconstruye el centro de estrellas saturadas antes de MaskedStretch u otro estirado; según pixinsight.com.ar el resultado es limitado y es mejor una HDR con tomas cortas. Alternativas: RepairStarCores (Toolbox), StarHaloReducer para dar luminosidad al centro, o nuestro relleno con la ley de potencias medida."
+**Núcleos saturados que quedan.** Lo mejor es una HDR con tomas cortas. Si aun así queda alguno, rellenarlo con la continuación de su ley de potencias medida (Paso 8 no lineal), nunca con un disco plano.

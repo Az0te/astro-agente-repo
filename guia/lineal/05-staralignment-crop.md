@@ -10,7 +10,7 @@
 - **Una sola referencia común**, la imagen con mejor resolución y SNR (normalmente la L o el Hα de la mono), con surface splines + corrección de distorsión.
 - "Cada remuestreo suaviza la PSF y el ruido: **interpolar una sola vez** (Lanczos-3, en 32 bits) y no encadenar resize + registro + rotación si se puede evitar."
 - Si las escalas difieren: "Registrar escalas distintas (×2) nos falló: escalar antes con Resample (Lanczos-3)". Con la razón de escalas astrométricas, un único Resample previo y luego registrar.
-- Mejor aún: que salgan ya alineados de WBPP (Paso 4).
+- Mejor aún: que salgan ya alineados del preprocesado, registrados sobre la misma referencia (Paso 4).
 
 **Crop**
 

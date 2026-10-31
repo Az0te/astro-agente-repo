@@ -23,7 +23,7 @@
 
 El Antlia Hα/OIII 5 nm no deja pasar Hβ ni SII.
 
-**Emulación para el Antlia HO** (el script no se puede lanzar desde el watcher). Restar a cada canal su fondo (mediana/moda de cielo limpio tras corregir el gradiente) y resolver por mínimos cuadrados las 3 ecuaciones con 2 incógnitas (sistema bien condicionado, número de condición 1,4). Con R, G, B ya sin pedestal (`$T[0]`, `$T[1]`, `$T[2]` en PixelMath):
+**Emulación para el Antlia HO** (DBXtract es un script; la guía usa esta emulación). Restar a cada canal su fondo (mediana/moda de cielo limpio tras corregir el gradiente) y resolver por mínimos cuadrados las 3 ecuaciones con 2 incógnitas (sistema bien condicionado, número de condición 1,4). Con R, G, B ya sin pedestal (`$T[0]`, `$T[1]`, `$T[2]` en PixelMath):
 
 - `Ha = 1.2563*R - 0.0293*G - 0.0460*B`
 - `OIII = -0.1378*R + 0.8370*G + 0.4542*B`

@@ -26,13 +26,12 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 |---|---|
 | Ajustar color multiplicando canales a mano o curvas por canal "a ojo" | SPCC (o BackgroundNeutralization + ColorCalibration) |
 | SPCC sobre imagen estirada o con color retocado | Volver al master lineal |
-| `new SpectrophotometricColorCalibration` sin curvas de cámara | Icono del usuario (`SPCC_RGB`) |
+| `new SpectrophotometricColorCalibration` sin curvas de cámara | `pxSPCC()` con los filtros y la QE del perfil |
 | `whiteReferenceSpectrum = "Average Spiral Galaxy"` | `whiteReferenceName` (ya es el valor por defecto) |
 | Tomar el fondo azul pre-SPCC por blue bloat, o los pedestales por fallo de color | Son normales sin calibrar |
 | Aplastar luces con curvas sobre toda la imagen | Máscaras o HDR |
 | SCNR global para tapar una calibración mal hecha | SPCC; SCNR suave o con máscara |
 | SCNR en cometas o sobre OIII real | Dejarlo: es emisión real |
-| Halo-B-Gon sin máscara de estrellas | Máscara + niveles 1–2 |
 
 ## F.3 Gradiente
 
@@ -80,7 +79,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | `Rect(x0,y0,ancho,alto)` | `Rect` usa esquinas |
 | `FastRotation` sobre ventana con astrometría | PixelMath `pixel($T, w()-1-x(), h()-1-y())` |
 | `saveAs` y creer que conserva el historial | Anotar los parámetros en el dossier |
-| Lanzar scripts desde el watcher | El usuario, con el watcher parado |
+| Lanzar scripts o depender de iconos del escritorio | Su equivalente con procesos y PixelMath (Anexo A.9); procesos configurados en código |
 | Suponer nombres de parámetros | `describe_process` |
 
 ## F.7 Criterio de parada

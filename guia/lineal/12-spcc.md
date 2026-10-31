@@ -10,7 +10,7 @@
 |---|---|
 | Solución astrométrica | Sin ella falla: "The image has no valid astrometric solution" |
 | Datos lineales | "SPCC sólo sobre datos lineales. Nunca calibrar una imagen ya estirada" |
-| Curvas de cámara y filtros | Usar el **icono del usuario** (`ProcessInstance.fromIcon("SPCC_RGB")`, o el de su filtro), que ya trae las curvas y la referencia de blanco |
+| Curvas de cámara y filtros | `pxSPCC()` de `herramientas/procesos.js`: carga las curvas por su nombre desde la base de filtros de PixInsight (`filters.xspd`). Los nombres de filtro y QE de cada equipo están en el perfil |
 | `new` sin más | "Un `new SpectrophotometricColorCalibration` sin más usa curvas genéricas, no las de la cámara" |
 | Referencia de blanco | `P.whiteReferenceName`; "Average Spiral Galaxy" ya es el valor por defecto. `P.whiteReferenceSpectrum` es la tabla de datos (longitud de onda, valor), **no** el nombre: da "Parsing 32-bit floating point expression: conversion error" |
 | OSC | Curva QE 'Ideal' (las curvas de filtro ya incluyen la QE del sensor) y elegir bien el filtro dual band |
@@ -27,9 +27,12 @@ if (v.isNull) throw new Error("No existe MasterLight");
 var w = ImageWindow.windowById("MasterLight");
 if (!w.hasAstrometricSolution) throw new Error("Sin WCS: SPCC fallaría");
 
-var spcc = ProcessInstance.fromIcon("SPCC_RGB");   // trae curvas de cámara y filtros
-if (spcc === null) throw new Error("Falta el icono SPCC_RGB en el workspace");
+eval(File.readTextFile("<ruta de guia>/herramientas/procesos.js"));
+// OSC sin filtro con ventana UV/IR-cut: Sony Color Sensor R/G/B-UVIRcut + "Ideal QE curve" (valores por defecto).
+// Dual band Hα/OIII 5 nm: pxSPCC({ narrowband: [[656.3, 5], [500.7, 5], [500.7, 5]], qe: "<QE del sensor>" })
+var spcc = pxSPCC({ /* filtros y QE del perfil */ });
 if (!spcc.executeOn(v)) throw new Error("SPCC falló");
+// Probado el 31 oct 2026 (PixInsight 1.9.6): 2,4 s en 3008×3222; deja PCL:SPCC:WhiteBalanceFactors en la vista.
 
 // Verificación: medianas de cielo por canal tras SPCC (deben quedar parecidas)
 var img = v.image, out = [];

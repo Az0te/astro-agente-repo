@@ -8,7 +8,7 @@ Material por tipo de objeto que no se ha convertido en paso porque **sustituye**
 
 **Emisión frente a reflexión.** "Emisión = rayas (contraste alto, colores de paleta); reflexión = continuo, dominante azul natural (azul, no cian), contraste suave, más sensible a gradientes; los halos de la estrella que la ilumina son el problema principal (tomas cortas/HDR para esa estrella). Objetos mixtos (IC 63, NGC 2024, IC 4592): tratar por capas/máscaras, preservar coherencia de color y estrellas; no saturar el azul. Con mono: la reflexión sale de L/RGB, la emisión de la banda estrecha."
 
-**Nebulosa oscura (LDN, Barnard).** "El tema es la silueta; un estirado excesivo la destruye. Textura de polvo con LHE suave; el color de las estrellas del fondo es parte del atractivo. El script clásico DarkStructureEnhance (amount 0,30–0,40, lo lanza el usuario) es una alternativa, pero se basa en restar escalas como el mapa de 'estructuras oscuras' que falló en IC 63: probarlo sólo contra el control sin hacer nada."
+**Nebulosa oscura (LDN, Barnard).** "El tema es la silueta; un estirado excesivo la destruye. Textura de polvo con LHE suave; el color de las estrellas del fondo es parte del atractivo."
 
 Flujo que gustó en LDN 1235 (v2 + v5), en orden:
 
@@ -39,7 +39,7 @@ Parámetros orientativos de aescaffre para galaxias: fondo 0,10; HDRMT 6–7 cap
 
 **Cúmulos.** "Las estrellas son el objeto (no SXT; color estelar como protagonista; globulares: BXT clave, núcleo con margen). Cúmulos abiertos brillantes (Joyero): HDR con varias exposiciones (p. ej. 300, 30, 5 s y 0,3 s) y color estelar como objetivo."
 
-**Dual band OSC.** "Extraer Hα/OIII (DBXtract, su emulación con PixelMath o NBExtractPI), tratar cada raya por separado (denoise, deconvolución, gradiente, stretch, máscaras, contraste local), recombinar HOO (Hα→R, OIII→G+B) o bicolor; estrellas del OSC (color natural) o separadas."
+**Dual band OSC.** "Extraer Hα/OIII (emulación de DBXtract con PixelMath, Paso 7 lineal), tratar cada raya por separado (denoise, deconvolución, gradiente, stretch, máscaras, contraste local), recombinar HOO (Hα→R, OIII→G+B) o bicolor; estrellas del OSC (color natural) o separadas."
 
 **Paleta Hubble (SHO) sin SPCC.** "Calibrar en lineal con BackgroundNeutralization (preview de fondo) + ColorCalibration con preview de la nebulosa como blanco y **'Structure detection' desactivado** (cuenta toda la luz de la nebulosa, no sólo estrellas). Lo mismo con la imagen completa como blanco en campos estelares sin SPCC."
 

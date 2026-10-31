@@ -25,7 +25,7 @@ Nunca mezclar subs de cámaras distintas en una integración: cada cámara y fil
 
 - Primero decidir **si el Hα aporta de verdad**: "no integrarlo es un resultado válido" (aescaffre). ¿Añade estructura real?, ¿al color, a la luminancia o a ambos?, ¿global o por regiones?, ¿su ruido y textura casan con los de la banda ancha?
 - Cadena del Hα: "Hα → Gradient → BXT → SXT → NXT". Después **LinearFit con R como referencia** y **sustracción de continuo con R** (de la RGB ya calibrada con SPCC y sin estrellas) → Hα CS (Paso 16).
-- Rojo enriquecido: `R' = (1−α)·R + α·Hα`, **α ≈ 0,2–0,6** (galaxias bajo, nebulosas de emisión más alto; objetos mixtos con máscara). O "Combine Ha with RGB" (lineal, RGB4A) / CombineRGBAndNarrowband (no lineal, RGB4B).
+- Rojo enriquecido: `R' = (1−α)·R + α·Hα`, **α ≈ 0,2–0,6** (galaxias bajo, nebulosas de emisión más alto; objetos mixtos con máscara). En los flujos de Bernhard es "Combine Ha with RGB" (lineal, RGB4A) o CombineRGBAndNarrowband (no lineal, RGB4B); aquí se hace con PixelMath.
 - Valores de aescaffre (inyección condicional en R sobre starless, Hα estirado a mediana ~0,15): "galaxias fuerza 0,25 con límite de brillo 0,25 + luminancia 0,15; nebulosas de emisión 0,30–0,60".
 - Luminancia enriquecida: `L_Hα = L + k·Hα`, empezar con k = 0,1–0,3 y subir poco a poco; Bernhard mezcla L y Hα estirados ("Mix LHa") y luego Combine LRGB con la RHaGB.
 - **La inyección de Hα siempre a través de máscara** de luminancia/nebulosa (clipLow 0,04–0,08): "sin máscara el fondo se vuelve rojo".
@@ -36,7 +36,7 @@ Nunca mezclar subs de cámaras distintas en una integración: cada cámara y fil
 
 **Código: LinearFit y mezcla en lineal**
 
-La mezcla, en fórmula: `R' = (1−α)·R + α·Hα`, con `α ≈ 0,2–0,6` y siempre bajo máscara. Los scripts "Combine Ha with RGB" (lineal) y "CombineRGBAndNarrowband" (no lineal) son **scripts**: los lanza el usuario con el watcher parado; desde el watcher no se pueden ejecutar.
+La mezcla, en fórmula: `R' = (1−α)·R + α·Hα`, con `α ≈ 0,2–0,6` y siempre bajo máscara. Se hace con PixelMath, con el Hα y la máscara por su id:
 
 ```javascript
 // LinearFit del Hα a la R (vista de referencia por su id).

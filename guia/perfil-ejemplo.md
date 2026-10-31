@@ -17,7 +17,7 @@ Copia este fichero como `perfil.md` y rellénalo. Claude lo lee antes de procesa
 
 ## Forma de capturar
 - _(p. ej. RGB larga de 120 s + RGB corta de 30 s para estrellas y HDR)_
-- Programa de captura y de preprocesado: _(p. ej. N.I.N.A. + WBPP)_
+- Programa de captura y de preprocesado: _(p. ej. N.I.N.A.; preprocesado con la cadena de procesos del Paso 4)_
 
 ## Rutas de trabajo
 - Masters: _(carpeta donde guardas los masters de cada objeto)_
@@ -25,8 +25,9 @@ Copia este fichero como `perfil.md` y rellénalo. Claude lo lee antes de procesa
 
 ## PixInsight
 - Ruta de instalación: _(sólo si no es la de por defecto)_
-- Iconos de procesos guardados en el workspace: _(nombres y para qué sirve cada uno)_
-- Scripts instalados que puedes pedirme que lance: _(SetiAstro, Toolbox, DBXtract…)_
+- SPCC/SPFC: nombres de los filtros y de la curva QE en la base de PixInsight (`filters.xspd`; `pxFilterNames()` los lista) para cada configuración (sin filtro, dual band…), y longitud de onda y ancho de los filtros de banda estrecha
+- MGC: ruta de la base MARS (`.xmars`) y ajustes preferidos (escala, separación, suavizado)
+- Valores preferidos de BXT, NXT y SXT
 - Módulos de terceros: _(BlurXTerminator, NoiseXTerminator, StarXTerminator, GraXpert…)_
 - GraXpert: _(ruta del ejecutable, sólo si `guia/herramientas/graxpert.js` no lo encuentra solo)_
 - Carpeta `guia/` de este repositorio en tu PC: _(para cargar `herramientas/*.js` desde el watcher)_

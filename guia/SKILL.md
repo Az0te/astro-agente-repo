@@ -21,13 +21,14 @@ Guía de trabajo para que Claude procese astrofotografía de cielo profundo en P
 6. **Trabajar sobre una copia con nombre de versión**, nunca sobre el master ni sobrescribiendo versiones. Nunca borrar subs ni masters: los descartes van a `_rechazados` y el usuario confirma.
 7. **El dossier describe lo que dice el historial de la vista**, no lo que se pretendía.
 8. **No inventar nombres.** Procesos y parámetros: `describe_process`. IDs de vistas: `list_open_images`. Los procesos se aplican con `P.executeOn(ventana.mainView)`; la imagen está en `ventana.mainView.image`.
-9. **Antes de aplicar nada, repasar los anti-patrones** ([Anexo F](anexos/F-anti-patrones.md)): casi todos los fallos de una sesión están ahí, y el criterio de parada también.
+9. **Todo desde el watcher.** Sin iconos del escritorio ni scripts: procesos configurados en código y PixelMath. Si un proceso no existe en el script (`typeof BlurXTerminator`), su módulo no está cargado en PixInsight: avisar, no sustituirlo.
+10. **Antes de aplicar nada, repasar los anti-patrones** ([Anexo F](anexos/F-anti-patrones.md)): casi todos los fallos de una sesión están ahí, y el criterio de parada también.
 
 **Orden lineal:** gradiente → BXT Correct Only → SPCC → BXT completo → SXT → NXT principal sobre la starless. Nunca reducir ruido antes de BXT: el ruido fino es información para la deconvolución.
 
 ## Antes de empezar
 
-Leer [Perfil del usuario y entorno](00-perfil-y-entorno.md) y el `perfil.md` del usuario (plantilla en `perfil-ejemplo.md`; es privado y no se sube a Git). La guía es genérica: el perfil decide equipo, escala, rutas, iconos, scripts instalados y preferencias. Cuando el usuario exprese una preferencia nueva, propón añadirla al perfil.
+Leer [Perfil del usuario y entorno](00-perfil-y-entorno.md) y el `perfil.md` del usuario (plantilla en `perfil-ejemplo.md`; es privado y no se sube a Git). La guía es genérica: el perfil decide equipo, escala, rutas, filtros y QE para SPCC/SPFC, base MARS y preferencias. Cuando el usuario exprese una preferencia nueva, propón añadirla al perfil.
 
 ## Mapa de decisión rápido
 
@@ -96,6 +97,7 @@ Sin banda estrecha no hay paletas: RGB o LHa-RHaGB. Una paleta es una convenció
 
 | Fichero | Para qué |
 |---|---|
+| `herramientas/procesos.js` | SPCC, SPFC y MGC configurados en código (filtros y QE de la base de PixInsight, base MARS), sin iconos |
 | `herramientas/graxpert.js` | GraXpert desde el watcher (fondo y denoise), sin su script |
 | `herramientas/gradcompare.js` | Medir modelos de gradiente (`gcStructCopy` y comparativa) |
 | `FUENTES.md` | Fuentes consultadas |

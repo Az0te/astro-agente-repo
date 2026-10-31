@@ -18,7 +18,7 @@
 - "El nonstellar 0,90 es para datos bien muestreados o submuestreados: con drizzle 2x (sobremuestreado) mantener ~0,45–0,55 y comprobar 'gusanos' al 100 %."
 - "BXT siempre antes de SXT (usa las estrellas como referencia de PSF)."
 
-**PSF manual.** "Automatic PSF off, diámetro = FWHM medido; SPFC deja `PCL:SPFC:FWHMx/FWHMy`: campos con pocas estrellas, nebulosa que llena el campo o deconvolución de una starless. Un valor aproximado basta."
+**PSF manual.** "Automatic PSF off, diámetro = FWHM medido" (`auto_nonstellar_psf = false`, `nonstellar_diameter` = FWHM; SPFC deja `PCL:SPFC:FWHMx/FWHMy`: campos con pocas estrellas, nebulosa que llena el campo o deconvolución de una starless. Un valor aproximado basta."
 
 **Núcleos saturados.** "BXT puede dejarlos casi blancos. En estrellas como γ Cas, pasar BXT sobre la HDR (larga + corta) o enmascarar los núcleos saturados."
 
@@ -28,11 +28,13 @@
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 var BXT = new BlurXTerminator;
-BXT.correctOnly = false;
-BXT.automaticPSF = true;
-BXT.sharpenStars = 0.30;        // confirmar nombres con describe_process BlurXTerminator
-BXT.adjustStarHalos = 0.00;     // -0,30 SOLO si hay blue bloat y sin ringing
-BXT.sharpenNonstellar = 0.35;   // galaxia; 0,50-0,70 nebulosa; 0,45-0,55 con drizzle 2x
+// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+BXT.correct_only = false;
+BXT.auto_nonstellar_psf = true;
+BXT.sharpen_stars = 0.30;
+BXT.adjust_star_halos = 0.00;   // -0,30 SOLO si hay blue bloat y sin ringing
+BXT.sharpen_nonstellar = 0.35;  // galaxia; 0,50-0,70 nebulosa; 0,45-0,55 con drizzle 2x
+BXT.overlap = 0.20;
 if (!BXT.executeOn(v)) throw new Error("BXT completo falló");
 "BXT completo aplicado";
 ```

@@ -19,7 +19,7 @@ JSON.stringify(r);   // ra, dec (grados), scale (″/px), rotation, flipped, mat
 - Si la imagen ya tenía solución, la conserva (`solution: "existing"`) y devuelve la comparación (`centerOffsetArcsec`, `resolutionDifference`, `rotationDifference`, `parityMatch`): sirve para verificar una solución dudosa.
 - "Tras recortar, rotar, BXT o GraXpert, volver a resolver es más sencillo que trasladar la solución a mano."
 
-**Con watcher clásico.** El usuario resuelve con ImageSolver o BlindSolver, con el watcher parado. ImageSolver es un **script**: no se puede lanzar desde el watcher ("Attempt to execute a Script instance recursively").
+**Con el watcher clásico** no existe `blindSolve`: usar el watcher v8. ImageSolver y BlindSolver son scripts y no se lanzan desde el watcher.
 
 **Alternativas**
 

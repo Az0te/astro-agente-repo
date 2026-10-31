@@ -32,9 +32,9 @@
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 var BXT = new BlurXTerminator;
-// Nombres de parámetros a confirmar SIEMPRE con describe_process BlurXTerminator (regla 8).
-BXT.correctOnly = true;
-BXT.automaticPSF = true;          // o PSF manual: diametro = FWHM medido
+// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+BXT.correct_only = true;
+BXT.auto_nonstellar_psf = true;   // o PSF manual: false y nonstellar_diameter = FWHM medido
 if (!BXT.executeOn(v)) throw new Error("BXT Correct Only falló");
 
 // Comprobar/restaurar la astrometría antes de SPCC

@@ -40,7 +40,6 @@ if (!PM.executeOn(View.viewById("Ha_starless"))) throw new Error("Resta de conti
 "Ha_CS creada";
 ```
 
-Alternativa: el script PCS con el watcher parado (Max stars 1000, Max peak 0,80, Generate starless).
 
 ```javascript
 // Comprobación del resultado de la resta, sin tocar la imagen:

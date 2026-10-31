@@ -18,11 +18,10 @@
 | Método | Cuándo |
 |---|---|
 | **GHS** | Control manual fino (SP, LP/HP), ideal galaxias HDR y starless |
-| **Statistical** | Rápido y reproducible |
 | **MAS** | Estructuras multiescala, nebulosas complejas, galaxias |
 | HMS / VeraLux | Color vectorial guiado |
 | **MaskedStretch** | Clásico para no hinchar estrellas (los centros saturados salen mal si no se reparan antes) |
-| **Star Stretch** (SETI) | Sólo para la capa de estrellas, nunca starless |
+| **Fórmula de Star Stretch** (PixelMath) | Sólo para la capa de estrellas, nunca starless |
 
 "Comparar a resultado visual equivalente, no a parámetros iguales."
 
@@ -90,7 +89,7 @@ Background Reference (ROI en fondo limpio; imprescindible si el objeto llena el 
 
 **Capa de estrellas**
 
-- SETI Astro **Star Stretch** (v2.6): `y = 3^A·x / ((3^A − 1)·x + 1)`, Amount 0–8 (**defecto 5**). "Color Boost aumenta separación cromática (controlar R:G:B en no saturados, evitar anillos de color). Suprimir verde off salvo dominante real."
+- Fórmula de **Star Stretch** (SetiAstro v2.6) aplicada con PixelMath: `y = 3^A·x / ((3^A − 1)·x + 1)`, A de 0 a 8 (el script usaba 5). En PixelMath: símbolos `A, f` y `A = 2;\nf = exp(A*ln(3));\nf*$T/((f-1)*$T+1)`. "Color Boost aumenta separación cromática (controlar R:G:B en no saturados, evitar anillos de color). Suprimir verde off salvo dominante real."
 - Objetivo de la capa (NOVA): "buscar que el p90 de la capa quede en ~0,25 (factor de Star Stretch 1–3, más suave que el 5 por defecto), probando la fuerza con saturación y SCNR fijos."
 - Alternativa: arcsinh que conserva color, `f = asinh(k·L)/asinh(k)/L` con `L = max(RGB)` (**k ≈ 5000** para muchas estrellas), saturación ×1,6 alrededor de la media, núcleos saturados neutros; o ArcsinhStretch "hasta que se vean claramente sin hincharse (GHS opcional después)".
 

@@ -24,7 +24,8 @@
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 var NXT = new NoiseXTerminator;
-NXT.denoise = 0.50;       // pasada ligera antes de SXT (confirmar nombres)
+// nombres leídos de instancias guardadas (oct 2026); confirmar con describe_process cuando el módulo RCAstroSuite esté cargado
+NXT.denoise = 0.50;       // pasada ligera antes de SXT
 NXT.detail = 0.15;
 NXT.iterations = 2;
 if (!NXT.executeOn(v)) throw new Error("NXT ligero falló");

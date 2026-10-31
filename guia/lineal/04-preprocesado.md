@@ -30,14 +30,14 @@
 | LocalNormalization | Recomendada antes de integrar (no quita gradientes, pero facilita su corrección) |
 | ImageIntegration | Average, normalización LocalNormalization, pesos 'PSF Signal Weight', rechazo según número de subs; revisar el mapa `rejection_high`; 'Large-scale pixel rejection' para trazas persistentes |
 | Drizzle | Recomendado en OSC aunque no haya submuestreo (evita artefactos del debayer): escala 1 y drop shrink 1,0; 2x si hay submuestreo y muchos subs bien "ditherizados"; el mapa `drizzle_weights` debe ser uniforme |
-| Varios masters alineados | Procesarlos en la misma ejecución de WBPP con referencia de registro común, misma escala de drizzle y Autocrop: salen alineados y recortados igual; 'Reuse last reference frames' para añadir noches |
+| Varios masters alineados | Registrarlos todos con la misma referencia común, misma escala de drizzle y Autocrop: salen alineados y recortados igual; 'Reuse last reference frames' para añadir noches |
 | Rutas | Rutas y carpetas cortas; nombres de sesión con guion bajo (SESSION_1) para las grouping keywords |
 
 **Diagnóstico de flats en el master** (para no culpar al postprocesado): viñeteo residual = subcorrección (flats sin calibrar o bias y dark restados a la vez); "viñeteo negativo" = lights sin dark; motas de polvo en relieve = rotación movida, polvo desplazado, filtro mal posicionado en la rueda (usar movimiento unidireccional) o luz parásita (probar sky flats).
 
 **Medidas por sub desde el watcher.** "SubframeSelector sobre los FITS crudos CFA ordena bien, pero los valores absolutos están sesgados (en debayerizado VNG el FWHM sale ~15–20 % mayor y la excentricidad ~0,06 menor). Para umbrales absolutos, debayerizar una muestra. Fondo por sub = mediana − bias (bias con offset 50 ≈ 500 ADU). Gradiente por sub = rejilla 4×4 de medianas; en crudo incluye el viñeteo (~2,4 %). Un velo fino se ve como fondo +5–8 % con 15–18 % menos estrellas respecto a sus vecinos."
 
-**Código.** WBPP es un **script**: no se puede lanzar desde el watcher (lo lanza el usuario con el watcher parado). Lo que sí se hace desde PJSR es auditar el resultado:
+**Código.** WBPP es un script y la guía no lo usa. Desde el watcher, el preprocesado es la cadena de procesos equivalente con los ajustes de la tabla: ImageCalibration → CosmeticCorrection → Debayer → SubframeSelector → StarAlignment → LocalNormalization → ImageIntegration → DrizzleIntegration, todos con ficheros de entrada y carpeta de salida. La cadena completa está pendiente de probar (Anexo C). Con los masters hechos, se audita el resultado:
 
 ```javascript
 // Auditoría del master: pasos aplicados y presencia de los procesos clave.

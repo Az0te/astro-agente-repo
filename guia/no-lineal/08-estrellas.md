@@ -15,7 +15,7 @@
 
 **Extracción en no lineal** (alternativa para evitar halos hinchados): "guardar un clon antes de SXT; SXT lineal para la starless; estirar la starless; aplicar al clon **exactamente el mismo estirado**; SXT con `unscreen=true` sobre el clon estirado → estrellas ya en rango de pantalla, listas para screen."
 
-**Estrellas de banda estrecha** (si no hay RGB): "SETI NB to RGB Stars: R = 0,5·Hα + 0,5·SII, G = 0,3·Hα + 0,7·OIII, B = OIII (sin SII: R = Hα). Color plausible, no fotometría; una estrella saturada en las tres capas queda blanca."
+**Estrellas de banda estrecha** (si no hay RGB), fórmula de NB to RGB Stars con PixelMath: " R = 0,5·Hα + 0,5·SII, G = 0,3·Hα + 0,7·OIII, B = OIII (sin SII: R = Hα). Color plausible, no fotometría; una estrella saturada en las tres capas queda blanca."
 
 **Halos y núcleos**
 

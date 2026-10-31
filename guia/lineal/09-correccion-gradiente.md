@@ -27,7 +27,7 @@
 - **Salida por sustracción:** `resultado = original − modelo + media(modelo)`, con la media **de los tres canales juntos**: además de quitar el gradiente, **neutraliza el color del fondo**. MGC no lo hace. Al comparar, medir el color del fondo después de SPCC, no antes.
 - **Salida por división:** `original / modelo × media(modelo)` con la media **por canal**.
 - Extrae el fondo con un modelo de IA o con métodos clásicos sobre puntos de muestra: splines, funciones de base radial (thin-plate, lineal, cúbica, quíntica, con suavizado), kriging y sample_free.
-- El script de PixInsight (Toolbox/Graxpert.js) no se lanza desde el watcher (error de script recursivo). Por dentro sólo guarda la imagen, ejecuta `GraXpert -cli` con `ExternalProcess` y reabre el resultado, siempre con IA. Desde el watcher se usa `guia/herramientas/graxpert.js`:
+- La guía no usa el script de PixInsight (Toolbox/Graxpert.js). Por dentro sólo guarda la imagen, ejecuta `GraXpert -cli` con `ExternalProcess` y reabre el resultado, siempre con IA. Desde el watcher se usa `guia/herramientas/graxpert.js`:
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/graxpert.js"));
@@ -129,14 +129,12 @@ var rAI = graxpertBGE("MasterLight", { method: "AI", tag: "ai" });
 var v = View.viewById("MasterLight");
 if (v.isNull) throw new Error("No existe MasterLight");
 if (!ImageWindow.windowById("MasterLight").hasAstrometricSolution) throw new Error("Sin WCS: Parar");
-var spfc = ProcessInstance.fromIcon("SPFC_RGB");
+eval(File.readTextFile("<ruta de guia>/herramientas/procesos.js"));
+var spfc = pxSPFC({ /* filtros y QE del perfil */ });
 if (!spfc.executeOn(v)) throw new Error("SPFC falló");
-var mgc = ProcessInstance.fromIcon("MGC");   // icono del usuario, con la base MARS ya configurada
-if (mgc === null) throw new Error("Falta el icono MGC: sin base MARS, MGC necesita imagen de referencia");
-mgc.gradientScale = 2048;          // 1024 / 2048 / 4096 en la comparativa
-mgc.structureSeparation = 3;
-mgc.modelSmoothness = 1.0;
-mgc.showGradientModel = true;      // para revisar el modelo
+var mgc = pxMGC({ mars: "<base MARS del perfil>", gradientScale: 2048 });   // 1024 / 2048 / 4096 en la comparativa
+if (!mgc.executeOn(v)) throw new Error("MGC falló");   // crea <vista>_MGC_gradient_model para revisarlo
+// Probado el 31 oct 2026: SPFC 2,7 s y MGC 5,6 s en 3008×3222.
 if (!mgc.executeOn(v)) throw new Error("MGC falló");
 "SPFC + MGC aplicados";
 ```

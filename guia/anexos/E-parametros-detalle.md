@@ -18,7 +18,7 @@ Rodilla sobre el máximo, para que la suma no sature el rojo: "`m = max(r,g,b)`;
 
 **Dominante verde en las esquinas tras SPCC+MGC**. "G/R hasta 1,67 en IC63: la corrección de NOVA (sección Blue bloat) con máscara de cielo `clip((med + 5σ − L_s)/(3,5σ))` sobre los canales suavizados a ~48 px y amount 0,85 funcionó sin tocar la nebulosa."
 
-**Flujos de referencia LRGB**
+**Flujos de referencia LRGB** (los nombres de scripts son los de los flujos originales; en esta guía cada uno se hace con su equivalente desde el watcher, Anexo A.9)
 
 | Flujo | Secuencia |
 |---|---|
@@ -42,9 +42,9 @@ Rodilla sobre el máximo, para que la suma no sature el rojo: "`m = max(r,g,b)`;
 - Causas: dispersión o aberración cromática residual en el azul-violeta (refractores), scatter mayor en el canal azul, microlentes; en filtros duales, **reflexiones internas del filtro** (bloqueo fuera de banda < OD4), peores con óptica rápida y con estrellas muy calientes o muy frías. Arreglo óptico: UV/IR-cut delante del dual band, filtros con OD > 4 y antirreflejo en el lado de la cámara.
 - Diagnóstico: comparar los canales por separado; si las estrellas son más grandes en el azul, hay blue bloat. SPFC deja `PCL:SPFC:FWHMx/FWHMy` por canal.
 - Tratamiento: BXT Correct Only antes de SPCC y, sólo si hace falta, segunda pasada con "Adjust star halos" ≈ −0,30 vigilando el ringing. Desde el preprocesado, debayer con canales separados + registro con surface splines corrige la aberración cromática lateral. Con mono, el foco por filtro (o filtros parafocales) evita gran parte.
-- Reducción de estrellas: script Star Reduction (Transfer/Halo/Star) con cuidado, o estirar menos las estrellas. En galaxias, aescaffre la desactiva (crea anillos).
+- Reducción de estrellas: estirar menos las estrellas. En galaxias, aescaffre la desactiva (crea anillos).
 
-**Halo-B-Gon e InterchannelCurves**. "Script SetiAstro Halo-B-Gon como alternativa, **siempre con máscara de estrellas brillantes**: sin ella degenera en un oscurecimiento gamma global de toda la imagen (NOVA lo comprobó en modo sin interfaz; incluso el nivel 0 aplica gamma 1,2). NOVA lo confina con una máscara: luminancia > percentil 99,5, desenfoque gaussiano σ = 6 + 3·nivel para cubrir el anillo del halo, gamma 0,6, y mezcla `original·(1−m) + resultado·m`. Niveles 1–2 como máximo. En campos muy densos de estrellas puede fallar igualmente (IC 1805: +129 % de ruido de fondo y anillos magenta/cian/verde); medirlo siempre contra la imagen sin tocar."
+**InterchannelCurves y máscaras de halo.** Halo-B-Gon (script) no se usa: NOVA midió que sin máscara oscurece toda la imagen (gamma global) y que en campos densos dispara el ruido (IC 1805: +129 %).
 Método clásico si BXT no basta: "StarMask ajustada a los halos (estirada y suavizada) protegiendo la nebulosa/galaxia; **InterchannelCurves** con canal de referencia *Value* y canal objetivo *Blue*, bajando la curva hasta que el halo azul desaparezca; o MultiscaleLinearTransform en el canal azul atenuando las capas pequeñas bajo la máscara."
 Otras máscaras: "`Halo = CanalConHalo − CanalLimpio + med(CanalLimpio)`, suavizada, y restar en el canal afectado"; "halos OIII de filtro: LinearFit del verde (sin halo) al OIII, igualar ruido con NoiseGenerator y clonar suavemente sobre los halos".
 Ajustes BXT como diagnóstico: "anillos negros = fuerza estelar/PSF/halos excesivos; núcleos duros = sobrecorrección; textura plástica = no estelar excesivo; franjas de color = mala alineación de canales."
