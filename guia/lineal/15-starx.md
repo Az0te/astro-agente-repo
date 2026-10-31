@@ -19,7 +19,7 @@
 
 ```javascript
 var v = View.viewById("MasterLight");
-if (v.isNull) throw new Error("No existe MasterLight");
+if (!v || v.isNull) throw new Error("No existe MasterLight");
 var SXT = new StarXTerminator;
 // nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
 SXT.output_stars = true; // genera la capa de estrellas
@@ -47,7 +47,7 @@ Elegir con una rejilla sobre la starless de la BXT ganadora (Paso 13): denoise 0
 
 ```javascript
 var v = View.viewById("MasterLight_starless");
-if (v.isNull) throw new Error("No existe la starless");
+if (!v || v.isNull) throw new Error("No existe la starless");
 var NXT = new NoiseXTerminator;
 // nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
 NXT.denoise = 0.75;

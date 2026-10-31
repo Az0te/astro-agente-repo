@@ -22,7 +22,7 @@
 
 ```javascript
 var v = View.viewById("MasterLight");
-if (v.isNull) throw new Error("No existe MasterLight");
+if (!v || v.isNull) throw new Error("No existe MasterLight");
 var NXT = new NoiseXTerminator;
 // nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
 NXT.denoise = 0.50;       // pasada ligera antes de SXT

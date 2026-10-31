@@ -32,7 +32,7 @@
 
 ```javascript
 var v = View.viewById("Starless");
-if (v.isNull) throw new Error("No existe Starless");
+if (!v || v.isNull) throw new Error("No existe Starless");
 var NXT = new NoiseXTerminator;
 NXT.denoise = 0.30;        // pasada final suave
 NXT.detail = 0.15;

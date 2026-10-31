@@ -714,7 +714,7 @@ function pjsrHint(msg) {
              "img.isColor, \"Nombre_v3\"); w2.mainView.beginProcess(); w2.mainView.image.assign(img); " +
              "w2.mainView.endProcess(); w2.copyAstrometricSolution(ventanaOrigen); w2.show();");
    if (/null|isNull/.test(msg))
-      h.push("windowById/viewById nunca devuelven null: comprobar .isNull.");
+      h.push("En este watcher (v8) View.viewById devuelve null si la vista no existe; ImageWindow.windowById devuelve un objeto con .isNull. Comprobar !v || v.isNull.");
    if (/SyntaxError|unexpected token|missing ;/i.test(msg))
       h.push("Error de sintaxis JavaScript: revisa llaves, parentesis y comillas (el watcher usa el motor v8: let/const, flechas y clases si estan permitidos).");
    if (/is not a function/.test(msg) && !h.length)

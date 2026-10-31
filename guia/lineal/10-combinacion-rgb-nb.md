@@ -42,7 +42,7 @@ La mezcla, en fórmula: `R' = (1−α)·R + α·Hα`, con `α ≈ 0,2–0,6` y s
 // LinearFit del Hα a la R (vista de referencia por su id).
 // Comprobado en PixInsight 1.9.6 (rejectHigh = 0,92 por defecto).
 var vHa = View.viewById("Ha");
-if (vHa.isNull) throw new Error("No existe Ha");
+if (!vHa || vHa.isNull) throw new Error("No existe Ha");
 var LF = new LinearFit;
 LF.referenceViewId = "R_starless";
 if (!LF.executeOn(vHa)) throw new Error("LinearFit falló");
@@ -59,7 +59,7 @@ PM.expression  = "a = 0.4;\n(1-a)*$T + a*Ha";   // alfa 0,2-0,6
 PM.expression1 = "$T";
 PM.expression2 = "$T";
 var w = ImageWindow.windowById("RGB_starless");
-if (w.isNull) throw new Error("No existe RGB_starless");
+if (!w || w.isNull) throw new Error("No existe RGB_starless");
 w.mask = ImageWindow.windowById("mask_neb");    // máscara de nebulosa (clipLow 0,04-0,08)
 if (!PM.executeOn(w.mainView)) throw new Error("Mezcla Hα falló");
 w.removeMask();

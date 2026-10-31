@@ -26,7 +26,7 @@ Regla: "Cuando el usuario exprese una preferencia nueva (elige una versión fren
 | `watcher_status` | Dice qué comando está en curso y si PixInsight responde |
 | Bucles largos (medir cientos de subs) | Funciones que trabajen ~50 s, guarden el resultado en un CSV incremental y devuelvan el índice siguiente |
 | Cada llamada empieza sin estado | Guardar funciones reutilizables en `<versión>/tools/*.js` y cargarlas con `eval(File.readTextFile(ruta))` |
-| Herramientas de la guía | `herramientas/procesos.js` (SPCC, SPFC y MGC sin iconos), `herramientas/graxpert.js` (GraXpert desde el watcher) y `herramientas/gradcompare.js` (medir modelos de gradiente): `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))` |
+| Herramientas de la guía | `herramientas/procesos.js` (SPCC, SPFC y MGC sin iconos), `herramientas/graxpert.js` (GraXpert por línea de comandos, para lo que no ofrece el proceso GraXpert) y `herramientas/gradcompare.js` (medir modelos de gradiente): `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))` |
 | Astrometría | `blindSolve("<vista>")` en el watcher v8 (PixInsight 1.9.6+); con el clásico la resuelve el usuario (Paso 8 lineal) |
 | Proceso que no existe en el script (`typeof BlurXTerminator`) | El módulo no está cargado en PixInsight: avisar al usuario; no sustituirlo por otro proceso |
 | Duda con un nombre | `describe_process` (parámetros y constantes reales de la versión instalada) |

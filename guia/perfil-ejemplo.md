@@ -29,7 +29,7 @@ Copia este fichero como `perfil.md` y rellénalo. Claude lo lee antes de procesa
 - MGC: ruta de la base MARS (`.xmars`) y ajustes preferidos (escala, separación, suavizado)
 - Valores preferidos de BXT, NXT y SXT
 - Módulos de terceros: _(BlurXTerminator, NoiseXTerminator, StarXTerminator, GraXpert…)_
-- GraXpert: _(ruta del ejecutable, sólo si `guia/herramientas/graxpert.js` no lo encuentra solo)_
+- GraXpert: _(el proceso de PixInsight no necesita nada; ruta del ejecutable sólo si `guia/herramientas/graxpert.js` no lo encuentra solo)_
 - Carpeta `guia/` de este repositorio en tu PC: _(para cargar `herramientas/*.js` desde el watcher)_
 
 ## Preferencias estéticas

@@ -97,7 +97,7 @@ Background Reference (ROI en fondo limpio; imprescindible si el objeto llena el 
 
 ```javascript
 var v = View.viewById("Starless");
-if (v.isNull) throw new Error("No existe Starless");
+if (!v || v.isNull) throw new Error("No existe Starless");
 var img = v.image;
 img.selectedChannel = 0;
 var med = img.median();          // SP = mediana actual (medir ANTES de cada pasada)

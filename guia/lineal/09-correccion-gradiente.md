@@ -4,13 +4,13 @@
 
 **Por qué.** El gradiente es un offset de gran escala que no pertenece al objeto: contamina la calibración de color (SPCC mide el fondo), aplasta el contraste del polvo y del IFN y aparece como un velo al estirar. Y se corrige **en lineal y por canal**, antes de combinar: "Si los canales tienen gradientes distintos (otras noches/filtros/cámaras), corregir por canal antes de combinar". Un gradiente que llega al estirado ya no se puede separar de la señal débil.
 
-**Método predeterminado (desde el 29 oct 2026).** "**GraXpert sample_free, escala 10, por sustracción** (`graxpertBGE()` sin opciones, de `guia/herramientas/graxpert.js`) sobre el master lineal recortado". Elegido con la prueba medida de `20-graxpert-comparativa-gradientes.md`.
+**Método predeterminado.** **GraXpert sample_free, escala 10, por sustracción**, sobre el master lineal recortado (elegido con la prueba medida de la tabla de abajo). Desde el 31 oct 2026 se ejecuta con el **proceso GraXpert de PixInsight**, que da el mismo resultado que `herramientas/graxpert.js` sin el ejecutable aparte (comparativa abajo); `graxpert.js` queda para los métodos que el proceso no ofrece (RBF, Kriging, Splines con muestras propias) y para el denoise.
 
 **Cadena de procesos alrededor del gradiente**
 
 | Caso | Cadena documentada |
 |---|---|
-| GraXpert (predeterminado) | Recorte → `blindSolve` → **GraXpert sample_free 10** (devuelve la astrometría copiada) → BXT Correct Only → comprobar WCS → SPCC |
+| GraXpert (predeterminado) | Recorte → `blindSolve` → **proceso GraXpert, sample_free 10** (conserva la astrometría) → BXT Correct Only → comprobar WCS → SPCC |
 | MGC | RGB → **SPFC_RGB** → **MGC** (MARS) → SPCC |
 | Banda estrecha sin MGC | "polinomio suave propio sobre rejilla de medianas con rechazo sigma (grado 2 en OIII; en Hα sólo plano grado 1 ajustado en bordes, para no comerse emisión difusa real)" |
 
@@ -27,7 +27,8 @@
 - **Salida por sustracción:** `resultado = original − modelo + media(modelo)`, con la media **de los tres canales juntos**: además de quitar el gradiente, **neutraliza el color del fondo**. MGC no lo hace. Al comparar, medir el color del fondo después de SPCC, no antes.
 - **Salida por división:** `original / modelo × media(modelo)` con la media **por canal**.
 - Extrae el fondo con un modelo de IA o con métodos clásicos sobre puntos de muestra: splines, funciones de base radial (thin-plate, lineal, cúbica, quíntica, con suavizado), kriging y sample_free.
-- La guía no usa el script de PixInsight (Toolbox/Graxpert.js). Por dentro sólo guarda la imagen, ejecuta `GraXpert -cli` con `ExternalProcess` y reabre el resultado, siempre con IA. Desde el watcher se usa `guia/herramientas/graxpert.js`:
+- La guía no usa el script de PixInsight (Toolbox/Graxpert.js). Por dentro sólo guarda la imagen, ejecuta `GraXpert -cli` con `ExternalProcess` y reabre el resultado, siempre con IA.
+- `herramientas/graxpert.js` (alternativa: llama al ejecutable por línea de comandos):
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/graxpert.js"));
@@ -38,21 +39,20 @@ var r = graxpertBGE("<vista>");      // sample_free, escala 10 por defecto
 
 - El ejecutable se busca en las rutas habituales; si no está, definir `var GX_EXE = "ruta"` antes del `eval`.
 - Opciones: `method` (sample_free por defecto, AI, RBF, Kriging, Splines), `scale` (sample_free, 1–10, por defecto 10), `smoothing` 0–1, `correction` (Subtraction o Division), `aiVersion`, `gpu: false`, `prefs`, `extra` (`-sample_free_scale`, `-sample_free_smoothness`, `-sample_free_protect`, `-sample_free_protect_threshold`, `-sample_free_protect_amount`, `-sample_free_simplified`, `-sample_free_degree`, `-sample_free_downsample`), `tag`, `keepFiles`, `maxMinutes`.
-- **Proceso GraXpert nativo** (módulo de PixInsight, comprobado en 1.9.6): se ejecuta desde el watcher sin el ejecutable aparte. Crea `GraXpert_sample_free_background_extraction` (corregida, con la astrometría conservada) y `GraXpert_background` (el modelo); ~10 s en 1504×1611. Falta compararlo con `graxpert.js` en la misma imagen (Anexo C); hasta entonces `graxpert.js` sigue siendo el método de referencia.
+- **Proceso GraXpert de PixInsight** (método por defecto; comprobado en 1.9.6). Crea `GraXpert_sample_free_background_extraction` (corregida, con la astrometría conservada) y `GraXpert_background` (el modelo); ~5 s en 3008×3222. Por defecto usa sample_free con suavizado 1,0, protección de estructuras activada y submuestreo 4.
 
-```javascript
-var G = new GraXpert;
-G.backgroundExtraction = true;
-G.backgroundExtractionSampleFree = true;
-G.sampleFreeScale = 10;
-G.correction = "Subtraction";
-G.createBackground = true;       // ventana con el modelo, para revisarlo
-G.replaceImage = false;
-if (!G.executeOn(View.viewById("MasterLight"))) throw new Error("GraXpert falló");
-```
+  Comparativa del 31 oct 2026, sample_free escala 10 en la misma imagen (masters binados ×2):
+
+  | Objeto | `gcStructCopy` graxpert.js | `gcStructCopy` proceso | Diferencia entre las corregidas |
+  |---|---|---|---|
+  | LDN 1235 | copia 0,8 % (0,13) | copia 0,5 % (0,07) | p95 0,07σ del cielo |
+  | IC 1396 (`master_RGB`) | copia 4,3 % (0,32) | copia 4,1 % (0,31) | p95 0,08σ |
+
+  Mismo resultado en la práctica, con el modelo igual o algo más limpio. En IC 1396 este master da un 4,3 % con graxpert.js, no el 14 % de la tabla de abajo: aquella medida se hizo sobre otra versión del master (Anexo C).
+
 
 - Denoise: `graxpertDenoise("<vista>", {strength: 0.5})`; "es una alternativa a comparar con NXT, no un sustituto".
-- Si cambia la versión de GraXpert, confirmar las opciones con `GraXpert -cli -cmd background-extraction -h`.
+- Si cambia la versión de GraXpert, confirmar las opciones de `graxpert.js` con `GraXpert -cli -cmd background-extraction -h` y las del proceso con `describe_process GraXpert`.
 
 **Ajustes de partida (medidos el 29 oct 2026 en M31, LDN 1235, IC 1396 e IC 63)**
 
@@ -119,28 +119,37 @@ En imágenes grandes GraXpert puede pasar del corte de 60 s del MCP: esperar con
 **Código**
 
 ```javascript
-// Gradiente por defecto: GraXpert sample_free, escala 10, sustracción.
-eval(File.readTextFile("C:/ASTRO/guia/herramientas/graxpert.js"));
-var r = graxpertBGE("MasterLight");           // crea GC_GraXpert_default y su _model
-if (!ImageWindow.windowById(r.corrected).hasAstrometricSolution)
-   throw new Error("El resultado de GraXpert ha perdido la astrometría");
-// Revisión del modelo antes de aceptarlo:
-//   - abrir GC_GraXpert_default_model con STF, restarle su ajuste de grado 1
-//   - gcStructCopy(<base>, <modelo>) segun guia/herramientas/gradcompare.js
-JSON.stringify({ corrected: r.corrected, model: r.model, seconds: r.seconds });
+// Gradiente por defecto: proceso GraXpert, sample_free escala 10, sustracción.
+var G = new GraXpert;
+G.backgroundExtraction = true;
+G.backgroundExtractionSampleFree = true;
+G.sampleFreeScale = 10;
+G.correction = "Subtraction";
+G.createBackground = true;
+G.replaceImage = false;
+if (!G.executeOn(View.viewById("MasterLight"))) throw new Error("GraXpert falló");
+var wc = ImageWindow.windowById("GraXpert_sample_free_background_extraction");
+if (wc.isNull || !wc.hasAstrometricSolution) throw new Error("Falta la corregida o ha perdido la astrometría");
+// Revisión del modelo antes de aceptarlo (GraXpert_background):
+//   eval(File.readTextFile("<ruta de guia>/herramientas/gradcompare.js"));
+//   var base = gcPrepare("MasterLight", 8); gcStructCopy(base, "GraXpert_background");   // corr < 0,15 = limpio
 ```
 
 ```javascript
-// Variante medida cuando el modelo no convence: sample_free escala 8 o IA.
-var r8 = graxpertBGE("MasterLight", { method: "sample_free", scale: 8, tag: "sf8" });
+// Variante medida cuando el modelo no convence: sample_free escala 8 (proceso) o IA (graxpert.js).
+var G8 = new GraXpert;
+G8.backgroundExtraction = true; G8.backgroundExtractionSampleFree = true; G8.sampleFreeScale = 8;
+G8.correction = "Subtraction"; G8.createBackground = true; G8.replaceImage = false;
+if (!G8.executeOn(View.viewById("MasterLight"))) throw new Error("GraXpert escala 8 falló");
+// Renombrar las ventanas que crea antes de lanzar otra variante.
+eval(File.readTextFile("<ruta de guia>/herramientas/graxpert.js"));
 var rAI = graxpertBGE("MasterLight", { method: "AI", tag: "ai" });
-[r8.corrected, rAI.corrected].join(" | ");
 ```
 
 ```javascript
 // MGC: SPFC -> MGC -> SPCC (los tres necesitan WCS). Nombres comprobados en PixInsight 1.9.6.
 var v = View.viewById("MasterLight");
-if (v.isNull) throw new Error("No existe MasterLight");
+if (!v || v.isNull) throw new Error("No existe MasterLight");
 if (!ImageWindow.windowById("MasterLight").hasAstrometricSolution) throw new Error("Sin WCS: Parar");
 eval(File.readTextFile("<ruta de guia>/herramientas/procesos.js"));
 var spfc = pxSPFC({ /* filtros y QE del perfil */ });

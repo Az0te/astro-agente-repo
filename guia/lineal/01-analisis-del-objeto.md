@@ -31,7 +31,7 @@
 ```javascript
 // Estado del master: canales, bits, astrometría y estadísticas por canal.
 var w = ImageWindow.windowById("MasterLight");
-if (w.isNull) throw new Error("No existe MasterLight");
+if (!w || w.isNull) throw new Error("No existe MasterLight");
 var v = w.mainView, img = v.image, out = [];
 out.push("id=" + v.id + "  canales=" + img.numberOfChannels +
          "  bits=" + img.bitsPerSample + "  color=" + img.isColor);

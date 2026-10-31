@@ -25,7 +25,7 @@
 ```javascript
 // LHE sobre la starless, con la máscara de fondo de la receta v4B ya aplicada a la vista.
 var v = View.viewById("Starless");
-if (v.isNull) throw new Error("No existe Starless");
+if (!v || v.isNull) throw new Error("No existe Starless");
 var LHE = new LocalHistogramEqualization;
 LHE.radius = 256;          // 96 para detalle fino; ~1/12 del lado corto en NOVA
 LHE.amount = 0.35;         // > 0,5 parece artificial

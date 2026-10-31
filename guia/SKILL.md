@@ -98,6 +98,6 @@ Sin banda estrecha no hay paletas: RGB o LHa-RHaGB. Una paleta es una convenció
 | Fichero | Para qué |
 |---|---|
 | `herramientas/procesos.js` | SPCC, SPFC y MGC configurados en código (filtros y QE de la base de PixInsight, base MARS), sin iconos |
-| `herramientas/graxpert.js` | GraXpert desde el watcher (fondo y denoise), sin su script |
+| `herramientas/graxpert.js` | GraXpert por línea de comandos: métodos que el proceso GraXpert no ofrece (RBF, Kriging, Splines con muestras) y denoise. El fondo por defecto se hace con el proceso GraXpert |
 | `herramientas/gradcompare.js` | Medir modelos de gradiente (`gcStructCopy` y comparativa) |
 | `FUENTES.md` | Fuentes consultadas |

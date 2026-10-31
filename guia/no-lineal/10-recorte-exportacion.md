@@ -21,7 +21,7 @@
 ```javascript
 // Perfil de salida y guardado de la versión final.
 var v = View.viewById("Final");
-if (v.isNull) throw new Error("No existe Final");
+if (!v || v.isNull) throw new Error("No existe Final");
 var icc = new ICCProfileTransformation;
 icc.targetProfile = "sRGB IEC61966-2.1";   // comprobado en PixInsight 1.9.6
 icc.toDefaultProfile = false;

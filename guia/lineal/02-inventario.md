@@ -29,7 +29,7 @@
 ```javascript
 // ¿Este master tiene una integración real y de qué tipo?
 var v = View.viewById("MasterLight");
-if (v.isNull) throw new Error("No existe MasterLight");
+if (!v || v.isNull) throw new Error("No existe MasterLight");
 var h = v.processing, out = [], integ = 0;
 for (var i = 0; i < h.length; ++i) {
    var src = h.at(i).toSource();

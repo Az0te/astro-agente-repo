@@ -22,7 +22,7 @@
 
 ```javascript
 var v = View.viewById("MasterLight_v3");
-if (v.isNull) throw new Error("No existe MasterLight_v3");
+if (!v || v.isNull) throw new Error("No existe MasterLight_v3");
 var w = ImageWindow.windowById("MasterLight_v3"), img = v.image, out = [];
 out.push("WCS: " + w.hasAstrometricSolution);
 out.push("bits: " + img.bitsPerSample + "  color: " + img.isColor);

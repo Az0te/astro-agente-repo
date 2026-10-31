@@ -44,7 +44,7 @@ if (!PM.executeOn(View.viewById("Ha_starless"))) throw new Error("Resta de conti
 ```javascript
 // Comprobación del resultado de la resta, sin tocar la imagen:
 var v = View.viewById("Ha_CS");
-if (v.isNull) throw new Error("No existe Ha_CS");
+if (!v || v.isNull) throw new Error("No existe Ha_CS");
 var img = v.image, out = [];
 for (var c = 0; c < img.numberOfChannels; ++c) {
    img.selectedChannel = c;

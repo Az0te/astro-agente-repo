@@ -43,6 +43,10 @@ if (typeof GX_EXE === 'undefined' || !GX_EXE) {
 }
 var GX_TMP = File.systemTempDirectory + '/graxpert_watcher';
 
+
+// View.viewById devuelve null en el watcher v8 y un objeto con isNull en el clásico.
+function gxViewExists(id) { var v = View.viewById(id); return !!v && !v.isNull; }
+
 function gxWin(p) { return /^[A-Za-z]:/.test(p) ? File.unixPathToWindows(p) : p; }
 
 function gxRun(args, maxMinutes) {
@@ -70,7 +74,7 @@ function gxSafeId(id) {
   id = String(id).replace(/[^A-Za-z0-9_]/g, '_');
   if (/^[0-9]/.test(id)) id = '_' + id;
   var base = id, n = 2;
-  while (!View.viewById(id).isNull) id = base + '_' + (n++);
+  while (gxViewExists(id)) id = base + '_' + (n++);
   return id;
 }
 
@@ -110,7 +114,7 @@ function gxClean(paths) {
 function graxpertBGE(viewId, o) {
   o = o || {};
   var v = View.viewById(viewId);
-  if (v.isNull) throw new Error('No existe la vista ' + viewId);
+  if (!v || v.isNull) throw new Error('No existe la vista ' + viewId);
   var method = o.method || 'sample_free';
   var scale = (o.scale === undefined) ? 10 : o.scale;
   var smoothing = (o.smoothing === undefined) ? 0.1 : o.smoothing;
@@ -137,7 +141,7 @@ function graxpertBGE(viewId, o) {
 function graxpertDenoise(viewId, o) {
   o = o || {};
   var v = View.viewById(viewId);
-  if (v.isNull) throw new Error('No existe la vista ' + viewId);
+  if (!v || v.isNull) throw new Error('No existe la vista ' + viewId);
   var strength = (o.strength === undefined) ? 0.5 : o.strength;
   var base = gxSafeId('nr_' + viewId).replace(/_\d+$/, '');
   var inp = gxExport(v, base);

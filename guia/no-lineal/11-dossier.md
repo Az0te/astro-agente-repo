@@ -16,7 +16,7 @@
 
 ```javascript
 var v = View.viewById("Final");
-if (v.isNull) throw new Error("No existe Final");
+if (!v || v.isNull) throw new Error("No existe Final");
 var h = v.processing, out = [];       // contenedor, no array: length y at(i)
 for (var i = 0; i < h.length; ++i) out.push(i + ": " + h.at(i).toSource());
 out.join("\n\n");

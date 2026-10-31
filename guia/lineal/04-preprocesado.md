@@ -42,7 +42,7 @@
 ```javascript
 // Auditoría del master: pasos aplicados y presencia de los procesos clave.
 var v = View.viewById("MasterLight");
-if (v.isNull) throw new Error("No existe MasterLight");
+if (!v || v.isNull) throw new Error("No existe MasterLight");
 var h = v.processing, out = [], claves = ["ImageCalibration", "Debayer", "StarAlignment",
                                           "LocalNormalization", "ImageIntegration", "DrizzleIntegration"];
 for (var k = 0; k < claves.length; ++k) {

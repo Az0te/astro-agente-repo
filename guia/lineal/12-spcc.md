@@ -23,7 +23,7 @@
 
 ```javascript
 var v = View.viewById("MasterLight");
-if (v.isNull) throw new Error("No existe MasterLight");
+if (!v || v.isNull) throw new Error("No existe MasterLight");
 var w = ImageWindow.windowById("MasterLight");
 if (!w.hasAstrometricSolution) throw new Error("Sin WCS: SPCC fallaría");
 

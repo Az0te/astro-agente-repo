@@ -8,8 +8,8 @@ Contrato mínimo para que un agente ejecute los pasos de esta guía sin inventar
 
 | Necesidad | Llamada correcta | Trampa |
 |---|---|---|
-| Ventana por id | `ImageWindow.windowById("MasterLight")` | **Nunca** devuelve `null`: comprobar `.isNull` |
-| Vista por id | `View.viewById("MasterLight")` | Igual: comprobar `.isNull` |
+| Ventana por id | `ImageWindow.windowById("MasterLight")` | Nunca devuelve `null`: si no existe, un objeto con `.isNull = true` |
+| Vista por id | `View.viewById("MasterLight")` | En el watcher v8 devuelve **`null`** si no existe (comprobado en 1.9.6); en el clásico, un objeto con `.isNull`. Comprobar siempre `!v || v.isNull` |
 | Vista principal | `w.mainView` | — |
 | Imagen | `v.image` | **`w.image` no existe** |
 | Id de la vista | `w.mainView.id` | **`w.id` no existe** |
@@ -17,7 +17,7 @@ Contrato mínimo para que un agente ejecute los pasos de esta guía sin inventar
 
 ```javascript
 var w = ImageWindow.windowById("MasterLight");
-if (w.isNull) throw new Error("No existe MasterLight");
+if (!w || w.isNull) throw new Error("No existe MasterLight");
 var v = w.mainView;          // la vista
 var img = v.image;           // la imagen está en la vista, NO en la ventana
 ```
@@ -136,7 +136,7 @@ h.at(i).toSource();          // código del paso i
 | ImageSolver / BlindSolver | `blindSolve` (Paso 8 lineal) |
 | WBPP | Cadena de procesos de calibración, registro e integración (Paso 4 lineal) |
 | DBXtract / NBExtractPI | Emulación con PixelMath (Paso 7 lineal) |
-| GraXpert (script) / AutoDBE | `herramientas/graxpert.js`, MGC con `pxMGC` o plano robusto (Paso 9 lineal) |
+| GraXpert (script) / AutoDBE | Proceso GraXpert (sample_free 10), `herramientas/graxpert.js`, MGC con `pxMGC` o plano robusto (Paso 9 lineal) |
 | Combine Ha with RGB / CombineRGBAndNarrowband / Mix SHORGB | PixelMath (Paso 10 lineal y Paso 2 no lineal) |
 | PhotometricContinuumSubtraction | Fotometría de estrellas + PixelMath (Paso 16 lineal) |
 | AutoPalette Studio / Perfect Palette Picker / Foraxx | Fórmulas con PixelMath (Paso 2 no lineal) |
@@ -145,6 +145,6 @@ h.at(i).toSource();          // código del paso i
 | Halo-B-Gon / Star Reduction / RepairStarCores / Repaired HSV Separation | Recetas de halos y relleno con ley de potencias (Paso 8 no lineal); HDR con tomas cortas |
 | DarkStructureEnhance | LHE con máscara de fondo (Paso 5 no lineal) |
 - **BlindSolver** es la excepción: `blindSolve("<vista>")`.
-- **GraXpert** es externo: se llama con `guia/herramientas/graxpert.js`.
+- **GraXpert**: el proceso de PixInsight (`new GraXpert`) para el fondo por defecto; `herramientas/graxpert.js` llama al programa externo para el resto.
 
 ---

@@ -37,7 +37,7 @@ function gcK(C, name) {
 
 function gcLumBinned(viewId, bin) {
   var v = View.viewById(viewId);
-  if (v.isNull) throw new Error('No existe la vista ' + viewId);
+  if (!v || v.isNull) throw new Error('No existe la vista ' + viewId);
   try { return gcLumBinnedNative(v, bin); }
   catch (e) { Console.warningln('gcLumBinned: binado nativo falló (' + e + '); uso JS'); return gcLumBinnedJS(v, bin); }
 }
@@ -45,7 +45,7 @@ function gcLumBinned(viewId, bin) {
 // luminancia con PixelMath a una imagen gris nueva, IntegerResample con mediana y lectura de las muestras
 function gcLumBinnedNative(v, bin) {
   var id = 'gc_tmp_lum';
-  var old = View.viewById(id); if (!old.isNull) old.window.forceClose();
+  var old = View.viewById(id); if (old && !old.isNull) old.window.forceClose();
   var nc = v.image.numberOfChannels;
   var PM = new PixelMath;
   PM.expression = nc >= 3 ? '($T[0]+$T[1]+$T[2])/3' : '$T';
@@ -57,7 +57,7 @@ function gcLumBinnedNative(v, bin) {
   PM.rescale = false; PM.truncate = false;
   if (!PM.executeOn(v, false)) throw new Error('PixelMath no se ejecutó');
   var g = View.viewById(id);
-  if (g.isNull) throw new Error('no se creó ' + id);
+  if (!g || g.isNull) throw new Error('no se creó ' + id);
   try {
     var IR = new IntegerResample;
     IR.zoomFactor = -bin;

@@ -35,7 +35,7 @@ if (!PM.executeOn(View.viewById("MasterLight_stars"))) throw new Error("Limpieza
 
 // Suelo de la capa: mediana + 2*MAD por canal (medir antes; no subir hasta borrar estrellas débiles)
 var v = View.viewById("MasterLight_stars");
-if (v.isNull) throw new Error("No existe MasterLight_stars");
+if (!v || v.isNull) throw new Error("No existe MasterLight_stars");
 var img = v.image, out = [];
 for (var c = 0; c < img.numberOfChannels; ++c) {
    img.selectedChannel = c;
