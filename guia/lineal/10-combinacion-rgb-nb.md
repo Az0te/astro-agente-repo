@@ -14,7 +14,7 @@
 | OSC sin filtro | Color natural de estrellas y continuo (polvo, reflexión, galaxias), SPCC sencillo | Color y estrellas (tomas cortas + HDR) |
 | OSC dual band | Hα/OIII con menos SNR y resolución (¼ o ½ de los píxeles por raya) | Sumar tiempo a la banda estrecha de la mono, o cuando falta ese filtro |
 
-Nunca mezclar subs de cámaras distintas en una integración: cada cámara y filtro da su propio master. La solución astrométrica de la RGB se copia a las de banda estrecha ("Copy coordinates") o se resuelve cada una con `blindSolve`.
+Nunca mezclar subs de cámaras distintas en una integración: cada cámara y filtro da su propio master. La astrometría de cada master (RGB y banda estrecha) se resuelve con `blindSolve` (Paso 8).
 
 **Combinar dos masters del mismo canal** (p. ej. Hα mono + Hα de dual band)
 

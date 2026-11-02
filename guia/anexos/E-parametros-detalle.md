@@ -56,7 +56,7 @@ Ajustes BXT como diagnóstico: "anillos negros = fuerza estelar/PSF/halos excesi
 - "`ImageWindow.windowById` con un id inexistente no falla: un `w.mask` así aplica el proceso **sin máscara**." Comprobar `.isNull` antes de asignar la máscara.
 - Procesos largos (MGC sobre 12k × 8k ≈ 3 min, LHE ≈ 35 s, NXT ≈ 30 s) superan el corte de 60 s del MCP: esperar con `watcher_status`. La memoria llegó a 15 GB: cerrar ventanas grandes.
 - `new ImageWindow(w, h, …)` puede fallar con dimensiones leídas de `Image.width`: redondear o pasar números; para máscaras, `floatSample = true`.
-- Tras crear una composición con PixelMath, `copyAstrometricSolution` desde el original (o `blindSolve`): SPCC necesita WCS.
+- Tras crear una composición con PixelMath, resolverla con `blindSolve` (Paso 8): SPCC necesita WCS.
 
 - "Abrir un XISF de WBPP puede crear ventanas `crop_mask` extra: cerrarlas (`id.indexOf('crop_mask')>=0`)."
 - "StarDetector puede colgarse en algunos campos: para medir estrellas en imágenes procesadas, buscar máximos locales por encima de mediana + 5·MAD en una rejilla, deduplicar a < 20 px y medir semiancho a media altura en 4 direcciones."

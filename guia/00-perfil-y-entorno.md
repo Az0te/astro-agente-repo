@@ -27,7 +27,7 @@ Regla: "Cuando el usuario exprese una preferencia nueva (elige una versión fren
 | Bucles largos (medir cientos de subs) | Funciones que trabajen ~50 s, guarden el resultado en un CSV incremental y devuelvan el índice siguiente |
 | Cada llamada empieza sin estado | Guardar funciones reutilizables en `<versión>/tools/*.js` y cargarlas con `eval(File.readTextFile(ruta))` |
 | Herramientas de la guía | `herramientas/procesos.js` (SPCC, SPFC y MGC sin iconos), `herramientas/graxpert.js` (GraXpert por línea de comandos, para lo que no ofrece el proceso GraXpert) y `herramientas/gradcompare.js` (medir modelos de gradiente): `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))`. `herramientas/realces.js` (Star Stretch, ScreenStars, DarkStructureEnhance, BackgroundEnhance) ya va incluido en el watcher v8 |
-| Astrometría | `blindSolve("<vista>")` en el watcher v8 (PixInsight 1.9.6+); con el clásico la resuelve el usuario (Paso 8 lineal) |
+| Astrometría | Sólo `blindSolve("<vista>")` del watcher v8 (PixInsight 1.9.6+), ver Paso 8 lineal |
 | Proceso que no existe en el script (`typeof BlurXTerminator`) | El módulo no está cargado en PixInsight: avisar al usuario; no sustituirlo por otro proceso |
 | Duda con un nombre | `describe_process` (parámetros y constantes reales de la versión instalada) |
 | Scripts | La guía no los usa: no se pueden lanzar desde el watcher ("Script instance recursively") y cada uno tiene su equivalente con procesos y PixelMath ([Anexo A](anexos/A-contrato-api-pjsr.md), A.9) |
