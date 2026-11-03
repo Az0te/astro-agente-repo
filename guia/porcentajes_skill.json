@@ -101,6 +101,14 @@
     "no-lineal/10-recorte-exportacion": {
       "sonnet_vs_opus": 89,
       "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/11-dossier": {
+      "sonnet_vs_opus": 80,
+      "nota": "valor asignado, no medido"
+    },
+    "completa": {
+      "sonnet_vs_opus": 80,
+      "nota": "Resolucion Completa (todos los pasos seguidos); valor asignado, no medido"
     }
   }
 }
