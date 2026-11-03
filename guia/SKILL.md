@@ -78,7 +78,8 @@ Lista completa y criterio de parada: [Anexo F](anexos/F-anti-patrones.md), cuand
 Si la plataforma ofrece varios modelos o niveles de razonamiento, cada paso se puede hacer con uno **rápido** (más barato) o uno **potente**. El % de cada paso es la calidad del rápido respecto al potente haciendo ese paso, **medida con Claude** (Sonnet 5.5 frente a Opus 5.5; IC 1396 v2, noviembre de 2026; rúbrica de 40 puntos: exactitud, completitud, verificación y utilidad).
 
 - Lineal: 1 → 86 · 2 → 97 · 3 → 92 · 4 → 84 · 5 → 84 · 6 → 100 · 7 → 100 · 8 → 100 · 9 → 87 · 10 → 100 (NB) / 95 (RGB) · 11–17 → 95
-- No lineal: 1 → 95 · 2 → 95 · 3–10 → 89 · 11 (dossier) → potente
+- No lineal: 1 → 95 · 2 → 95 · 3–10 → 89 · 11 (dossier) → 80 (asignado, sin medir)
+- Resolución completa (todos los pasos seguidos en una sola tarea) → 80 (asignado, sin medir)
 
 | Plataforma | Rápido | Potente | % |
 |---|---|---|---|
@@ -86,7 +87,7 @@ Si la plataforma ofrece varios modelos o niveles de razonamiento, cada paso se p
 | ChatGPT | Modelo o nivel de razonamiento estándar | El de más razonamiento del plan (Thinking alto o Pro) | Sin medir: usar los de Claude como provisionales |
 | Local | No aplica (un solo modelo) | — | — |
 
-**Regla N.** Al empezar, el usuario elige N (0–100): si el % del paso es **> N**, rápido; si es **≤ N**, potente. Si no lo da, preguntarlo una vez; sin respuesta, N = 100 (todo potente). Con Claude, N = 95 pasa al rápido ~18 % del trabajo (ahorro ~7 %, pérdida ~0,2 %) y N = 90 ~50 % (ahorro ~20 %, pérdida ~2 %); el ahorro es de precio por token, no de tokens. Fijo, sea cual sea N: lotes mecánicos de un método ya decidido (calibrar con una herramienta escrita, medir subs, mover ficheros) con el rápido; decisiones de método, dossier (sin medir) y cambios en la guía con el potente. **Un solo agente con PixInsight a la vez** (dos en paralelo con imágenes grandes lo cerraron, c0000374); renombrar las ventanas en la misma llamada que las crea y guardar con rutas absolutas. Los % salen de un solo objeto (emisión, OSC dual band) y los pasos lineales 10–17 y no lineales 3–10 se puntuaron en bloque.
+**Regla N.** Al empezar, el usuario elige N (0–100): si el % del paso es **> N**, rápido; si es **≤ N**, potente. Si no lo da, preguntarlo una vez; sin respuesta, N = 100 (todo potente). Con Claude, N = 95 pasa al rápido ~18 % del trabajo (ahorro ~7 %, pérdida ~0,2 %) y N = 90 ~50 % (ahorro ~20 %, pérdida ~2 %); el ahorro es de precio por token, no de tokens. Fijo, sea cual sea N: lotes mecánicos de un método ya decidido (calibrar con una herramienta escrita, medir subs, mover ficheros) con el rápido; decisiones de método y cambios en la guía con el potente. **Un solo agente con PixInsight a la vez** (dos en paralelo con imágenes grandes lo cerraron, c0000374); renombrar las ventanas en la misma llamada que las crea y guardar con rutas absolutas. Los % salen de un solo objeto (emisión, OSC dual band) y los pasos lineales 10–17 y no lineales 3–10 se puntuaron en bloque.
 
 ## Mapa de decisión
 
@@ -107,67 +108,4 @@ Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias
 
 **Anexos (bajo demanda):** [A API de PJSR y equivalentes de scripts](anexos/A-contrato-api-pjsr.md) · [B Controles de calidad y entrega](anexos/B-checklist-entrega.md) · [C Pendiente](anexos/C-pendiente-documentar.md) · [D Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) · [E Parámetros complementarios](anexos/E-parametros-detalle.md) · [F Anti-patrones y parada](anexos/F-anti-patrones.md) · [G Glosario](anexos/G-glosario.md)
 
-<<<<<<< HEAD
-### Fase lineal
-
-| Paso | Parte | Tokens aprox. |
-|---|---|---|
-| 1 | [Análisis del objeto](lineal/01-analisis-del-objeto.md) | ~1000 |
-| 2 | [Inventario](lineal/02-inventario.md) | ~780 |
-| 3 | [Blink / SubframeSelector](lineal/03-blink-subframeselector.md) | ~1180 |
-| 4 | [Preprocesado](lineal/04-preprocesado.md) | ~1670 |
-| 5 | [StarAlignment + crop común](lineal/05-staralignment-crop.md) | ~800 |
-| 6 | [HDRComposition](lineal/06-hdr-composition.md) | ~1570 |
-| 7 | [Extracción de canales (OSC dual band)](lineal/07-extraccion-canales.md) | ~1040 |
-| 8 | [Plate solve](lineal/08-plate-solve.md) | ~720 |
-| 9 | [Corrección de Gradiente](lineal/09-correccion-gradiente.md) | ~3660 |
-| 10 | [Combinación RGB / NB](lineal/10-combinacion-rgb-nb.md) | ~1710 |
-| 11 | [BlurX correct only](lineal/11-bxt-correct-only.md) | ~910 |
-| 12 | [SPCC](lineal/12-spcc.md) | ~840 |
-| 13 | [BlurX completo](lineal/13-bxt-completo.md) | ~1000 |
-| 14 | [NoiseX suave (opcional)](lineal/14-noisex-suave.md) | ~560 |
-| 15 | [StarX y NXT de la starless](lineal/15-starx.md) | ~1050 |
-| 16 | [LinearFit / sustracción de continuo](lineal/16-linearfit-continuo.md) | ~1070 |
-| 17 | [Checkpoint](lineal/17-checkpoint.md) | ~630 |
-
-### Fase no lineal
-
-| Paso | Parte | Tokens aprox. |
-|---|---|---|
-| 1 | [Estirado (starless y estrellas por separado)](no-lineal/01-estirado.md) | ~2580 |
-| 2 | [LRGB / Paleta](no-lineal/02-lrgb-paleta.md) | ~2940 |
-| 3 | [SCNR](no-lineal/03-scnr.md) | ~730 |
-| 4 | [Máscaras](no-lineal/04-mascaras.md) | ~800 |
-| 5 | [Boost (curvas, contraste, saturación)](no-lineal/05-boost.md) | ~1130 |
-| 6 | [NoiseX](no-lineal/06-noisex.md) | ~720 |
-| 7 | [Nitidez](no-lineal/07-nitidez.md) | ~500 |
-| 8 | [Procesado de estrellas](no-lineal/08-estrellas.md) | ~2170 |
-| 9 | [Recombinación](no-lineal/09-recombinacion.md) | ~530 |
-| 10 | [Recorte y exportación](no-lineal/10-recorte-exportacion.md) | ~680 |
-| 11 | [Dossier](no-lineal/11-dossier.md) | ~560 |
-
-### Anexos
-
-| Anexo | Contenido | Tokens aprox. |
-|---|---|---|
-| A | [Contrato de API (PJSR)](anexos/A-contrato-api-pjsr.md) | ~1900 |
-| B | [Controles de calidad y checklist de entrega](anexos/B-checklist-entrega.md) | ~990 |
-| C | [Pendiente de documentar](anexos/C-pendiente-documentar.md) | ~470 |
-| D | [Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) | ~1670 |
-| E | [Parámetros y detalles complementarios](anexos/E-parametros-detalle.md) | ~3230 |
-| F | [Anti-patrones y criterio de parada](anexos/F-anti-patrones.md) | ~1770 |
-| G | [Glosario](anexos/G-glosario.md) | ~1210 |
-
-### Herramientas y fuentes
-
-| Fichero | Para qué |
-|---|---|
-| `herramientas/procesos.js` | SPCC, SPFC y MGC configurados en código (filtros y QE de la base de PixInsight, base MARS), sin iconos |
-| `herramientas/realces.js` | Star Stretch, ScreenStars, DarkStructureEnhance y BackgroundEnhance desde el watcher (incluido en el v8): `starStretch`, `screenStarsCombine`, `screenStarsExtract`, `darkStructureEnhance`, `backgroundEnhance` |
-| `herramientas/graxpert.js` | GraXpert por línea de comandos: métodos que el proceso GraXpert no ofrece (RBF, Kriging, Splines con muestras) y denoise. El fondo por defecto se hace con el proceso GraXpert |
-| `herramientas/gradcompare.js` | Medir modelos de gradiente (`gcStructCopy` y comparativa) |
-| `porcentajes_skill.json` | Calidad de Sonnet en % de la de Opus por paso (`sonnet_vs_opus`). Con un umbral N: más de N, Sonnet; N o menos, Opus. Los ajustes de cada usuario no van aquí, se guardan en local |
-| `FUENTES.md` | Fuentes consultadas |
-=======
-**Detalle de los pasos** (el porqué y las fuentes; sólo si una ficha no basta para decidir): `detalle/`. **Configuración** (crear o completar `perfil.md`, entorno de PixInsight): [00 Perfil y entorno](00-perfil-y-entorno.md). Fuentes: `FUENTES.md`. Instrucciones para ChatGPT y modelos locales: `envolturas/`.
->>>>>>> 95bd63017ec6aef606c35a9d105b78178fed1c9a
+**Detalle de los pasos** (el porqué y las fuentes; sólo si una ficha no basta para decidir): `detalle/`. **Configuración** (crear o completar `perfil.md`, entorno de PixInsight): [00 Perfil y entorno](00-perfil-y-entorno.md). Pesos por paso en datos: `porcentajes_skill.json` (los ajustes de cada usuario, como su N, no van ahí sino en local). Fuentes: `FUENTES.md`. Instrucciones para ChatGPT y modelos locales: `envolturas/`.
