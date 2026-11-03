@@ -59,7 +59,10 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
 4. En PixInsight: **Script → Execute Script File… → `watcher/pixinsight-mcp-watcher-v8.js`**. En la consola debe aparecer `PixInsight MCP Watcher v0.5.1-v8`.
    Con PixInsight anterior a 1.9.6, usa `watcher/pixinsight-mcp-watcher.js` (v0.4.14, sin BlindSolver).
    Si PixInsight no está en `C:/Program Files/PixInsight`, cambia esa ruta en el bloque `#else` del principio del watcher.
-5. Carga la guía como *skill* en tu cliente de Claude (la carpeta `guia/`, cuyo punto de entrada es `guia/SKILL.md`).
+5. Carga la guía en tu agente. El punto de entrada es `guia/SKILL.md` (núcleo de reglas e índice, ~2.300 tokens); el resto se lee paso a paso.
+   - Claude: la carpeta `guia/` como *skill*.
+   - ChatGPT u otro cliente con MCP: [`guia/envolturas/chatgpt.md`](guia/envolturas/chatgpt.md).
+   - Modelo local (Ollama): [`guia/envolturas/local.md`](guia/envolturas/local.md).
 6. Copia `guia/perfil-ejemplo.md` como `guia/perfil.md` y rellénalo con tu equipo, tu cielo, tus rutas y tus gustos. Ese fichero está excluido de Git.
 
 ## Uso diario

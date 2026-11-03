@@ -18,7 +18,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | HDR global cuando sólo el núcleo lo necesita | Mezcla sólo bajo máscara de núcleo (`hdr_core_blend`) |
 | HDRMT sobre núcleos ya recortados | Dejar margen (~0,93–0,97) o tomas cortas |
 | LHE + HDRMT juntos, LHE amount > 0,5, radios pequeños con estrellas | Uno u otro; sobre starless o con máscara |
-| Mapa de "estructuras oscuras" por diferencia de escalas | LHE con máscara de fondo |
+| Mapa de "estructuras oscuras" por diferencia de escalas sin mirarlo (en IC 63 era ruido) | `darkStructureEnhance` con `keepMask: true`: sólo si la máscara sigue estructuras reales; si no, LHE con máscara de fondo |
 
 ## F.2 Color
 
