@@ -2,6 +2,8 @@
 
 [← Índice](SKILL.md)
 
+**Cuándo se lee.** Sólo para crear o completar el `perfil.md` del usuario o al montar el entorno. Durante un procesado bastan `SKILL.md` y `perfil.md`.
+
 **Por qué.** "Esta guía es genérica; el perfil decide los valores concretos". La guía no usa iconos del escritorio ni scripts: todo se ejecuta desde el watcher con procesos configurados en código (`herramientas/procesos.js` para SPCC, SPFC y MGC) y los scripts necesarios reimplementados en `herramientas/realces.js`. Los valores de cada equipo (nombres de filtro y QE de `filters.xspd`, base MARS, preferencias) salen del perfil. Sin perfil, la escala de muestreo, los filtros y las rutas son suposiciones.
 
 **Perfil del usuario** (plantilla en `guia/perfil-ejemplo.md`; copiar como `perfil.md` y rellenar antes del primer paso)

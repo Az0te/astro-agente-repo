@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- **Guía optimizada para gastar menos contexto con cualquier modelo** (Claude, ChatGPT, local):
+  - `guia/SKILL.md` es ahora el núcleo común: reglas, orden, sesiones por fase, funciones del watcher, entorno, trampas más frecuentes, mapa e índice. Arranque de ~6.150 a ~2.460 tokens: `00-perfil-y-entorno.md` sólo se lee para configurar y el Anexo F completo cuando algo falla.
+  - **Sesión por fase**: el checkpoint lineal (Paso 17) escribe `estado.md` y la fase no lineal empieza en una sesión nueva leyéndolo.
+  - **Fichas en dos capas** (piloto en Gradiente, Estirado y Estrellas): la ficha lleva lo necesario para ejecutar y controlar; el porqué, las medidas y las recetas largas pasan a `guia/detalle/`. Esos tres pasos bajan de ~9.340 a ~3.450 tokens.
+  - Cuándo, por qué y cómo de las funciones de `realces.js`, en sus pasos (1, 5, 8 y 9 no lineales) en vez del índice.
+  - Nuevas envolturas `guia/envolturas/chatgpt.md` y `guia/envolturas/local.md` (prompt de sistema y parámetros de Ollama).
+  - Corregido: el código de MGC del Paso 9 lineal lo aplicaba dos veces; el Anexo F prohibía el mapa de estructuras oscuras que ahora implementa `darkStructureEnhance` (vale si su máscara sigue estructuras reales).
+
 ### Watcher v0.5.1-v8 (2026-10-31)
 - Nuevo `guia/herramientas/realces.js`, incluido en el watcher v8: **Star Stretch** (`starStretch`), **ScreenStars** (`screenStarsCombine`, `screenStarsExtract`), **DarkStructureEnhance** (`darkStructureEnhance`) y **BackgroundEnhance** (`backgroundEnhance`), que no se podían lanzar desde el watcher. Son reimplementaciones de sus algoritmos con los mismos procesos y parámetros (créditos a sus autores en el fichero); comparadas con los originales en PixInsight 1.9.6, la diferencia máxima es 0 en todos los casos probados. Guía actualizada: Anexo A, `00` y pasos 1, 5, 8 y 9 no lineales.
 

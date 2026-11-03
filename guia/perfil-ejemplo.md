@@ -1,6 +1,6 @@
 # Perfil del usuario (plantilla)
 
-Copia este fichero como `perfil.md` y rellénalo. Claude lo lee antes de procesar: aquí van tu equipo, tu cielo, tus rutas y tus gustos. La guía es genérica; los valores concretos salen de aquí.
+Copia este fichero como `perfil.md` y rellénalo. El agente lo lee antes de procesar: aquí van tu equipo, tu cielo, tus rutas y tus gustos. La guía es genérica; los valores concretos salen de aquí.
 
 ## Equipo
 - Telescopio y focal: _(p. ej. refractor 106 mm, FOCALLEN ≈ 509 mm)_
@@ -41,4 +41,4 @@ Copia este fichero como `perfil.md` y rellénalo. Claude lo lee antes de procesa
 - Entrega: _(formatos, orientación, si quieres dossier con antes/después)_
 
 ## Preferencias aprendidas por objeto
-_(Claude propone añadir aquí lo que elijas en cada procesado, p. ej. "IC 63: prefirió la versión B, con más nebulosidad de fondo y Hα al rojo 1,40".)_
+_(El agente propone añadir aquí lo que elijas en cada procesado, p. ej. "IC 63: prefirió la versión B, con más nebulosidad de fondo y Hα al rojo 1,40".)_

@@ -37,4 +37,16 @@ out.join("\n");
 
 **Guardado.** "Guardar también capas lineales intermedias (incluida la HDR y sus máscaras) para poder rehacer sin repetir todo". Antes de estirar, `window.purge()` de las vistas temporales: "cada imagen RGB f32 de ~11k×7k ocupa ~1 GB y cada paso añade historial de deshacer. Cerrar vistas temporales y usar `window.purge()` tras pasos pesados".
 
+**Estado para la fase no lineal.** La fase lineal termina aquí: escribir `<carpeta de la versión>/estado.md` y cerrar la sesión. La fase no lineal empieza en una sesión nueva leyendo `SKILL.md`, `perfil.md` y este fichero, sin nada de la fase lineal.
+
+```markdown
+# Estado al final de la fase lineal: <objeto> <versión>
+- Ficheros: <ruta del master lineal guardado>; estrellas lineales: <ruta o "no separadas">; starless: <ruta>; otros (Hα, OIII, HDR, máscaras): <rutas>
+- Datos: <cámara, filtros, tiempo total, combinación prevista (RGB, HOO, Hα+RGB…)>
+- Hecho (según el historial): <gradiente: método y parámetros>; BXT CO; SPCC <filtros/QE>; BXT <valores>; SXT; NXT <valor> sobre <vista>
+- Medidas del checkpoint: medianas R/G/B <…>; % recortado por canal <…>; WCS <sí/no>; FWHM por canal <…>
+- Decisiones y avisos: <lo que el usuario eligió, lo que falló o quedó dudoso, lo que no se debe repetir>
+- Siguiente: Paso 1 no lineal (estirado) sobre <vista/fichero>
+```
+
 ---
