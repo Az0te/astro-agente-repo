@@ -113,4 +113,5 @@ Funciones de `herramientas/realces.js` (incluido en el watcher v8; con el clási
 | `herramientas/realces.js` | Star Stretch, ScreenStars, DarkStructureEnhance y BackgroundEnhance desde el watcher (incluido en el v8): `starStretch`, `screenStarsCombine`, `screenStarsExtract`, `darkStructureEnhance`, `backgroundEnhance` |
 | `herramientas/graxpert.js` | GraXpert por línea de comandos: métodos que el proceso GraXpert no ofrece (RBF, Kriging, Splines con muestras) y denoise. El fondo por defecto se hace con el proceso GraXpert |
 | `herramientas/gradcompare.js` | Medir modelos de gradiente (`gcStructCopy` y comparativa) |
+| `porcentajes_skill.json` | Calidad de Sonnet en % de la de Opus por paso (`sonnet_vs_opus`). Con un umbral N: más de N, Sonnet; N o menos, Opus. Los ajustes de cada usuario no van aquí, se guardan en local |
 | `FUENTES.md` | Fuentes consultadas |

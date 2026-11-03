@@ -1,0 +1,106 @@
+{
+  "descripcion": "Por proceso de la skill astro-procesado-pixinsight (IC1396 v2, nov 2026). sonnet_vs_opus = calidad de Sonnet en % de la de Opus. Regla: el usuario elige un nivel N; si sonnet_vs_opus > N el proceso se ejecuta con Sonnet; si es <= N, con Opus.",
+  "procesos": {
+    "lineal/01-analisis-del-objeto": {
+      "sonnet_vs_opus": 86
+    },
+    "lineal/02-inventario": {
+      "sonnet_vs_opus": 97
+    },
+    "lineal/03-blink-subframeselector": {
+      "sonnet_vs_opus": 92
+    },
+    "lineal/04-preprocesado": {
+      "sonnet_vs_opus": 84
+    },
+    "lineal/05-staralignment-crop": {
+      "sonnet_vs_opus": 84,
+      "nota": "registro evaluado con el paso 4; el recorte en el paso 5-8 salio igual (100)"
+    },
+    "lineal/06-hdr-composition": {
+      "sonnet_vs_opus": 100
+    },
+    "lineal/07-extraccion-canales": {
+      "sonnet_vs_opus": 100
+    },
+    "lineal/08-plate-solve": {
+      "sonnet_vs_opus": 100
+    },
+    "lineal/10-combinacion-rgb-nb (parte NB)": {
+      "sonnet_vs_opus": 100
+    },
+    "lineal/09-correccion-gradiente": {
+      "sonnet_vs_opus": 87
+    },
+    "lineal/10-combinacion-rgb-nb (parte RGB)": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "lineal/11-bxt-correct-only": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "lineal/12-spcc": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "lineal/13-bxt-completo": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "lineal/14-noisex-suave": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "lineal/15-starx": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "lineal/16-linearfit-continuo": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "lineal/17-checkpoint": {
+      "sonnet_vs_opus": 95,
+      "nota": "evaluados juntos (pasos 10-17)"
+    },
+    "no-lineal/01-estirado": {
+      "sonnet_vs_opus": 95
+    },
+    "no-lineal/02-lrgb-paleta": {
+      "sonnet_vs_opus": 95
+    },
+    "no-lineal/03-scnr": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/04-mascaras": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/05-boost": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/06-noisex": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/07-nitidez": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/08-estrellas": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/09-recombinacion": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    },
+    "no-lineal/10-recorte-exportacion": {
+      "sonnet_vs_opus": 89,
+      "nota": "evaluados juntos (finales en tres paletas)"
+    }
+  }
+}
