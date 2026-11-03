@@ -58,3 +58,14 @@ NXT.iterations = 3;
 if (!NXT.executeOn(v)) throw new Error("NXT principal falló");
 "NXT principal sobre la starless";
 ```
+
+- En una rejilla, cada prueba de NXT sobre una ventana con un **id nuevo**, y fijar también `denoise_intensity`: con el mismo id NXT devolvió el mismo resultado aunque cambiara `denoise`.
+
+**Alternativa medida: MLDenoise e híbrido (PixInsight 1.9.6+)**
+
+MLDenoise (módulo MachineLearning) necesita un modelo `.xmlm` en `modelPath`. Usar `amount` 1,0; la máscara, el overlap y la precisión alta no cambian el resultado. Medido frente a una referencia de subs independientes (IC 1396):
+
+- Señal fuerte (Hα): MLDenoise 1,0 empata con NXT 0,95 en ruido y borra menos detalle.
+- Señal débil (OIII, SII): MLDenoise solo deja hasta el doble de ruido a 16 px. Usar el **híbrido**: `ML − suave(ML) + suave(NXT 0,95)`, con caja de radio 3. Es el mejor en los tres canales (OIII: 83,8 frente a 78,6 de NXT 0,95).
+
+Código, puntuaciones y método: [detalle](../detalle/lineal-15-denoise-mldenoise.md).

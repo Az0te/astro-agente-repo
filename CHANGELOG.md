@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- Guía: **MLDenoise frente a NoiseX**, medido en IC 1396 (Hα, OIII, SII) con una referencia de subs independientes. Nueva ficha `guia/detalle/lineal-15-denoise-mldenoise.md` (método, puntuaciones, parámetros de MLDenoise y receta híbrida ML fino + NXT grueso, que gana en los tres canales) y resumen en el Paso 15 lineal. Trampa documentada: NXT repetido sobre el mismo id de ventana devuelve el mismo resultado.
+
 - Guía: nueva sección **"Modelo por paso: rápido o potente"** en `SKILL.md`, válida para Claude (Sonnet/Opus, % medidos) y ChatGPT (nivel estándar / máximo razonamiento, % provisionales), con la regla N.
 
 - **Guía optimizada para gastar menos contexto con cualquier modelo** (Claude, ChatGPT, local):
