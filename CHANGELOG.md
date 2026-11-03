@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- Guía: nueva sección **"Modelo por paso: rápido o potente"** en `SKILL.md`, válida para Claude (Sonnet/Opus, % medidos) y ChatGPT (nivel estándar / máximo razonamiento, % provisionales), con la regla N.
+
 - **Guía optimizada para gastar menos contexto con cualquier modelo** (Claude, ChatGPT, local):
   - `guia/SKILL.md` es ahora el núcleo común: reglas, orden, sesiones por fase, funciones del watcher, entorno, trampas más frecuentes, mapa e índice. Arranque de ~6.150 a ~2.460 tokens: `00-perfil-y-entorno.md` sólo se lee para configurar y el Anexo F completo cuando algo falla.
   - **Sesión por fase**: el checkpoint lineal (Paso 17) escribe `estado.md` y la fase no lineal empieza en una sesión nueva leyéndolo.
