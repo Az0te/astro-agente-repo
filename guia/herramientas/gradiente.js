@@ -92,6 +92,7 @@ function grMeasure(base, modelId, correctedId, range0) {
 }
 
 function gradienteCandidatos(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   var scalesGX = o.graxpert || [10, 8];
   var scalesMGC = o.mgc || [];

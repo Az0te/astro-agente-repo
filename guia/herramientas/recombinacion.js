@@ -58,6 +58,8 @@ function rcDiff(a, b) {
 }
 
 function recombinarEstrellas(starlessId, starsId, o) {
+  if (starlessId && typeof starlessId === "object" && starlessId.id !== undefined) starlessId = starlessId.id;   // también vale la View
+  if (starsId && typeof starsId === "object" && starsId.id !== undefined) starsId = starsId.id;   // también vale la View
   o = o || {};
   var sl = View.viewById(starlessId), st = View.viewById(starsId);
   if (!sl || sl.isNull) throw new Error("No existe la starless " + starlessId);

@@ -32,6 +32,7 @@ function anMedian(arr) {
 }
 
 function analizarMaster(viewId) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
   var v = win.mainView, im = v.image, W = im.width, H = im.height, nc = im.numberOfChannels;

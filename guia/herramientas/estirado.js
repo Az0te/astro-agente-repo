@@ -64,6 +64,7 @@ function esGHS(view, D, b, SP, LP, HP, canal) {
 }
 
 function estirarAFondo(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   var fondo = o.fondo || 0.20, tol = o.tolerancia || 0.02, canal = o.canal || "RGB";
   var win = ImageWindow.windowById(viewId);
@@ -240,6 +241,7 @@ function esSkyDominance(view) {
            canales: med.map(function (m) { return +m.toFixed(4); }) };
 }
 function estirarStarless(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   if (o.modo === "fondo") return estirarAFondo(viewId, o);
   var cielo = o.cielo || 0.10, D = o.paso || 1.0, canal = o.canal || "RGB";
@@ -322,6 +324,7 @@ function esStarP90(sample, A) {
 }
 
 function estirarEstrellas(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   var sat = o.saturacion || 1;
   if (typeof starStretch !== "function" && typeof PICOPILOT_GUIA === "string")
@@ -374,6 +377,8 @@ function estirarEstrellas(viewId, o) {
 // Las dos capas del Paso 1 en una llamada.
 //   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // { starless: {...}, estrellas: {...} }
 function estirarCapas(starlessId, starsId, o) {
+  if (starlessId && typeof starlessId === "object" && starlessId.id !== undefined) starlessId = starlessId.id;   // también vale la View
+  if (starsId && typeof starsId === "object" && starsId.id !== undefined) starsId = starsId.id;   // también vale la View
   o = o || {};
   var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3 }) };
   if (starsId) r.estrellas = estirarEstrellas(starsId, { nuevaVista: o.nuevasEstrellas, amount: o.amount, saturacion: o.saturacion });

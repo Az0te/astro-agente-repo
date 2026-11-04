@@ -55,6 +55,7 @@ function stMeasure(view) {
 }
 
 function prepararEstrellas(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   var lim = (o.limpieza !== undefined) ? o.limpieza : 0.005;
   var maxT = o.maximo || 0.97, knee = o.rodilla || 0.80;

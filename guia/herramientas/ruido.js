@@ -136,6 +136,7 @@ function rdBox(a, W, H, r) {
 }
 
 function reducirRuido(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
@@ -182,6 +183,7 @@ function reducirRuido(viewId, o) {
 
 // StarXTerminator en lineal sobre una copia: starless + capa de estrellas, con las comprobaciones de la ficha.
 function separarEstrellas(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);

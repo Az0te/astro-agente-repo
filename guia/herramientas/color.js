@@ -88,6 +88,7 @@ function ccProperty(view, id) {
 }
 
 function calibrarColor(viewId, o) {
+  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
   if (typeof pxSPCC !== "function") {
     var g = o.guia || (typeof PICOPILOT_GUIA === "string" ? PICOPILOT_GUIA : null);
