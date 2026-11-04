@@ -29,6 +29,15 @@ if (!SXT.executeOn(v)) throw new Error("StarX falló");
 "starless + MasterLight_stars";
 ```
 
+**En una llamada** (`herramientas/ruido.js`): `separarEstrellas` hace SXT sobre una copia (unscreen según sea lineal o no), localiza la capa de estrellas y comprueba que starless + estrellas reproduce el original; la estructura extensa de la capa de estrellas se da como orientación (en campos densos es alta sin fallo). Después, el denoise principal con `reducirRuido` (híbrido en mono con el modelo del perfil; NXT 0,95 en RGB).
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/ruido.js"));   // en el nivel superior del script
+var s = separarEstrellas("MasterLight_nxt", { nuevaVista: "Starless", nuevasEstrellas: "Stars" });
+var d = reducirRuido(s.starless, { metodo: "hibrido", modelo: "<.xmlm del perfil>", nuevaVista: "Starless_dn" });   // RGB: { denoise: 0.95 }
+JSON.stringify({ separacion: s, denoise: d });
+```
+
 **Control.** "Una starless 'limpia' no prueba que la separación sea buena: revisar la diferencia original − starless." Esa diferencia debe contener **sólo** estrellas y sus halos, no filamentos, polvo ni núcleos de galaxia. Comprobar el recuento de estrellas de la capa frente al original. Y la suma `starless + stars` debe reproducir el original píxel a píxel (en lineal es exacta).
 
 **Denoise principal sobre la starless (lineal)**

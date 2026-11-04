@@ -41,4 +41,6 @@ if (!NXT.executeOn(v)) throw new Error("NXT final falló");
 "NXT final 0,30 sobre starless";
 ```
 
+**En una llamada** (`herramientas/ruido.js`): `reducirRuido("Starless", { denoise: 0.30, detail: 0.15, nuevaVista: "Starless_nxt" })` (con `croma: 0.90, denoise: 0.40` para la separación de color) aplica NXT sobre una copia y mide σ del cielo, contraste de la zona débil y estructura de la residual. Recomendado para modelos sin herramientas.
+
 **Control.** σ del cielo antes/después (bajar un 50–80 %, nunca a cero: fondo muerto). Contraste de una zona débil (polvo, IFN, filamento): no debe bajar más de ~5 %. Imagen residual: sólo ruido; si se ven filamentos o bordes, se llevó señal.

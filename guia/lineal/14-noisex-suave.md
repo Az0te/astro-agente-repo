@@ -32,4 +32,12 @@ if (!NXT.executeOn(v)) throw new Error("NXT ligero falló");
 "NXT 0,50 aplicado";
 ```
 
+**En una llamada** (`herramientas/ruido.js`): `reducirRuido` aplica NXT sobre una copia y mide los controles de abajo: σ del cielo antes y después, contraste de la zona débil y estructura de la imagen residual (~1–2 = sólo ruido). En IC 1396 (nov 2026), NXT 0,50 bajó el ruido del cielo un 43 % con el contraste intacto (−0,5 %). Recomendado para modelos sin herramientas.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/ruido.js"));   // en el nivel superior del script
+var r = reducirRuido("MasterLight_bxt", { denoise: 0.50, detail: 0.15, iterations: 2, nuevaVista: "MasterLight_nxt" });
+JSON.stringify(r);   // medidas (ruido_baja_pct, contraste_zona_debil_pct, residual_estructura), no_cumple, control
+```
+
 **Control.** σ del cielo baja poco (es una pasada suave), contraste de una zona débil no baja más de ~5 %, la imagen diferencia (antes − después) debe ser **sólo ruido**. Si aparece aspecto de cera, se ha pasado: bajar denoise o dejarlo para la starless.
