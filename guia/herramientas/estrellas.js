@@ -110,12 +110,18 @@ function prepararEstrellas(viewId, o) {
 
   var despues = stMeasure(v), ok = true;
   for (var k = 0; k < 3; ++k) if (despues[k].maximo >= 0.98 || despues[k].mediana > 0.001) ok = false;
+  var p90 = Math.max(despues[0].p90_estrellas || 0, despues[1].p90_estrellas || 0, despues[2].p90_estrellas || 0);
   return {
     vista: id, original: viewId, pasos: pasos, antes: antes, despues: despues,
-    control: { fondo_a_cero: despues.every(function (d) { return d.mediana <= 0.001; }),
-               maximo_menor_098: despues.every(function (d) { return d.maximo < 0.98; }),
-               cumple: ok,
+    control: { medido: {
+                 fondo_a_cero: despues.every(function (d) { return d.mediana <= 0.001; }),
+                 maximo_menor_098: despues.every(function (d) { return d.maximo < 0.98; }),
+                 p90_cerca_de_025: p90 >= 0.15 && p90 <= 0.35,
+                 cumple_lo_medido: ok },
+               revisar_a_ojo: ["anillos de color alrededor de las estrellas brillantes (al 200–400 %)",
+                               "halos residuales en zonas brillantes",
+                               "manchas de residuos de SXT entre estrellas (verdes o moradas)"],
                nota: "El p90 de la ficha (≈ 0,25) depende de cuánto se estiró la capa en el Paso 1; si queda muy por debajo, " +
-                     "subir 'amount' de starStretch allí, no aquí." }
+                     "subir 'amount' de starStretch allí, no aquí. Lo de revisar_a_ojo no lo mide esta función: no darlo por bueno." }
   };
 }
