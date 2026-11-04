@@ -277,10 +277,17 @@ function estirarStarless(viewId, o) {
   var im = v.image, porCanal = [];
   for (var ch = 0; ch < im.numberOfChannels; ++ch) { im.selectedChannel = ch; porCanal.push(+im.median().toFixed(4)); }
   im.resetSelections();
-  var sd = esSkyDominance(v), dom = sd.dominante_pct;
+  var sd = esSkyDominance(v), dom = sd.dominante_pct, noCumple = [];
+  if (dom >= 5) {
+    var nombres = ["rojo", "verde", "azul"], k = sd.canales.indexOf(Math.max.apply(null, sd.canales));
+    noCumple.push("DOMINANTE DEL CIELO " + dom + " % hacia el " + nombres[k] + " (límite 5 %): no es aceptable; viene de la " +
+                  "fase lineal (fondo tras el gradiente o SPCC) y hay que corregirla allí antes de seguir");
+  }
+  if (Math.abs(c.cielo - cielo) > 0.02) noCumple.push("cielo " + c.cielo + " fuera del objetivo " + cielo);
   return {
     vista: v.id, original: viewId, metodo: "al fallo (pasadas cortas de GHS + punto negro)", cielo_objetivo: cielo,
     pasadas: pasadas, pasadas_descartadas: descartadas, parada: motivo,
+    no_cumple: noCumple,
     medidas: c, mediana_por_canal: porCanal, cielo_por_canal: sd.canales, dominante_cielo_pct: dom,
     control: {
       medido: {
