@@ -54,4 +54,4 @@ var r = prepararEstrellas("Stars_st", { nuevaVista: "Stars_v1" });
 JSON.stringify(r);   // pasos, antes/despues por canal (mediana, MAD, máximo, pix_098, p90_estrellas), control
 ```
 
-**Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 ≈ 0,25; sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.
+**Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) del orden de 0,08–0,13 (depende del amount del Paso 1); sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.

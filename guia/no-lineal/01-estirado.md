@@ -73,7 +73,7 @@ if (!M.executeOn(View.viewById("Starless"))) throw new Error("MAS falló");
 **Capa de estrellas: `starStretch`** (Star Stretch de SetiAstro, mismo resultado que el script)
 
 - Cuándo: la capa de estrellas **lineal** de SXT, y las estrellas RGB que se añaden a una imagen de banda estrecha. Nunca la starless ni una capa ya estirada.
-- Cómo: `starStretch("Stars_v1", { amount: 2, saturation: 1, removeGreen: false })` sobre una copia. `amount` 1–3 en campos con muchas estrellas (objetivo: p90 de la capa ≈ 0,25, probando con saturación fija), hasta 5 con pocas. `saturation` 1; 1,2–1,5 si salen pálidas, vigilando anillos de color. `removeGreen` sólo con dominante verde real.
+- Cómo: `starStretch("Stars_v1", { amount: 2, saturation: 1, removeGreen: false })` sobre una copia. `amount` 1–3 en campos con muchas estrellas, hasta 5 con pocas. Referencia medida (p90 de los píxeles de estrella > 0,005, como lo miden las funciones): 0,08–0,12 con amount 2 en IC 1396 y M31 (nov 2026), lo mismo que dejó Opus a mano; el "≈ 0,25" de NOVA se mide de otra forma y no se alcanza así ni con amount 5. `saturation` 1; 1,2–1,5 si salen pálidas, vigilando anillos de color. `removeGreen` sólo con dominante verde real.
 - Alternativa: arcsinh con `L = max(RGB)` y k ≈ 5000, o ArcsinhStretch (ver detalle).
 
 **Control.** Estirado hasta el fallo (ni más ni menos: la pasada anterior a que el ruido del cielo pase del 15 % o recorte); cielo ~0,10; sin dominante en el cielo (< 5 %; si la hay, venía de la lineal: corregirla allí); mínimo ≥ 0 (sin sombras aplastadas); sin estrellas hinchadas; sin deriva de color. Pico más ancho = más ruido; pico de un canal desplazado = dominante; "dientes de sierra" al ampliar el histograma = posterización por estirados repetidos.

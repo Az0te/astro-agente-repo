@@ -121,7 +121,7 @@ function prepararEstrellas(viewId, o) {
                revisar_a_ojo: ["anillos de color alrededor de las estrellas brillantes (al 200–400 %)",
                                "halos residuales en zonas brillantes",
                                "manchas de residuos de SXT entre estrellas (verdes o moradas)"],
-               nota: "El p90 de la ficha (≈ 0,25) depende de cuánto se estiró la capa en el Paso 1; si queda muy por debajo, " +
+               nota: "El p90 (referencia 0,08–0,13 medido así) depende de cuánto se estiró la capa en el Paso 1; si queda muy por debajo, " +
                      "subir 'amount' de starStretch allí, no aquí. Lo de revisar_a_ojo no lo mide esta función: no darlo por bueno." }
   };
 }

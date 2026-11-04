@@ -27,7 +27,7 @@ Medir con PJSR sobre la imagen final (o tras cada paso arriesgado) y usarlos jun
 
 ## B.3 Checklist de entrega
 
-1. Fondo limpio, sin gradientes ni dominantes; mediana en el objetivo (galaxia ~0,10; nebulosa ~0,15–0,25).
+1. Fondo limpio, sin gradientes ni dominantes; cielo (zonas más oscuras) ~0,10 tras el estirado al fallo; la mediana de una nebulosa que llena el campo queda por encima.
 2. Estrellas redondas, sin halos, con variedad de color; `hasAstrometricSolution` en el XISF final.
 3. Estructura visible (filamentos, polvo, densidades) sin inventar; separación tonal núcleo–extensiones.
 4. Color natural sin sobresaturar; ningún canal recortado; % de píxeles > 0,98 anotado.
