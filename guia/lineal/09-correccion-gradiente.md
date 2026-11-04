@@ -52,6 +52,18 @@ if (!mgc.executeOn(v)) throw new Error("MGC falló");   // crea <vista>_MGC_grad
 "SPFC + MGC aplicados";
 ```
 
+**Comparativa en una sola llamada** (`herramientas/gradiente.js`): lanza GraXpert y MGC sobre copias, mide cada modelo con `gcStructCopy`, mide además el gradiente que queda (rejilla 4×3), nombra las vistas (`GC_GX10`, `GC_GX10_modelo`, `GC_MGC2048`…), recomienda entre los que dejan ≤ 30 % del gradiente el que menos copia el objeto y, si se le pasa una ruta, escribe el dossier. Es la forma recomendada cuando no se puede ir paso a paso (modelos sin herramientas).
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/gradiente.js"));   // en el nivel superior del script
+var r = gradienteCandidatos("MasterLight", {
+  graxpert: [10, 8], mgc: [2048],
+  spfc: { /* filtros y QE del perfil */ }, mars: "<base MARS del perfil>",
+  mgcOpts: { /* structureSeparation, modelSmoothness del perfil */ },
+  dossier: "<ruta del dossier .json>"
+});
+JSON.stringify(r);   // candidatos (corr, copia, fondoResidual), recomendado, motivo, errores
+```
 En MGC, si la nebulosa aparece en el modelo, subir la escala; si aparece en negativo, bajarla.
 
 **Control.** Modelo liso y sin objeto; fondo no aplastado con el mismo STF antes y después; contraste objeto−cielo ≥ 90 % en polvo/IFN; `hasAstrometricSolution` al terminar. Anillo oscuro alrededor de un objeto extenso = se ha comido el halo: volver atrás y usar plano robusto o muestras manuales. En imágenes grandes GraXpert puede pasar de 60 s: esperar con `watcher_status`.
