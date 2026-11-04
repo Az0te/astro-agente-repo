@@ -4,7 +4,9 @@
 
 Primer paso de la sesión no lineal: leer antes `estado.md` (Paso 17 lineal). Starless y estrellas se estiran **por separado**: la starless tolera un estirado más profundo; las estrellas, más suave y con las altas luces protegidas. Irreversible: lo que no se limpió en lineal queda amplificado.
 
-**Fondo objetivo** (mediana tras estirar): nebulosa de emisión 0,15–0,25 · galaxia 0,10 · cúmulo de galaxias 0,08–0,10 · margen de altas luces 0,05. El perfil puede fijar otro.
+**Cielo objetivo** (estirado al fallo, el método por defecto): **0,10 en todos los objetos** (nebulosas, galaxias y cúmulos). Es el nivel de las zonas más oscuras de la imagen (`cielo`), no la mediana: en una nebulosa que llena el campo la mediana sale sola por encima (IC 1396: 0,14 con cielo 0,10). Con cielo 0,15 la nebulosa queda algo pasada (prueba de nov 2026). El perfil puede fijar otro.
+
+**Fondo objetivo** (sólo para el modo antiguo a mediana fija, `modo: "fondo"`): nebulosa de emisión 0,15–0,25 · galaxia 0,10 · cúmulo de galaxias 0,08–0,10 · margen de altas luces 0,05.
 
 **Método**
 
@@ -74,4 +76,4 @@ if (!M.executeOn(View.viewById("Starless"))) throw new Error("MAS falló");
 - Cómo: `starStretch("Stars_v1", { amount: 2, saturation: 1, removeGreen: false })` sobre una copia. `amount` 1–3 en campos con muchas estrellas (objetivo: p90 de la capa ≈ 0,25, probando con saturación fija), hasta 5 con pocas. `saturation` 1; 1,2–1,5 si salen pálidas, vigilando anillos de color. `removeGreen` sólo con dominante verde real.
 - Alternativa: arcsinh con `L = max(RGB)` y k ≈ 5000, o ArcsinhStretch (ver detalle).
 
-**Control.** Estirado hasta el fallo (ni más ni menos: la pasada anterior a que el ruido del cielo pase del 15 % o recorte); cielo ~0,10; mediana del fondo en el objetivo; mínimo ≥ 0 (sin sombras aplastadas); sin estrellas hinchadas; sin deriva de color. Pico más ancho = más ruido; pico de un canal desplazado = dominante; "dientes de sierra" al ampliar el histograma = posterización por estirados repetidos.
+**Control.** Estirado hasta el fallo (ni más ni menos: la pasada anterior a que el ruido del cielo pase del 15 % o recorte); cielo ~0,10; sin dominante en el cielo (< 5 %; si la hay, venía de la lineal: corregirla allí); mínimo ≥ 0 (sin sombras aplastadas); sin estrellas hinchadas; sin deriva de color. Pico más ancho = más ruido; pico de un canal desplazado = dominante; "dientes de sierra" al ampliar el histograma = posterización por estirados repetidos.
