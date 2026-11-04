@@ -32,6 +32,14 @@ if (!w.saveAs("C:/ASTRO/IC63/final/IC63_v4.xisf", false, false, false, false))
 "guardado: sin historial en el XISF, anotar los parámetros en el dossier";
 ```
 
+**En una llamada** (`herramientas/exportar.js`): `exportarFinal("Final", { carpeta, nombre, girar180 })` comprueba saturados y bordes negros, guarda el XISF 32 bits con astrometría y, sobre una copia en sRGB (y girada con PixelMath si se pide), el TIFF 16 bits y el JPG. Crea la carpeta antes de guardar y no sobrescribe (añade _2). Recomendado para modelos sin herramientas.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/exportar.js"));   // en el nivel superior del script
+var r = exportarFinal("Final", { carpeta: "<carpeta de la versión>/final", nombre: "IC63_v4", girar180: false });
+JSON.stringify(r);   // ficheros (con tamaño), controles, no_cumple
+```
+
 **Control.** Abrir el JPG/TIFF exportado en un visor externo y comparar con PixInsight (si cambia, el ICC no está incrustado). Comprobar dimensiones y que el recorte no deja bordes negros ni bandas de máscara.
 
 **Pendiente:** calidad y tamaño de los JPG de entrega (Anexo C); sólo está fijado el orden: ICC y redimensionado al final.

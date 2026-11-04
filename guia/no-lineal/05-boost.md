@@ -11,6 +11,14 @@
 - "No saturar con una dominante de fondo sin resolver (la amplifica); los núcleos de estrella ya recortados no recuperan color. Si el ruido de color del cielo es visible o el objeto llena el campo, mejor saturación selectiva por tono o con máscara que global."
 - Puntos de curva para levantar sombras sin quemar el objeto: `[[0,0.04],[0.04,0.12],[0.10,0.16],[0.20,0.24],[0.50,0.50],[1,1]]`; "las curvas S que hunden sombras matan esa señal". Oscurecer sombras sólo en el fondo verdadero y con transición suave (p. ej. 0,05→0,003, 0,10→0,015, 0,15→0,05).
 
+**Saturación al fallo en una llamada** (`herramientas/boost.js`): `saturarAlFallo("Starless_st", { tipo: "nebulosa" })` prueba 0,58 → 0,78 sobre copias y se queda la última sin fallo medido (canales > 0,98, fondo teñido: dominante del cielo > 8 % o +4 puntos, ruido de color del cielo × 1,5). Si ni la primera pasa, no satura. Pruebas de nov 2026: M31 → 0,63 (para por ruido de color); IC 1396 → no satura (dominante azul del cielo sin resolver). Los umbrales de tinte son provisionales.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/boost.js"));   // en el nivel superior del script
+var r = saturarAlFallo("Starless_st", { tipo: "nebulosa", nuevaVista: "Starless_sat" });   // "galaxia": 0,63–0,70
+JSON.stringify(r);   // pruebas, punto_medio_elegido, parada, no_cumple, control
+```
+
 **Realces de los scripts BackgroundEnhance y DarkStructureEnhance** (integrados en el watcher, `herramientas/realces.js`; mismo resultado que los scripts)
 
 - **`backgroundEnhance`** (BackgroundEnhance). Cuándo: sobre la starless, antes de LHE y del NXT final, con nebulosidad débil extensa, IFN, polvo o colas de nebulosa apagadas **y señal confirmada** (Paso 1 lineal, Anexo D). Por qué: suma la gran escala de la imagen a través de una máscara invertida de luminancia; levanta lo débil y extenso sin quemar lo brillante ni realzar el ruido fino. Cómo: `backgroundEnhance("SL_v2", { amount: 0.3 })` en una copia; subir `amount` (0,5 en el script) mientras sólo suba la nebulosidad; `maskAmount` (0,6) más alto protege más lo brillante. No usar si el fondo es sólo ruido o queda gradiente residual: lo amplifica.
