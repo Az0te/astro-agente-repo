@@ -48,12 +48,12 @@ if (!P.executeOn(v)) throw new Error("GHS fase 1 falló");
 "GHS fase 1: mediana previa " + med;
 ```
 
-**GHS hasta el fondo objetivo en una llamada** (`herramientas/estirado.js`): hace la fase 1 y, si no basta, una segunda pasada con el D que lleva la mediana al objetivo (buscado sobre una copia reducida), sobre una copia y midiendo el recorte. Recomendado cuando no se puede ir pasada a pasada (modelos sin herramientas). Las fases 3 y 4 siguen siendo a mano.
+**Las dos capas en una llamada** (`herramientas/estirado.js`), sobre copias. Starless: GHS fase 1 y, si no basta, una segunda pasada con el D que lleva la mediana al objetivo (buscado sobre una copia reducida); la fase 3 sólo si más del 0,05 % de los píxeles pasa de 0,95. Estrellas: `starStretch` con `amount` 2 (cambiable) y el p90 que daría cada amount de 1 a 5. Devuelve las medidas y el control (fondo, sombras, luces, dominante; lo visual, aparte). Recomendado para modelos sin herramientas. La fase 4 sigue siendo a mano. Sueltas: `estirarStarless(vista, {fondo})` y `estirarEstrellas(vista, {amount})`.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/estirado.js"));   // en el nivel superior del script
-var r = estirarStarless("Starless", { fondo: 0.20, nuevaVista: "Starless_st_v1" });
-JSON.stringify(r);   // pasadas, mediana (y por canal), mínimo, máximo, recorte, en_objetivo
+var r = estirarCapas("Starless", "Stars", { fondo: 0.20, nuevaStarless: "Starless_st_v1", nuevasEstrellas: "Stars_st_v1" });
+JSON.stringify(r);   // { starless: {pasadas, mediana, recorte, dominante, control}, estrellas: {amount, p90, control} }
 ```
 **MAS.** Parámetros (por defecto): `targetBackground` (0,15), `aggressiveness` (0,70), `dynamicRangeCompression` (0,40), `contrastRecovery` (true), `scaleSeparation` (1024), `contrastRecoveryIntensity` (1,0), `saturationEnabled` (true), `saturationAmount` (0,75), `backgroundROIEnabled` y `backgroundROIX0/Y0/Width/Height` (imprescindible si el objeto llena el campo). Orden de ajuste: ROI de fondo → fondo objetivo → agresividad → DRC → scale separation → contrast recovery (0,25 sutil, 0,5 moderado, 1 completo) → saturación. Más señal débil: subir un poco el fondo y bajar la agresividad. DRC protege núcleos durante el estirado; no sustituye a HDRMT.
 
