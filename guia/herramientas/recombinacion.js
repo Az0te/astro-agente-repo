@@ -72,6 +72,11 @@ function recombinarEstrellas(starlessId, starsId, o) {
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
   var metodo = o.metodo || "auto", k = (o.k !== undefined) ? o.k : 1.0, usado;
 
+  // Fuera del watcher v8 (p. ej. scripts ejecutados por PiCopilot) screenStarsCombine no existe: se carga realces.js
+  // de la misma guía, que PiCopilot indica en la variable global PICOPILOT_GUIA.
+  if (metodo === "auto" && typeof screenStarsCombine !== "function" && typeof PICOPILOT_GUIA === "string") {
+    try { eval.call(null, File.readTextFile(PICOPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
+  }
   if (metodo === "auto" && typeof screenStarsCombine === "function") {
     var r = screenStarsCombine(starlessId, starsId, { newId: id });
     id = r.created;
@@ -102,13 +107,18 @@ function recombinarEstrellas(starlessId, starsId, o) {
       medido: {
         nunca_baja_respecto_a_starless: nuncaBaja,
         fondo_casi_igual: fondoSube.every(function (s) { return Math.abs(s) < 0.01; }),
-        sin_recorte_nuevo: clipFin.every(function (c, i) { return c <= clipSl[i] + 0.0001 * fin.image.width * fin.image.height; })
+        sin_recorte_nuevo: clipFin.every(function (c, i) { return c <= clipSl[i]; }),
+        recorte_nuevo_px: clipFin.map(function (c, i) { return c - clipSl[i]; }),
+        recorte_nuevo_despreciable: clipFin.every(function (c, i) { return c - clipSl[i] <= 0.00005 * fin.image.width * fin.image.height; })
       },
       revisar_a_ojo: ["zoom 200–400 % en zonas brillantes: halos de combinación o bordes de residuos de SXT",
                       "agujeros oscuros alrededor de estrellas (starless mal extraída)",
                       "color de las estrellas equilibrado, sin estrellas demasiado grandes ni pérdida de las débiles"],
       nota: "Si nunca_baja es false hay un error en las capas (el screen nunca oscurece). Una subida de fondo > 0,01 indica " +
-            "que la capa de estrellas no tiene el fondo a cero: volver al Paso 8. Lo de revisar_a_ojo no lo mide esta función."
+            "que la capa de estrellas no tiene el fondo a cero: volver al Paso 8. recorte_nuevo_px son píxeles que llegan a 0,99 " +
+            "sólo tras recombinar (núcleos de estrellas brillantes): unos pocos cientos son normales (despreciable = menos del " +
+            "0,005 % de la imagen); muchos más, bajar el máximo de la capa de estrellas o usar k < 1. " +
+            "Lo de revisar_a_ojo no lo mide esta función."
     }
   };
   if (o.original) {
