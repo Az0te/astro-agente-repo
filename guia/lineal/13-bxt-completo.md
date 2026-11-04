@@ -48,6 +48,15 @@ if (!BXT.executeOn(v)) throw new Error("BXT completo falló");
 3. Plancha de recortes al 100 % con el mismo STF y CSV de métricas en `<versión>/tests/`; elegir la ganadora y anotarla en el dossier y en la tabla.
 4. Aplicar la ganadora a la imagen entera (esperar con `watcher_status`).
 
+**Rejilla y aplicación en una llamada** (`herramientas/deconvolucion.js`): `bxtCandidatos` hace la rejilla en un recorte de 1500 px (el de más señal extensa) con los valores de la tabla para el tipo de objeto y mide en cada variante el FWHM de las mismas estrellas, el ringing de la más brillante no saturada y, fuera de las estrellas, la textura nueva en el fondo (gusanos) y el detalle en el objeto respecto a BXT con nonstellar 0; recomienda el nonstellar más alto sin ringing ni gusanos. `bxtAplicar` lo aplica a una copia de la imagen entera. En IC 1396 (nov 2026): FWHM 4,6 → 4,1 px; el nonstellar 0,25–0,65 sólo añadía un 0,4–1,9 % de detalle, sin gusanos. Recomendado para modelos sin herramientas.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/deconvolucion.js"));   // en el nivel superior del script
+var r = bxtCandidatos("MasterLight_spcc", { tipo: "nebulosa" });           // "galaxia" | "cumulo" | "snr_bajo"
+var a = bxtAplicar("MasterLight_spcc", { nonstellar: r.recomendada.nonstellar, stars: r.recomendada.stars, nuevaVista: "MasterLight_bxt" });
+JSON.stringify({ candidatos: r, aplicado: a });
+```
+
 | Objeto | BXT CO | BXT stars / nonstellar | NXT denoise / detail / iter / separación | Notas |
 |---|---|---|---|---|
 | IC 63 v4 (previo) | no | ? / ? (halos 0,00) | 0,5–0,8 + 0,75 + 0,30 | sin rejilla |
