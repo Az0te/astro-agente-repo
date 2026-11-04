@@ -44,4 +44,13 @@ img.resetSelections();
 out.join("\n");
 ```
 
+**SPCC en una llamada** (`herramientas/color.js`, necesita `procesos.js`): comprueba la solución astrométrica y que la imagen sea lineal, aplica `pxSPCC` con los filtros del perfil sobre una copia y mide el cielo por canal antes y después, en las zonas más oscuras, comparando la diferencia con el ruido. Devuelve los filtros usados, los factores de balance de blancos, `no_cumple` y el control. Una diferencia de más de 0,5 sigmas en el cielo sale como dominante al estirar (IC 1396, nov 2026: 1,1 sigmas en lineal → 19 % azul estirada). Recomendado para modelos sin herramientas.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/procesos.js"));   // en el nivel superior del script
+eval(File.readTextFile("<ruta de guia>/herramientas/color.js"));
+var r = calibrarColor("MasterLight", { nuevaVista: "MasterLight_spcc", spcc: { /* filtros y QE del perfil */ } });
+JSON.stringify(r);   // filtros, factores_balance_blancos, cielo_antes / cielo_despues, no_cumple, control
+```
+
 **Control.** "Comprobar la calibración de color con Statistics: medianas de R, G y B en previews de cielo limpio parecidas tras BackgroundNeutralization/SPCC; si un canal se aparta, revisar la referencia de fondo antes de seguir". Un fondo más azul que rojo **después** de SPCC ya no es "color del cielo sin calibrar": es un problema a investigar (gradiente, flats, extinción).
