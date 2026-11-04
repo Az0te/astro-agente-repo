@@ -46,4 +46,12 @@ img.resetSelections();
 out.join("\n");
 ```
 
+**Preparación en una llamada** (`herramientas/estrellas.js`): sobre una copia de la capa ya estirada hace la limpieza de residuos, el suelo por canal (reescalando), la curva de saturación y comprime las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco); opcionales `halosMagenta: true` y `atenuar: 0.35`. Devuelve las medidas antes y después y el control. Recomendado para modelos sin herramientas; el p90 depende del estirado del Paso 1.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/estrellas.js"));   // en el nivel superior del script
+var r = prepararEstrellas("Stars_st", { nuevaVista: "Stars_v1" });
+JSON.stringify(r);   // pasos, antes/despues por canal (mediana, MAD, máximo, pix_098, p90_estrellas), control
+```
+
 **Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 ≈ 0,25; sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.

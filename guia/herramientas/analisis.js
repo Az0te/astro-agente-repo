@@ -14,6 +14,8 @@
 //   saturada   posición y valor del píxel más brillante (estrella más brillante probable)
 //   campo      fracción del campo con señal extensa por encima del cielo (estimación con una rejilla
 //              de medianas de 64×64 px: celdas > cielo + 3·dispersión del cielo). > 0,5 = el objeto llena el campo.
+//              Mide la señal CLARA en lineal: la nebulosa débil suele extenderse bastante más, así que un
+//              valor bajo (p. ej. 0,3) no demuestra que el objeto no llene el campo; mirar la imagen estirada.
 // La interpretación (tipo de objeto, banda estrecha, HDR, polvo/IFN, muestreo) la hace quien lo llama.
 
 function anKeyword(win, name) {
