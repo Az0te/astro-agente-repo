@@ -27,4 +27,12 @@ if (!PM.executeOn(View.viewById("Starless_boost"))) throw new Error("Recombinaci
 "Final creada";
 ```
 
+**Recombinación en una llamada** (`herramientas/recombinacion.js`): combina con `screenStarsCombine` (o screen con `k` si se pide `metodo: "screen"`), sin tocar las entradas, y mide que el fondo no baje ni suba, el recorte nuevo y lo que aportan las estrellas; con `original` mide también el residuo. Recomendado para modelos sin herramientas.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/recombinacion.js"));   // en el nivel superior del script
+var r = recombinarEstrellas("Starless_st", "Stars_v1", { nuevaVista: "Final_v1" });   // k: { metodo: "screen", k: 0.55 }
+JSON.stringify(r);   // metodo, fondo, recorte, aporte_estrellas, control: { medido, revisar_a_ojo }
+```
+
 **Control.** "Residuo (Original − Final) ≈ ruido"; zoom 200–400 % en zonas brillantes; halos residuales → máscara/reducción en la capa de estrellas; agujeros en la starless → ensanchar máscara o reextraer. "Con estrellas de otra cámara/filtro/exposición: color equilibrado (SPCC), sin dominante, sin estrellas demasiado grandes ni halos de combinación, sin perder las débiles."
