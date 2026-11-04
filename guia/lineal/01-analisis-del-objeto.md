@@ -45,4 +45,10 @@ img.resetSelections();
 out.join("\n");
 ```
 
+**Datos de la checklist en una llamada** (`herramientas/analisis.js`): cabecera (objeto, filtro, cámara), escala (de la cabecera o de la astrometría), estadísticas y píxeles saturados por canal, estrella más brillante, si es lineal y qué fracción del campo tiene señal extensa. Devuelve los datos; la interpretación de la checklist se hace después con ellos.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/analisis.js"));   // en el nivel superior del script
+JSON.stringify(analizarMaster("MasterLight"));
+```
 **Control.** La mediana de un master lineal está en torno a 0,001–0,02 (con pedestal puede pasar de 0,01: el de LDN 1235 da 0,0102). Si es mucho mayor (> 0,05), la imagen ya está estirada y no es la entrada correcta. Máximos por canal muy distintos = saturación desigual, no fallo de color.
