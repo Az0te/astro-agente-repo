@@ -134,7 +134,7 @@ function estirarAFondo(viewId, o) {
         fondo_en_objetivo: Math.abs(medF - fondo) <= 0.02,
         sin_sombras_aplastadas: aCero < 0.1,
         sin_luces_quemadas: aUno < 0.01,
-        sin_dominante_en_el_fondo: dom < 5
+        sin_dominante_en_el_cielo: dom < 5
       },
       revisar_a_ojo: ["histograma con dos cúpulas (exceso de b): deshacer y bajar b ~40 % o D ~50 %",
                       "dientes de sierra al ampliar el histograma (posterización)",
@@ -213,6 +213,32 @@ function esFallo(c, lim) {
   return f;
 }
 
+// Dominante de color del CIELO: medianas por canal en el 10 % de celdas de 64 px más oscuras (no la mediana de la
+// imagen, que en una nebulosa que llena el campo es la propia nebulosa y su color).
+function esSkyDominance(view) {
+  var im = view.image, W = im.width, H = im.height, S = 64, nc = im.numberOfChannels;
+  if (nc < 3) return { dominante_pct: 0, canales: [] };
+  var cells = [], blk = new Float32Array(S * S), lum = new Float32Array(S * S);
+  for (var y0 = 0; y0 + S <= H; y0 += S)
+    for (var x0 = 0; x0 + S <= W; x0 += S) {
+      var R = new Rect(x0, y0, x0 + S, y0 + S); lum.fill(0);
+      for (var c = 0; c < 3; ++c) { im.getSamples(blk, R, c); for (var i = 0; i < blk.length; i += 4) lum[i] += blk[i]; }
+      var v = []; for (var j = 0; j < lum.length; j += 4) v.push(lum[j]);
+      v.sort(function (a, b) { return a - b; });
+      cells.push({ r: R, m: v[v.length >> 1] });
+    }
+  cells.sort(function (a, b) { return a.m - b.m; });
+  var k = Math.max(5, Math.floor(cells.length * 0.10)), med = [];
+  for (var ch = 0; ch < 3; ++ch) {
+    var vals = [];
+    for (var q = 0; q < k; ++q) { im.getSamples(blk, cells[q].r, ch); for (var t = 0; t < blk.length; t += 8) vals.push(blk[t]); }
+    vals.sort(function (a, b) { return a - b; });
+    med.push(vals[vals.length >> 1]);
+  }
+  var mean = (med[0] + med[1] + med[2]) / 3;
+  return { dominante_pct: +(100 * (Math.max.apply(null, med) - Math.min.apply(null, med)) / mean).toFixed(1),
+           canales: med.map(function (m) { return +m.toFixed(4); }) };
+}
 function estirarStarless(viewId, o) {
   o = o || {};
   if (o.modo === "fondo") return estirarAFondo(viewId, o);
@@ -251,19 +277,18 @@ function estirarStarless(viewId, o) {
   var im = v.image, porCanal = [];
   for (var ch = 0; ch < im.numberOfChannels; ++ch) { im.selectedChannel = ch; porCanal.push(+im.median().toFixed(4)); }
   im.resetSelections();
-  var medF = esMedian(v), dom = 0;
-  if (porCanal.length === 3) dom = 100 * (Math.max.apply(null, porCanal) - Math.min.apply(null, porCanal)) / medF;
+  var sd = esSkyDominance(v), dom = sd.dominante_pct;
   return {
     vista: v.id, original: viewId, metodo: "al fallo (pasadas cortas de GHS + punto negro)", cielo_objetivo: cielo,
     pasadas: pasadas, pasadas_descartadas: descartadas, parada: motivo,
-    medidas: c, mediana_por_canal: porCanal, dominante_fondo_pct: +dom.toFixed(1),
+    medidas: c, mediana_por_canal: porCanal, cielo_por_canal: sd.canales, dominante_cielo_pct: dom,
     control: {
       medido: {
         cielo_en_objetivo: Math.abs(c.cielo - cielo) <= 0.02,
         ruido_del_cielo_bajo_el_limite: c.ruido_rel <= lim.ruido,
         sin_sombras_aplastadas: c.cero_pct <= lim.cero,
         sin_luces_quemadas: c.alto_pct <= lim.alto,
-        sin_dominante_en_el_fondo: dom < 5
+        sin_dominante_en_el_cielo: dom < 5
       },
       revisar_a_ojo: ["núcleos brillantes (galaxias): si se ven quemados, HDRMT en los pasos siguientes",
                       "dientes de sierra al ampliar el histograma (posterización)",
