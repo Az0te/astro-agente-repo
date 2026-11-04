@@ -22,7 +22,7 @@ Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) qu
 7. **Todo desde el watcher**, sin iconos ni scripts del menú (no se pueden lanzar desde el watcher). Si `typeof Proceso !== "function"`, su módulo no está cargado: avisar, no sustituirlo.
 8. **El dossier cuenta lo que dice el historial**, no lo que se pretendía.
 
-**Orden lineal:** gradiente → BXT Correct Only → SPCC → BXT completo → SXT → NXT principal sobre la starless (en lineal). Nunca reducir ruido antes de BXT.
+**Orden lineal:** gradiente → BXT Correct Only → SPCC → BXT completo → SXT → denoise principal sobre la starless en lineal (por defecto, híbrido MLDenoise + NXT; Paso 15). Nunca reducir ruido antes de BXT.
 
 ## Sesiones por fase
 
@@ -102,7 +102,7 @@ Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias
 
 ## Índice (cargar sólo el paso en curso; tokens aproximados)
 
-**Lineal:** [1 Análisis del objeto](lineal/01-analisis-del-objeto.md) ~1000 · [2 Inventario](lineal/02-inventario.md) ~780 · [3 Blink / SubframeSelector](lineal/03-blink-subframeselector.md) ~1180 · [4 Preprocesado](lineal/04-preprocesado.md) ~1670 · [5 StarAlignment + crop](lineal/05-staralignment-crop.md) ~800 · [6 HDRComposition](lineal/06-hdr-composition.md) ~1570 · [7 Extracción de canales](lineal/07-extraccion-canales.md) ~1040 · [8 Plate solve](lineal/08-plate-solve.md) ~720 · [9 Gradiente](lineal/09-correccion-gradiente.md) ~1200 · [10 Combinación RGB / NB](lineal/10-combinacion-rgb-nb.md) ~1710 · [11 BXT Correct Only](lineal/11-bxt-correct-only.md) ~910 · [12 SPCC](lineal/12-spcc.md) ~840 · [13 BXT completo](lineal/13-bxt-completo.md) ~1000 · [14 NXT suave](lineal/14-noisex-suave.md) ~560 · [15 StarX](lineal/15-starx.md) ~1050 · [16 LinearFit / continuo](lineal/16-linearfit-continuo.md) ~1070 · [17 Checkpoint](lineal/17-checkpoint.md) ~930
+**Lineal:** [1 Análisis del objeto](lineal/01-analisis-del-objeto.md) ~1000 · [2 Inventario](lineal/02-inventario.md) ~780 · [3 Blink / SubframeSelector](lineal/03-blink-subframeselector.md) ~1180 · [4 Preprocesado](lineal/04-preprocesado.md) ~1670 · [5 StarAlignment + crop](lineal/05-staralignment-crop.md) ~800 · [6 HDRComposition](lineal/06-hdr-composition.md) ~1570 · [7 Extracción de canales](lineal/07-extraccion-canales.md) ~1040 · [8 Plate solve](lineal/08-plate-solve.md) ~720 · [9 Gradiente](lineal/09-correccion-gradiente.md) ~1200 · [10 Combinación RGB / NB](lineal/10-combinacion-rgb-nb.md) ~1710 · [11 BXT Correct Only](lineal/11-bxt-correct-only.md) ~910 · [12 SPCC](lineal/12-spcc.md) ~840 · [13 BXT completo](lineal/13-bxt-completo.md) ~1000 · [14 NXT suave](lineal/14-noisex-suave.md) ~560 · [15 StarX y denoise](lineal/15-starx.md) ~1980 · [16 LinearFit / continuo](lineal/16-linearfit-continuo.md) ~1070 · [17 Checkpoint](lineal/17-checkpoint.md) ~930
 
 **No lineal:** [1 Estirado](no-lineal/01-estirado.md) ~1310 · [2 LRGB / paleta](no-lineal/02-lrgb-paleta.md) ~2940 · [3 SCNR](no-lineal/03-scnr.md) ~730 · [4 Máscaras](no-lineal/04-mascaras.md) ~800 · [5 Boost](no-lineal/05-boost.md) ~1660 · [6 NoiseX](no-lineal/06-noisex.md) ~720 · [7 Nitidez](no-lineal/07-nitidez.md) ~500 · [8 Estrellas](no-lineal/08-estrellas.md) ~950 · [9 Recombinación](no-lineal/09-recombinacion.md) ~700 · [10 Recorte y exportación](no-lineal/10-recorte-exportacion.md) ~680 · [11 Dossier](no-lineal/11-dossier.md) ~560
 

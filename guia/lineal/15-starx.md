@@ -31,41 +31,69 @@ if (!SXT.executeOn(v)) throw new Error("StarX falló");
 
 **Control.** "Una starless 'limpia' no prueba que la separación sea buena: revisar la diferencia original − starless." Esa diferencia debe contener **sólo** estrellas y sus halos, no filamentos, polvo ni núcleos de galaxia. Comprobar el recuento de estrellas de la capa frente al original. Y la suma `starless + stars` debe reproducir el original píxel a píxel (en lineal es exacta).
 
-**NXT principal sobre la starless (lineal)**
+**Denoise principal sobre la starless (lineal)**
 
 Es el denoise fuerte del flujo: va aquí, sobre la capa sin estrellas y todavía en lineal, no antes de BXT ni sobre la imagen con estrellas.
 
-| Parámetro | Partida |
-|---|---|
-| denoise | 0,70–0,80 (no el 0,90 por defecto) |
-| detail | 0,10–0,20 (más alto crea halos oscuros en estrellas) |
-| iterations | 2–3 (hasta 5: conservan mejor el detalle débil y limpian el moteado de gran escala) |
-| Separación de color | croma > luminancia (LDN 1235: croma 0,90, luminancia 0,40, detail 0,25); 0,75 por igual dio aspecto plástico |
-| Variante "full" (RC-Astro) | separación intensidad/color y de frecuencia: HF y LF 0,80 en intensidad y color, escala HF/LF 5, iterations 5 |
+**Por defecto: híbrido MLDenoise + NXT.** Es la mejor opción medida, en los tres canales probados frente a una referencia de subs independientes (IC 1396; [detalle](../detalle/lineal-15-denoise-mldenoise.md)). Toma el detalle fino de MLDenoise y lo grueso de NXT 0,95: `ML − suave(ML) + suave(NXT)`, con caja de radio 3. Iguala a NXT 0,95 en ruido a 1, 4 y 16 px y borra menos detalle.
 
-Elegir con una rejilla sobre la starless de la BXT ganadora (Paso 13): denoise 0,50 / 0,70 / 0,85 × iterations 2 / 5, más una variante con separación de color. Medir en cajas fijas: σ del cielo (bajar un 50–80 %, nunca a cero), contraste de una zona débil (no bajar más de ~5 %), imagen residual (sólo ruido) y FWHM de estrellas si se aplica a la capa con estrellas.
+| Variante (puntuación 0–100) | Hα | OIII | SII |
+|---|---|---|---|
+| **Híbrido ML + NXT (por defecto)** | **81,5** | **83,8** | **74,4** |
+| MLDenoise 1,0 solo | 81,0 | 67,0 | 68,3 |
+| NXT 0,95 solo | 78,6 | 78,6 | 69,7 |
+| NXT 0,70 solo | 77,7 | 58,6 | 59,3 |
+
+| Parámetro | Valor |
+|---|---|
+| MLDenoise `modelPath` | modelo `.xmlm` (obligatorio; ruta en `perfil.md`) |
+| MLDenoise `amount` | 1,0 (máscara, overlap y precisión alta no cambian nada) |
+| NXT `denoise` y `denoise_intensity` | 0,95 |
+| NXT `detail` / `iterations` | 0,15 / 2 (iterations 5 no mejoró) |
+| Radio de la caja | 3 px |
+
+Canales mono (Hα, OIII, SII, L). En RGB, el modelo puede rechazar imágenes de color ("cannot process RGB images"): aplicar por canal (sin medir) o usar NXT con separación de color.
 
 ```javascript
-var v = View.viewById("MasterLight_starless");
+var SRC = "MasterLight_starless";             // mono, lineal, sin estrellas
+var MODEL = "<ruta del modelo .xmlm>";        // de perfil.md
+var v = View.viewById(SRC);
 if (!v || v.isNull) throw new Error("No existe la starless");
-var NXT = new NoiseXTerminator;
-// nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
-NXT.denoise = 0.75;
-NXT.detail = 0.15;
-NXT.iterations = 3;
-// Separación de color: NXT.enable_color_separation = true; NXT.denoise_color = 0.90; NXT.denoise_intensity = 0.40;
-// Separación de frecuencia: NXT.enable_frequency_separation = true; denoise_high_freq / denoise_low_freq; frequency_scale = 5
-if (!NXT.executeOn(v)) throw new Error("NXT principal falló");
-"NXT principal sobre la starless";
+if (typeof MLDenoise !== "function") throw new Error("MLDenoise no está cargado: usar NXT 0,95 solo y avisar");
+function boxblur(a, W, H, r) {                // caja separable de radio r
+  var t = new Float32Array(W * H), o = new Float32Array(W * H);
+  for (var y = 0; y < H; y++) { var s = 0, n = 0, b = y * W;
+    for (var x = 0; x < Math.min(r, W); x++) { s += a[b + x]; n++; }
+    for (var x = 0; x < W; x++) { if (x + r < W) { s += a[b + x + r]; n++; } if (x - r - 1 >= 0) { s -= a[b + x - r - 1]; n--; } t[b + x] = s / n; } }
+  for (var x = 0; x < W; x++) { var s = 0, n = 0;
+    for (var y = 0; y < Math.min(r, H); y++) { s += t[y * W + x]; n++; }
+    for (var y = 0; y < H; y++) { if (y + r < H) { s += t[(y + r) * W + x]; n++; } if (y - r - 1 >= 0) { s -= t[(y - r - 1) * W + x]; n--; } o[y * W + x] = s / n; } }
+  return o; }
+function dup(id) { var s = v.image, w = new ImageWindow(s.width, s.height, 1, 32, true, false, id); w.mainView.beginProcess(); w.mainView.image.assign(s); w.mainView.endProcess(); w.show(); return w; }
+function px(w) { var im = w.mainView.image, a = new Float32Array(im.width * im.height); im.getSamples(a, new Rect(0, 0, im.width, im.height), 0); return a; }
+var ml = dup(SRC + "_ml"), nx = dup(SRC + "_nx");
+var ML = new MLDenoise; ML.modelPath = MODEL; ML.amount = 1.0; ML.useCache = false;
+if (!ML.executeOn(ml.mainView)) throw new Error("MLDenoise falló");
+var NXT = new NoiseXTerminator; NXT.denoise = 0.95; NXT.denoise_intensity = 0.95; NXT.detail = 0.15; NXT.iterations = 2;
+if (!NXT.executeOn(nx.mainView)) throw new Error("NXT falló");
+var W = v.image.width, H = v.image.height, m = px(ml), n = px(nx), bm = boxblur(m, W, H, 3), bn = boxblur(n, W, H, 3), o = new Float32Array(W * H);
+for (var i = 0; i < o.length; i++) o[i] = m[i] - bm[i] + bn[i];
+var out = new ImageWindow(W, H, 1, 32, true, false, SRC + "_dn");
+out.mainView.beginProcess(); out.mainView.image.setSamples(o, new Rect(0, 0, W, H), 0); out.mainView.endProcess(); out.show();
+ml.forceClose(); nx.forceClose();
+"híbrido ML + NXT: " + SRC + "_dn";
 ```
 
+MLDenoise tarda ~2 min en 26 MP: supera el corte de 60 s del MCP, esperar con `watcher_status`, y no encadenar varios canales en un mismo `run_script` (con 8+ min seguidos PixInsight dio "Invalid task termination intent" y el watcher dejó de recoger comandos).
+
+**Sin MLDenoise (no hay modelo o el módulo no está):** NXT solo, denoise 0,95 (en Hα 0,85 puntuó algo más: 79,2 frente a 78,6), detail 0,15, iterations 2. Con señal fuerte (Hα), sin NXT: MLDenoise 1,0 solo.
+
+| Parámetro NXT (variantes) | Valor |
+|---|---|
+| Separación de color (RGB) | croma > luminancia (LDN 1235: croma 0,90, luminancia 0,40, detail 0,25); 0,75 por igual dio aspecto plástico |
+| Variante "full" (RC-Astro) | separación intensidad/color y de frecuencia: HF y LF 0,80 en intensidad y color, escala HF/LF 5, iterations 5 |
+
 - En una rejilla, cada prueba de NXT sobre una ventana con un **id nuevo**, y fijar también `denoise_intensity`: con el mismo id NXT devolvió el mismo resultado aunque cambiara `denoise`.
+- La rejilla de antes (denoise 0,50 / 0,70 / 0,85) se quedaba corta: medido contra una referencia, 0,70 pierde frente a 0,95 en los tres canales. Bajar σ del cielo sin referencia no distingue ruido quitado de señal borrada.
 
-**Alternativa medida: MLDenoise e híbrido (PixInsight 1.9.6+)**
-
-MLDenoise (módulo MachineLearning) necesita un modelo `.xmlm` en `modelPath`. Usar `amount` 1,0; la máscara, el overlap y la precisión alta no cambian el resultado. Medido frente a una referencia de subs independientes (IC 1396):
-
-- Señal fuerte (Hα): MLDenoise 1,0 empata con NXT 0,95 en ruido y borra menos detalle.
-- Señal débil (OIII, SII): MLDenoise solo deja hasta el doble de ruido a 16 px. Usar el **híbrido**: `ML − suave(ML) + suave(NXT 0,95)`, con caja de radio 3. Es el mejor en los tres canales (OIII: 83,8 frente a 78,6 de NXT 0,95).
-
-Código, puntuaciones y método: [detalle](../detalle/lineal-15-denoise-mldenoise.md).
+**Control del denoise.** σ del cielo (bajar un 50–80 %, nunca a cero), contraste de una zona débil (no bajar más de ~5 %) e imagen residual (antes − después): sólo ruido, sin filamentos ni bordes. Con el híbrido, revisar además que no aparezca moteado a 4–16 px en el cielo.

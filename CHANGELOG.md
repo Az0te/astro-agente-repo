@@ -3,6 +3,7 @@
 ## Sin publicar
 
 - Guía: **MLDenoise frente a NoiseX**, medido en IC 1396 (Hα, OIII, SII) con una referencia de subs independientes. Nueva ficha `guia/detalle/lineal-15-denoise-mldenoise.md` (método, puntuaciones, parámetros de MLDenoise y receta híbrida ML fino + NXT grueso, que gana en los tres canales) y resumen en el Paso 15 lineal. Trampa documentada: NXT repetido sobre el mismo id de ventana devuelve el mismo resultado.
+- Guía: el **denoise principal por defecto** (Paso 15 lineal) pasa a ser el híbrido MLDenoise + NXT 0,95, la mejor opción medida; NXT solo (0,95, ya no 0,70–0,80) queda como alternativa si no hay modelo de MLDenoise. Actualizados SKILL.md (orden lineal) y el Paso 6 no lineal.
 
 - Guía: nueva sección **"Modelo por paso: rápido o potente"** en `SKILL.md`, válida para Claude (Sonnet/Opus, % medidos) y ChatGPT (nivel estándar / máximo razonamiento, % provisionales), con la regla N.
 

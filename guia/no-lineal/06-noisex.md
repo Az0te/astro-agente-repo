@@ -2,7 +2,7 @@
 
 [← Índice](../SKILL.md) · Anterior: [Paso 5: Boost (curvas, contraste, saturación)](05-boost.md) · Siguiente: [Paso 7: Nitidez](07-nitidez.md)
 
-**Por qué.** El NXT principal ya se hizo en lineal sobre la starless (Paso 15 de la fase lineal). El boost ha amplificado el ruido de croma y el moteado de baja frecuencia. Este es el denoise **final**, sobre la capa sin estrellas y ya estirada: aquí sí se puede ser más agresivo que en lineal, porque BXT ya hizo su trabajo. "Si va a haber saturación fuerte, quitar el ruido de croma **antes** de saturar".
+**Por qué.** El denoise principal ya se hizo en lineal sobre la starless (Paso 15 de la fase lineal; por defecto el híbrido MLDenoise + NXT). El boost ha amplificado el ruido de croma y el moteado de baja frecuencia. Este es el denoise **final**, sobre la capa sin estrellas y ya estirada: aquí sí se puede ser más agresivo que en lineal, porque BXT ya hizo su trabajo. "Si va a haber saturación fuerte, quitar el ruido de croma **antes** de saturar".
 
 **Parámetros**
 
