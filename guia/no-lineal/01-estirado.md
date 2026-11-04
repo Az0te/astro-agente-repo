@@ -48,12 +48,14 @@ if (!P.executeOn(v)) throw new Error("GHS fase 1 falló");
 "GHS fase 1: mediana previa " + med;
 ```
 
-**Las dos capas en una llamada** (`herramientas/estirado.js`), sobre copias. Starless: GHS fase 1 y, si no basta, una segunda pasada con el D que lleva la mediana al objetivo (buscado sobre una copia reducida); la fase 3 sólo si más del 0,05 % de los píxeles pasa de 0,95. Estrellas: `starStretch` con `amount` 2 (cambiable) y el p90 que daría cada amount de 1 a 5. Devuelve las medidas y el control (fondo, sombras, luces, dominante; lo visual, aparte). Recomendado para modelos sin herramientas. La fase 4 sigue siendo a mano. Sueltas: `estirarStarless(vista, {fondo})` y `estirarEstrellas(vista, {amount})`.
+**Estirar al fallo, en pasadas cortas** (método por defecto). Varias pasadas cortas son mejores que una larga: se estira hasta que algo falla y se queda la pasada anterior. Tras la fase 1, pasadas cortas de GHS (D ≈ 1, b 6, SP = cielo, HP 0,92), cada una seguida de un punto negro que devuelve el cielo a ~0,10; se mide tras cada pasada. **Fallo:** ruido del cielo > 15 % del cielo, > 0,05 % de píxeles a 0 o > 0,95. Si una pasada falla, se deshace y se prueba la mitad de corta; cuando ni la más corta cabe, se queda la anterior. Con M31 (nov 2026) da lo mismo que el arcsinh elegido (bulbo 0,75, disco 0,24, ruido del cielo ~12–14 %), mientras que llevar sólo la mediana a 0,10 dejaba la galaxia apagada (bulbo 0,45, disco 0,13).
+
+**Las dos capas en una llamada** (`herramientas/estirado.js`), sobre copias: starless al fallo (o a una mediana fija con `modo: "fondo"`) y estrellas con `starStretch` `amount` 2 (cambiable), con el p90 que daría cada amount de 1 a 5. Devuelve las pasadas, qué falló, las medidas y el control (lo visual, aparte). Recomendado para cualquier modelo. Sueltas: `estirarStarless(vista, {cielo})` y `estirarEstrellas(vista, {amount})`.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/estirado.js"));   // en el nivel superior del script
-var r = estirarCapas("Starless", "Stars", { fondo: 0.20, nuevaStarless: "Starless_st_v1", nuevasEstrellas: "Stars_st_v1" });
-JSON.stringify(r);   // { starless: {pasadas, mediana, recorte, dominante, control}, estrellas: {amount, p90, control} }
+var r = estirarCapas("Starless", "Stars", { cielo: 0.10, nuevaStarless: "Starless_st_v1", nuevasEstrellas: "Stars_st_v1" });
+JSON.stringify(r);   // { starless: {pasadas, parada, medidas, dominante, control}, estrellas: {amount, p90, control} }
 ```
 **MAS.** Parámetros (por defecto): `targetBackground` (0,15), `aggressiveness` (0,70), `dynamicRangeCompression` (0,40), `contrastRecovery` (true), `scaleSeparation` (1024), `contrastRecoveryIntensity` (1,0), `saturationEnabled` (true), `saturationAmount` (0,75), `backgroundROIEnabled` y `backgroundROIX0/Y0/Width/Height` (imprescindible si el objeto llena el campo). Orden de ajuste: ROI de fondo → fondo objetivo → agresividad → DRC → scale separation → contrast recovery (0,25 sutil, 0,5 moderado, 1 completo) → saturación. Más señal débil: subir un poco el fondo y bajar la agresividad. DRC protege núcleos durante el estirado; no sustituye a HDRMT.
 
@@ -72,4 +74,4 @@ if (!M.executeOn(View.viewById("Starless"))) throw new Error("MAS falló");
 - Cómo: `starStretch("Stars_v1", { amount: 2, saturation: 1, removeGreen: false })` sobre una copia. `amount` 1–3 en campos con muchas estrellas (objetivo: p90 de la capa ≈ 0,25, probando con saturación fija), hasta 5 con pocas. `saturation` 1; 1,2–1,5 si salen pálidas, vigilando anillos de color. `removeGreen` sólo con dominante verde real.
 - Alternativa: arcsinh con `L = max(RGB)` y k ≈ 5000, o ArcsinhStretch (ver detalle).
 
-**Control.** Mediana del fondo en el objetivo; mínimo ≥ 0 (sin sombras aplastadas); sin estrellas hinchadas; sin deriva de color. Pico más ancho = más ruido; pico de un canal desplazado = dominante; "dientes de sierra" al ampliar el histograma = posterización por estirados repetidos.
+**Control.** Estirado hasta el fallo (ni más ni menos: la pasada anterior a que el ruido del cielo pase del 15 % o recorte); cielo ~0,10; mediana del fondo en el objetivo; mínimo ≥ 0 (sin sombras aplastadas); sin estrellas hinchadas; sin deriva de color. Pico más ancho = más ruido; pico de un canal desplazado = dominante; "dientes de sierra" al ampliar el histograma = posterización por estirados repetidos.

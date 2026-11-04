@@ -1,24 +1,24 @@
-// estirado.js — Estirado del Paso 1 no lineal en una sola llamada: starless con GHS hasta el fondo objetivo y capa de
-// estrellas con starStretch. PJSR, ECMAScript 5.
+// estirado.js — Estirado del Paso 1 no lineal en una sola llamada: starless "al fallo" con pasadas cortas de GHS y capa
+// de estrellas con starStretch. PJSR, ECMAScript 5.
 //
 // Uso (en el nivel superior del script):
 //   eval(File.readTextFile("<ruta de guia>/herramientas/estirado.js"));
-//   var r = estirarCapas("Starless", "Stars", { fondo: 0.20 });   // las dos capas
-//   var r = estirarStarless("Starless", { fondo: 0.20, nuevaVista: "Starless_st_v1" });
-//   JSON.stringify(r);   // { vista, pasadas: [{D, b, SP, LP, HP, mediana}], mediana, minimo, maximo, recorte, ... }
+//   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // las dos capas
+//   var r = estirarStarless("Starless", { cielo: 0.10, nuevaVista: "Starless_st_v1" });
+//   JSON.stringify(r);
 //
-// Opciones: fondo (mediana objetivo; 0,15–0,25 en nebulosas de emisión, 0,10 en galaxias; por defecto 0,20),
-// nuevaVista (copia donde se estira; por defecto <vista>_st), canal ("RGB" por defecto o "Col" para conservar el
-// tono), tolerancia (0,02).
-//
-// Qué hace, siguiendo la ficha del Paso 1 no lineal:
-// - Trabaja sobre una copia; no toca la original. Se niega si la imagen ya parece estirada (mediana > 0,05).
-// - Fase 1 "levantar el pie": D 2,5, b 12, SP = mediana, LP 0, HP 0,95.
-// - Si el fondo aún no llega, segunda pasada con SP = nueva mediana, b 8, LP 0, HP 0,92 y el D que lleva la mediana
-//   al objetivo, buscado por bisección sobre una copia reducida ×4 (rápido) y aplicado después a la imagen completa.
-// - Mide al final mediana, mínimo, máximo y píxeles recortados (= 0 o ≥ 0,999).
-// No hace las fases 3 y 4 (altas luces y núcleos): son ajustes finos que dependen del objeto.
-
+// Starless "al fallo" (por defecto), como se hace a mano: varias pasadas cortas mejor que una larga, estirar hasta que
+// algo falla y quedarse con la anterior.
+// - Fase 1 de la ficha (D 2,5, b 12, SP = mediana, HP 0,95) para levantar el pie.
+// - Pasadas cortas de GHS (D 1, b 6, SP = cielo, LP 0, HP 0,92); tras cada una, punto negro para dejar el cielo en
+//   'cielo' (0,10 por defecto). Se mide después de cada pasada.
+// - Fallo: ruido del cielo > 15 % del cielo (ruidoMax), > 0,05 % de píxeles a 0 (ceroMax) o > 0,95 (altoMax). Si una
+//   pasada falla se deshace y se prueba otra la mitad de corta; si ni la más corta (D 0,125) cabe, se queda la anterior.
+// - Calibrado con M31 (4 nov 2026): el arcsinh aceptado tenía un ruido del cielo del 11,8 %; al fallo da bulbo 0,747 y
+//   disco 0,238 frente a 0,751 y 0,214 del arcsinh; a fondo fijo 0,10 daba 0,45 y 0,13 (galaxia apagada).
+// - "cielo" es la mediana de las celdas de 64 px más oscuras (10 %), no la mediana de la imagen: en nebulosas que llenan
+//   el campo la mediana queda por encima.
+// Modo antiguo: { modo: "fondo", fondo: 0.20 } estira hasta una mediana fija con una o dos pasadas (estirarAFondo).
 function esK(C, name) {
   if (C[name] !== undefined) return C[name];
   if (C.prototype && C.prototype[name] !== undefined) return C.prototype[name];
@@ -63,7 +63,7 @@ function esGHS(view, D, b, SP, LP, HP, canal) {
   if (!P.executeOn(view)) throw new Error("GHS falló (D " + D + ", b " + b + ")");
 }
 
-function estirarStarless(viewId, o) {
+function estirarAFondo(viewId, o) {
   o = o || {};
   var fondo = o.fondo || 0.20, tol = o.tolerancia || 0.02, canal = o.canal || "RGB";
   var win = ImageWindow.windowById(viewId);
@@ -155,6 +155,125 @@ function esHigh(view, thr) {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Estirado "al fallo".
+
+// Medidas de la imagen para decidir el fallo: cielo (mediana de las celdas de 64 px más oscuras, 10 %), ruido del
+// cielo (diferencias entre píxeles vecinos en esas celdas), percentiles de la luminancia y píxeles a 0 / > 0,95.
+function esCheck(view) {
+  var im = view.image, W = im.width, H = im.height, n = W * H, R = new Rect(0, 0, W, H), nc = im.numberOfChannels;
+  var L = new Float32Array(n), buf = new Float32Array(n), cero = 0, alto = 0;
+  for (var c = 0; c < nc; ++c) {
+    im.getSamples(buf, R, c);
+    for (var i = 0; i < n; ++i) { var x = buf[i]; L[i] += x / nc; if (x <= 0.0001) ++cero; if (x >= 0.95) ++alto; }
+  }
+  var S = 64, cells = [];
+  for (var y0 = 0; y0 + S <= H; y0 += S)
+    for (var x0 = 0; x0 + S <= W; x0 += S) {
+      var v = [];
+      for (var y = y0; y < y0 + S; y += 2) for (var x = x0; x < x0 + S; x += 2) v.push(L[y * W + x]);
+      v.sort(function (a, b) { return a - b; });
+      cells.push({ x: x0, y: y0, m: v[v.length >> 1] });
+    }
+  cells.sort(function (a, b) { return a.m - b.m; });
+  var k = Math.max(5, Math.floor(cells.length * 0.10)), dif = [], sk = [];
+  for (var j = 0; j < k; ++j) {
+    var cc = cells[j];
+    sk.push(cc.m);
+    for (var yy = cc.y; yy < cc.y + S; ++yy) for (var xx = cc.x; xx < cc.x + S - 1; xx += 2) dif.push(Math.abs(L[yy * W + xx + 1] - L[yy * W + xx]));
+  }
+  sk.sort(function (a, b) { return a - b; }); dif.sort(function (a, b) { return a - b; });
+  var cielo = sk[sk.length >> 1], ruido = dif[dif.length >> 1] / (0.6745 * Math.SQRT2), all = [];
+  for (var q = 0; q < n; q += 17) all.push(L[q]);
+  all.sort(function (a, b) { return a - b; });
+  function pc(p) { return all[Math.floor(p * (all.length - 1))]; }
+  return { cielo: +cielo.toFixed(4), ruido_rel: +(ruido / Math.max(cielo, 1e-6)).toFixed(3),
+           mediana: +pc(0.5).toFixed(4), p90: +pc(0.9).toFixed(4), p99: +pc(0.99).toFixed(4), p999: +pc(0.999).toFixed(4),
+           cero_pct: +(100 * cero / (n * nc)).toFixed(4), alto_pct: +(100 * alto / (n * nc)).toFixed(4) };
+}
+
+function esAssign(dst, src) { dst.beginProcess(); dst.image.assign(src.image); dst.endProcess(); }
+
+// Punto negro que deja el cielo s en f: (x − bp)/(1 − bp).
+function esBlackPoint(view, s, f) {
+  var bp = (s - f) / (1 - f);
+  if (bp <= 0) return 0;
+  var P = new PixelMath;
+  P.expression = "max(0, ($T - " + bp + ") / (1 - " + bp + "))";
+  P.useSingleExpression = true; P.createNewImage = false;
+  P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
+  if (!P.executeOn(view)) throw new Error("Punto negro falló");
+  return bp;
+}
+
+function esFallo(c, lim) {
+  var f = [];
+  if (c.ruido_rel > lim.ruido) f.push("ruido del cielo " + c.ruido_rel + " > " + lim.ruido);
+  if (c.cero_pct > lim.cero) f.push("sombras a 0 " + c.cero_pct + " % > " + lim.cero + " %");
+  if (c.alto_pct > lim.alto) f.push("luces > 0,95 " + c.alto_pct + " % > " + lim.alto + " %");
+  return f;
+}
+
+function estirarStarless(viewId, o) {
+  o = o || {};
+  if (o.modo === "fondo") return estirarAFondo(viewId, o);
+  var cielo = o.cielo || 0.10, D = o.paso || 1.0, canal = o.canal || "RGB";
+  var lim = { ruido: o.ruidoMax || 0.15, cero: o.ceroMax || 0.05, alto: o.altoMax || 0.05 };
+  var win = ImageWindow.windowById(viewId);
+  if (win.isNull) throw new Error("No existe la vista " + viewId);
+  var med0 = esMedian(win.mainView);
+  if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): no repetir la fase 1");
+  var w = esCopy(viewId, o.nuevaVista || (viewId + "_st"));
+  w.show();
+  var v = w.mainView, pasadas = [];
+  esGHS(v, 2.5, 12, med0, 0, 0.95, canal);
+  var c = esCheck(v);
+  pasadas.push({ n: 1, fase: 1, D: 2.5, b: 12, SP: +med0.toPrecision(4), HP: 0.95, cielo: c.cielo, ruido_rel: c.ruido_rel, p99: c.p99 });
+  var prev = esCopy(v.id, "esPrev"), motivo = "máximo de pasadas", maxN = o.maxPasadas || 25, descartadas = 0;
+  for (var n = 2; n <= maxN; ++n) {
+    esAssign(prev.mainView, v);
+    esGHS(v, D, 6, Math.max(c.cielo, 1e-5), 0, 0.92, canal);
+    var c1 = esCheck(v), bp = 0;
+    if (c1.cielo > cielo) { bp = esBlackPoint(v, c1.cielo, cielo); c1 = esCheck(v); }
+    var f = esFallo(c1, lim);
+    if (f.length) {
+      esAssign(v, prev.mainView);
+      ++descartadas;
+      if (D / 2 < (o.pasoMin || 0.12)) { motivo = "fallo con la pasada más corta (D " + D + "): " + f.join("; ") + "; se queda la anterior"; break; }
+      D = D / 2;
+      continue;
+    }
+    pasadas.push({ n: n, D: D, b: 6, SP: +c.cielo.toPrecision(3), HP: 0.92, punto_negro: +bp.toPrecision(3),
+                   cielo: c1.cielo, ruido_rel: c1.ruido_rel, p99: c1.p99 });
+    c = c1;
+  }
+  prev.forceClose();
+
+  var im = v.image, porCanal = [];
+  for (var ch = 0; ch < im.numberOfChannels; ++ch) { im.selectedChannel = ch; porCanal.push(+im.median().toFixed(4)); }
+  im.resetSelections();
+  var medF = esMedian(v), dom = 0;
+  if (porCanal.length === 3) dom = 100 * (Math.max.apply(null, porCanal) - Math.min.apply(null, porCanal)) / medF;
+  return {
+    vista: v.id, original: viewId, metodo: "al fallo (pasadas cortas de GHS + punto negro)", cielo_objetivo: cielo,
+    pasadas: pasadas, pasadas_descartadas: descartadas, parada: motivo,
+    medidas: c, mediana_por_canal: porCanal, dominante_fondo_pct: +dom.toFixed(1),
+    control: {
+      medido: {
+        cielo_en_objetivo: Math.abs(c.cielo - cielo) <= 0.02,
+        ruido_del_cielo_bajo_el_limite: c.ruido_rel <= lim.ruido,
+        sin_sombras_aplastadas: c.cero_pct <= lim.cero,
+        sin_luces_quemadas: c.alto_pct <= lim.alto,
+        sin_dominante_en_el_fondo: dom < 5
+      },
+      revisar_a_ojo: ["núcleos brillantes (galaxias): si se ven quemados, HDRMT en los pasos siguientes",
+                      "dientes de sierra al ampliar el histograma (posterización)",
+                      "ruido del fondo al 100 %: si molesta, repetir con ruidoMax menor (0,12)"],
+      nota: "Se estira hasta el fallo y se queda la pasada anterior: la imagen está todo lo estirada que permiten el ruido " +
+            "y el recorte. 'parada' dice qué falló. Lo de revisar_a_ojo no lo mide esta función."
+    }
+  };
+}
+// ---------------------------------------------------------------------------------------------------
 // Capa de estrellas LINEAL con starStretch (Star Stretch de SetiAstro) sobre una copia. amount por defecto 2 (campos
 // con muchas estrellas: 1–3; con pocas, hasta 5). Como la curva de starStretch es punto a punto, devuelve también el
 // p90 de los píxeles de estrella (> 0,005) que daría cada amount, calculado sobre una muestra sin tocar la imagen,
@@ -221,10 +340,10 @@ function estirarEstrellas(viewId, o) {
 }
 
 // Las dos capas del Paso 1 en una llamada.
-//   var r = estirarCapas("Starless", "Stars", { fondo: 0.20 });   // { starless: {...}, estrellas: {...} }
+//   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // { starless: {...}, estrellas: {...} }
 function estirarCapas(starlessId, starsId, o) {
   o = o || {};
-  var r = { starless: estirarStarless(starlessId, { fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3 }) };
+  var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3 }) };
   if (starsId) r.estrellas = estirarEstrellas(starsId, { nuevaVista: o.nuevasEstrellas, amount: o.amount, saturacion: o.saturacion });
   return r;
 }
