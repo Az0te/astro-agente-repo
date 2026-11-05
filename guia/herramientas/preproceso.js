@@ -473,6 +473,7 @@ function seleccionarSubs(x, o) {
   // Resultado corto (el modelo lo recibe entero): la tabla completa sólo con { tabla: true } o en el CSV, y los
   // aprobados como fichero de lista (una ruta por línea) que lanzarWBPP acepta en lights.
   var dirOut = o.csv ? File.extractDrive(o.csv) + File.extractDirectory(o.csv) : File.systemTempDirectory;
+  if (!File.directoryExists(dirOut)) File.createDirectory(dirOut, true);   // la carpeta del CSV puede no existir
   var lista = o.lista || (dirOut + "/subs_aprobados.txt");
   File.writeTextFile(lista, apr.map(function (s) { return s.fichero; }).join("\n"));
   var r = { grupos: resumen, n_medidos: subs.length, n_aprobados: apr.length, lista_aprobados: lista,
