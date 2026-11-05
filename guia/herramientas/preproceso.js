@@ -47,7 +47,8 @@ function ppHeader(path) {
   if (!d || d.length == 0) throw new Error("No se pudo leer " + path);
   var o = { fichero: path, ancho: d[0].width, alto: d[0].height }, k = f.keywords;
   var want = ["IMAGETYP", "FILTER", "EXPTIME", "EXPOSURE", "CCD-TEMP", "SET-TEMP", "GAIN", "OFFSET", "XBINNING",
-              "BAYERPAT", "DATE-OBS", "INSTRUME", "TELESCOP", "FOCALLEN", "OBJECT"];
+              "BAYERPAT", "DATE-OBS", "INSTRUME", "TELESCOP", "FOCALLEN", "OBJECT", "XPIXSZ", "SWCREATE", "ROTATANG",
+              "ROTATOR", "FOCPOS", "FOCUSPOS", "READOUTM"];
   for (var i = 0; i < k.length; ++i) if (want.indexOf(k[i].name) >= 0) o[k[i].name] = k[i].strippedValue.trim();
   // Masters XISF: a veces sólo llevan propiedades XISF, sin palabras clave FITS.
   var props = { EXPTIME: "Instrument:FrameExposureTime", EXPOSURE: "Instrument:ExposureTime", "CCD-TEMP": "Instrument:Sensor:Temperature", FILTER: "Instrument:Filter:Name",
@@ -205,6 +206,107 @@ function revisarCalibracion(o) {
     r.control.revisar_a_ojo.push("Hay " + keys.length + " grupos de lights distintos: integrarlos por separado o comprobar que WBPP los agrupa bien.");
   r.no_cumple = ppUnique(r.no_cumple, function (x) { return x; });
   delete r._medidos;
+  return r;
+}
+
+// Inventario (Paso 2): recorre una carpeta (con subcarpetas) y agrupa los ficheros por tipo, noche, filtro,
+// exposición, gain, offset, binning y telescopio, sólo con las cabeceras. Devuelve equipo (cámara, OSC o mono,
+// píxel, focal, escala, programa de captura), grupos de lights con horas y temperaturas, calibración disponible
+// y, en no_cumple, las incompatibilidades: lights sin flats de su filtro en su noche, sin dark de su exposición,
+// ganancias u offsets mezclados, flats de otro telescopio. Opciones: darks (carpeta o lista de la biblioteca de
+// darks, que suele estar fuera de la carpeta del objeto), aliasFiltros ({ viejo: bueno }), excluir (texto: se
+// ignoran las rutas que lo contengan). Siempre se saltan las carpetas que empiezan por "_" (_proc, _rechazados)
+// y las de salida de WBPP (calibrated, debayered, registered, master, logs).
+function inventario(carpeta, o) {
+  o = o || {};
+  var raiz = carpeta.replace(/\\/g, "/").replace(/\/$/, ""), excl = o.excluir || "_rechazados", files = [];
+  ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) { files = files.concat(searchDirectory(raiz + "/" + e, true)); });
+  // Fuera: carpetas que empiezan por "_" (_proc, _rechazados...) y las de salida de WBPP.
+  var rel = function (f) { return f.substring(raiz.length); };
+  files = files.filter(function (f) { return f.indexOf(excl) < 0 && !/\/_[^\/]*\//.test(rel(f)) &&
+                                             !/\/(calibrated|debayered|registered|master|logs|cache)\//i.test(rel(f)); });
+  if (files.length == 0) throw new Error("No hay imágenes en " + raiz);
+  var H = [], errores = [];
+  files.forEach(function (f) { try { H.push(ppHeader(f)); } catch (e) { errores.push(File.extractNameAndExtension(f) + ": " + e.message); } });
+  ppList(o.darks).forEach(function (f) { try { var h = ppHeader(f); h.biblioteca = true; H.push(h); } catch (e) { } });
+  if (o.aliasFiltros) H.forEach(function (h) { if (o.aliasFiltros[h.filtro] !== undefined) h.filtro = o.aliasFiltros[h.filtro]; });
+
+  function tipo(h) {
+    var t = h.tipo, n = File.extractName(h.fichero).toLowerCase(), m = /master/.test(t) || /master/.test(n);
+    var b = /flat/.test(t) ? "flat" : /bias|offset/.test(t) ? "bias" : /dark/.test(t) ? "dark" : /light|science/.test(t) ? "light" :
+            /flat/.test(n) ? "flat" : /bias/.test(n) ? "bias" : /dark/.test(n) ? "dark" : "light";
+    return m ? "master " + b : b;
+  }
+  function noche(h) {   // fecha de la tarde en que empezó la noche (DATE-OBS en UTC menos 12 h)
+    var d = h["DATE-OBS"]; if (!d) return "";
+    var t = Date.parse(d.replace(/(\.\d{3})\d*/, "$1") + (/Z|[+-]\d\d:?\d\d$/.test(d) ? "" : "Z"));
+    return isFinite(t) ? new Date(t - 12 * 3600e3).toISOString().substring(0, 10) : d.substring(0, 10);
+  }
+  H.forEach(function (h) { h.clase = tipo(h); h.noche = noche(h); });
+  var L = H.filter(function (h) { return h.clase == "light"; });
+  if (L.length == 0) throw new Error("No hay lights en " + raiz + " (" + H.length + " ficheros leídos)");
+
+  // Equipo, del primer light.
+  var l0 = L[0], pix = parseFloat(l0.XPIXSZ), fl = parseFloat(l0.FOCALLEN);
+  var r = { carpeta: raiz, ficheros: H.length,
+            equipo: { camara: l0.INSTRUME || "", osc: !!l0.BAYERPAT, bayer: l0.BAYERPAT || "", pixel_um: isFinite(pix) ? pix : null,
+                      focal_mm: isFinite(fl) ? fl : null, escala_arcsec_px: isFinite(pix) && isFinite(fl) && fl > 0 ? +(206.265 * pix / fl).toFixed(3) : null,
+                      telescopios: ppUnique(L, function (h) { return (h.TELESCOP || "").toUpperCase(); }), captura: ppUnique(L, function (h) { return h.SWCREATE || ""; }),
+                      objeto: ppUnique(L, function (h) { return h.OBJECT || ""; }) },
+            lights: [], calibracion: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
+  if (errores.length) r.control.revisar_a_ojo.push(errores.length + " ficheros no se pudieron leer: " + errores.slice(0, 5).join("; "));
+
+  function gkey(h) { return [h.noche, h.filtro, h.exp, h.gain, h.offset, h.bin, h.telescopio].join("|"); }
+  var keys = ppUnique(L, gkey);
+  keys.forEach(function (k) {
+    var G = L.filter(function (h) { return gkey(h) == k; }), h0 = G[0];
+    var temps = G.map(function (h) { return h.temp; }).filter(isFinite);
+    var rot = ppUnique(G, function (h) { return h.ROTATANG || h.ROTATOR || ""; }).filter(function (x) { return x; });
+    var g = { noche: h0.noche, filtro: h0.filtro || "(sin FILTER)", exposicion_s: h0.exp, n: G.length, horas: +(G.length * h0.exp / 3600).toFixed(2),
+              gain: h0.gain, offset: h0.offset, bin: h0.bin, telescopio: h0.TELESCOP || "",
+              temp: temps.length ? [Math.min.apply(null, temps), Math.max.apply(null, temps)] : null,
+              carpetas: ppUnique(G, function (h) { return (File.extractDrive(h.fichero) + File.extractDirectory(h.fichero)).replace(raiz, "").replace(/^\//, ""); }) };
+    if (rot.length) g.rotador = rot.length > 3 ? rot.slice(0, 3).concat(["…"]) : rot;
+    // Flats de su filtro y su noche (o de la mañana siguiente), mismo sensor y telescopio.
+    var flats = H.filter(function (f) { return /flat/.test(f.clase) && f.filtro == h0.filtro && f.bin == h0.bin && f.ancho == h0.ancho &&
+                                               (f.gain === null || h0.gain === null || f.gain == h0.gain); });
+    var flatsNoche = flats.filter(function (f) { return f.noche == h0.noche || /master/.test(f.clase); });
+    g.flats = flatsNoche.length;
+    if (flatsNoche.length == 0)
+      r.no_cumple.push("Lights " + g.filtro + " " + h0.exp + " s del " + h0.noche + " (" + G.length + "): no hay flats de ese filtro de esa noche" +
+                       (flats.length ? " (sí de " + ppUnique(flats, function (f) { return f.noche; }).join(", ") + ": sólo valen si no se movió nada del tren óptico)" : "") + ".");
+    else {
+      var otroTel = flatsNoche.filter(function (f) { return f.telescopio && h0.telescopio && f.telescopio != h0.telescopio; });
+      if (otroTel.length) r.no_cumple.push("Lights " + g.filtro + " del " + h0.noche + ": " + otroTel.length + " flats dicen telescopio '" + otroTel[0].TELESCOP + "' (lights '" + h0.TELESCOP + "').");
+    }
+    var darks = H.filter(function (d) { return /dark/.test(d.clase) && d.bin == h0.bin && d.ancho == h0.ancho && Math.abs(d.exp - h0.exp) <= 1 &&
+                                               (d.gain === null || h0.gain === null || d.gain == h0.gain) &&
+                                               (d.offset === null || h0.offset === null || d.offset == h0.offset) &&
+                                               (!isFinite(d.temp) || !temps.length || Math.abs(d.temp - temps[0]) <= 2); });
+    g.darks = darks.length;
+    if (darks.length == 0) r.no_cumple.push("Lights " + g.filtro + " " + h0.exp + " s del " + h0.noche + ": no hay dark de " + h0.exp + " s (gain " + h0.gain + ", offset " + h0.offset + ") ni en la carpeta ni en la biblioteca (opción darks).");
+    if (g.temp && g.temp[1] - g.temp[0] > 2) r.control.revisar_a_ojo.push("Lights " + g.filtro + " del " + h0.noche + ": temperatura de " + g.temp[0] + " a " + g.temp[1] + " °C.");
+    r.lights.push(g);
+  });
+
+  // Mezclas que no deben integrarse juntas.
+  var gains = ppUnique(L, function (h) { return h.gain + "/" + h.offset; });
+  if (gains.length > 1) r.no_cumple.push("Lights con distintos gain/offset: " + gains.join(", ") + ". Cada combinación necesita su calibración y su master.");
+  var tels = r.equipo.telescopios.filter(function (t) { return t; });
+  if (tels.length > 1) r.control.revisar_a_ojo.push("Lights con varios TELESCOP (" + tels.join(", ") + "): ¿otro tren óptico o sólo otro nombre?");
+
+  // Resumen de calibración disponible (sin repetir fichero a fichero).
+  var C = H.filter(function (h) { return h.clase != "light"; });
+  function ckey(h) { return [h.clase, h.clase.indexOf("flat") >= 0 ? h.noche : "", h.filtro, h.exp, h.gain, h.offset, h.biblioteca ? "biblioteca" : ""].join("|"); }
+  ppUnique(C, ckey).forEach(function (k) {
+    var G = C.filter(function (h) { return ckey(h) == k; }), h0 = G[0];
+    r.calibracion.push({ tipo: h0.clase, noche: h0.clase.indexOf("flat") >= 0 ? h0.noche : undefined, filtro: h0.filtro || undefined,
+                         exposicion_s: h0.exp, gain: h0.gain, offset: h0.offset, n: G.length, biblioteca: h0.biblioteca || undefined });
+  });
+  var porFiltro = {};
+  r.lights.forEach(function (g) { porFiltro[g.filtro + " " + g.exposicion_s + " s"] = (porFiltro[g.filtro + " " + g.exposicion_s + " s"] || 0) + g.horas; });
+  for (var f in porFiltro) r.control.medido.push(f + ": " + porFiltro[f].toFixed(2) + " h en " + r.lights.filter(function (g) { return g.filtro + " " + g.exposicion_s + " s" == f; }).length + " noches");
+  r.no_cumple = ppUnique(r.no_cumple, function (x) { return x; });
   return r;
 }
 

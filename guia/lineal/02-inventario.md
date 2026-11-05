@@ -24,6 +24,20 @@
 
 > **Compatibilidad:** lights y calibración con la misma ganancia, offset, modo de lectura, binning, temperatura, driver, programa de captura y formato de archivo.
 
+**En una llamada** (`herramientas/preproceso.js`): `inventario(carpeta del objeto, { darks, aliasFiltros })` lee sólo las cabeceras de todas las subcarpetas, en ~1 s para 1100 ficheros. Se salta `_proc`, `_rechazados` y las salidas de WBPP. Devuelve:
+- el equipo: cámara, OSC o mono, píxel, focal, escala y programa de captura;
+- un grupo de lights por noche, filtro, exposición, gain, offset, binning y telescopio, con horas, temperaturas, rotador y cuántos flats y darks compatibles tiene;
+- la calibración disponible y las horas por filtro y exposición.
+
+En `no_cumple` avisa de lights sin flats de su filtro en su noche, sin dark de su exposición, con gain u offset mezclados o con flats de otro telescopio. La biblioteca de darks suele estar fuera de la carpeta del objeto: pasarla en `darks`.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el nivel superior del script
+JSON.stringify(inventario("<carpeta del objeto>", { darks: "<carpeta de master darks>" }));
+```
+
+Comprobado con IC 1396 (nov 2026; 11 grupos en 10 noches, 1147 ficheros). Detectó que los lights Hα/OIII del 12-9 y del 14-9 no tienen flats de ese filtro en su noche (sí del 20-9, 24-9 y 25-9).
+
 **Código.** Para listar vistas abiertas, la herramienta del watcher es `list_open_images`. Para comprobar que un master contiene realmente una integración y con cuántos subs, se lee su historial:
 
 ```javascript
