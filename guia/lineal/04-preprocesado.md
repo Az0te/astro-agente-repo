@@ -37,7 +37,24 @@
 
 **Medidas por sub desde el watcher.** "SubframeSelector sobre los FITS crudos CFA ordena bien, pero los valores absolutos están sesgados (en debayerizado VNG el FWHM sale ~15–20 % mayor y la excentricidad ~0,06 menor). Para umbrales absolutos, debayerizar una muestra. Fondo por sub = mediana − bias (bias con offset 50 ≈ 500 ADU). Gradiente por sub = rejilla 4×4 de medianas; en crudo incluye el viñeteo (~2,4 %). Un velo fino se ve como fondo +5–8 % con 15–18 % menos estrellas respecto a sus vecinos."
 
-**Código.** WBPP es un script y la guía no lo usa. Desde el watcher, el preprocesado es la cadena de procesos equivalente con los ajustes de la tabla: ImageCalibration → CosmeticCorrection → Debayer → SubframeSelector → StarAlignment → LocalNormalization → ImageIntegration → DrizzleIntegration, todos con ficheros de entrada y carpeta de salida. La cadena completa está pendiente de probar (Anexo C). Con los masters hechos, se audita el resultado:
+**En una llamada (PixInsight 1.9.6+)** (`herramientas/preproceso.js`):
+
+1. `revisarCalibracion({ lights, flats, flatDarks, darks, bias })` lee las cabeceras sin abrir ventanas y mide unos pocos flats por canal Bayer. Avisa en `no_cumple` si falta el dark de la exposición de los lights, si los flats son de otro filtro o de otro telescopio (`TELESCOP`), si faltan darks de flats o bias, si un flat está saturado o si la temperatura varía más de 2 °C. Un flat por encima de 0,85 en un canal va a `revisar_a_ojo`. Los masters sin palabras clave se leen de sus propiedades XISF o del nombre ("Master Dark 300s -10C 100Ga 50Of").
+2. `lanzarWBPP({ lights, flats, flatDarks, darks, salida })` arranca WBPP en **otra instancia de PixInsight en modo automatización**, que se cierra sola al acabar. No bloquea la sesión ni el watcher. En `lights` se puede pasar `aprobados_rutas` de `seleccionarSubs` (Paso 3). La salida tiene que ser una **ruta corta**: Windows no crea ficheros de más de 256 caracteres. El resto de ajustes (drizzle, normalización local, autocrop) son los últimos guardados en WBPP; se cambian con `parametros` (nombres de la ayuda de automatización, Alt+A en la ventana de WBPP).
+3. `estadoWBPP(salida)`: repetir hasta `terminado: true`. Resume el log: pasos con éxitos y fallos, errores, avisos, ficheros fallidos, masters generados y qué master dark y flat usó cada grupo.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el nivel superior del script
+JSON.stringify(revisarCalibracion({ lights: "<LIGHT>", flats: "<FLAT>", flatDarks: "<DARK de flats>", darks: ["<master dark>"] }));
+// si no_cumple está vacío (o el usuario lo acepta), en otro script:
+JSON.stringify(lanzarWBPP({ lights: "<LIGHT>", flats: "<FLAT>", flatDarks: "<DARK de flats>", darks: ["<master dark>"], salida: "C:/wbpp/objeto" }));
+// y luego, cada minuto o dos:
+JSON.stringify(estadoWBPP("C:/wbpp/objeto"));
+```
+
+Comprobado con LDN 1235 (nov 2026). En la noche del 11-9, `revisarCalibracion` encontró sin abrir ninguna imagen lo que en octubre costó una tarde: sin dark de 240 s, flats sin `FILTER`, flats con `TELESCOP` TS65Q (los lights, SQA106) y flats saturados. En la del 19-9 todo casa, con un aviso: el canal R de los flats a 0,94. WBPP con 8 lights, 10 flats y 10 darks de flats tardó 2 min.
+
+**Sin WBPP:** el preprocesado es la cadena de procesos equivalente con los ajustes de la tabla: ImageCalibration → CosmeticCorrection → Debayer → ImageAnalysis → StarAlignment → LocalNormalization → ImageIntegration → DrizzleIntegration, todos con ficheros de entrada y carpeta de salida. Con los masters hechos, se audita el resultado:
 
 ```javascript
 // Auditoría del master: pasos aplicados y presencia de los procesos clave.
