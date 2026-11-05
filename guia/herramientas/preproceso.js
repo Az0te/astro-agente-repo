@@ -26,6 +26,11 @@
 // (satélites, aviones) sólo se anotan: los quita el rechazo de píxeles de la integración.
 // Los umbrales se ajustaron con LDN 1235 (11-9-2026, subs crudos CFA): revisar con otros datos.
 
+// File.searchDirectory en 1.9.6+ (searchDirectory global está obsoleta y avisa en la consola).
+function ppSearch(patron, recursivo) {
+  return (File.searchDirectory ? File.searchDirectory(patron, recursivo) : searchDirectory(patron, recursivo));
+}
+
 function ppList(x, patron) {
   if (!x) return [];
   if (x instanceof Array) return x;
@@ -34,7 +39,7 @@ function ppList(x, patron) {
     return File.readLines(p).map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
   if (File.exists(p)) return [p];
   var d = p.replace(/\/$/, ""), out = [], exts = patron || ["*.fits", "*.fit", "*.fts", "*.xisf"];
-  for (var i = 0; i < exts.length; ++i) out = out.concat(searchDirectory(d + "/" + exts[i], false));
+  for (var i = 0; i < exts.length; ++i) out = out.concat(ppSearch(d + "/" + exts[i], false));
   out.sort();
   return out;
 }
@@ -54,7 +59,7 @@ function ppHeader(path) {
   var props = { EXPTIME: "Instrument:FrameExposureTime", EXPOSURE: "Instrument:ExposureTime", "CCD-TEMP": "Instrument:Sensor:Temperature", FILTER: "Instrument:Filter:Name",
                 TELESCOP: "Instrument:Telescope:Name", XBINNING: "Instrument:Sensor:XBinning", IMAGETYP: "Instrument:Frame:Type" };
   for (var kp in props)
-    if (o[kp] === undefined) try { var pv = f.readImageProperty(props[kp]); if (pv !== undefined && pv !== null) o[kp] = String(pv); } catch (e) { }
+    if (o[kp] === undefined && F.canStoreImageProperties) try { var pv = f.readImageProperty(props[kp]); if (pv !== undefined && pv !== null) o[kp] = String(pv); } catch (e) { }
   f.close();
   o.exp = parseFloat(o.EXPTIME || o.EXPOSURE);
   o.temp = parseFloat(o["CCD-TEMP"] || o["SET-TEMP"]);
@@ -220,7 +225,7 @@ function revisarCalibracion(o) {
 function inventario(carpeta, o) {
   o = o || {};
   var raiz = carpeta.replace(/\\/g, "/").replace(/\/$/, ""), excl = o.excluir || "_rechazados", files = [];
-  ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) { files = files.concat(searchDirectory(raiz + "/" + e, true)); });
+  ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) { files = files.concat(ppSearch(raiz + "/" + e, true)); });
   // Fuera: carpetas que empiezan por "_" (_proc, _rechazados...) y las de salida de WBPP.
   var rel = function (f) { return f.substring(raiz.length); };
   files = files.filter(function (f) { return f.indexOf(excl) < 0 && !/\/_[^\/]*\//.test(rel(f)) &&
@@ -349,7 +354,7 @@ function lanzarWBPP(o) {
 // Estado de un WBPP lanzado con lanzarWBPP (o de cualquier carpeta de salida de WBPP) y resumen de su log.
 function estadoWBPP(salida) {
   salida = salida.replace(/\\/g, "/").replace(/\/$/, "");
-  var logs = searchDirectory(salida + "/logs/*.log", false).sort();
+  var logs = ppSearch(salida + "/logs/*.log", false).sort();
   if (logs.length == 0) return { terminado: false, estado: "sin log todavía (arrancando)" };
   var log = logs[logs.length - 1], lines = File.readLines(log), last = "";
   for (var i = lines.length - 1; i >= 0 && !last; --i) if (lines[i].replace(/^\[[^\]]*\]\s*/, "").trim()) last = lines[i];
