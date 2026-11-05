@@ -31,11 +31,19 @@ function abrirConSTF(path, id) {
     if (id) { var n = id.replace(/[^A-Za-z0-9_]/g, "_"); if (/^[0-9]/.test(n)) n = "_" + n; if (ImageWindow.windowById(n).isNull) w.mainView.id = n; }
   }
   // STF enlazado (mismos parámetros en todos los canales): por canal desequilibra los colores.
-  var v = w.mainView, im = v.image, n = im.numberOfChannels, med = 0, mad = 0;
-  for (var c = 0; c < n; ++c) { im.selectedChannel = c; med += im.median() / n; mad += 1.4826 * im.MAD() / n; }
+  // Por canal sólo si los canales están muy desequilibrados (lineal sin calibrar color); si no, enlazado.
+  var v = w.mainView, im = v.image, n = im.numberOfChannels, meds = [], mads = [], rows = [];
+  for (var c = 0; c < n; ++c) { im.selectedChannel = c; meds.push(im.median()); mads.push(1.4826 * im.MAD()); }
   im.resetSelections();
-  var sh = Math.max(0, Math.min(1, med - 2.8 * mad)), row = [sh, 1, Math.mtf(0.25, med - sh), 0, 1];   // c0, c1, m, r0, r1
-  var S = new ScreenTransferFunction; S.STF = [row, row, row, [0, 1, 0.5, 0, 1]]; S.executeOn(v, false);
+  var mn = Math.min.apply(null, meds), mx = Math.max.apply(null, meds), link = mn > 0 && mx / mn < 1.25;
+  var avg = function (a) { return a.reduce(function (p, q) { return p + q; }, 0) / a.length; };
+  for (var c2 = 0; c2 < n; ++c2) {
+    var md = link ? avg(meds) : meds[c2], ma = link ? avg(mads) : mads[c2], sh = Math.max(0, Math.min(1, md - 2.8 * ma));
+    rows.push([sh, 1, Math.mtf(0.25, md - sh), 0, 1]);   // c0, c1, m, r0, r1
+  }
+  if (n == 1) rows = [rows[0], rows[0], rows[0]];
+  while (rows.length < 4) rows.push([0, 1, 0.5, 0, 1]);
+  var S = new ScreenTransferFunction; S.STF = rows; S.executeOn(v, false);
   w.show();
   return v.id;
 }
