@@ -5,7 +5,7 @@
 //   JSON.stringify(revisarCalibracion({ lights: "<carpeta LIGHT>", flats: "<carpeta FLAT>",
 //                                       flatDarks: "<carpeta DARK de flats>", darks: "<carpeta o master>" }));
 //   JSON.stringify(seleccionarSubs("<carpeta LIGHT>"));          // o una lista de ficheros
-//   JSON.stringify(lanzarWBPP({ lights: sel.aprobados_rutas, flats: ..., flatDarks: ..., darks: ..., salida: "C:/wbpp/obj" }));
+//   JSON.stringify(lanzarWBPP({ lights: sel.lista_aprobados, flats: ..., flatDarks: ..., darks: ..., salida: "C:/wbpp/obj" }));
 //   JSON.stringify(estadoWBPP("C:/wbpp/obj"));                    // repetir hasta terminado: true
 //
 // revisarCalibracion lee sólo las cabeceras (sin abrir ventanas) y, de los flats, unos pocos ficheros para medir
@@ -30,6 +30,8 @@ function ppList(x, patron) {
   if (!x) return [];
   if (x instanceof Array) return x;
   var p = String(x).replace(/\\/g, "/");
+  if (File.exists(p) && /\.txt$/i.test(p))   // lista de ficheros (la que escribe seleccionarSubs)
+    return File.readLines(p).map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
   if (File.exists(p)) return [p];
   var d = p.replace(/\/$/, ""), out = [], exts = patron || ["*.fits", "*.fit", "*.fts", "*.xisf"];
   for (var i = 0; i < exts.length; ++i) out = out.concat(searchDirectory(d + "/" + exts[i], false));
@@ -279,7 +281,7 @@ function seleccionarSubs(x, o) {
   var fs = ppList(x);
   if (fs.length == 0) throw new Error("No hay subs en " + x);
   var fwhmTol = o.fwhmTol !== undefined ? o.fwhmTol : 0.5, fwhmDuda = o.fwhmDuda !== undefined ? o.fwhmDuda : 0.35, eccDelta = o.eccDelta !== undefined ? o.eccDelta : 0.1;
-  var eccDuda = o.eccDuda !== undefined ? o.eccDuda : 0.07;
+  var eccDuda = o.eccDuda !== undefined ? o.eccDuda : 0.07, nubeDuda = o.nubeDuda !== undefined ? o.nubeDuda : 1.5;
   var nubeZ = o.nubeZ !== undefined ? o.nubeZ : 2.5;
   if (typeof ImageAnalysis === "undefined") throw new Error("ImageAnalysis no está disponible (PixInsight 1.9.6 o posterior)");
 
@@ -323,23 +325,31 @@ function seleccionarSubs(x, o) {
       else if (s.excentricidad > eMed + eccDuda) s.dudas.push("excentricidad " + s.excentricidad + ", +" + (s.excentricidad - eMed).toFixed(3) + " sobre la mediana");
       if (s.nube !== null && nSig > 0 && (s.nube - nMed) / nSig > nubeZ)
         s.motivos.push("extinción por nubes " + s.nube + " (z " + ((s.nube - nMed) / nSig).toFixed(1) + " > " + nubeZ + ")");
+      else if (s.nube !== null && nSig > 0 && (s.nube - nMed) / nSig > nubeDuda)
+        s.dudas.push("extinción por nubes " + s.nube + " (z " + ((s.nube - nMed) / nSig).toFixed(1) + ")");
       s.peso = wMax > 0 ? +(s.psf_signal_weight / wMax).toFixed(3) : null;
     });
     resumen.push({ grupo: grupos[g], n: S.length, fwhm_ref_px: +fRef.toFixed(3), fwhm_max_px: +fMax.toFixed(3),
                    excentricidad_max: +eMax.toFixed(3), rechazados: S.filter(function (s) { return s.motivos.length; }).length });
   }
   var rech = subs.filter(function (s) { return s.motivos.length; }), apr = subs.filter(function (s) { return !s.motivos.length; });
-  var r = { grupos: resumen, aprobados: apr.map(function (s) { return s.nombre; }),
-            aprobados_rutas: apr.map(function (s) { return s.fichero; }),   // para lanzarWBPP({ lights: ... })
+  // Resultado corto (el modelo lo recibe entero): la tabla completa sólo con { tabla: true } o en el CSV, y los
+  // aprobados como fichero de lista (una ruta por línea) que lanzarWBPP acepta en lights.
+  var dirOut = o.csv ? File.extractDrive(o.csv) + File.extractDirectory(o.csv) : File.systemTempDirectory;
+  var lista = o.lista || (dirOut + "/subs_aprobados.txt");
+  File.writeTextFile(lista, apr.map(function (s) { return s.fichero; }).join("\n"));
+  var r = { grupos: resumen, n_medidos: subs.length, n_aprobados: apr.length, lista_aprobados: lista,
             rechazados: rech.map(function (s) { return { sub: s.nombre, motivos: s.motivos }; }),
-            tabla: subs.map(function (s) { var t = {}; for (var k in s) if (k != "fichero" && k != "motivos" && k != "dudas") t[k] = s[k]; return t; }),
             no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
+  if (o.tabla) r.tabla = subs.map(function (s) { var t = {}; for (var k in s) if (k != "fichero" && k != "motivos" && k != "dudas") t[k] = s[k]; return t; });
+  // En el mismo script también vale r.aprobados_rutas (no sale en JSON.stringify).
+  Object.defineProperty(r, "aprobados_rutas", { value: apr.map(function (s) { return s.fichero; }), enumerable: false });
   if (apr.length < 0.5 * subs.length) r.no_cumple.push("Se rechaza más de la mitad de los subs (" + rech.length + " de " + subs.length + "): revisar los umbrales o la sesión.");
   var dudas = apr.filter(function (s) { return s.dudas.length; });
   if (dudas.length) {
     r.dudosos = dudas.map(function (s) { return { sub: s.nombre, motivo: s.dudas.join(" / ") }; });
     r.control.revisar_a_ojo.push(dudas.length + " subs aprobados pero dudosos (FWHM entre +" + Math.round(100 * fwhmDuda) + " y +" + Math.round(100 * fwhmTol) +
-                                 " %, o excentricidad entre +" + eccDuda + " y +" + eccDelta + " sobre la mediana; ver dudosos): el peso ya los rebaja; " +
+                                 " %, excentricidad entre +" + eccDuda + " y +" + eccDelta + " sobre la mediana, o nubes con z entre " + nubeDuda + " y " + nubeZ + "; ver dudosos): el peso ya los rebaja; " +
                                  "quitarlos sólo si sobran subs o el usuario lo prefiere.");
   }
   var conTrazos = subs.filter(function (s) { return s.trazos; }).map(function (s) { return s.nombre; });

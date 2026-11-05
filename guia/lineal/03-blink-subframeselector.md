@@ -22,7 +22,7 @@ Escala del sub = 206,265·píxel(µm)/focal(mm).
 
 **Criterio NOVA:** "descartar primero por pocas estrellas (< 20), excentricidad > 0,66, gradiente fuerte o cielo > 3× el de la sesión, y luego ordenar por `FWHM·(1 + excentricidad)` y quitar el ~10 % peor; son valores de ingeniería, no óptimos". No mezclar en un mismo ranking paneles, filtros o exposiciones distintas.
 
-**En una llamada (PixInsight 1.9.6+, ImageAnalysis)** (`herramientas/preproceso.js`): `seleccionarSubs(carpeta o lista, { csv })` mide los subs con ImageAnalysis (sin abrir ventanas, ~1 s por sub) y, dentro de cada grupo de carpeta, filtro y exposición, rechaza por FWHM > cuartil inferior + 50 %, excentricidad > mediana + 0,10 o extinción por nubes con z robusto > 2,5. Con FWHM entre +35 y +50 % o excentricidad entre +0,07 y +0,10 los aprueba, pero los lista en `dudosos` para que decida el usuario. En subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas: en M31 los subs de mejor FWHM tenían +0,08. Devuelve aprobados (`aprobados_rutas` para WBPP), rechazados con su motivo, pesos (PSF Signal Weight relativo) y los subs con trazos (sólo anotados). ImageAnalysis sustituye a SubframeSelector.
+**En una llamada (PixInsight 1.9.6+, ImageAnalysis)** (`herramientas/preproceso.js`): `seleccionarSubs(carpeta o lista, { csv })` mide los subs con ImageAnalysis (sin abrir ventanas, ~1 s por sub) y, dentro de cada grupo de carpeta, filtro y exposición, rechaza por FWHM > cuartil inferior + 50 %, excentricidad > mediana + 0,10 o extinción por nubes con z robusto > 2,5. Con FWHM entre +35 y +50 % , excentricidad entre +0,07 y +0,10 o nubes con z entre 1,5 y 2,5 los aprueba, pero los lista en `dudosos` para que decida el usuario. En subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas: en M31 los subs de mejor FWHM tenían +0,08. Devuelve el número de aprobados y `lista_aprobados` (fichero con una ruta por línea, para WBPP), rechazados con su motivo, pesos (PSF Signal Weight relativo) y los subs con trazos (sólo anotados). ImageAnalysis sustituye a SubframeSelector.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el nivel superior del script
@@ -34,6 +34,7 @@ Comprobado con subs crudos CFA (nov 2026):
 | Datos | Resultado |
 |---|---|
 | LDN 1235, 11-9 (16 subs, 8 descartados a mano en octubre) | Rechaza T0012–T0013 (FWHM), T0028 (nubes; en octubre, "−9 % de estrellas") y T0031 (excentricidad). T0014–T0016 y T0032 salen como dudosos. |
+| LDN 1235, 11-9 completa (27 subs) | Rechaza T0012–T0016 (FWHM); T0028–T0029 (nubes), T0031 (excentricidad) y 3 por FWHM salen como dudosos. Con más subs el cuartil inferior baja y la nube de T0028 pesa menos: el resultado depende del conjunto. |
 | LDN 1235, 19-9 (35 subs, todos integrados) | Ningún rechazo; 6 dudosos por FWHM (+36 a +49 %). |
 | M31, 7-9 (1 de cada 6, 25 subs; FWHM de 4,2 a 1,6 px a lo largo de la noche) | Rechaza los 4 primeros (FWHM) y 1 por nubes; 7 dudosos. Va en la línea del master "amplio" de la v6 (FWHM ≤ 6,1″). |
 | IC 1396, 13-9 (dual band 300 s y RGB 30 s) | Separa los dos grupos y no rechaza ninguno. |
