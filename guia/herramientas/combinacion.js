@@ -12,7 +12,8 @@
 //   más de un 10 % se avisa: entonces usarlo sólo para la señal difusa).
 // inyectarHa(rgb, ha): RGB y Hα lineales, alineados, sin estrellas y con el continuo ya restado (Paso 16) si es posible.
 //   LinearFit del Hα al canal R; máscara de nebulosa desde el Hα (estirado automático, clipLow 0,06, suavizada);
-//   R' = (1 − α·M)·R + α·M·Hα con α 0,4 en nebulosas y 0,25 en galaxias (opción alfa). G y B no cambian.
+//   Modo "suma" (por defecto): R' = R + α·M·max(0, Hα − R), α 0,6 nebulosas / 0,3 galaxias: añade sólo la emisión que el R no tiene.
+//   Modo "mezcla": R' = (1 − α·M)·R + α·M·Hα (α 0,4 / 0,25). G y B no cambian.
 //   Controles: dominante del cielo antes y después (medianas R/G/B en las celdas más oscuras: no debe enrojecer),
 //   % del campo bajo la máscara y cuánto cambia el R en la nebulosa.
 
@@ -221,7 +222,9 @@ function inyectarHa(rgb, ha, o) {
   if (vr.image.numberOfChannels < 3) throw new Error(vr.id + " no es RGB");
   if (vr.image.width != vh.image.width || vr.image.height != vh.image.height)
     throw new Error("Tamaños distintos: alinear y recortar antes (Paso 5, alinearMasters)");
-  var alfa = o.alfa !== undefined ? o.alfa : (o.tipo == "galaxia" ? 0.25 : 0.4), clip = o.clipLow !== undefined ? o.clipLow : 0.06;
+  var modo = o.modo || "suma";
+  var alfa = o.alfa !== undefined ? o.alfa : (modo == "mezcla" ? (o.tipo == "galaxia" ? 0.25 : 0.4) : (o.tipo == "galaxia" ? 0.3 : 0.6));
+  var clip = o.clipLow !== undefined ? o.clipLow : 0.06;
 
   cbNeeds();
   // Hα ajustado al R (LinearFit sobre una copia gris del R).
@@ -257,7 +260,13 @@ function inyectarHa(rgb, ha, o) {
   wO = cbCopy(vr, id, false);
   var P2 = new PixelMath;
   P2.useSingleExpression = false; P2.symbols = "a, m";
-  P2.expression = "a = " + alfa + "; m = " + mId + "; (1 - a*m)*$T + a*m*" + wH.mainView.id;
+  // modo "suma" (por defecto): sólo se añade el exceso de Hα sobre el R → más rojo donde hay emisión, sin tocar el resto.
+  // modo "mezcla": R' = (1−α·M)·R + α·M·Hα (la fórmula clásica); con un Hα ajustado por LinearFit global apagó el color
+  // de la nebulosa en IC 1396 (5 nov 2026), así que queda como opción.
+  if (modo == "mezcla")
+    P2.expression = "a = " + alfa + "; m = " + mId + "; (1 - a*m)*$T + a*m*" + wH.mainView.id;
+  else
+    P2.expression = "a = " + alfa + "; m = " + mId + "; $T + a*m*max(0, " + wH.mainView.id + " - " + wR.mainView.id + ")";
   P2.expression1 = "$T"; P2.expression2 = "$T"; P2.rescale = false; P2.truncate = true; P2.createNewImage = false;
   if (!P2.executeOn(wO.mainView)) throw new Error("PixelMath de la inyección falló");
 
@@ -267,22 +276,24 @@ function inyectarHa(rgb, ha, o) {
   var mim = wM.mainView.image, en = 0, tot = 0, row = new Float32Array(mim.width);
   for (var y = 0; y < mim.height; y += 4) { mim.getSamples(row, new Rect(0, y, mim.width, y + 1), 0); for (var x = 0; x < mim.width; x += 4) { ++tot; if (row[x] > 0.5) ++en; } }
   // Cuánto cambia el R donde la máscara pasa de 0,5.
-  var rIn = vr.image, rOut = wO.mainView.image, b0 = new Float32Array(rIn.width), b1 = new Float32Array(rIn.width), s0 = 0, s1 = 0;
+  var rIn = vr.image, rOut = wO.mainView.image, b0 = new Float32Array(rIn.width), b1 = new Float32Array(rIn.width), s0 = 0, s1 = 0, rels = [];
   for (var y = 0; y < mim.height; y += 4) {
     mim.getSamples(row, new Rect(0, y, mim.width, y + 1), 0);
     rIn.getSamples(b0, new Rect(0, y, rIn.width, y + 1), 0); rOut.getSamples(b1, new Rect(0, y, rIn.width, y + 1), 0);
-    for (var x = 0; x < mim.width; x += 4) if (row[x] > 0.5) { s0 += b0[x]; s1 += Math.abs(b1[x] - b0[x]); }
+    for (var x = 0; x < mim.width; x += 4) if (row[x] > 0.5) { s0 += b0[x]; s1 += Math.abs(b1[x] - b0[x]); if (b0[x] > 0) rels.push(Math.abs(b1[x] - b0[x]) / b0[x]); }
   }
-  var r = { vista: id, mascara: mId, alfa: alfa, clipLow: clip,
+  var r = { vista: id, mascara: mId, modo: modo, alfa: alfa, clipLow: clip,
             cielo_R_sobre_GB: { antes: +rel(sky0).toFixed(4), despues: +rel(sky1).toFixed(4) },
             bajo_mascara_pct: +(100 * en / tot).toFixed(1), cambio_R_nebulosa_pct: s0 > 0 ? +(100 * s1 / s0).toFixed(1) : null,
+            cambio_R_p95_pct: rels.length ? +(100 * rels.sort(function (p, q) { return p - q; })[Math.floor(0.95 * (rels.length - 1))]).toFixed(1) : null,
             no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
   wR.forceClose(); wH.forceClose();
   wM.show(); wO.show(); wO.bringToFront();   // el resultado delante, no la máscara
   var d = 100 * (r.cielo_R_sobre_GB.despues / r.cielo_R_sobre_GB.antes - 1);
-  r.control.medido.push("Cielo R/(G+B)/2: " + r.cielo_R_sobre_GB.antes + " → " + r.cielo_R_sobre_GB.despues + " (" + d.toFixed(1) + " %); máscara sobre el " + r.bajo_mascara_pct + " % del campo; el R cambia un " + r.cambio_R_nebulosa_pct + " % de media en la nebulosa (LinearFit iguala niveles: aporta estructura, no más rojo).");
-  if (r.cambio_R_nebulosa_pct !== null && r.cambio_R_nebulosa_pct < 1)
-    r.control.revisar_a_ojo.push("El Hα cambia el R menos de un 1 % en la nebulosa (alfa " + alfa + "): el R ya se parece mucho al Hα, lo normal si la RGB es de una OSC con dual band o el Hα tiene poca señal propia. Subir alfa apenas cambiará esto; comparar a ojo si compensa.");
+  r.control.medido.push("Cielo R/(G+B)/2: " + r.cielo_R_sobre_GB.antes + " → " + r.cielo_R_sobre_GB.despues + " (" + d.toFixed(1) + " %); máscara sobre el " + r.bajo_mascara_pct + " % del campo; el R cambia un " + r.cambio_R_nebulosa_pct + " % de media en la nebulosa (modo " + modo + ", alfa " + alfa + ").");
+  r.control.medido.push("En el 5 % de la nebulosa donde más cambia, el R sube un " + r.cambio_R_p95_pct + " % (la emisión que el R no tenía).");
+  if (r.cambio_R_p95_pct !== null && r.cambio_R_p95_pct < 1)
+    r.control.revisar_a_ojo.push("El Hα cambia el R menos de un 1 % en la nebulosa (alfa " + alfa + "): aporta poco; comparar a ojo si compensa.");
   if (d > 3) r.no_cumple.push("El cielo enrojece un " + d.toFixed(1) + " %: subir clipLow o bajar alfa (sin máscara fina el fondo se vuelve rojo).");
   if (r.bajo_mascara_pct > 80) r.no_cumple.push("La máscara cubre el " + r.bajo_mascara_pct + " % del campo: subir clipLow para que no entre el cielo.");
   r.control.revisar_a_ojo.push("Comparar con la RGB sola al 100 % en una zona de Hα y en el fondo: sin textura distinta entre nebulosa y banda ancha, sin bordes de máscara, sin estrellas rojas.");

@@ -59,9 +59,10 @@ Comprobado con IC 1396: con RGB + Hα + OIII inyecta el Hα y deja el OIII; con 
   - IC 1396 Hα, 24 frente a 122 subs: pesos 0,05 / 0,95 y ruido −2,4 %, lo que predice 1/σ² con esa diferencia de ruido.
 - `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, clipLow })`: RGB y Hα lineales, sin estrellas y alineados.
   - LinearFit del Hα al R y máscara de nebulosa referida al cielo (celdas más oscuras), no a la mediana: en nebulosas que llenan el campo, la mediana ya es nebulosa.
-  - Mezcla `R' = (1 − α·M)·R + α·M·Hα`, con α 0,4 por defecto en nebulosas y 0,25 en galaxias.
-  - Mide la dominante del cielo antes y después (aviso si enrojece más de un 3 %), el % del campo bajo la máscara y cuánto cambia el R en la nebulosa.
-  - IC 1396 con dual band: máscara sobre el 60 % del campo, cielo +0,6 % y el R cambia un 0,6 %. Con dual band el R ya es casi Hα, así que inyectarlo aporta poco; con Hα de una mono y RGB sin filtro aporta más.
+  - Por defecto, **modo "suma"**: `R' = R + α·M·max(0, Hα − R)`, con α 0,6 en nebulosas y 0,3 en galaxias. Añade sólo la emisión que el R no tiene.
+  - La fórmula clásica `R' = (1 − α·M)·R + α·M·Hα` queda como `modo: "mezcla"`. Con el Hα ajustado por LinearFit global, en IC 1396 **apagó el rojo de la nebulosa**, que quedó grisácea: el Hα ajustado es más bajo que el R en buena parte de la emisión.
+  - Mide la dominante del cielo antes y después (aviso si enrojece más de un 3 %), el % del campo bajo la máscara y cuánto sube el R donde más cambia (percentil 95).
+  - IC 1396 (Hα del dual band con la RGB sin filtro): máscara sobre el 60 % del campo, cielo +0,8 %; en el 5 % de la nebulosa donde más cambia, el R sube un 1,6 % en lineal, visible tras estirar.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/combinacion.js"));   // en el nivel superior del script
