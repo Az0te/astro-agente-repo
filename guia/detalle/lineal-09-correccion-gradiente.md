@@ -6,13 +6,13 @@ Material de apoyo de la ficha: medidas, funcionamiento de GraXpert, opciones de 
 
 **Por qué.** El gradiente es un offset de gran escala que no pertenece al objeto: contamina la calibración de color (SPCC mide el fondo), aplasta el contraste del polvo y del IFN y aparece como un velo al estirar. Y se corrige **en lineal y por canal**, antes de combinar: "Si los canales tienen gradientes distintos (otras noches/filtros/cámaras), corregir por canal antes de combinar". Un gradiente que llega al estirado ya no se puede separar de la señal débil.
 
-**Método predeterminado.** **GraXpert sample_free, escala 10, por sustracción**, sobre el master lineal recortado (elegido con la prueba medida de la tabla de abajo). Desde el 31 oct 2026 se ejecuta con el **proceso GraXpert de PixInsight**, que da el mismo resultado que `herramientas/graxpert.js` sin el ejecutable aparte (comparativa abajo); `graxpert.js` queda para los métodos que el proceso no ofrece (RBF, Kriging, Splines con muestras propias) y para el denoise.
+**Sin método predeterminado** (decisión del usuario, 5 nov 2026): se comparan los candidatos en cada imagen y se aplica el que mejor mida. GraXpert sample_free escala 10 por sustracción fue el mejor en la prueba de la tabla de abajo, pero en M31 v6 ganó un polinomio de grado 2. El GraXpert se ejecuta con el **proceso GraXpert de PixInsight**, que da el mismo resultado que `herramientas/graxpert.js` sin el ejecutable aparte (comparativa abajo); `graxpert.js` queda para los métodos que el proceso no ofrece (RBF, Kriging, Splines con muestras propias) y para el denoise.
 
 **Cadena de procesos alrededor del gradiente**
 
 | Caso | Cadena documentada |
 |---|---|
-| GraXpert (predeterminado) | Recorte → `blindSolve` → **proceso GraXpert, sample_free 10** (conserva la astrometría) → BXT Correct Only → comprobar WCS → SPCC |
+| GraXpert | Recorte → `blindSolve` → **proceso GraXpert, sample_free 10** (conserva la astrometría) → BXT Correct Only → comprobar WCS → SPCC |
 | MGC | RGB → **SPFC_RGB** → **MGC** (MARS) → SPCC |
 | Banda estrecha sin MGC | "polinomio suave propio sobre rejilla de medianas con rechazo sigma (grado 2 en OIII; en Hα sólo plano grado 1 ajustado en bordes, para no comerse emisión difusa real)" |
 

@@ -4,11 +4,16 @@
 
 El gradiente es un offset de gran escala que no es del objeto: contamina SPCC, aplasta el polvo y el IFN y sale como velo al estirar. Se corrige **en lineal, por canal si los canales vienen de noches, filtros o cámaras distintos**, y antes de combinar y de BXT Correct Only.
 
-**Método por defecto: proceso GraXpert, sample_free escala 10, sustracción**, sobre el master lineal recortado. Fue el que menos objeto copió en el modelo en M31, LDN 1235, IC 1396 e IC 63. Crea `GraXpert_sample_free_background_extraction` (corregida, conserva la astrometría) y `GraXpert_background` (modelo).
+**Sin método fijo: se comparan siempre los candidatos y se aplica el que mejor funcione en esa imagen**: el que quita el gradiente copiando menos el objeto en su modelo (`gradienteCandidatos`, abajo). Ningún método gana siempre:
+- GraXpert sample_free escala 10 copió poco objeto en LDN 1235, IC 1396 e IC 63.
+- En M31 v6 ganó un polinomio de grado 2: GraXpert se comía el 8,5 % de la galaxia.
+- En polvo e IFN, MGC se comió el 75 % del contraste.
+
+El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida, conserva la astrometría) y `GraXpert_background` (modelo).
 
 | Caso | Cadena |
 |---|---|
-| Por defecto | Recorte → `blindSolve` → GraXpert sample_free 10 → BXT Correct Only → comprobar WCS → SPCC |
+| GraXpert | Recorte → `blindSolve` → GraXpert sample_free 10 → BXT Correct Only → comprobar WCS → SPCC |
 | MGC | Recorte → `blindSolve` → `pxSPFC` → `pxMGC` (base MARS del perfil) → SPCC |
 | Nebulosas oscuras, IFN, polvo extenso | Plano robusto grado 1 o muestras manuales; desconfiar de MGC y de la IA |
 | Banda estrecha sin MGC | Polinomio sobre rejilla de medianas con rechazo sigma: grado 2 en OIII; en Hα sólo plano grado 1 en los bordes |
