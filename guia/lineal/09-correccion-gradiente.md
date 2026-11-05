@@ -68,7 +68,8 @@ En MGC, si la nebulosa aparece en el modelo, subir la escala; si aparece en nega
 
 **MGC en PixInsight 1.9.6+** (medido en LDN 1235 binada ×2, nov 2026):
 - `edgeCorrection` (corrección de bordes): `gradienteCandidatos` prueba cada escala con y sin ella (`GC_MGC2048_borde`). En LDN 1235 dejó los bordes a ±1·10⁻⁵ del centro (sin ella, hasta −5·10⁻⁵) y bajó el gradiente que queda del 83 % al 59 %, pero el modelo copia algo más el polvo (corr −0,13 → +0,16). Elegir con las medidas, y mirar el modelo en nebulosas oscuras.
-- `autoScaleFactors`: sin cambio medible tras SPFC (los factores ya salen ≈ 1). Se deja apagado.
+- `autoScaleFactors`: ajusta a la imagen el factor de cada canal de MARS (LDN 1235: R 0,92, G 0,61, B 0,64), pero el modelo cambió sólo un 2–6 %. Se deja apagado; `gradienteCandidatos` devuelve en `ajuste_mars` el factor y la correlación con MARS de cada canal (correlación baja, < 0,3 = MARS se parece poco a la imagen: desconfiar de MGC).
+- Sin la opción `mars`, `pxMGC` y `gradienteCandidatos` usan la base MARS configurada en las preferencias de MGC (comando de servidor `set-default-database-files`).
 - Píxeles a 0 (bordes negros del registro): MGC los trata como sin datos. Siguen a 0 y la franja de al lado queda igual que si se hubiera recortado. Aun así, recortar primero (Paso 5).
 - En `pxMGC`: opciones `edgeCorrection`, `edgeAggressiveness` (2) y `autoScaleFactors`; se ignoran en versiones sin ellas.
 

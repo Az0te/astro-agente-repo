@@ -98,16 +98,23 @@ function pxSPFC(o) {
   return P;
 }
 
-// MultiscaleGradientCorrection con base MARS. Opciones: mars (ruta del .xmars, obligatoria), gradientScale (1024),
+// MultiscaleGradientCorrection con base MARS. Opciones: mars (ruta del .xmars; en 1.9.6+, sin ella se usan las
+// bases configuradas en MGC), gradientScale (1024),
 // structureSeparation (3), modelSmoothness (1.0), showGradientModel (true); en 1.9.6+ también edgeCorrection (false),
 // edgeAggressiveness (2) y autoScaleFactors (false).
 function pxMGC(o) {
   o = o || {};
-  if (!o.mars) throw new Error("pxMGC: falta la ruta de la base MARS (opción mars; está en el perfil)");
-  if (!File.exists(o.mars)) throw new Error("No existe la base MARS: " + o.mars);
   var P = new MultiscaleGradientCorrection;
   P.useMARSDatabase = true;
-  P.marsDatabaseFiles = [[true, o.mars]];
+  if (o.mars) {
+    if (!File.exists(o.mars)) throw new Error("No existe la base MARS: " + o.mars);
+    P.marsDatabaseFiles = [[true, o.mars]];
+  } else {
+    // Sin ruta: las bases configuradas en las preferencias de MGC (comando de servidor de PixInsight 1.9.6+).
+    if (P.command !== undefined) { P.command = "set-default-database-files"; P.executeGlobal(); P.command = ""; }
+    if (!P.marsDatabaseFiles || P.marsDatabaseFiles.length == 0)
+      throw new Error("pxMGC: falta la base MARS (opción mars del perfil, o configurarla en MGC)");
+  }
   P.gradientScale = pxDefault(o, "gradientScale", 1024);
   P.structureSeparation = pxDefault(o, "structureSeparation", 3);
   P.modelSmoothness = pxDefault(o, "modelSmoothness", 1.0);

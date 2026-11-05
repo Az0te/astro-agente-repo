@@ -6,7 +6,7 @@
 //     graxpert: [10, 8],                                   // escalas sample_free (sustracción)
 //     mgc: [2048],                                         // escalas de MGC; [] para no probar MGC
 //     spfc: { qe: "...", gray: "..." },                    // opciones de pxSPFC (perfil)
-//     mars: "<ruta .xmars del perfil>",                    // obligatoria si hay escalas de MGC
+//     mars: "<ruta .xmars del perfil>",                    // opcional en 1.9.6+: sin ella, la base configurada en MGC
 //     mgcOpts: { structureSeparation: 2, modelSmoothness: 2.5 },
 //     mgcBorde: true,                                      // 1.9.6+: cada escala también con edgeCorrection (false = no)
 //     dossier: "C:/ruta/dossier.json"                      // opcional: escribe el dossier de PiCopilot
@@ -151,7 +151,6 @@ function gradienteCandidatos(viewId, o) {
     var g = mgcRuns[j].g, borde = mgcRuns[j].borde;
     try {
       if (!hasWCS) throw new Error("la vista no tiene solución astrométrica (Paso 8: blindSolve)");
-      if (!o.mars) throw new Error("falta la ruta de la base MARS (opción mars, está en el perfil)");
       var id = grDuplicate(viewId, "GC_MGC" + g + (borde ? "_borde" : ""));
       var v = View.viewById(id);
       if (!pxSPFC(o.spfc || {}).executeOn(v)) throw new Error("SPFC devolvió false");
@@ -159,13 +158,18 @@ function gradienteCandidatos(viewId, o) {
       if (o.mgcOpts) for (var key in o.mgcOpts) mo[key] = o.mgcOpts[key];
       if (borde) mo.edgeCorrection = true;
       before = grIds();
-      if (!pxMGC(mo).executeOn(v)) throw new Error("MGC devolvió false");
+      var PM = pxMGC(mo);
+      if (!PM.executeOn(v)) throw new Error("MGC devolvió false");
+      var ajusteMARS = [];   // por canal: [canal, factor de escala, correlación con MARS] (1.9.6+)
+      try { for (var cd = 0; cd < PM.channelData.length; ++cd) { var rw = PM.channelData[cd];
+        ajusteMARS.push([rw[0], +(+rw[5]).toFixed(3), +(+rw[6]).toFixed(3)]); } } catch (eCD) { }
       var nm = grNew(before), mmod = null;
       for (var q = 0; q < nm.length; ++q) if (nm[q].indexOf("gradient_model") >= 0 || nm[q].indexOf("model") >= 0) mmod = nm[q];
       if (!mmod) throw new Error("MGC no creó el modelo de gradiente");
       mmod = grRename(mmod, id + "_modelo");
       r.candidatos.push({ vista: id, modelo: mmod, metodo: "MGC", parametros: "SPFC + MGC gradientScale " + g + (borde ? ", corrección de bordes" : ""),
-                          metricas: grMeasure(base, mmod, id, range0), notas: "No neutraliza el color del fondo (GraXpert sí)." });
+                          metricas: grMeasure(base, mmod, id, range0), ajuste_mars: ajusteMARS,
+                          notas: "No neutraliza el color del fondo (GraXpert sí)." });
     } catch (e) {
       r.errores.push("MGC escala " + g + (borde ? " con bordes" : "") + ": " + e);
     }
