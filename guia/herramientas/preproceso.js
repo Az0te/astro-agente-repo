@@ -300,8 +300,13 @@ function inventario(carpeta, o) {
                                                (f.gain === null || h0.gain === null || f.gain == h0.gain); });
     var flatsNoche = flats.filter(function (f) { return f.noche == h0.noche || /master/.test(f.clase); });
     g.flats = flatsNoche.length;
+    // Flats de esa noche con otro filtro (o sin FILTER): se dice cuáles, para no dejar que el modelo adivine el motivo.
+    var otrosNoche = H.filter(function (f) { return /flat/.test(f.clase) && f.noche == h0.noche && f.filtro != h0.filtro; });
+    var notaNoche = otrosNoche.length ? " (esa noche hay " + otrosNoche.length + " flats con filtro '" +
+        ppUnique(otrosNoche, function (f) { return f.filtro || "sin FILTER"; }).join("', '") + "' y telescopio '" +
+        ppUnique(otrosNoche, function (f) { return f.TELESCOP || "?"; }).join("', '") + "'; si eran de este filtro, usar aliasFiltros)" : "";
     if (flatsNoche.length == 0)
-      r.no_cumple.push("Lights " + g.filtro + " " + h0.exp + " s del " + h0.noche + " (" + G.length + "): no hay flats de ese filtro de esa noche" +
+      r.no_cumple.push("Lights " + g.filtro + " " + h0.exp + " s del " + h0.noche + " (" + G.length + "): no hay flats de ese filtro de esa noche" + notaNoche +
                        (flats.length ? " (sí de " + ppUnique(flats, function (f) { return f.noche; }).join(", ") + ": sólo valen si no se movió nada del tren óptico" +
                         (function () {   // ángulo del rotador de los lights frente al de esos flats
                           var rl = parseFloat(h0.ROTATANG || h0.ROTATOR), rf = ppUnique(flats.filter(function (f) { return isFinite(parseFloat(f.ROTATANG || f.ROTATOR)); }),
