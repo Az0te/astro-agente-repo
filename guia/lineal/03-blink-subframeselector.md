@@ -22,14 +22,24 @@ Escala del sub = 206,265·píxel(µm)/focal(mm).
 
 **Criterio NOVA:** "descartar primero por pocas estrellas (< 20), excentricidad > 0,66, gradiente fuerte o cielo > 3× el de la sesión, y luego ordenar por `FWHM·(1 + excentricidad)` y quitar el ~10 % peor; son valores de ingeniería, no óptimos". No mezclar en un mismo ranking paneles, filtros o exposiciones distintas.
 
-**En una llamada (PixInsight 1.9.6+, ImageAnalysis)** (`herramientas/preproceso.js`): `seleccionarSubs(carpeta o lista, { csv })` mide los subs con ImageAnalysis (sin abrir ventanas, ~1 s por sub) y, dentro de cada grupo de carpeta, filtro y exposición, rechaza por FWHM > cuartil inferior + 50 %, excentricidad > mediana + 0,07 o extinción por nubes con z robusto > 2,5. Entre +35 y +50 % de FWHM los aprueba pero los lista en `dudosos` para que decida el usuario. Devuelve aprobados (`aprobados_rutas` para WBPP), rechazados con su motivo, pesos (PSF Signal Weight relativo) y los subs con trazos (sólo anotados). ImageAnalysis sustituye a SubframeSelector.
+**En una llamada (PixInsight 1.9.6+, ImageAnalysis)** (`herramientas/preproceso.js`): `seleccionarSubs(carpeta o lista, { csv })` mide los subs con ImageAnalysis (sin abrir ventanas, ~1 s por sub) y, dentro de cada grupo de carpeta, filtro y exposición, rechaza por FWHM > cuartil inferior + 50 %, excentricidad > mediana + 0,10 o extinción por nubes con z robusto > 2,5. Con FWHM entre +35 y +50 % o excentricidad entre +0,07 y +0,10 los aprueba, pero los lista en `dudosos` para que decida el usuario. En subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas: en M31 los subs de mejor FWHM tenían +0,08. Devuelve aprobados (`aprobados_rutas` para WBPP), rechazados con su motivo, pesos (PSF Signal Weight relativo) y los subs con trazos (sólo anotados). ImageAnalysis sustituye a SubframeSelector.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el nivel superior del script
 JSON.stringify(seleccionarSubs("<carpeta LIGHT de una noche>", { csv: "<carpeta>/seleccion.csv" }));
 ```
 
-Comprobado con LDN 1235 (subs crudos CFA, nov 2026). En la noche del 11-9 coincide con lo descartado a mano en octubre: rechaza T0012–T0013 por FWHM, T0028 por nubes (en octubre, "−9 % de estrellas") y T0031–T0032 por excentricidad. T0014–T0016 salen como dudosos. En la del 19-9, donde se integraron todos, no rechaza ninguno y marca 6 como dudosos (FWHM +36 a +49 %). Los umbrales son de partida: no sustituyen al Blink de halos y nubes finas.
+Comprobado con subs crudos CFA (nov 2026):
+
+| Datos | Resultado |
+|---|---|
+| LDN 1235, 11-9 (16 subs, 8 descartados a mano en octubre) | Rechaza T0012–T0013 (FWHM), T0028 (nubes; en octubre, "−9 % de estrellas") y T0031 (excentricidad). T0014–T0016 y T0032 salen como dudosos. |
+| LDN 1235, 19-9 (35 subs, todos integrados) | Ningún rechazo; 6 dudosos por FWHM (+36 a +49 %). |
+| M31, 7-9 (1 de cada 6, 25 subs; FWHM de 4,2 a 1,6 px a lo largo de la noche) | Rechaza los 4 primeros (FWHM) y 1 por nubes; 7 dudosos. Va en la línea del master "amplio" de la v6 (FWHM ≤ 6,1″). |
+| IC 1396, 13-9 (dual band 300 s y RGB 30 s) | Separa los dos grupos y no rechaza ninguno. |
+| IC 63, 10-10 (120 s y 30 s) | 1 rechazado por nubes y 1 dudoso. |
+
+Los umbrales son de partida: no sustituyen al Blink de halos y nubes finas.
 
 **Índice de halo por sub** (para localizar los subs que forman halos). Receta probada en IC63 v4, γ Cas, 379 subs RGB en ~3 min:
 

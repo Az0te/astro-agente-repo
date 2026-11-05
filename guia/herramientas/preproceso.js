@@ -18,7 +18,9 @@
 //     +fwhmDuda (0,35) y +fwhmTol se aprueban pero se listan en "dudosos" para que decida el usuario.
 //     Se compara con el cuartil inferior y no con la mediana porque en una noche que mejora (o empeora) poco a poco
 //     la mitad de los subs pueden ser malos y la mediana se va con ellos.
-//   - Excentricidad > mediana del grupo + eccDelta (0,07): seguimiento o viento.
+//   - Excentricidad > mediana del grupo + eccDelta (0,1): seguimiento o viento. Entre +eccDuda (0,07) y +eccDelta,
+//     dudoso: en subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas (M31 7-9: los subs de
+//     mejor FWHM tenían +0,08).
 //   - CloudExtinction con z robusto > nubeZ (2,5): pérdida de transparencia (nubes, rocío).
 // Devuelve la tabla, aprobados, rechazados con motivo y pesos (PSF Signal Weight / máximo del grupo). Los trazos
 // (satélites, aviones) sólo se anotan: los quita el rechazo de píxeles de la integración.
@@ -170,10 +172,14 @@ function revisarCalibracion(o) {
         else r.darks_de_flats.push({ exposicion_flat_s: fExps[e], darks: fd.length, bias: B.length });
       }
 
-      // Nivel de los flats: unos pocos ficheros (por defecto 3).
-      var nf = Math.min(o.flatsMedidos || 3, fSen.length);
+      // Nivel de los flats: unos pocos ficheros (por defecto 3) de los del mismo filtro, si los hay; cada uno una vez.
+      var fMed = fFil.length ? fFil : fSen;
+      var nf = Math.min(o.flatsMedidos || 3, fMed.length);
+      r._medidos = r._medidos || [];
       for (var i = 0; i < nf; ++i) {
-        var fh = fSen[Math.floor(i * (fSen.length - 1) / Math.max(1, nf - 1))];
+        var fh = fMed[Math.floor(i * (fMed.length - 1) / Math.max(1, nf - 1))];
+        if (r._medidos.indexOf(fh.fichero) >= 0) continue;
+        r._medidos.push(fh.fichero);
         var lv = ppFlatLevel(fh.fichero, fh.BAYERPAT);
         r.control.medido.push("flat " + File.extractName(fh.fichero) + ": " + JSON.stringify(lv));
         for (var c in lv) {
@@ -194,6 +200,7 @@ function revisarCalibracion(o) {
   if (keys.length > 1)
     r.control.revisar_a_ojo.push("Hay " + keys.length + " grupos de lights distintos: integrarlos por separado o comprobar que WBPP los agrupa bien.");
   r.no_cumple = ppUnique(r.no_cumple, function (x) { return x; });
+  delete r._medidos;
   return r;
 }
 
@@ -269,7 +276,8 @@ function seleccionarSubs(x, o) {
   o = o || {};
   var fs = ppList(x);
   if (fs.length == 0) throw new Error("No hay subs en " + x);
-  var fwhmTol = o.fwhmTol !== undefined ? o.fwhmTol : 0.5, fwhmDuda = o.fwhmDuda !== undefined ? o.fwhmDuda : 0.35, eccDelta = o.eccDelta !== undefined ? o.eccDelta : 0.07;
+  var fwhmTol = o.fwhmTol !== undefined ? o.fwhmTol : 0.5, fwhmDuda = o.fwhmDuda !== undefined ? o.fwhmDuda : 0.35, eccDelta = o.eccDelta !== undefined ? o.eccDelta : 0.1;
+  var eccDuda = o.eccDuda !== undefined ? o.eccDuda : 0.07;
   var nubeZ = o.nubeZ !== undefined ? o.nubeZ : 2.5;
   if (typeof ImageAnalysis === "undefined") throw new Error("ImageAnalysis no está disponible (PixInsight 1.9.6 o posterior)");
 
@@ -291,25 +299,26 @@ function seleccionarSubs(x, o) {
     return { fichero: p, nombre: File.extractName(p), grupo: [File.extractDirectory(p), h.filtro || "", h.exp || ""].join(" | "),
              estrellas: row[iS], fwhm_px: +row[iF].toFixed(3), excentricidad: +row[iE].toFixed(3), mediana: row[iM], ruido: row[iN],
              psf_signal_weight: row[iW], nube: (flags & 0x40) ? +row[iCl].toFixed(4) : null, trazos: (flags & 0x08) ? row[iT] : null,
-             motivos: [] };
+             motivos: [], dudas: [] };
   });
   if (subs.length < fs.length) {
     var med = subs.map(function (s) { return s.fichero; });
-    fs.forEach(function (f) { if (med.indexOf(f) < 0) subs.push({ fichero: f, nombre: File.extractName(f), grupo: "", motivos: ["no se pudo medir"] }); });
+    fs.forEach(function (f) { if (med.indexOf(f) < 0) subs.push({ fichero: f, nombre: File.extractName(f), grupo: "", motivos: ["no se pudo medir"], dudas: [] }); });
   }
 
   var grupos = ppUnique(subs.filter(function (s) { return s.grupo; }), function (s) { return s.grupo; }), resumen = [];
   for (var g = 0; g < grupos.length; ++g) {
     var S = subs.filter(function (s) { return s.grupo == grupos[g]; });
     var fw = S.map(function (s) { return s.fwhm_px; }), ec = S.map(function (s) { return s.excentricidad; });
-    var fRef = ppQuantile(fw, 0.25), fMax = fRef * (1 + fwhmTol), eMax = ppMed(ec) + eccDelta;
+    var fRef = ppQuantile(fw, 0.25), fMax = fRef * (1 + fwhmTol), eMed = ppMed(ec), eMax = eMed + eccDelta;
     var nu = S.filter(function (s) { return s.nube !== null; }).map(function (s) { return s.nube; });
     var nMed = ppMed(nu), nSig = 1.4826 * ppMed(nu.map(function (v) { return Math.abs(v - nMed); }));
     var wMax = Math.max.apply(null, S.map(function (s) { return s.psf_signal_weight; }));
     S.forEach(function (s) {
       if (s.fwhm_px > fMax) s.motivos.push("FWHM " + s.fwhm_px + " px > " + fMax.toFixed(2) + " (cuartil inferior " + fRef.toFixed(2) + " + " + Math.round(100 * fwhmTol) + " %)");
-      else if (s.fwhm_px > fRef * (1 + fwhmDuda)) s.duda = "FWHM " + s.fwhm_px + " px, " + Math.round(100 * (s.fwhm_px / fRef - 1)) + " % sobre el cuartil inferior";
+      else if (s.fwhm_px > fRef * (1 + fwhmDuda)) s.dudas.push("FWHM " + s.fwhm_px + " px, " + Math.round(100 * (s.fwhm_px / fRef - 1)) + " % sobre el cuartil inferior");
       if (s.excentricidad > eMax) s.motivos.push("excentricidad " + s.excentricidad + " > " + eMax.toFixed(3) + " (mediana + " + eccDelta + ")");
+      else if (s.excentricidad > eMed + eccDuda) s.dudas.push("excentricidad " + s.excentricidad + ", +" + (s.excentricidad - eMed).toFixed(3) + " sobre la mediana");
       if (s.nube !== null && nSig > 0 && (s.nube - nMed) / nSig > nubeZ)
         s.motivos.push("extinción por nubes " + s.nube + " (z " + ((s.nube - nMed) / nSig).toFixed(1) + " > " + nubeZ + ")");
       s.peso = wMax > 0 ? +(s.psf_signal_weight / wMax).toFixed(3) : null;
@@ -321,14 +330,15 @@ function seleccionarSubs(x, o) {
   var r = { grupos: resumen, aprobados: apr.map(function (s) { return s.nombre; }),
             aprobados_rutas: apr.map(function (s) { return s.fichero; }),   // para lanzarWBPP({ lights: ... })
             rechazados: rech.map(function (s) { return { sub: s.nombre, motivos: s.motivos }; }),
-            tabla: subs.map(function (s) { var t = {}; for (var k in s) if (k != "fichero" && k != "motivos") t[k] = s[k]; return t; }),
+            tabla: subs.map(function (s) { var t = {}; for (var k in s) if (k != "fichero" && k != "motivos" && k != "dudas") t[k] = s[k]; return t; }),
             no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
   if (apr.length < 0.5 * subs.length) r.no_cumple.push("Se rechaza más de la mitad de los subs (" + rech.length + " de " + subs.length + "): revisar los umbrales o la sesión.");
-  var dudas = apr.filter(function (s) { return s.duda; });
+  var dudas = apr.filter(function (s) { return s.dudas.length; });
   if (dudas.length) {
-    r.dudosos = dudas.map(function (s) { return { sub: s.nombre, motivo: s.duda }; });
-    r.control.revisar_a_ojo.push(dudas.length + " subs aprobados con FWHM entre +" + Math.round(100 * fwhmDuda) + " y +" + Math.round(100 * fwhmTol) +
-                                 " % (ver dudosos): el peso ya los rebaja; quitarlos sólo si sobran subs o el usuario lo prefiere.");
+    r.dudosos = dudas.map(function (s) { return { sub: s.nombre, motivo: s.dudas.join(" / ") }; });
+    r.control.revisar_a_ojo.push(dudas.length + " subs aprobados pero dudosos (FWHM entre +" + Math.round(100 * fwhmDuda) + " y +" + Math.round(100 * fwhmTol) +
+                                 " %, o excentricidad entre +" + eccDuda + " y +" + eccDelta + " sobre la mediana; ver dudosos): el peso ya los rebaja; " +
+                                 "quitarlos sólo si sobran subs o el usuario lo prefiere.");
   }
   var conTrazos = subs.filter(function (s) { return s.trazos; }).map(function (s) { return s.nombre; });
   if (conTrazos.length) r.control.revisar_a_ojo.push("Trazos (satélites o aviones) en " + conTrazos.join(", ") + ": no se rechazan; los quita el rechazo de la integración.");
