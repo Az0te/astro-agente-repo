@@ -78,6 +78,105 @@ function cbSky(im) {
   return out;
 }
 
+// Clase de un master por su filtro (FILTER o nombre) y canales: L, R, G, B, Ha, OIII, SII, Hb o RGB (color).
+function cbClase(w, path) {
+  if (w.mainView.image.numberOfChannels >= 3) return "RGB";
+  var f = "", k = w.keywords;
+  for (var i = 0; i < k.length; ++i) if (k[i].name == "FILTER") f = k[i].strippedValue;
+  var t = (f + " " + File.extractName(path || w.mainView.id)).toUpperCase().replace(/[^A-Z0-9]+/g, " ");
+  if (/\b(HA|H ALPHA|HALPHA|H)\b/.test(t) || /\bHA\d/.test(t)) return "Ha";
+  if (/\b(OIII|O3|OXY)\b/.test(t)) return "OIII";
+  if (/\b(SII|S2)\b/.test(t)) return "SII";
+  if (/\b(HB|HBETA|H BETA)\b/.test(t)) return "Hb";
+  if (/\b(L|LUM|LUMINANCE|LUMINANCIA)\b/.test(t)) return "L";
+  if (/\b(R|RED|ROJO)\b/.test(t)) return "R";
+  if (/\b(G|GREEN|VERDE)\b/.test(t)) return "G";
+  if (/\b(B|BLUE|AZUL)\b/.test(t)) return "B";
+  return "?";
+}
+
+// Paso 10 en una llamada: carpeta o lista de masters alineados (Paso 5), hasta ~8 (LRGB = 4; SHO + RGB = 4–6).
+// Clasifica cada uno y hace lo que toca en lineal:
+//   - dos masters de la misma clase → combinarMismoCanal (pesos 1/σ²);
+//   - R, G y B mono → ChannelCombination en una RGB;
+//   - RGB (OSC o la de R,G,B) + Hα → inyectarHa (mejor si son starless y el Hα ya sin continuo, Paso 16);
+//   - L, y OIII/SII/Hβ sin RGB → se dejan abiertos: LRGB y paletas se montan en el Paso 2 no lineal.
+// Opciones: tipo ("nebulosa" | "galaxia"), alfa, inyectar (false para no meter el Hα), clases ({ "fichero": "Ha" } si
+// el filtro no se reconoce). Devuelve las clases, lo hecho, las vistas abiertas y no_cumple.
+function combinarMasters(lista, o) {
+  o = o || {};
+  var files = [];
+  (lista instanceof Array ? lista : [lista]).forEach(function (x) {
+    var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
+    if (File.directoryExists(p))
+      files = files.concat((File.searchDirectory ? File.searchDirectory(p + "/*.xisf", false) : searchDirectory(p + "/*.xisf", false))
+        .filter(function (f) { return !/mask|mascara|rejection|drizzle_weights|LN_Reference/i.test(File.extractName(f)); }).sort());
+    else files.push(p);
+  });
+  if (files.length < 2) throw new Error("Hacen falta al menos dos masters (o una carpeta con ellos) para combinar");
+  if (files.length > 8) throw new Error("Demasiados masters (" + files.length + "): pasa sólo los que se combinan (LRGB, Hα/OIII/SII con RGB...)");
+  var r = { masters: [], hecho: [], vistas: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } }, por = {}, W = 0, H = 0;
+  files.forEach(function (f) {
+    var abierta = null, ws = ImageWindow.windows;
+    for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == f) abierta = ws[i];
+    var w = abierta || ImageWindow.open(f)[0];
+    var cl = (o.clases && (o.clases[f] || o.clases[File.extractName(f)])) || cbClase(w, f);
+    if (!W) { W = w.mainView.image.width; H = w.mainView.image.height; }
+    if (w.mainView.image.width != W || w.mainView.image.height != H)
+      throw new Error("Tamaños distintos (" + File.extractName(f) + "): alinear y recortar antes (Paso 5, alinearMasters)");
+    var id = cbNewId(cl == "?" ? "M_" + File.extractName(f).replace(/[^A-Za-z0-9_]/g, "_").substring(0, 40) : cl);
+    if (!abierta) w.mainView.id = id;
+    w.show();
+    (por[cl] = por[cl] || []).push(w.mainView.id);
+    r.masters.push({ fichero: f, clase: cl, vista: w.mainView.id });
+  });
+  if (por["?"]) r.no_cumple.push("No se reconoce el filtro de: " + por["?"].join(", ") + ". Pásalo en clases: { \"<fichero>\": \"Ha\" | \"OIII\" | \"L\" | \"R\"... }.");
+
+  // 1. Mismo canal: combinar de dos en dos.
+  for (var cl in por) {
+    if (cl == "?" || por[cl].length < 2) continue;
+    var acc = por[cl][0];
+    for (var i = 1; i < por[cl].length; ++i) {
+      var c = combinarMismoCanal(acc, por[cl][i], { nuevaVista: cl + "_comb" });
+      r.hecho.push("Dos " + cl + " combinados (pesos " + c.pesos.a + " / " + c.pesos.b + ", ruido −" + c.mejora_ruido_pct + " %) → " + c.vista);
+      r.no_cumple = r.no_cumple.concat(c.no_cumple);
+      acc = c.vista;
+    }
+    por[cl] = [acc];
+  }
+  // 2. R, G y B mono → RGB.
+  if (por.R && por.G && por.B) {
+    var CC = new ChannelCombination;
+    CC.colorSpace = (ChannelCombination.RGB !== undefined) ? ChannelCombination.RGB : 0;
+    CC.channels = [[true, por.R[0]], [true, por.G[0]], [true, por.B[0]]];
+    var antes = ImageWindow.windows.map(function (w) { return w.mainView.id; });
+    if (!CC.executeGlobal()) throw new Error("ChannelCombination falló");
+    var nueva = ImageWindow.windows.filter(function (w) { return antes.indexOf(w.mainView.id) < 0; })[0];
+    if (nueva) {
+      nueva.mainView.id = cbNewId("RGB_comb");
+      var src = ImageWindow.windowById(por.R[0]);
+      if (src.hasAstrometricSolution) try { nueva.copyAstrometricSolution(src); } catch (e) { }
+      por.RGB = [nueva.mainView.id];
+      r.hecho.push("R, G y B combinados en " + nueva.mainView.id + " (falta SPCC, Paso 12).");
+    }
+  }
+  // 3. Hα en la RGB.
+  if (por.RGB && por.Ha && o.inyectar !== false) {
+    var h = inyectarHa(por.RGB[0], por.Ha[0], { tipo: o.tipo, alfa: o.alfa, nuevaVista: por.RGB[0] + "_Ha" });
+    r.hecho.push("Hα inyectado en el R de " + por.RGB[0] + " → " + h.vista + " (" + h.control.medido[0] + ")");
+    r.no_cumple = r.no_cumple.concat(h.no_cumple);
+    r.control.revisar_a_ojo = r.control.revisar_a_ojo.concat(h.control.revisar_a_ojo);
+    r.inyeccion = { vista: h.vista, mascara: h.mascara, cielo_R_sobre_GB: h.cielo_R_sobre_GB, bajo_mascara_pct: h.bajo_mascara_pct, cambio_R_nebulosa_pct: h.cambio_R_nebulosa_pct };
+  }
+  // 4. Lo que se deja para la fase no lineal.
+  if (por.L) r.control.medido.push("L (" + por.L[0] + "): la combinación LRGB se hace en el Paso 2 no lineal, con las dos ya estiradas.");
+  var nb = ["Ha", "OIII", "SII", "Hb"].filter(function (c) { return por[c]; });
+  if (nb.length && !por.RGB) r.control.medido.push("Banda estrecha sin RGB (" + nb.join(", ") + "): la paleta (HOO, SHO...) se monta en el Paso 2 no lineal; aquí no hay nada que combinar en lineal.");
+  if (!r.hecho.length) r.control.medido.push("Nada que combinar en lineal con estos masters.");
+  r.vistas = ImageWindow.windows.map(function (w) { return w.mainView.id; });
+  return r;
+}
+
 function combinarMismoCanal(a, b, o) {
   o = o || {};
   var va = cbView(a), vb = cbView(b);
