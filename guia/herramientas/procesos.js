@@ -95,6 +95,10 @@ function pxSPFC(o) {
   o = o || {};
   var P = new SpectrophotometricFluxCalibration;
   pxSetFilters(P, o, true);
+  // Sin ventanas de gráficas ni mapas de estrellas (en la comparativa de gradiente se abría una por candidato).
+  if (P.generateGraphs !== undefined) P.generateGraphs = pxDefault(o, "graficas", false);
+  if (P.generateStarMaps !== undefined) P.generateStarMaps = false;
+  if (P.generateTextFiles !== undefined) P.generateTextFiles = false;
   return P;
 }
 
