@@ -392,7 +392,7 @@ function lanzarWBPP(o) {
 }
 
 // Estado de un WBPP lanzado con lanzarWBPP (o de cualquier carpeta de salida de WBPP) y resumen de su log.
-function estadoWBPP(salida) {
+function estadoWBPP(salida, o) {
   salida = salida.replace(/\\/g, "/").replace(/\/$/, "");
   var logs = ppSearch(salida + "/logs/*.log", false).sort();
   if (logs.length == 0) return { terminado: false, estado: "sin log todavía (arrancando)" };
@@ -425,7 +425,36 @@ function estadoWBPP(salida) {
   if (r.errores.length) r.no_cumple.push(r.errores.length + " errores en el log (ver errores).");
   if (r.fallidos.length) r.no_cumple.push(r.fallidos.length + " ficheros fallaron (ver fallidos).");
   if (fin && !r.masters.some(function (x) { return /^Light/i.test(x); })) r.no_cumple.push("No se generó ningún master de lights.");
+  // Terminado: abre los masters de lights (el recortado si lo hay) con un STF automático; abrir: false para no abrirlos.
+  if (fin && (!o || o.abrir !== false)) {
+    var lights = r.masters.filter(function (x) { return /^autocrop:/i.test(x); });
+    if (!lights.length) lights = r.masters.filter(function (x) { return /^Light:/i.test(x); });
+    r.vistas = lights.map(function (x) { var p = x.replace(/^[^:]+:\s*/, ""); return File.exists(p) ? ppAbrirSTF(p, File.extractName(p).substring(0, 60)) : null; })
+                     .filter(function (v) { return v; });
+  }
   return r;
+}
+
+// Abre un fichero en PixInsight con un STF automático (sólo visual) y lo deja delante; reutiliza la ventana si ya está.
+function ppAbrirSTF(path, id) {
+  var ws = ImageWindow.windows, w = null;
+  for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == path) w = ws[i];
+  if (!w) {
+    w = ImageWindow.open(path)[0];
+    if (id) { var n = id.replace(/[^A-Za-z0-9_]/g, "_"); if (/^[0-9]/.test(n)) n = "_" + n; if (ImageWindow.windowById(n).isNull) w.mainView.id = n; }
+  }
+  var v = w.mainView, im = v.image, stf = [];
+  for (var c = 0; c < im.numberOfChannels; ++c) {
+    im.selectedChannel = c;
+    var med = im.median(), mad = im.MAD() * 1.4826, sh = Math.max(0, Math.min(1, med - 2.8 * mad));
+    stf.push([sh, 1, Math.mtf(0.25, med - sh), 0, 1]);   // c0, c1, m, r0, r1; fondo a 0,25
+  }
+  im.resetSelections();
+  if (im.numberOfChannels == 1) stf = [stf[0], stf[0], stf[0]];
+  while (stf.length < 4) stf.push([0, 1, 0.5, 0, 1]);
+  var S = new ScreenTransferFunction; S.STF = stf; S.executeOn(v, false);
+  w.show();
+  return v.id;
 }
 
 function seleccionarSubs(x, o) {

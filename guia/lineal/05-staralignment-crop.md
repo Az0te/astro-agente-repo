@@ -23,7 +23,7 @@
 2. Registra con StarAlignment en modo fichero, con corrección de distorsión y Lanczos-3.
 3. Calcula el rectángulo donde todos tienen datos y los recorta todos a él, también la referencia. Guarda `<nombre>_alin.xisf` en `salida`.
 
-Devuelve el rectángulo, el % del campo que se conserva, las estrellas emparejadas, los bordes a 0 y si cada uno conserva la astrometría.
+Al terminar abre los alineados en PixInsight con un STF automático, con la referencia delante (`abrir: false` para no abrirlos). Devuelve el rectángulo, el % del campo que se conserva, las estrellas emparejadas, los bordes a 0 y si cada uno conserva la astrometría.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/alineado.js"));   // en el nivel superior del script

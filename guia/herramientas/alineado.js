@@ -21,6 +21,30 @@
 
 function alSearch(p, r) { return File.searchDirectory ? File.searchDirectory(p, r) : searchDirectory(p, r); }
 
+// Abre un fichero en PixInsight con un STF automático (sólo visual, no cambia los píxeles) y devuelve el id de la vista.
+// Si ya hay una ventana con ese fichero, la reutiliza.
+function abrirConSTF(path, id) {
+  var ws = ImageWindow.windows, w = null;
+  for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == path) w = ws[i];
+  if (!w) {
+    w = ImageWindow.open(path)[0];
+    if (id) { var n = id.replace(/[^A-Za-z0-9_]/g, "_"); if (/^[0-9]/.test(n)) n = "_" + n; if (ImageWindow.windowById(n).isNull) w.mainView.id = n; }
+  }
+  var v = w.mainView, im = v.image, stf = [];
+  for (var c = 0; c < im.numberOfChannels; ++c) {
+    im.selectedChannel = c;
+    var med = im.median(), mad = im.MAD() * 1.4826, sh = Math.max(0, Math.min(1, med - 2.8 * mad));
+    var m = med - sh, mt = Math.mtf(0.25, m);   // fondo a 0,25
+    stf.push([sh, 1, mt, 0, 1]);   // c0 (sombras), c1 (luces), m (medios), r0, r1
+  }
+  im.resetSelections();
+  if (im.numberOfChannels == 1) stf = [stf[0], stf[0], stf[0]];
+  while (stf.length < 4) stf.push([0, 1, 0.5, 0, 1]);
+  var S = new ScreenTransferFunction; S.STF = stf; S.executeOn(v, false);
+  w.show();
+  return v.id;
+}
+
 function alScale(path) {
   // Escala en "/px: de la astrometría si la hay; si no, de XPIXSZ, FOCALLEN y XBINNING.
   var w = ImageWindow.open(path, "alSCALE", "verbosity 0", true)[0];
@@ -173,5 +197,12 @@ function alinearMasters(lista, o) {
     if (!e.wcs) r.control.revisar_a_ojo.push(File.extractName(e.entrada) + ": sin astrometría tras alinear; resolver en el Paso 8.");
   });
   r.control.revisar_a_ojo.push("Comparar a ojo 3–4 estrellas de las esquinas entre los masters alineados (Blink).");
+  // Abre los alineados con un STF automático y deja delante la referencia (abrir: false para no abrirlos).
+  if (o.abrir !== false) {
+    r.vistas = [];
+    r.ficheros.forEach(function (e) { if (e.entrada != ref && e.salida) r.vistas.push(abrirConSTF(e.salida, File.extractName(e.salida))); });
+    var eRef = r.ficheros.filter(function (e) { return e.entrada == ref; })[0];
+    if (eRef && eRef.salida) r.vistas.unshift(abrirConSTF(eRef.salida, File.extractName(eRef.salida)));
+  }
   return r;
 }
