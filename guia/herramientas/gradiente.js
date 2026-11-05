@@ -8,6 +8,7 @@
 //     spfc: { qe: "...", gray: "..." },                    // opciones de pxSPFC (perfil)
 //     mars: "<ruta .xmars del perfil>",                    // obligatoria si hay escalas de MGC
 //     mgcOpts: { structureSeparation: 2, modelSmoothness: 2.5 },
+//     mgcBorde: true,                                      // 1.9.6+: cada escala también con edgeCorrection (false = no)
 //     dossier: "C:/ruta/dossier.json"                      // opcional: escribe el dossier de PiCopilot
 //   });
 //   JSON.stringify(r);   // { vista, candidatos: [{vista, modelo, metodo, parametros, metricas, notas}],
@@ -138,27 +139,35 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
-  // MGC (SPFC previo) sobre copias. Necesita WCS y la base MARS.
-  for (var j = 0; j < scalesMGC.length; ++j) {
-    var g = scalesMGC[j];
+  // MGC (SPFC previo) sobre copias. Necesita WCS y la base MARS. Con PixInsight 1.9.6+ cada escala se prueba
+  // también con corrección de bordes (edgeCorrection), salvo mgcBorde: false.
+  var conBorde = o.mgcBorde !== false && (new MultiscaleGradientCorrection).edgeCorrection !== undefined;
+  var mgcRuns = [];
+  for (var j0 = 0; j0 < scalesMGC.length; ++j0) {
+    mgcRuns.push({ g: scalesMGC[j0], borde: false });
+    if (conBorde) mgcRuns.push({ g: scalesMGC[j0], borde: true });
+  }
+  for (var j = 0; j < mgcRuns.length; ++j) {
+    var g = mgcRuns[j].g, borde = mgcRuns[j].borde;
     try {
       if (!hasWCS) throw new Error("la vista no tiene solución astrométrica (Paso 8: blindSolve)");
       if (!o.mars) throw new Error("falta la ruta de la base MARS (opción mars, está en el perfil)");
-      var id = grDuplicate(viewId, "GC_MGC" + g);
+      var id = grDuplicate(viewId, "GC_MGC" + g + (borde ? "_borde" : ""));
       var v = View.viewById(id);
       if (!pxSPFC(o.spfc || {}).executeOn(v)) throw new Error("SPFC devolvió false");
       var mo = { mars: o.mars, gradientScale: g, showGradientModel: true };
       if (o.mgcOpts) for (var key in o.mgcOpts) mo[key] = o.mgcOpts[key];
+      if (borde) mo.edgeCorrection = true;
       before = grIds();
       if (!pxMGC(mo).executeOn(v)) throw new Error("MGC devolvió false");
       var nm = grNew(before), mmod = null;
       for (var q = 0; q < nm.length; ++q) if (nm[q].indexOf("gradient_model") >= 0 || nm[q].indexOf("model") >= 0) mmod = nm[q];
       if (!mmod) throw new Error("MGC no creó el modelo de gradiente");
       mmod = grRename(mmod, id + "_modelo");
-      r.candidatos.push({ vista: id, modelo: mmod, metodo: "MGC", parametros: "SPFC + MGC gradientScale " + g,
+      r.candidatos.push({ vista: id, modelo: mmod, metodo: "MGC", parametros: "SPFC + MGC gradientScale " + g + (borde ? ", corrección de bordes" : ""),
                           metricas: grMeasure(base, mmod, id, range0), notas: "No neutraliza el color del fondo (GraXpert sí)." });
     } catch (e) {
-      r.errores.push("MGC escala " + g + ": " + e);
+      r.errores.push("MGC escala " + g + (borde ? " con bordes" : "") + ": " + e);
     }
   }
 

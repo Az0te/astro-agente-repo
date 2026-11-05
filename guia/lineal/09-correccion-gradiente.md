@@ -66,4 +66,10 @@ JSON.stringify(r);   // candidatos (corr, copia, fondoResidual), recomendado, mo
 ```
 En MGC, si la nebulosa aparece en el modelo, subir la escala; si aparece en negativo, bajarla.
 
+**MGC en PixInsight 1.9.6+** (medido en LDN 1235 binada ×2, nov 2026):
+- `edgeCorrection` (corrección de bordes): `gradienteCandidatos` prueba cada escala con y sin ella (`GC_MGC2048_borde`). En LDN 1235 dejó los bordes a ±1·10⁻⁵ del centro (sin ella, hasta −5·10⁻⁵) y bajó el gradiente que queda del 83 % al 59 %, pero el modelo copia algo más el polvo (corr −0,13 → +0,16). Elegir con las medidas, y mirar el modelo en nebulosas oscuras.
+- `autoScaleFactors`: sin cambio medible tras SPFC (los factores ya salen ≈ 1). Se deja apagado.
+- Píxeles a 0 (bordes negros del registro): MGC los trata como sin datos. Siguen a 0 y la franja de al lado queda igual que si se hubiera recortado. Aun así, recortar primero (Paso 5).
+- En `pxMGC`: opciones `edgeCorrection`, `edgeAggressiveness` (2) y `autoScaleFactors`; se ignoran en versiones sin ellas.
+
 **Control.** Modelo liso y sin objeto; fondo no aplastado con el mismo STF antes y después; contraste objeto−cielo ≥ 90 % en polvo/IFN; `hasAstrometricSolution` al terminar. Anillo oscuro alrededor de un objeto extenso = se ha comido el halo: volver atrás y usar plano robusto o muestras manuales. En imágenes grandes GraXpert puede pasar de 60 s: esperar con `watcher_status`.

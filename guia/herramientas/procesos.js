@@ -99,7 +99,8 @@ function pxSPFC(o) {
 }
 
 // MultiscaleGradientCorrection con base MARS. Opciones: mars (ruta del .xmars, obligatoria), gradientScale (1024),
-// structureSeparation (3), modelSmoothness (1.0), showGradientModel (true).
+// structureSeparation (3), modelSmoothness (1.0), showGradientModel (true); en 1.9.6+ también edgeCorrection (false),
+// edgeAggressiveness (2) y autoScaleFactors (false).
 function pxMGC(o) {
   o = o || {};
   if (!o.mars) throw new Error("pxMGC: falta la ruta de la base MARS (opción mars; está en el perfil)");
@@ -111,5 +112,11 @@ function pxMGC(o) {
   P.structureSeparation = pxDefault(o, "structureSeparation", 3);
   P.modelSmoothness = pxDefault(o, "modelSmoothness", 1.0);
   P.showGradientModel = pxDefault(o, "showGradientModel", true);
+  // PixInsight 1.9.6+: factores de escala automáticos y corrección de bordes (sólo si el proceso los tiene).
+  if (P.autoScaleFactors !== undefined) {
+    P.autoScaleFactors = pxDefault(o, "autoScaleFactors", false);
+    P.edgeCorrection = pxDefault(o, "edgeCorrection", false);
+    P.edgeAggressiveness = pxDefault(o, "edgeAggressiveness", 2);
+  }
   return P;
 }
