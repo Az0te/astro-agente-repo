@@ -18,6 +18,20 @@
 - Calcular el rectángulo válido de las tres.
 - **Crop y rotación y la astrometría**: desde PixInsight 1.9.6, Crop, DynamicCrop, Resample, IntegerResample y FastRotation conservan la solución y la ajustan (comprobado: 0,05 px frente a una resolución nueva). Con 1.9.5 o anterior se perdía: "trasladarla copiando las propiedades `AstrometricSolution:*` con el offset (ver Flujo probado, paso 3) y `regenerateAstrometricSolution()` funcionó (residuos 0,2–0,3 px)", o volver a resolver (Paso 8).
 
+**En una llamada** (`herramientas/alineado.js`): `alinearMasters(masters o carpeta, { referencia, salida })` trabaja sobre ficheros y no toca los originales:
+1. Lee la escala de cada master, de su astrometría o del píxel y la focal. Si difiere más de un 3 % de la referencia, lo reescala antes con Resample Lanczos-3.
+2. Registra con StarAlignment en modo fichero, con corrección de distorsión y Lanczos-3.
+3. Calcula el rectángulo donde todos tienen datos y los recorta todos a él, también la referencia. Guarda `<nombre>_alin.xisf` en `salida`.
+
+Devuelve el rectángulo, el % del campo que se conserva, las estrellas emparejadas, los bordes a 0 y si cada uno conserva la astrometría.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/alineado.js"));   // en el nivel superior del script
+JSON.stringify(alinearMasters(["<Hα>", "<OIII>", "<RGB>"], { referencia: "<Hα>", salida: "<carpeta>/alineados" }));
+```
+
+Comprobado con IC 1396 (nov 2026; 3 masters de 300 MB en ~12 s). Un master girado 7° y desplazado, y otro binado ×2, quedaron alineados con la referencia: correlación máxima en el desplazamiento 0,0 (0,93 y 0,94). El binado se reescaló ×2 antes de registrar y conserva la astrometría.
+
 **Código**
 
 ```javascript
