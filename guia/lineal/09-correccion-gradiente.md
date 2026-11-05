@@ -57,7 +57,24 @@ if (!mgc.executeOn(v)) throw new Error("MGC falló");   // crea <vista>_MGC_grad
 "SPFC + MGC aplicados";
 ```
 
-**Comparativa en una sola llamada** (`herramientas/gradiente.js`): lanza GraXpert y MGC sobre copias, mide cada modelo con `gcStructCopy`, mide además el gradiente que queda (rejilla 4×3), nombra las vistas (`GC_GX10`, `GC_GX10_modelo`, `GC_MGC2048`…), recomienda entre los que dejan ≤ 30 % del gradiente el que menos copia el objeto y, si se le pasa una ruta, escribe el dossier. Es la forma recomendada cuando no se puede ir paso a paso (modelos sin herramientas).
+**Comparativa en una sola llamada** (`herramientas/gradiente.js`): `gradienteCandidatos(vista, { spfc, dossier })` compara por defecto, sobre copias:
+- GraXpert sample_free 10 y 8;
+- MGC 1024 y 2048, con y sin corrección de bordes;
+- polinomio robusto de grado 1 y 2 por canal, ajustado fuera del objeto.
+
+Mide cada uno así:
+- `gcStructCopy`: cuánto se parece el modelo al objeto.
+- `come_objeto_pct`: % de la señal del objeto que se lleva el modelo.
+- `fondoResidual`: gradiente del **cielo** que queda, en una rejilla 8×8 fuera del objeto.
+
+Recomienda, entre los que no se comen el objeto (≤ 3 % y |corr| < 0,3), el que deja el cielo más plano. Nombra las vistas `GC_GX10`, `GC_MGC2048_borde`, `GC_POLY2`… con su `_modelo`. Si se le pasa una ruta, escribe el dossier. El resultado lleva una `leyenda` de cómo leer las medidas.
+
+Comprobado con M31 v2 (nov 2026, 100 s con los 8 candidatos). Reproduce la decisión de octubre:
+- GraXpert 10 se lleva el **8,5 %** de la galaxia.
+- MGC 2048 se lleva el 1,8 %.
+- El polinomio de grado 2, el 0 %, con el cielo igual de plano (13 % del gradiente): recomendado.
+
+Antes el gradiente que quedaba se medía en una rejilla 4×3 de toda la imagen. En objetos grandes medía la galaxia y no el gradiente, y daba por bueno a GraXpert.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/gradiente.js"));   // en el nivel superior del script

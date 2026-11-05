@@ -87,16 +87,88 @@ function grGridRange(viewId) {
   return Math.max.apply(null, meds) - Math.min.apply(null, meds);
 }
 
+// Un canal binado (mediana) con las mismas dimensiones que la luminancia de gcPrepare.
+function grChanBinned(viewId, c, bin) {
+  var v = View.viewById(viewId), id = "gr_tmp_ch";
+  var old = View.viewById(id); if (old && !old.isNull) old.window.forceClose();
+  var PM = new PixelMath;
+  PM.expression = v.image.numberOfChannels >= 3 ? "$T[" + c + "]" : "$T";
+  PM.useSingleExpression = true; PM.createNewImage = true; PM.showNewImage = false; PM.newImageId = id;
+  PM.newImageWidth = 0; PM.newImageHeight = 0; PM.rescale = false; PM.truncate = false;
+  PM.newImageColorSpace = gcK(PixelMath, "Gray"); PM.newImageSampleFormat = gcK(PixelMath, "f32");
+  if (!PM.executeOn(v, false)) throw new Error("PixelMath (canal) no se ejecutó");
+  var g = View.viewById(id);
+  try {
+    var IR = new IntegerResample; IR.zoomFactor = -bin; IR.downsamplingMode = gcK(IntegerResample, "Median");
+    IR.executeOn(g, false);
+    var im = g.image, w = im.width, h = im.height, a = new Float32Array(w * h);
+    im.getSamples(a, new Rect(0, 0, w, h), 0);
+    return { a: a, w: w, h: h };
+  } finally { g.window.forceClose(); }
+}
+
+// Coeficientes de un polinomio de grado 1 o 2 ajustado fuera del objeto (rejilla de medianas, rechazo a 2,5σ).
+// Coordenadas normalizadas X, Y en [−0,5, 0,5], iguales a resolución completa y binada.
+function grPolyCoef(img, excl, grado) {
+  var w = img.w, h = img.h, a = img.a, gx = 32, gy = 22, pts = [];
+  for (var j = 0; j < gy; j++) for (var i = 0; i < gx; i++) {
+    var x0 = Math.floor(i * w / gx), x1 = Math.floor((i + 1) * w / gx), y0 = Math.floor(j * h / gy), y1 = Math.floor((j + 1) * h / gy), v = [];
+    for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) { var p = y * w + x; if (!excl[p] && a[p] > 0) v.push(a[p]); }
+    if (v.length > 0.5 * (x1 - x0) * (y1 - y0)) pts.push({ x: (x0 + x1) / 2 / w - 0.5, y: (y0 + y1) / 2 / h - 0.5, z: gcMedian(v), ok: true });
+  }
+  var nt = grado >= 2 ? 6 : 3;
+  function terms(x, y) { return grado >= 2 ? [1, x, y, x * x, x * y, y * y] : [1, x, y]; }
+  var c = []; for (var q0 = 0; q0 < nt; q0++) c.push(0);
+  for (var it = 0; it < 6; it++) {
+    var A = [], b = [], k, r, q, n = 0;
+    for (r = 0; r < nt; r++) { var row = []; for (q = 0; q < nt; q++) row.push(0); A.push(row); b.push(0); }
+    for (k = 0; k < pts.length; k++) {
+      if (!pts[k].ok) continue;
+      var t = terms(pts[k].x, pts[k].y);
+      for (r = 0; r < nt; r++) { b[r] += t[r] * pts[k].z; for (q = 0; q < nt; q++) A[r][q] += t[r] * t[q]; }
+      n++;
+    }
+    if (n < nt + 2) break;
+    c = gcSolveN(A, b);
+    var res = [];
+    for (k = 0; k < pts.length; k++) if (pts[k].ok) { var tt = terms(pts[k].x, pts[k].y), f = 0; for (r = 0; r < nt; r++) f += c[r] * tt[r]; res.push(pts[k].z - f); }
+    var sd = gcMAD(res, gcMedian(res)), changed = false;
+    for (k = 0; k < pts.length; k++) {
+      var t2 = terms(pts[k].x, pts[k].y), f2 = 0; for (r = 0; r < nt; r++) f2 += c[r] * t2[r];
+      var keep = sd == 0 || Math.abs(pts[k].z - f2) <= 2.5 * sd;
+      if (keep != pts[k].ok) changed = true;
+      pts[k].ok = keep;
+    }
+    if (!changed) break;
+  }
+  return c;
+}
+
+// Expresión de PixelMath del polinomio a resolución completa.
+function grPolyExpr(c) {
+  var X = "((x()+0.5)/w()-0.5)", Y = "((y()+0.5)/h()-0.5)", s = c[0].toExponential(8) + " + " + c[1].toExponential(8) + "*" + X + " + " + c[2].toExponential(8) + "*" + Y;
+  if (c.length >= 6) s += " + " + c[3].toExponential(8) + "*" + X + "*" + X + " + " + c[4].toExponential(8) + "*" + X + "*" + Y + " + " + c[5].toExponential(8) + "*" + Y + "*" + Y;
+  return s;
+}
+
+// fondoResidual: rango de las medianas del CIELO (rejilla 8×8 fuera del objeto, gcScore.flat) de la corregida frente
+// al original. Antes era la rejilla 4×3 de toda la imagen, que en objetos grandes (M31) medía la galaxia y no el
+// gradiente, y hacía ganar a GraXpert aunque se comiera parte de ella (5 nov 2026).
+// come_objeto_pct: señal del objeto que se lleva el modelo (gcScore.eat), en % de la señal del objeto.
 function grMeasure(base, modelId, correctedId, range0) {
-  var m = gcStructCopy(base, modelId);
-  return { gcStructCopy: m.corr, copia: m.copy, fondoResidual: grGridRange(correctedId) / range0 };
+  var m = gcStructCopy(base, modelId), s = gcMetrics(base, correctedId);
+  if (base.flat0 === undefined) base.flat0 = gcScore(base, base.O.a, "original").flat;
+  return { gcStructCopy: +m.corr.toFixed(3), copia: m.copy, fondoResidual: +(s.flat / base.flat0).toFixed(3),
+           come_objeto_pct: +(100 * s.eat).toFixed(1) };
 }
 
 function gradienteCandidatos(viewId, o) {
   if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
   o = o || {};
+  // Por defecto se comparan los tres métodos (no hay uno preferido: se aplica el que mejor mida en cada imagen).
   var scalesGX = o.graxpert || [10, 8];
-  var scalesMGC = o.mgc || [];
+  var scalesMGC = o.mgc || [1024, 2048];
+  var gradosPoly = o.polinomio || [1, 2];
   var bin = o.bin || 8;
   var r = { vista: viewId, candidatos: [], intermedias: [], recomendado: "", motivo: "", errores: [] };
 
@@ -175,6 +247,40 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
+  // Polinomio robusto (grado 1 = plano, grado 2) por canal, ajustado fuera del objeto: no puede comerse formas.
+  // En M31 v6 (oct 2026) el grado 2 ganó a GraXpert, que se comía el 8,5 % de la galaxia.
+  var nch = win.mainView.image.numberOfChannels;
+  for (var gp = 0; gp < gradosPoly.length; ++gp) {
+    var grado = gradosPoly[gp];
+    try {
+      var exprs = [];
+      for (var ch = 0; ch < Math.min(3, nch); ++ch) exprs.push(grPolyExpr(grPolyCoef(grChanBinned(viewId, ch, bin), base.excl, grado)));
+      var pid = grDuplicate(viewId, "GC_POLY" + grado), mid = grFreeId(pid + "_modelo");
+      // Modelo (para medirlo y verlo) y corrección: $T − modelo + valor del modelo en el centro (mantiene el nivel).
+      var PMm = new PixelMath;
+      PMm.useSingleExpression = (nch < 3); PMm.expression = exprs[0];
+      if (nch >= 3) { PMm.expression1 = exprs[1]; PMm.expression2 = exprs[2]; }
+      PMm.createNewImage = true; PMm.showNewImage = true; PMm.newImageId = mid; PMm.newImageWidth = 0; PMm.newImageHeight = 0;
+      PMm.rescale = false; PMm.truncate = false; PMm.newImageSampleFormat = gcK(PixelMath, "f32");
+      PMm.newImageColorSpace = nch >= 3 ? gcK(PixelMath, "RGB") : gcK(PixelMath, "Gray");
+      if (!PMm.executeOn(win.mainView)) throw new Error("PixelMath del modelo falló");
+      var PMc = new PixelMath, cen = function (e) { return "(" + e.split(" + ")[0] + ")"; };
+      PMc.useSingleExpression = (nch < 3); PMc.expression = "$T - (" + exprs[0] + ") + " + cen(exprs[0]);
+      if (nch >= 3) { PMc.expression1 = "$T - (" + exprs[1] + ") + " + cen(exprs[1]); PMc.expression2 = "$T - (" + exprs[2] + ") + " + cen(exprs[2]); }
+      PMc.rescale = false; PMc.truncate = false; PMc.createNewImage = false;
+      if (!PMc.executeOn(View.viewById(pid))) throw new Error("PixelMath de la corrección falló");
+      r.candidatos.push({ vista: pid, modelo: mid, metodo: "Polinomio", parametros: "grado " + grado + " ajustado fuera del objeto, por canal",
+                          metricas: grMeasure(base, mid, pid, range0), notas: "No puede crear ni borrar formas; deja el gradiente que no sea liso." });
+    } catch (e) {
+      r.errores.push("Polinomio grado " + grado + ": " + e);
+    }
+  }
+
+  r.leyenda = "gcStructCopy: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
+              "negativo = infla el objeto). come_objeto_pct: % de la señal del objeto que se lleva el modelo (menor = mejor). " +
+              "fondoResidual: fracción del gradiente del cielo que queda, medido fuera del objeto (menor = más plano). " +
+              "Mejor: el que deja poco gradiente sin comerse el objeto.";
+
   // Recomendación. Un buen modelo cumple dos cosas: quita el gradiente (fondoResidual = rango del fondo
   // corregido / rango del original) y no copia el objeto (|corr| pequeño; negativo = el modelo infla el objeto).
   // Prioridad, como en la guía: entre los que dejan <= 30 % del gradiente, el que menos copia (menor |corr|);
@@ -186,13 +292,16 @@ function gradienteCandidatos(viewId, o) {
   }
   function absCorr(x) { return Math.abs(x.metricas.gcStructCopy); }
   function resid(x) { return x.metricas.fondoResidual; }
-  var flat = r.candidatos.filter(function (x) { return resid(x) <= 0.3; });
+  function eat(x) { var e = x.metricas.come_objeto_pct; return isFinite(e) ? Math.abs(e) : 100; }
+  // Primero, no comerse el objeto (≤ 3 % de su señal y modelo limpio); entre esos, el que deja el cielo más plano.
+  var safe = r.candidatos.filter(function (x) { return eat(x) <= 3 && absCorr(x) < 0.3; });
   var clean = r.candidatos.filter(function (x) { return absCorr(x) < 0.3; });
-  var best = flat.length ? pick(flat, absCorr) : clean.length ? pick(clean, resid) : pick(r.candidatos, absCorr);  if (best) {
+  var best = safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(r.candidatos, absCorr);
+  if (best) {
     var bc = best.metricas.gcStructCopy;
     r.recomendado = best.vista;
     r.motivo = best.metodo + " " + best.parametros + ": deja " + Math.round(100 * best.metricas.fondoResidual) +
-               " % del gradiente del original con corr " + bc.toFixed(3) + " (" +
+               " % del gradiente del cielo, se lleva el " + best.metricas.come_objeto_pct + " % del objeto, corr " + bc.toFixed(3) + " (" +
                (Math.abs(bc) < 0.15 ? "modelo limpio" : Math.abs(bc) > 0.5 ? "copia el objeto: revisar o probar plano robusto"
                                                                    : "intermedio: revisar el modelo a la vista") + ").";
   } else {
