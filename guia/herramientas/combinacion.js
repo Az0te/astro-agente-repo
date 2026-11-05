@@ -114,6 +114,7 @@ function combinarMasters(lista, o) {
     else files.push(p);
   });
   if (files.length < 2) throw new Error("Hacen falta al menos dos masters (o una carpeta con ellos) para combinar");
+  cbNeeds();
   if (files.length > 8) throw new Error("Demasiados masters (" + files.length + "): pasa sólo los que se combinan (LRGB, Hα/OIII/SII con RGB...)");
   var r = { masters: [], hecho: [], vistas: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } }, por = {}, W = 0, H = 0;
   files.forEach(function (f) {
@@ -222,8 +223,10 @@ function inyectarHa(rgb, ha, o) {
     throw new Error("Tamaños distintos: alinear y recortar antes (Paso 5, alinearMasters)");
   var alfa = o.alfa !== undefined ? o.alfa : (o.tipo == "galaxia" ? 0.25 : 0.4), clip = o.clipLow !== undefined ? o.clipLow : 0.06;
 
+  cbNeeds();
   // Hα ajustado al R (LinearFit sobre una copia gris del R).
-  var wR = cbCopy(vr, "cbR", true), wH = cbCopy(vh, "cbHa", true);
+  var wR = cbCopy(vr, "cbR", true), wH = cbCopy(vh, "cbHa", true), wM = null, wO = null;
+  try {
   var LF = new LinearFit; LF.referenceViewId = wR.mainView.id;
   if (!LF.executeOn(wH.mainView)) throw new Error("LinearFit del Hα al R falló");
 
@@ -244,14 +247,14 @@ function inyectarHa(rgb, ha, o) {
   PM.newImageColorSpace = (PixelMath.Gray !== undefined) ? PixelMath.Gray : PixelMath.prototype.Gray;
   PM.newImageSampleFormat = (PixelMath.f32 !== undefined) ? PixelMath.f32 : PixelMath.prototype.f32;
   if (!PM.executeOn(wH.mainView)) throw new Error("PixelMath de la máscara falló");
-  var wM = ImageWindow.windowById(mId);
+  wM = ImageWindow.windowById(mId);
   var C = new Convolution; C.mode = (Convolution.Parametric !== undefined) ? Convolution.Parametric : Convolution.prototype.Parametric;
   C.sigma = o.suavizado || 4; C.shape = 2; C.aspectRatio = 1;
   C.executeOn(wM.mainView);
 
   // Mezcla en el R de una copia.
   var id = cbNewId(o.nuevaVista || (vr.id + "_Ha"));
-  var wO = cbCopy(vr, id, false);
+  wO = cbCopy(vr, id, false);
   var P2 = new PixelMath;
   P2.useSingleExpression = false; P2.symbols = "a, m";
   P2.expression = "a = " + alfa + "; m = " + mId + "; (1 - a*m)*$T + a*m*" + wH.mainView.id;
@@ -284,4 +287,18 @@ function inyectarHa(rgb, ha, o) {
   if (r.bajo_mascara_pct > 80) r.no_cumple.push("La máscara cubre el " + r.bajo_mascara_pct + " % del campo: subir clipLow para que no entre el cielo.");
   r.control.revisar_a_ojo.push("Comparar con la RGB sola al 100 % en una zona de Hα y en el fondo: sin textura distinta entre nebulosa y banda ancha, sin bordes de máscara, sin estrellas rojas.");
   return r;
+  } catch (e) {   // si algo falla, no dejar ventanas temporales abiertas
+    [wR, wH, wM, wO].forEach(function (w) { try { if (w && !w.isNull) w.forceClose(); } catch (x) { } });
+    throw e;
+  }
+}
+
+// Procesos que necesitan estas funciones: si falta alguno, se dice cuál (5 nov 2026: PixelMath había desaparecido
+// de una sesión de PixInsight y el error "PixelMath is not defined" hizo que el modelo reescribiera todo a mano).
+function cbNeeds() {
+  var faltan = ["PixelMath", "LinearFit", "Convolution", "ChannelCombination"].filter(function (p) {
+    try { return eval("typeof " + p) === "undefined"; } catch (e) { return true; } });
+  if (faltan.length)
+    throw new Error("Falta en PixInsight el proceso " + faltan.join(", ") + " (módulo desinstalado o sin cargar): " +
+                    "reinstálalo en Process > Modules > Install Modules o reinicia PixInsight. No es un fallo del script: no lo reescribas.");
 }
