@@ -66,7 +66,7 @@ function resolverAstrometria(viewId, o) {
               no_cumple: ok ? [] : ["sin solución astrométrica: repetir con pistas de escala (minScale/maxScale del perfil) o de región (regionRA/regionDec)"] };
   res.control = { medido: { con_solucion_astrometrica: ok },
                   revisar_a_ojo: ["que la imagen resuelta sea la que tiene estrellas (nunca la starless)"],
-                  nota: "Volver a resolver tras recortar, rotar, BXT o GraXpert si se pierde la solución." };
+                  nota: "Volver a resolver tras BXT o GraXpert si se pierde la solución (recortar y rotar la conservan desde 1.9.6)." };
   return res;
 }
 

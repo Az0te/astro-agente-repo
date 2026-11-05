@@ -77,7 +77,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | `w.image`, `w.id`, `P.execute()`, `img.clone()`, `h[i]` | `w.mainView.image`, `w.mainView.id`, `executeOn`, ventana nueva + `assign`, `h.at(i)` |
 | Expresiones largas en PixelMath | Símbolos + comprobar el valor devuelto (fallan en silencio) |
 | `Rect(x0,y0,ancho,alto)` | `Rect` usa esquinas |
-| `FastRotation` sobre ventana con astrometría | PixelMath `pixel($T, w()-1-x(), h()-1-y())` |
+| `FastRotation` sobre ventana con astrometría en PixInsight 1.9.5 o anterior (colgó el watcher) | PixelMath `pixel($T, w()-1-x(), h()-1-y())`; con 1.9.6+ FastRotation va bien y conserva la astrometría |
 | `saveAs` y creer que conserva el historial | Anotar los parámetros en el dossier |
 | Lanzar scripts o depender de iconos del escritorio | Su equivalente con procesos y PixelMath (Anexo A.9); procesos configurados en código |
 | Suponer nombres de parámetros | `describe_process` |

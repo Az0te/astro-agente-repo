@@ -13,8 +13,7 @@
 **Cuidados de PJSR**
 
 - "`window.saveAs` no guarda el historial de procesos en el XISF: anotar los parámetros en el dossier".
-- "`FastRotation` sobre una ventana con astrometría colgó el watcher durante horas. Para girar 180° una exportación: PixelMath a imagen nueva `pixel($T, w()-1-x(), h()-1-y())`, sin solución astrométrica."
-- Recortar con Crop/DynamicCrop pierde la WCS; si la versión final debe llevar astrometría, trasladarla o regenerarla.
+- Desde PixInsight 1.9.6, Crop, DynamicCrop (también girado), Resample y FastRotation **conservan la astrometría** y la ajustan al nuevo marco. Comprobado (IC 1396, nov 2026): tras Crop + Resample 0,5 + DynamicCrop de 10°, una nueva resolución coincide con la heredada a 0,05 px; tras FastRotation 180°, igual que el original. Con 1.9.5 o anterior se perdía y `FastRotation` sobre una ventana con astrometría llegó a colgar el watcher: girar con PixelMath `pixel($T, w()-1-x(), h()-1-y())`.
 
 **Código**
 
@@ -32,7 +31,7 @@ if (!w.saveAs("C:/ASTRO/IC63/final/IC63_v4.xisf", false, false, false, false))
 "guardado: sin historial en el XISF, anotar los parámetros en el dossier";
 ```
 
-**En una llamada** (`herramientas/exportar.js`): `exportarFinal("Final", { carpeta, nombre, girar180 })` comprueba saturados y bordes negros, guarda el XISF 32 bits con astrometría y, sobre una copia en sRGB (y girada con PixelMath si se pide), el TIFF 16 bits y el JPG. Crea la carpeta antes de guardar y no sobrescribe (añade _2). Recomendado para modelos sin herramientas.
+**En una llamada** (`herramientas/exportar.js`): `exportarFinal("Final", { carpeta, nombre, girar180 })` comprueba saturados y bordes negros, guarda el XISF 32 bits con astrometría y, sobre una copia en sRGB (y girada 180° con FastRotation si se pide), el TIFF 16 bits y el JPG. Crea la carpeta antes de guardar y no sobrescribe (añade _2). Recomendado para modelos sin herramientas.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/exportar.js"));   // en el nivel superior del script

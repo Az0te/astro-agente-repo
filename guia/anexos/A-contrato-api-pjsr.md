@@ -45,7 +45,7 @@ Regla: **cada `executeOn` se comprueba**. Un proceso que devuelve `false` no ha 
 
 | Necesidad | Llamada | Notas |
 |---|---|---|
-| ¿Tiene WCS? | `w.hasAstrometricSolution` | Comprobar tras crop, rotación, BXT, GraXpert |
+| ¿Tiene WCS? | `w.hasAstrometricSolution` | Comprobar tras BXT y GraXpert (y tras crop o rotación antes de 1.9.6) |
 | Resolver a ciegas (v8) | `blindSolve("<vista>", opciones)` | Devuelve `{ra, dec, scale, rotation, flipped, matches, solution, …}`; `null` si falla |
 | Copiar WCS entre ventanas | `destino.copyAstrometricSolution(origen)` | Método de la **ventana** |
 | Regenerar tras mover la solución | `regenerateAstrometricSolution()` | Residuos 0,2–0,3 px en el traslado manual |

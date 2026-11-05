@@ -8,8 +8,8 @@
 // Hace, en este orden y sin tocar la vista:
 //   1. Controles antes de exportar: % de píxeles saturados (> 0,98 y = 1) y bordes negros (filas/columnas a 0).
 //   2. XISF 32 bits de la vista tal cual (con su solución astrométrica). Ojo: saveAs no guarda el historial de procesos.
-//   3. Copia → ICCProfileTransformation a sRGB → (opcional) giro 180° con PixelMath (sin astrometría; FastRotation sobre
-//      ventanas con astrometría colgó el watcher) → TIFF 16 bits y JPG.
+//   3. Copia → ICCProfileTransformation a sRGB → (opcional) giro 180° con FastRotation → TIFF 16 bits y JPG.
+//      El XISF no se gira. Desde PixInsight 1.9.6 FastRotation también conserva la astrometría (comprobado).
 // Opciones: carpeta (obligatoria; se crea si no existe: saveAs a una carpeta inexistente abre un diálogo modal que
 // bloquea PixInsight), nombre (por defecto el id de la vista), girar180 (false), formatos (["xisf", "tif", "jpg"]),
 // sobrescribir (false: si el fichero existe, añade _2, _3...).
@@ -78,10 +78,9 @@ function exportarFinal(viewId, o) {
     icc.toDefaultProfile = false;
     if (!icc.executeOn(w.mainView)) throw new Error("ICC sRGB falló");
     if (o.girar180) {
-      var P = new PixelMath;
-      P.expression = "pixel($T, w()-1-x(), h()-1-y())";
-      P.useSingleExpression = true; P.createNewImage = false;
-      if (!P.executeOn(w.mainView)) throw new Error("Giro de 180° falló");
+      var F = new FastRotation;
+      F.mode = 0;   // Rotate180 (la constante no está expuesta en PJSR)
+      if (!F.executeOn(w.mainView)) throw new Error("Giro de 180° falló");
     }
     if (fmts.indexOf("tif") >= 0) {
       var w16 = exCopy(w.mainView, "exTIF");

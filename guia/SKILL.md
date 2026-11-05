@@ -39,7 +39,7 @@ Disponibles en `run_script` sin cargar nada:
 
 | Función | Para qué | Paso |
 |---|---|---|
-| `blindSolve("vista")` | Astrometría para SPCC, SPFC y MGC; repetir tras recortar, rotar, BXT o GraXpert si `hasAstrometricSolution` es falso | 8 lineal |
+| `blindSolve("vista")` | Astrometría para SPCC, SPFC y MGC; repetir tras BXT o GraXpert si `hasAstrometricSolution` es falso (recortar y rotar la conservan desde 1.9.6) | 8 lineal |
 | `starStretch("Stars", {amount})` | Estirar la capa de estrellas lineal | 1 no lineal |
 | `screenStarsCombine("Starless", "Stars", {newId})` | Recombinar estrellas (por defecto) | 9 no lineal |
 | `screenStarsExtract("Original", "Starless")` | Sacar la capa de estrellas sin repetir SXT | 8 no lineal |

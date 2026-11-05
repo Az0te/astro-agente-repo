@@ -2,7 +2,7 @@
 
 [← Índice](../SKILL.md) · Anterior: [Paso 7: Extracción de canales (OSC dual band)](07-extraccion-canales.md) · Siguiente: [Paso 9: Corrección de Gradiente](09-correccion-gradiente.md)
 
-**Por qué.** SPCC, SPFC y MGC **necesitan solución astrométrica**: sin ella fallan con "The image has no valid astrometric solution". Y "recortar, rotar, BXT y GraXpert pueden eliminarla: comprobar `hasAstrometricSolution` antes de cada uno". Resolver es más barato que descubrir el fallo a mitad de SPCC.
+**Por qué.** SPCC, SPFC y MGC **necesitan solución astrométrica**: sin ella fallan con "The image has no valid astrometric solution". BXT y GraXpert pueden eliminarla (y recortar o rotar, con PixInsight 1.9.5 o anterior): comprobar `hasAstrometricSolution` antes de cada uno. Resolver es más barato que descubrir el fallo a mitad de SPCC.
 
 **Método único: `blindSolve` del watcher v8** (BlindSolver portado al watcher, PixInsight 1.9.6+). La astrometría se resuelve siempre así, desde `run_script`; no se usan ImageSolver, el script BlindSolver ni copias de otras ventanas.
 
@@ -17,7 +17,7 @@ JSON.stringify(r);   // ra, dec (grados), scale (″/px), rotation, flipped, mat
 - Necesita el índice astrométrico de Gaia configurado en las preferencias del proceso Gaia; si falta, el error lo dice.
 - Resolver la imagen **con estrellas**, nunca la capa sin estrellas.
 - Si la imagen ya tenía solución, la conserva (`solution: "existing"`) y devuelve la comparación (`centerOffsetArcsec`, `resolutionDifference`, `rotationDifference`, `parityMatch`): sirve para verificar una solución dudosa.
-- "Tras recortar, rotar, BXT o GraXpert, volver a resolver es más sencillo que trasladar la solución a mano."
+- Desde 1.9.6, Crop, DynamicCrop, Resample y FastRotation conservan y ajustan la solución (comprobado con `blindSolve` sobre la imagen transformada: 0,05 px de diferencia). Si se pierde tras BXT o GraXpert, volver a resolver es más sencillo que trasladarla a mano.
 
 **Si falla**
 
@@ -31,4 +31,4 @@ eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el niv
 JSON.stringify(resolverAstrometria("MasterLight"));
 ```
 
-**Control.** `hasAstrometricSolution === true` **después** de cada paso que pueda romperla (crop, rotación, BXT, GraXpert); si se ha perdido, volver a ejecutar `blindSolve`.
+**Control.** `hasAstrometricSolution === true` **después** de cada paso que pueda romperla (BXT, GraXpert; crop y rotación sólo antes de 1.9.6); si se ha perdido, volver a ejecutar `blindSolve`.

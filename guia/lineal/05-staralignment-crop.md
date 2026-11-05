@@ -16,7 +16,7 @@
 
 - "Recortar todos los masters a la región común antes de procesar (astro-photographie: 'Cropped' es siempre el primer paso). Si los campos difieren mucho (otro telescopio), la imagen final sólo cubre la intersección."
 - Calcular el rectángulo válido de las tres.
-- **Crop y rotación pierden la astrometría**: "Crop/DynamicCrop pierden la astrometría; trasladarla copiando las propiedades `AstrometricSolution:*` con el offset (ver Flujo probado, paso 3) y `regenerateAstrometricSolution()` funcionó (residuos 0,2–0,3 px)". Con watcher v8 es más simple volver a resolver (Paso 8).
+- **Crop y rotación y la astrometría**: desde PixInsight 1.9.6, Crop, DynamicCrop, Resample y FastRotation conservan la solución y la ajustan (comprobado: 0,05 px frente a una resolución nueva). Con 1.9.5 o anterior se perdía: "trasladarla copiando las propiedades `AstrometricSolution:*` con el offset (ver Flujo probado, paso 3) y `regenerateAstrometricSolution()` funcionó (residuos 0,2–0,3 px)", o volver a resolver (Paso 8).
 
 **Código**
 
@@ -34,4 +34,4 @@ if (!SA.executeGlobal()) throw new Error("StarAlignment no registró");
 "registro lanzado";
 ```
 
-**Control.** Abrir los registrados y comparar la posición de 3–4 estrellas en las esquinas; comprobar que el recorte no deja bandas negras (mediana de una franja de 20 px en cada borde ≈ mediana del fondo, no 0). Tras recortar, la vista **no** tiene WCS: resolver de nuevo (Paso 8) o trasladar la solución.
+**Control.** Abrir los registrados y comparar la posición de 3–4 estrellas en las esquinas; comprobar que el recorte no deja bandas negras (mediana de una franja de 20 px en cada borde ≈ mediana del fondo, no 0). Tras recortar, comprobar `hasAstrometricSolution`: con 1.9.6+ la conserva; con versiones anteriores no, y hay que resolver de nuevo (Paso 8) o trasladar la solución.
