@@ -4,6 +4,13 @@
 
 **Por qué.** Combinar es decidir **qué canal aporta qué**: el color natural y las estrellas vienen de la banda ancha; el detalle y la emisión, de la banda estrecha. Hacerlo mal (Hα sin restar continuo, o mezclado antes de calibrar) produce el síntoma clásico: fondo rojo y regiones HII "pegadas" por diferencia de textura.
 
+**Cuándo aplica.** Sólo cuando hay **masters separados que juntar**:
+- Mono: L, R, G, B por separado (LRGB), o Hα, OIII, SII, Hβ.
+- Banda estrecha + RGB de banda ancha, aunque sea OSC: p. ej. RGB sin filtro + Hα/OIII extraídos del dual band (Paso 7). Con dual band OSC el R ya lleva casi todo el Hα y la inyección aporta poco (IC 1396: el R cambió un 0,6 %).
+- Dos masters del mismo canal (Hα de la mono + Hα del dual band).
+
+**No aplica** con una sola OSC sin filtro (p. ej. M31), ni con sólo dual band: la paleta HOO/SHO se monta en el Paso 2 no lineal. Si no aplica, decirlo y pasar al Paso 11 sin escribir ningún script.
+
 **Regla previa.** "Antes de procesar: alinear todos los stacks entre sí y recortar bordes negros a la misma dimensión" (flujo OSC5 de astro-photographie). Si los canales vienen de cámaras o noches distintas, **normalizar antes de combinar**: "Cada noche y cámara cambia fondo, transparencia y FWHM: LocalNormalization/LinearFit antes de combinar, ponderar por calidad, flats por configuración, no mezclar filtros ni material incompatible en una integración."
 
 **Qué aporta cada cámara**
