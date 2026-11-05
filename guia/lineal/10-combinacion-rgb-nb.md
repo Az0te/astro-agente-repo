@@ -34,6 +34,23 @@ Nunca mezclar subs de cámaras distintas en una integración: cada cámara y fil
 
 **HOO / SHO de la mono con estrellas RGB** (si hay banda estrecha): "cada canal Gradient → BXT → SXT → NXT"; SPCC narrowband combinando S,H,O en RGB y volviendo a extraer los canales. El continuo se resta con la RGB starless calibrada: **R sobre Hα, R sobre SII, G sobre OIII**; "OIII nunca con B si se quiere evitar Hβ". Estrellas siempre de la RGB (preferentemente la corta/HDR); "nunca de L ni de Hα/banda estrecha: tienen otra PSF y otro tamaño y dan estrellas hinchadas o de color de paleta".
 
+**En una llamada** (`herramientas/combinacion.js`, sobre copias):
+
+- `combinarMismoCanal(a, b, { nuevaVista })`: dos masters del mismo canal, alineados.
+  - LinearFit del segundo al primero y suma pesada por 1/σ² (ruido MRS).
+  - Avisa si el ruido apenas baja (< 2 %) o si las estrellas empeoran más de un 10 %.
+  - IC 1396 Hα, 24 frente a 122 subs: pesos 0,05 / 0,95 y ruido −2,4 %, lo que predice 1/σ² con esa diferencia de ruido.
+- `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, clipLow })`: RGB y Hα lineales, sin estrellas y alineados.
+  - LinearFit del Hα al R y máscara de nebulosa referida al cielo (celdas más oscuras), no a la mediana: en nebulosas que llenan el campo, la mediana ya es nebulosa.
+  - Mezcla `R' = (1 − α·M)·R + α·M·Hα`, con α 0,4 por defecto en nebulosas y 0,25 en galaxias.
+  - Mide la dominante del cielo antes y después (aviso si enrojece más de un 3 %), el % del campo bajo la máscara y cuánto cambia el R en la nebulosa.
+  - IC 1396 con dual band: máscara sobre el 60 % del campo, cielo +0,6 % y el R cambia un 0,6 %. Con dual band el R ya es casi Hα, así que inyectarlo aporta poco; con Hα de una mono y RGB sin filtro aporta más.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/combinacion.js"));   // en el nivel superior del script
+JSON.stringify(inyectarHa("RGB_starless", "Ha_CS", { tipo: "nebulosa", nuevaVista: "RGB_Ha" }));
+```
+
 **Código: LinearFit y mezcla en lineal**
 
 La mezcla, en fórmula: `R' = (1−α)·R + α·Hα`, con `α ≈ 0,2–0,6` y siempre bajo máscara. Se hace con PixelMath, con el Hα y la máscara por su id:
