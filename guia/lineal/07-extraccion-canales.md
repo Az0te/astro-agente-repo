@@ -56,4 +56,11 @@ if (!PM.executeOn(View.viewById("MasterLight"))) throw new Error("Desmezcla Hα 
 
 El mismo bloque con `newImageId = "OIII_raw"` y la expresión `-0.1378*($T[0]-pR) + 0.8370*($T[1]-pG) + 0.4542*($T[2]-pB)`. Con `createNewImage` desde `executeOn(view)` basta color space y formato; `executeGlobal` exige además `newImageWidth/Height`.
 
+**En una llamada** (`herramientas/bandaestrecha.js`): `desmezclarDualBand(vista, { ponderarG })` mide los pedestales en el cielo, crea `Ha_raw` y `OIII_raw` (gris, con la solución astrométrica), cuenta las sobre-restas antes de recortar a 0 y comprueba los ratios G/R y B/R en la zona de Hα. IC 63 v4 (nov 2026): ratios 0,146 y 0,072, sin sobre-resta; misma estructura que DBXtract (correlación 0,96 en bloques de 16 px; DBXtract escala distinto).
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en el nivel superior del script
+JSON.stringify(desmezclarDualBand("MasterLight_NB"));
+```
+
 **Control.** Ratios G/R y B/R en una zona de Hα ≈ 0,14 y 0,05. Comparar con DBXtract si el usuario lo lanza (fuente "DBXtract / Mono" en AutoPalette Studio, nunca "OSC Dualband"). Revisar que no hay zonas negras por sobre-resta y que el OIII no está lleno de continuo (comparar con la R de la RGB).

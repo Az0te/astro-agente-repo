@@ -55,4 +55,13 @@ if (img.minimum() < -0.001) throw new Error("Fondo negativo: k o c mal medidos")
 out.join("\n");
 ```
 
+**En una llamada** (`herramientas/bandaestrecha.js`): `medirContinuo(nbConEstrellas, rgbConEstrellas, { canal: 0 })` mide k con el procedimiento de arriba (centroide, apertura 7 px, anillo 10–14 px, mediana de ~3000 estrellas); `restarContinuo(nbStarless, rgbStarless, { k })` resta y mide los negativos y el brillo de emisión conservado. IC 63 v4 (nov 2026): k = 0,316 (la medida a mano fue 0,332) y la emisión conserva el 95 %.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en el nivel superior del script
+var k = medirContinuo("Ha_raw", "RGB_spcc", { canal: 0 });          // OIII: canal 1 (G)
+var r = restarContinuo("Ha_starless", "RGB_starless", { k: k.k, nuevaVista: "Ha_CS" });
+JSON.stringify({ k: k, resta: r });
+```
+
 **Control.** Residuos simétricos alrededor de las estrellas; sin discos oscuros en zonas de continuo fuerte (enmascarar o cubrir con la estrella); sin fondo negativo. Comparar el Hα original y el restado en una zona dominada por emisión: debe conservar casi todo el brillo (en IC 63 el continuo sólo quitaba un 2–5 %).

@@ -36,4 +36,11 @@ if (!PM.executeOn(View.viewById("Starless"))) throw new Error("Máscara gamma fa
 "mask_L_g20 creada";
 ```
 
+**En una llamada** (`herramientas/mascaras.js`): `crearMascara(vista, { tipo })` con `tipo` `luminancia` (gamma 2,0 LHE / 1,5 HDRMT), `cielo` (rampa 1,5σ–5σ, suavizada) o `fondo_lhe` (receta v4B). Devuelve la vista de la máscara, su cobertura y la media en el cielo y en lo brillante, y cómo aplicarla.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/mascaras.js"));   // en el nivel superior del script
+JSON.stringify(crearMascara("Starless_st", { tipo: "fondo_lhe" }));
+```
+
 **Control.** Ver la máscara estirada (STF) y comprobar que cubre lo que debe: núcleo protegido, fondo incluido, estrellas cubiertas si el proceso las daña. "Si hay que contenerlas, atenuar brillo en vez de erosionar." Revisar bordes de máscara (escalones, halos, costuras de color) en la imagen final, no sólo en la máscara.

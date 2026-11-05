@@ -101,4 +101,11 @@ if (!NBN.executeOn(View.viewById("HOO"))) throw new Error("NBN falló");
 "NBN HOO aplicado";
 ```
 
+**Previews en una llamada** (`herramientas/bandaestrecha.js`): `previsualizarPaletas(ha, oiii, { carpeta })` genera a ~1200 px Classic HOO Soft y Hard, Foraxx Classic bicolor y HOO con límite al OIII (NOVA) desde capas ya estiradas con el mismo estirado, y las guarda como JPG para enseñarlas y preguntar.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en el nivel superior del script
+JSON.stringify(previsualizarPaletas("Ha_st", "OIII_st", { carpeta: "<versión>/prev/paletas" }));
+```
+
 **Control.** Comparar la paleta elegida con la composición natural (Hα/OIII + RGB) como referencia. Vigilar: fondo teñido, OIII que inunda el campo de cian, estrellas de color de paleta (deben venir de la RGB), transiciones de máscara. "Una paleta es una convención, no el color real: decirlo en el dosier."
