@@ -95,7 +95,7 @@ ml.forceClose(); nx.forceClose();
 
 MLDenoise tarda ~2 min en 26 MP: supera el corte de 60 s del MCP, esperar con `watcher_status`, y no encadenar varios canales en un mismo `run_script` (con 8+ min seguidos PixInsight dio "Invalid task termination intent" y el watcher dejó de recoger comandos).
 
-**Sin MLDenoise (no hay modelo o el módulo no está):** NXT solo, denoise 0,95 (en Hα 0,85 puntuó algo más: 79,2 frente a 78,6), detail 0,15, iterations 2. Con señal fuerte (Hα), sin NXT: MLDenoise 1,0 solo.
+**Sin MLDenoise (no hay modelo o el módulo no está):** NXT solo, denoise 0,95 (en Hα 0,85 puntuó algo más: 79,2 frente a 78,6), detail 0,15, iterations 2. Con señal fuerte (Hα), sin NXT: MLDenoise 1,0 solo. Sin MLDenoise ni NXT: MultiscaleTGVDenoise (1.9.6) con `scales` 8 y `strength` 0,6; no con los valores por defecto (2 escalas dejan mucho ruido grueso). Borra más detalle que el híbrido y que NXT 0,95 (ver [detalle](../detalle/lineal-15-denoise-mldenoise.md)).
 
 | Parámetro NXT (variantes) | Valor |
 |---|---|

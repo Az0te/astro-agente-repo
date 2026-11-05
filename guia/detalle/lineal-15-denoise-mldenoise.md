@@ -26,6 +26,12 @@ Material de apoyo de la ficha: comparación medida de MLDenoise (proceso nativo 
 | NXT 0,95 | 78,6 | 78,6 | 69,7 |
 | NXT 0,85 | 79,2 | 71,4 | 66,8 |
 | NXT 0,70 | 77,7 | 58,6 | 59,3 |
+| MultiscaleTGVDenoise fuerza 0,7, 8 escalas | — | 75,1 | 44,6 |
+| MultiscaleTGVDenoise fuerza 0,6, 8 escalas | — | 75,1 | 52,5 |
+| MultiscaleTGVDenoise fuerza 0,5, 8 escalas | — | 70,0 | — |
+| MultiscaleTGVDenoise por defecto (0,5, 2 escalas) | — | 52,4 | — |
+
+**MultiscaleTGVDenoise (nuevo en PixInsight 1.9.6, medido el 5 nov 2026).** Con 8 escalas y fuerza 0,6–0,7 iguala al híbrido en ruido (OIII: error en el cielo 1,60·10⁻⁵ a 1 px y 3,2·10⁻⁶ a 16 px), pero borra más detalle de la nebulosa (pendiente −0,50 a −0,59 frente a −0,43 del híbrido; en SII −0,47 a −0,58, más que cualquier otra variante). No supera ni al híbrido ni a NXT 0,95; con sus valores por defecto (2 escalas) deja tres veces más ruido a 16 px. Tarda ~2 min por canal de 26 MP (como MLDenoise en CPU). Hα no se midió. Queda como alternativa sin RC-Astro ni modelo de MLDenoise, con 8 escalas y fuerza 0,6.
 
 Error en el cielo a 16 px, OIII: NXT 0,95 3,1·10⁻⁶; híbrido 3,1·10⁻⁶; MLDenoise 1,0 6,1·10⁻⁶. Detalle en nebulosa, OIII: híbrido −0,43; NXT 0,95 −0,55.
 
@@ -60,7 +66,7 @@ function px(id) { var im = View.viewById(id).image, a = new Float32Array(im.widt
 
 var SRC = "OIII_starless";                                   // canal mono lineal sin estrellas
 var ml = dup(SRC, SRC + "_ml"), nx = dup(SRC, SRC + "_nx");  // ids nuevos en cada prueba (caché de NXT)
-var ML = new MLDenoise; ML.modelPath = "D:/Astronomia/PixInsight/MLDenoise_v42.xmlm"; ML.amount = 1.0; ML.useCache = false;
+var ML = new MLDenoise; ML.modelPath = "C:/ruta/a/MLDenoise_v42.xmlm";       // cambiar por la ruta del modelo ML.amount = 1.0; ML.useCache = false;
 if (!ML.executeOn(ml.mainView)) throw new Error("MLDenoise falló");
 var NX = new NoiseXTerminator; NX.denoise = 0.95; NX.denoise_intensity = 0.95; NX.detail = 0.15; NX.iterations = 2;
 if (!NX.executeOn(nx.mainView)) throw new Error("NXT falló");
