@@ -278,11 +278,11 @@ function inyectarHa(rgb, ha, o) {
             bajo_mascara_pct: +(100 * en / tot).toFixed(1), cambio_R_nebulosa_pct: s0 > 0 ? +(100 * s1 / s0).toFixed(1) : null,
             no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
   wR.forceClose(); wH.forceClose();
-  wM.show();
+  wM.show(); wO.show(); wO.bringToFront();   // el resultado delante, no la máscara
   var d = 100 * (r.cielo_R_sobre_GB.despues / r.cielo_R_sobre_GB.antes - 1);
   r.control.medido.push("Cielo R/(G+B)/2: " + r.cielo_R_sobre_GB.antes + " → " + r.cielo_R_sobre_GB.despues + " (" + d.toFixed(1) + " %); máscara sobre el " + r.bajo_mascara_pct + " % del campo; el R cambia un " + r.cambio_R_nebulosa_pct + " % de media en la nebulosa (LinearFit iguala niveles: aporta estructura, no más rojo).");
   if (r.cambio_R_nebulosa_pct !== null && r.cambio_R_nebulosa_pct < 1)
-    r.control.revisar_a_ojo.push("El Hα cambia el R menos de un 1 % en la nebulosa: con este alfa aporta poco; comparar a ojo si compensa, o subir alfa.");
+    r.control.revisar_a_ojo.push("El Hα cambia el R menos de un 1 % en la nebulosa (alfa " + alfa + "): el R ya se parece mucho al Hα, lo normal si la RGB es de una OSC con dual band o el Hα tiene poca señal propia. Subir alfa apenas cambiará esto; comparar a ojo si compensa.");
   if (d > 3) r.no_cumple.push("El cielo enrojece un " + d.toFixed(1) + " %: subir clipLow o bajar alfa (sin máscara fina el fondo se vuelve rojo).");
   if (r.bajo_mascara_pct > 80) r.no_cumple.push("La máscara cubre el " + r.bajo_mascara_pct + " % del campo: subir clipLow para que no entre el cielo.");
   r.control.revisar_a_ojo.push("Comparar con la RGB sola al 100 % en una zona de Hα y en el fondo: sin textura distinta entre nebulosa y banda ancha, sin bordes de máscara, sin estrellas rojas.");
