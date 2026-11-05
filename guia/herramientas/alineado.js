@@ -45,6 +45,22 @@ function abrirConSTF(path, id) {
   return v.id;
 }
 
+// PixInsight 1.9.6 conserva la astrometría LINEAL al recortar, reescalar o girar, pero la que lleva corrección de
+// distorsión (splines) no se puede transformar: el proceso abre un diálogo "Some of these side effects could be
+// irreversible. Proceed?" que deja el script esperando. Esto la reduce a su parte lineal (se queda en la ventana,
+// no en el fichero): comprobado con IC 63 v4, tras IntegerResample ×2 coincide con una resolución nueva a 0,11 px.
+// Devuelve true si había splines y se quitaron.
+function astrometriaLineal(win) {
+  if (!win || win.isNull || !win.hasAstrometricSolution) return false;
+  var v = win.mainView;
+  var spl = v.properties.filter(function (p) {
+    return /AstrometricSolution:(ControlPoints|DistortionModel|Generation|Grid|ProjectiveTransformation)/.test(p); });
+  if (!spl.length) return false;
+  spl.forEach(function (p) { try { v.deleteProperty(p); } catch (e) { } });
+  try { win.regenerateAstrometricSolution(); } catch (e) { win.clearAstrometricSolution(); }
+  return true;
+}
+
 function alScale(path) {
   // Escala en "/px: de la astrometría si la hay; si no, de XPIXSZ, FOCALLEN y XBINNING.
   var w = ImageWindow.open(path, "alSCALE", "verbosity 0", true)[0];
@@ -107,6 +123,7 @@ function alinearMasters(lista, o) {
     if (sRef && info[f].escala && Math.abs(info[f].escala / sRef - 1) > 0.03) {
       var k = info[f].escala / sRef;   // >1: píxeles más grandes que la referencia → ampliar
       var w = ImageWindow.open(f, "alRES", "verbosity 0", true)[0];
+      astrometriaLineal(w);   // sin esto, una solución con splines abre un diálogo y para el script
       var R = new Resample;
       R.xSize = k; R.ySize = k; R.mode = 0;   // relativo
       R.interpolation = 4;                    // Lanczos-3 (constante no expuesta en PJSR)
@@ -173,6 +190,7 @@ function alinearMasters(lista, o) {
   r.ficheros.forEach(function (e) { porSalida[e.entrada == ref ? ref : e.registrado] = e; });
   reg.forEach(function (f) {
     var e = porSalida[f], w = ImageWindow.open(f, "alCROP", "verbosity 0", true)[0];
+    if (astrometriaLineal(w)) e.splines_quitados = true;
     var C = new Crop; C.mode = 1;   // AbsolutePixels
     C.leftMargin = -x0; C.topMargin = -y0; C.rightMargin = -(W - 1 - x1); C.bottomMargin = -(H - 1 - y1);
     if (!C.executeOn(w.mainView)) { w.forceClose(); throw new Error("Crop falló en " + f); }
