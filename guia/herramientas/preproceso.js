@@ -33,7 +33,11 @@ function ppSearch(patron, recursivo) {
 
 function ppList(x, patron) {
   if (!x) return [];
-  if (x instanceof Array) return x;
+  if (x instanceof Array) {   // lista de ficheros y/o carpetas
+    var all = [];
+    x.forEach(function (e) { all = all.concat(ppList(e, patron)); });
+    return all;
+  }
   var p = String(x).replace(/\\/g, "/");
   if (File.exists(p) && /\.txt$/i.test(p))   // lista de ficheros (la que escribe seleccionarSubs)
     return File.readLines(p).map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
@@ -123,7 +127,17 @@ function ppFlatLevel(path, bayer) {
 function revisarCalibracion(o) {
   o = o || {};
   var r = { grupos_lights: [], darks: [], flats: [], darks_de_flats: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
-  var L = ppList(o.lights).map(ppHeader);
+  // Con la carpeta de la noche (opción carpeta, o lights apuntando a ella) se usan sus subcarpetas LIGHT, FLAT y DARK.
+  function sub(x, n) {
+    if (typeof x !== "string") return x;
+    var d = x.replace(/\\/g, "/").replace(/\/$/, "");
+    return File.directoryExists(d + "/" + n) ? d + "/" + n : x;
+  }
+  if (o.carpeta) { o.lights = o.lights || o.carpeta; o.flats = o.flats || sub(o.carpeta, "FLAT"); o.flatDarks = o.flatDarks || sub(o.carpeta, "DARK"); }
+  if (typeof o.lights === "string" && ppList(o.lights).length == 0) o.lights = sub(o.lights, "LIGHT");
+  if (typeof o.flats === "string" && ppList(o.flats).length == 0) o.flats = sub(o.flats, "FLAT");
+  if (typeof o.flatDarks === "string" && ppList(o.flatDarks).length == 0) o.flatDarks = sub(o.flatDarks, "DARK");
+  var L = ppList(o.lights).map(ppHeader).filter(function (h) { return !h.tipo || /light|science/.test(h.tipo); });
   if (L.length == 0) throw new Error("No hay lights en " + o.lights);
   var D = ppList(o.darks).map(ppHeader), F = ppList(o.flats).map(ppHeader), FD = ppList(o.flatDarks).map(ppHeader);
   // aliasFiltros: { "nombre viejo": "nombre bueno" } para filtros renombrados en el programa de captura.
@@ -332,6 +346,13 @@ function lanzarWBPP(o) {
   if (!o.salida) throw new Error("Falta la carpeta de salida (opción salida, ruta corta)");
   var salida = o.salida.replace(/\\/g, "/").replace(/\/$/, "");
   if (salida.length > 60) throw new Error("Ruta de salida demasiado larga (" + salida.length + " caracteres): usar una de menos de 60");
+  function sub(x, n) {   // carpeta de la noche: sus subcarpetas LIGHT, FLAT y DARK
+    if (typeof x !== "string" || ppList(x).length > 0) return x;
+    var d = x.replace(/\\/g, "/").replace(/\/$/, "");
+    return File.directoryExists(d + "/" + n) ? d + "/" + n : x;
+  }
+  if (o.carpeta) { o.lights = o.lights || o.carpeta; o.flats = o.flats || o.carpeta; o.flatDarks = o.flatDarks || o.carpeta; }
+  o.lights = sub(o.lights, "LIGHT"); o.flats = sub(o.flats, "FLAT"); o.flatDarks = sub(o.flatDarks, "DARK");
   var files = [].concat(ppList(o.lights), ppList(o.flats), ppList(o.darks), ppList(o.flatDarks), ppList(o.bias));
   if (ppList(o.lights).length == 0) throw new Error("No hay lights");
   for (var i = 0; i < files.length; ++i)
@@ -391,6 +412,8 @@ function estadoWBPP(salida) {
 function seleccionarSubs(x, o) {
   o = o || {};
   var fs = ppList(x);
+  if (fs.length == 0 && typeof x === "string" && File.directoryExists(x.replace(/\\/g, "/").replace(/\/$/, "") + "/LIGHT"))
+    fs = ppList(x.replace(/\\/g, "/").replace(/\/$/, "") + "/LIGHT");   // carpeta de la noche: su LIGHT
   if (fs.length == 0) throw new Error("No hay subs en " + x);
   var fwhmTol = o.fwhmTol !== undefined ? o.fwhmTol : 0.5, fwhmDuda = o.fwhmDuda !== undefined ? o.fwhmDuda : 0.35, eccDelta = o.eccDelta !== undefined ? o.eccDelta : 0.1;
   var eccDuda = o.eccDuda !== undefined ? o.eccDuda : 0.07, nubeDuda = o.nubeDuda !== undefined ? o.nubeDuda : 1.5;
