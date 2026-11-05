@@ -39,7 +39,17 @@ function ppSub(x, n) {
   if (x instanceof Array) return x.map(function (e) { return ppSub(e, n); });
   if (typeof x !== "string" || ppList(x).length > 0) return x;
   var d = x.replace(/\\/g, "/").replace(/\/$/, "");
-  return File.directoryExists(d + "/" + n) ? d + "/" + n : x;
+  if (File.directoryExists(d + "/" + n)) return d + "/" + n;
+  // Carpeta del objeto: todas sus subcarpetas n (una por noche), sin las que empiezan por "_" (_proc, _rechazados).
+  var dirs = [];
+  ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) {
+    ppSearch(d + "/" + e, true).forEach(function (f) {
+      var dir = File.extractDrive(f) + File.extractDirectory(f), rel = dir.substring(d.length);
+      if (!/\/_/.test(rel) && new RegExp("/" + n + "$", "i").test(dir) && dirs.indexOf(dir) < 0) dirs.push(dir);
+    });
+  });
+  dirs.sort();
+  return dirs.length ? dirs : x;
 }
 
 function ppList(x, patron) {
@@ -421,7 +431,8 @@ function estadoWBPP(salida) {
 function seleccionarSubs(x, o) {
   o = o || {};
   var fs = ppList(ppSub(x, "LIGHT"));   // una o varias carpetas; de una carpeta de noche, su LIGHT
-  if (fs.length == 0) throw new Error("No hay subs en " + x);
+  if (fs.length == 0) throw new Error("No hay subs en " + x + ": ni imágenes en la carpeta ni subcarpetas LIGHT (de la noche o de las noches del objeto). " +
+                                      "Pasa la carpeta LIGHT, la de la noche, la del objeto o una lista de ficheros; no escribas tu propia búsqueda.");
   var fwhmTol = o.fwhmTol !== undefined ? o.fwhmTol : 0.5, fwhmDuda = o.fwhmDuda !== undefined ? o.fwhmDuda : 0.35, eccDelta = o.eccDelta !== undefined ? o.eccDelta : 0.1;
   var eccDuda = o.eccDuda !== undefined ? o.eccDuda : 0.07, nubeDuda = o.nubeDuda !== undefined ? o.nubeDuda : 1.5;
   var nubeZ = o.nubeZ !== undefined ? o.nubeZ : 2.5;
