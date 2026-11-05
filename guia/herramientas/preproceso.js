@@ -438,25 +438,36 @@ function seleccionarSubs(x, o) {
   var nubeZ = o.nubeZ !== undefined ? o.nubeZ : 2.5;
   if (typeof ImageAnalysis === "undefined") throw new Error("ImageAnalysis no está disponible (PixInsight 1.9.6 o posterior)");
 
-  var P = new ImageAnalysis;
-  P.frames = fs.map(function (f) { return [true, f, "", ""]; });
-  P.task = 0;       // medir (Task_Measure)
-  P.onError = 0;    // seguir con el resto
-  P.weightingExpression = "PSFSignalWeight";
-  P.executeGlobal();
+  // Grupos (carpeta, filtro, exposición) por cabecera, y ImageAnalysis por separado en cada uno: la extinción por
+  // nubes es relativa al conjunto medido, y mezclar noches o filtros la falsea (5 nov 2026: 0,13 → 1,64 al juntar
+  // las dos noches de LDN 1235).
   var C = ImageAnalysis;
   function col(n) { var k = "measurements_measurement" + n; return C[k] !== undefined ? C[k] : C.prototype[k]; }
   var iP = col("Path"), iF = col("FWHMpx"), iE = col("Eccentricity"), iS = col("Stars"), iW = col("PSFSignalWeight"),
       iCl = col("CloudExtinction"), iT = col("Trails"), iN = col("Noise"), iM = col("Median"), iFl = col("Flags");
-
-  var subs = P.measurements.map(function (row) {
-    var p = row[iP], h = {};
-    try { h = ppHeader(p); } catch (e) { }
-    var flags = row[iFl] || 0;
-    return { fichero: p, nombre: File.extractName(p), grupo: [File.extractDirectory(p), h.filtro || "", h.exp || ""].join(" | "),
-             estrellas: row[iS], fwhm_px: +row[iF].toFixed(3), excentricidad: +row[iE].toFixed(3), mediana: row[iM], ruido: row[iN],
-             psf_signal_weight: row[iW], nube: (flags & 0x40) ? +row[iCl].toFixed(4) : null, trazos: (flags & 0x08) ? row[iT] : null,
-             motivos: [], dudas: [] };
+  var cab = {}, gfs = {}, gord = [];
+  fs.forEach(function (f) {
+    var h = {}; try { h = ppHeader(f); } catch (e) { }
+    cab[f] = h;
+    var g = [File.extractDrive(f) + File.extractDirectory(f), h.filtro || "", h.exp || ""].join(" | ");
+    if (!gfs[g]) { gfs[g] = []; gord.push(g); }
+    gfs[g].push(f);
+  });
+  var subs = [];
+  gord.forEach(function (g) {
+    var P = new ImageAnalysis;
+    P.frames = gfs[g].map(function (f) { return [true, f, "", ""]; });
+    P.task = 0;       // medir (Task_Measure)
+    P.onError = 0;    // seguir con el resto
+    P.weightingExpression = "PSFSignalWeight";
+    P.executeGlobal();
+    P.measurements.forEach(function (row) {
+      var p = row[iP], flags = row[iFl] || 0;
+      subs.push({ fichero: p, nombre: File.extractName(p), grupo: g,
+                  estrellas: row[iS], fwhm_px: +row[iF].toFixed(3), excentricidad: +row[iE].toFixed(3), mediana: row[iM], ruido: row[iN],
+                  psf_signal_weight: row[iW], nube: (flags & 0x40) ? +row[iCl].toFixed(4) : null, trazos: (flags & 0x08) ? row[iT] : null,
+                  motivos: [], dudas: [] });
+    });
   });
   if (subs.length < fs.length) {
     var med = subs.map(function (s) { return s.fichero; });
