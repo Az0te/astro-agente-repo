@@ -8,6 +8,9 @@
 //   JSON.stringify(lanzarWBPP({ lights: sel.lista_aprobados, flats: ..., flatDarks: ..., darks: ..., salida: "C:/wbpp/obj" }));
 //   JSON.stringify(estadoWBPP("C:/wbpp/obj"));                    // repetir hasta terminado: true
 //
+// Todas las funciones aceptan una carpeta o una lista de carpetas y/o ficheros. Una carpeta de noche sin imágenes
+// dentro se sustituye por su subcarpeta LIGHT, FLAT o DARK según el caso.
+//
 // revisarCalibracion lee sólo las cabeceras (sin abrir ventanas) y, de los flats, unos pocos ficheros para medir
 // su nivel. Comprueba que darks, flats y darks de flats casan con los lights (exposición, temperatura, gain, offset,
 // binning, tamaño, telescopio y filtro) y que los flats no están saturados ni subexpuestos.
@@ -29,6 +32,14 @@
 // File.searchDirectory en 1.9.6+ (searchDirectory global está obsoleta y avisa en la consola).
 function ppSearch(patron, recursivo) {
   return (File.searchDirectory ? File.searchDirectory(patron, recursivo) : searchDirectory(patron, recursivo));
+}
+
+// Carpeta de noche → su subcarpeta n (LIGHT, FLAT o DARK) si ella misma no tiene imágenes. Acepta listas.
+function ppSub(x, n) {
+  if (x instanceof Array) return x.map(function (e) { return ppSub(e, n); });
+  if (typeof x !== "string" || ppList(x).length > 0) return x;
+  var d = x.replace(/\\/g, "/").replace(/\/$/, "");
+  return File.directoryExists(d + "/" + n) ? d + "/" + n : x;
 }
 
 function ppList(x, patron) {
@@ -127,16 +138,9 @@ function ppFlatLevel(path, bayer) {
 function revisarCalibracion(o) {
   o = o || {};
   var r = { grupos_lights: [], darks: [], flats: [], darks_de_flats: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
-  // Con la carpeta de la noche (opción carpeta, o lights apuntando a ella) se usan sus subcarpetas LIGHT, FLAT y DARK.
-  function sub(x, n) {
-    if (typeof x !== "string") return x;
-    var d = x.replace(/\\/g, "/").replace(/\/$/, "");
-    return File.directoryExists(d + "/" + n) ? d + "/" + n : x;
-  }
-  if (o.carpeta) { o.lights = o.lights || o.carpeta; o.flats = o.flats || sub(o.carpeta, "FLAT"); o.flatDarks = o.flatDarks || sub(o.carpeta, "DARK"); }
-  if (typeof o.lights === "string" && ppList(o.lights).length == 0) o.lights = sub(o.lights, "LIGHT");
-  if (typeof o.flats === "string" && ppList(o.flats).length == 0) o.flats = sub(o.flats, "FLAT");
-  if (typeof o.flatDarks === "string" && ppList(o.flatDarks).length == 0) o.flatDarks = sub(o.flatDarks, "DARK");
+  // Con la carpeta de la noche (opción carpeta, o lights apuntando a ella; una o varias) se usan sus LIGHT, FLAT y DARK.
+  if (o.carpeta) { o.lights = o.lights || o.carpeta; o.flats = o.flats || o.carpeta; o.flatDarks = o.flatDarks || o.carpeta; }
+  o.lights = ppSub(o.lights, "LIGHT"); o.flats = ppSub(o.flats, "FLAT"); o.flatDarks = ppSub(o.flatDarks, "DARK");
   var L = ppList(o.lights).map(ppHeader).filter(function (h) { return !h.tipo || /light|science/.test(h.tipo); });
   if (L.length == 0) throw new Error("No hay lights en " + o.lights);
   var D = ppList(o.darks).map(ppHeader), F = ppList(o.flats).map(ppHeader), FD = ppList(o.flatDarks).map(ppHeader);
@@ -238,13 +242,18 @@ function revisarCalibracion(o) {
 // y las de salida de WBPP (calibrated, debayered, registered, master, logs).
 function inventario(carpeta, o) {
   o = o || {};
-  var raiz = carpeta.replace(/\\/g, "/").replace(/\/$/, ""), excl = o.excluir || "_rechazados", files = [];
-  ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) { files = files.concat(ppSearch(raiz + "/" + e, true)); });
-  // Fuera: carpetas que empiezan por "_" (_proc, _rechazados...) y las de salida de WBPP.
-  var rel = function (f) { return f.substring(raiz.length); };
-  files = files.filter(function (f) { return f.indexOf(excl) < 0 && !/\/_[^\/]*\//.test(rel(f)) &&
-                                             !/\/(calibrated|debayered|registered|master|logs|cache)\//i.test(rel(f)); });
-  if (files.length == 0) throw new Error("No hay imágenes en " + raiz);
+  // Una carpeta o varias (p. ej. el objeto repartido en discos o carpetas distintas).
+  var raices = (carpeta instanceof Array ? carpeta : [carpeta]).map(function (c) { return String(c).replace(/\\/g, "/").replace(/\/$/, ""); });
+  var raiz = raices.length == 1 ? raices[0] : "", excl = o.excluir || "_rechazados", files = [];
+  raices.forEach(function (rz) {
+    var fr = [];
+    ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) { fr = fr.concat(ppSearch(rz + "/" + e, true)); });
+    // Fuera: carpetas que empiezan por "_" (_proc, _rechazados...) y las de salida de WBPP.
+    files = files.concat(fr.filter(function (f) { var rel = f.substring(rz.length);
+      return f.indexOf(excl) < 0 && !/\/_[^\/]*\//.test(rel) && !/\/(calibrated|debayered|registered|master|logs|cache)\//i.test(rel); }));
+  });
+  files = ppUnique(files, function (f) { return f; });
+  if (files.length == 0) throw new Error("No hay imágenes en " + raices.join(", "));
   var H = [], errores = [];
   files.forEach(function (f) { try { H.push(ppHeader(f)); } catch (e) { errores.push(File.extractNameAndExtension(f) + ": " + e.message); } });
   ppList(o.darks).forEach(function (f) { try { var h = ppHeader(f); h.biblioteca = true; H.push(h); } catch (e) { } });
@@ -263,11 +272,11 @@ function inventario(carpeta, o) {
   }
   H.forEach(function (h) { h.clase = tipo(h); h.noche = noche(h); });
   var L = H.filter(function (h) { return h.clase == "light"; });
-  if (L.length == 0) throw new Error("No hay lights en " + raiz + " (" + H.length + " ficheros leídos)");
+  if (L.length == 0) throw new Error("No hay lights en " + raices.join(", ") + " (" + H.length + " ficheros leídos)");
 
   // Equipo, del primer light.
   var l0 = L[0], pix = parseFloat(l0.XPIXSZ), fl = parseFloat(l0.FOCALLEN);
-  var r = { carpeta: raiz, ficheros: H.length,
+  var r = { carpeta: raices.length == 1 ? raiz : raices, ficheros: H.length,
             equipo: { camara: l0.INSTRUME || "", osc: !!l0.BAYERPAT, bayer: l0.BAYERPAT || "", pixel_um: isFinite(pix) ? pix : null,
                       focal_mm: isFinite(fl) ? fl : null, escala_arcsec_px: isFinite(pix) && isFinite(fl) && fl > 0 ? +(206.265 * pix / fl).toFixed(3) : null,
                       telescopios: ppUnique(L, function (h) { return (h.TELESCOP || "").toUpperCase(); }), captura: ppUnique(L, function (h) { return h.SWCREATE || ""; }),
@@ -284,7 +293,7 @@ function inventario(carpeta, o) {
     var g = { noche: h0.noche, filtro: h0.filtro || "(sin FILTER)", exposicion_s: h0.exp, n: G.length, horas: +(G.length * h0.exp / 3600).toFixed(2),
               gain: h0.gain, offset: h0.offset, bin: h0.bin, telescopio: h0.TELESCOP || "",
               temp: temps.length ? [Math.min.apply(null, temps), Math.max.apply(null, temps)] : null,
-              carpetas: ppUnique(G, function (h) { return (File.extractDrive(h.fichero) + File.extractDirectory(h.fichero)).replace(raiz, "").replace(/^\//, ""); }) };
+              carpetas: ppUnique(G, function (h) { return (File.extractDrive(h.fichero) + File.extractDirectory(h.fichero)).replace(raiz || "\u0000", "").replace(/^\//, ""); }) };
     if (rot.length) g.rotador = rot.length > 3 ? rot.slice(0, 3).concat(["…"]) : rot;
     // Flats de su filtro y su noche (o de la mañana siguiente), mismo sensor y telescopio.
     var flats = H.filter(function (f) { return /flat/.test(f.clase) && f.filtro == h0.filtro && f.bin == h0.bin && f.ancho == h0.ancho &&
@@ -346,13 +355,8 @@ function lanzarWBPP(o) {
   if (!o.salida) throw new Error("Falta la carpeta de salida (opción salida, ruta corta)");
   var salida = o.salida.replace(/\\/g, "/").replace(/\/$/, "");
   if (salida.length > 60) throw new Error("Ruta de salida demasiado larga (" + salida.length + " caracteres): usar una de menos de 60");
-  function sub(x, n) {   // carpeta de la noche: sus subcarpetas LIGHT, FLAT y DARK
-    if (typeof x !== "string" || ppList(x).length > 0) return x;
-    var d = x.replace(/\\/g, "/").replace(/\/$/, "");
-    return File.directoryExists(d + "/" + n) ? d + "/" + n : x;
-  }
   if (o.carpeta) { o.lights = o.lights || o.carpeta; o.flats = o.flats || o.carpeta; o.flatDarks = o.flatDarks || o.carpeta; }
-  o.lights = sub(o.lights, "LIGHT"); o.flats = sub(o.flats, "FLAT"); o.flatDarks = sub(o.flatDarks, "DARK");
+  o.lights = ppSub(o.lights, "LIGHT"); o.flats = ppSub(o.flats, "FLAT"); o.flatDarks = ppSub(o.flatDarks, "DARK");
   var files = [].concat(ppList(o.lights), ppList(o.flats), ppList(o.darks), ppList(o.flatDarks), ppList(o.bias));
   if (ppList(o.lights).length == 0) throw new Error("No hay lights");
   for (var i = 0; i < files.length; ++i)
@@ -411,9 +415,7 @@ function estadoWBPP(salida) {
 
 function seleccionarSubs(x, o) {
   o = o || {};
-  var fs = ppList(x);
-  if (fs.length == 0 && typeof x === "string" && File.directoryExists(x.replace(/\\/g, "/").replace(/\/$/, "") + "/LIGHT"))
-    fs = ppList(x.replace(/\\/g, "/").replace(/\/$/, "") + "/LIGHT");   // carpeta de la noche: su LIGHT
+  var fs = ppList(ppSub(x, "LIGHT"));   // una o varias carpetas; de una carpeta de noche, su LIGHT
   if (fs.length == 0) throw new Error("No hay subs en " + x);
   var fwhmTol = o.fwhmTol !== undefined ? o.fwhmTol : 0.5, fwhmDuda = o.fwhmDuda !== undefined ? o.fwhmDuda : 0.35, eccDelta = o.eccDelta !== undefined ? o.eccDelta : 0.1;
   var eccDuda = o.eccDuda !== undefined ? o.eccDuda : 0.07, nubeDuda = o.nubeDuda !== undefined ? o.nubeDuda : 1.5;
