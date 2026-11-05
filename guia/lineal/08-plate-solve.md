@@ -24,4 +24,11 @@ JSON.stringify(r);   // ra, dec (grados), scale (″/px), rotation, flipped, mat
 - Repetir `blindSolve` con la pista de escala del perfil (`minScale`/`maxScale`) y, si se conoce el centro (cabecera `RA`/`DEC` o el objeto), con `regionRA`/`regionDec`/`regionRadius`.
 - Si da `blindSolve is not defined`, el watcher cargado no es el v8: parar y decírselo al usuario para que cargue `watcher/pixinsight-mcp-watcher-v8.js`. No sustituirlo por ImageSolver, por copias de solución ni por traslados manuales.
 
+**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Desde PiCopilot, los scripts que usan `blindSolve` se ejecutan sobre el watcher, así que también funciona con modelos sin herramientas.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script
+JSON.stringify(resolverAstrometria("MasterLight"));
+```
+
 **Control.** `hasAstrometricSolution === true` **después** de cada paso que pueda romperla (crop, rotación, BXT, GraXpert); si se ha perdido, volver a ejecutar `blindSolve`.

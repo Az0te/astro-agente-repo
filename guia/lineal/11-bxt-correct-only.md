@@ -46,4 +46,11 @@ if (!w.hasAstrometricSolution) {
 "BXT CO + WCS OK";
 ```
 
+**En una llamada** (`herramientas/lineal.js`): `bxtCorrectOnly(vista, { nuevaVista })` aplica BXT correct only sobre una copia y mide el FWHM por canal antes y después (sobre las mismas estrellas), el ringing de la estrella más brillante y si conserva la solución astrométrica (si no, la recupera con `blindSolve`). IC 1396 (nov 2026): diferencia de FWHM entre canales 0,34 → 0,24 px, sin ringing, WCS conservada.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script
+JSON.stringify(bxtCorrectOnly("MasterLight", { nuevaVista: "MasterLight_bxtco" }));
+```
+
 **Control.** Comparar el perfil de una estrella brillante antes/después (FWHM por canal más parecido, sin anillos). Ringing = 0 (contar cambios de signo de la derivada del perfil radial con amplitud > 0,01; ver [Anexo B](../anexos/B-checklist-entrega.md)). `hasAstrometricSolution === true` antes de seguir.

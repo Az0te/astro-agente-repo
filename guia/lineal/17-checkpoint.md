@@ -35,6 +35,13 @@ out.push("pasos en historial: " + v.processing.length);
 out.join("\n");
 ```
 
+**Informe en una llamada** (`herramientas/lineal.js`): `checkpointLineal(vista, { carpeta, objeto, version, notas })` mide la tabla de arriba (lineal, cielo por canal en sigmas, recorte, WCS, FWHM por canal, ringing, núcleos, historial), devuelve `no_cumple` y, con `carpeta`, escribe un borrador de `estado.md` para la fase no lineal.
+
+```javascript
+eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script
+JSON.stringify(checkpointLineal("MasterLight_v3", { carpeta: "<carpeta de la versión>", objeto: "IC 1396", version: "v3" }));
+```
+
 **Guardado.** "Guardar también capas lineales intermedias (incluida la HDR y sus máscaras) para poder rehacer sin repetir todo". Antes de estirar, `window.purge()` de las vistas temporales: "cada imagen RGB f32 de ~11k×7k ocupa ~1 GB y cada paso añade historial de deshacer. Cerrar vistas temporales y usar `window.purge()` tras pasos pesados".
 
 **Estado para la fase no lineal.** La fase lineal termina aquí: escribir `<carpeta de la versión>/estado.md` y cerrar la sesión. La fase no lineal empieza en una sesión nueva leyendo `SKILL.md`, `perfil.md` y este fichero, sin nada de la fase lineal.
