@@ -443,16 +443,12 @@ function ppAbrirSTF(path, id) {
     w = ImageWindow.open(path)[0];
     if (id) { var n = id.replace(/[^A-Za-z0-9_]/g, "_"); if (/^[0-9]/.test(n)) n = "_" + n; if (ImageWindow.windowById(n).isNull) w.mainView.id = n; }
   }
-  var v = w.mainView, im = v.image, stf = [];
-  for (var c = 0; c < im.numberOfChannels; ++c) {
-    im.selectedChannel = c;
-    var med = im.median(), mad = im.MAD() * 1.4826, sh = Math.max(0, Math.min(1, med - 2.8 * mad));
-    stf.push([sh, 1, Math.mtf(0.25, med - sh), 0, 1]);   // c0, c1, m, r0, r1; fondo a 0,25
-  }
+  // STF enlazado (mismos parámetros en todos los canales): por canal desequilibra los colores.
+  var v = w.mainView, im = v.image, n = im.numberOfChannels, med = 0, mad = 0;
+  for (var c = 0; c < n; ++c) { im.selectedChannel = c; med += im.median() / n; mad += 1.4826 * im.MAD() / n; }
   im.resetSelections();
-  if (im.numberOfChannels == 1) stf = [stf[0], stf[0], stf[0]];
-  while (stf.length < 4) stf.push([0, 1, 0.5, 0, 1]);
-  var S = new ScreenTransferFunction; S.STF = stf; S.executeOn(v, false);
+  var sh = Math.max(0, Math.min(1, med - 2.8 * mad)), row = [sh, 1, Math.mtf(0.25, med - sh), 0, 1];   // c0, c1, m, r0, r1
+  var S = new ScreenTransferFunction; S.STF = [row, row, row, [0, 1, 0.5, 0, 1]]; S.executeOn(v, false);
   w.show();
   return v.id;
 }
