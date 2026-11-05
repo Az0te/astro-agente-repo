@@ -118,6 +118,8 @@ function revisarCalibracion(o) {
   var L = ppList(o.lights).map(ppHeader);
   if (L.length == 0) throw new Error("No hay lights en " + o.lights);
   var D = ppList(o.darks).map(ppHeader), F = ppList(o.flats).map(ppHeader), FD = ppList(o.flatDarks).map(ppHeader);
+  // aliasFiltros: { "nombre viejo": "nombre bueno" } para filtros renombrados en el programa de captura.
+  if (o.aliasFiltros) L.concat(D, F, FD).forEach(function (h) { if (o.aliasFiltros[h.filtro] !== undefined) h.filtro = o.aliasFiltros[h.filtro]; });
   var B = ppList(o.bias).map(ppHeader);
   var tolExp = o.tolExposicion || 1, tolTemp = o.tolTemperatura || 2;
 
