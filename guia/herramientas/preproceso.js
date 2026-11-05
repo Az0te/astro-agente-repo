@@ -274,7 +274,12 @@ function inventario(carpeta, o) {
     g.flats = flatsNoche.length;
     if (flatsNoche.length == 0)
       r.no_cumple.push("Lights " + g.filtro + " " + h0.exp + " s del " + h0.noche + " (" + G.length + "): no hay flats de ese filtro de esa noche" +
-                       (flats.length ? " (sí de " + ppUnique(flats, function (f) { return f.noche; }).join(", ") + ": sólo valen si no se movió nada del tren óptico)" : "") + ".");
+                       (flats.length ? " (sí de " + ppUnique(flats, function (f) { return f.noche; }).join(", ") + ": sólo valen si no se movió nada del tren óptico" +
+                        (function () {   // ángulo del rotador de los lights frente al de esos flats
+                          var rl = parseFloat(h0.ROTATANG || h0.ROTATOR), rf = ppUnique(flats.filter(function (f) { return isFinite(parseFloat(f.ROTATANG || f.ROTATOR)); }),
+                                   function (f) { return Math.round(parseFloat(f.ROTATANG || f.ROTATOR)); });
+                          return isFinite(rl) && rf.length ? "; rotador de los lights " + Math.round(rl) + "°, de esos flats " + rf.join("°, ") + "°" : "";
+                        })() + ")" : "") + ".");
     else {
       var otroTel = flatsNoche.filter(function (f) { return f.telescopio && h0.telescopio && f.telescopio != h0.telescopio; });
       if (otroTel.length) r.no_cumple.push("Lights " + g.filtro + " del " + h0.noche + ": " + otroTel.length + " flats dicen telescopio '" + otroTel[0].TELESCOP + "' (lights '" + h0.TELESCOP + "').");
