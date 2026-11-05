@@ -37,6 +37,7 @@ function beZones(view) {
       }
       cells.push(m);
     }
+  cells = cells.filter(function (c0) { return (c0[0] + (c0[1] || 0) + (c0[2] || 0)) > 1e-6; });   // fuera bordes negros
   var k = Math.max(5, Math.floor(cells.length * 0.10));
   var med = function (arr, ch) { var v = arr.map(function (x) { return x[ch]; }).sort(function (p, q) { return p - q; }); return v[v.length >> 1]; };
   var bySum = cells.slice().sort(function (a, b2) { return (a[0] + (a[1] || 0) + (a[2] || 0)) - (b2[0] + (b2[1] || 0) + (b2[2] || 0)); });

@@ -175,6 +175,7 @@ function esCheck(view) {
       v.sort(function (a, b) { return a - b; });
       cells.push({ x: x0, y: y0, m: v[v.length >> 1] });
     }
+  cells = cells.filter(function (c0) { return c0.m > 1e-6; });   // fuera bordes negros del registro o recorte
   cells.sort(function (a, b) { return a.m - b.m; });
   var k = Math.max(5, Math.floor(cells.length * 0.10)), dif = [], sk = [];
   for (var j = 0; j < k; ++j) {
@@ -228,6 +229,7 @@ function esSkyDominance(view) {
       v.sort(function (a, b) { return a - b; });
       cells.push({ r: R, m: v[v.length >> 1] });
     }
+  cells = cells.filter(function (c0) { return c0.m > 1e-6; });   // fuera bordes negros del registro o recorte
   cells.sort(function (a, b) { return a.m - b.m; });
   var k = Math.max(5, Math.floor(cells.length * 0.10)), med = [];
   for (var ch = 0; ch < 3; ++ch) {

@@ -88,7 +88,7 @@ function rdResidual(a, b) {
 
 function rdQuality(before, after) {
   var a = rdLum(before), b = rdLum(after), cells = rdCells(a);
-  var sorted = cells.slice().sort(function (p, q) { return p.m - q.m; });
+  var sorted = cells.filter(function (c0) { return c0.m > 1e-6; }).sort(function (p, q) { return p.m - q.m; });   // fuera bordes negros
   var sky = sorted.slice(0, Math.max(5, Math.floor(sorted.length * 0.10)));
   var na = rdNoise(a, sky), nb = rdNoise(b, sky), skyLevel = sky[sky.length >> 1].m;
   var faint = cells.filter(function (c) { return c.m > skyLevel + 3 * na && c.m < skyLevel + 20 * na; });

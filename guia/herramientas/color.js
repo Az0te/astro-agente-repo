@@ -29,6 +29,7 @@ function ccSky(view) {
       v.sort(function (a, b) { return a - b; });
       cells.push({ x: x0, y: y0, m: v[v.length >> 1] });
     }
+  cells = cells.filter(function (c0) { return c0.m > 1e-6; });   // fuera bordes negros del registro o recorte
   cells.sort(function (a, b) { return a.m - b.m; });
   var kc = Math.max(5, Math.floor(cells.length * 0.10)), med = [], noise = [];
   for (var c2 = 0; c2 < 3; ++c2) {
