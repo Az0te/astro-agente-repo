@@ -4,6 +4,12 @@
 
 **Por qué.** SPCC, SPFC y MGC **necesitan solución astrométrica**: sin ella fallan con "The image has no valid astrometric solution". BXT y GraXpert pueden eliminarla (y recortar o rotar, con PixInsight 1.9.5 o anterior): comprobar `hasAstrometricSolution` antes de cada uno. Resolver es más barato que descubrir el fallo a mitad de SPCC.
 
+**Orden: alinear primero (Paso 5), resolver después.** Con varios masters, resolver antes de alinear no sirve:
+- StarAlignment escribe ficheros nuevos y la solución no pasa a los alineados.
+- Una solución con splines (corrección de distorsión) antes del recorte abre el diálogo "irreversible" que deja el script parado.
+
+Tras alinear, todos comparten la rejilla: basta resolver la referencia y copiar la solución a las demás. `alinearMasters` ya lo hace (`r.astrometria`). Este paso queda para un master suelto o para volver a resolver si BXT o GraXpert quitan la solución.
+
 **Método único: `blindSolve` del watcher v8** (BlindSolver portado al watcher, PixInsight 1.9.6+). La astrometría se resuelve siempre así, desde `run_script`; no se usan ImageSolver, el script BlindSolver ni copias de otras ventanas.
 
 ```javascript
