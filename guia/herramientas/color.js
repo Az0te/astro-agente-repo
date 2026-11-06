@@ -98,7 +98,16 @@ function calibrarColor(viewId, o) {
   }
   var src = ImageWindow.windowById(viewId);
   if (src.isNull) throw new Error("No existe la vista " + viewId);
-  if (src.mainView.image.numberOfChannels !== 3) throw new Error("SPCC necesita una imagen RGB");
+  if (src.mainView.image.numberOfChannels !== 3)
+    throw new Error("SPCC necesita una imagen RGB. Las rayas desmezcladas (Hα, OIII, SII, Hβ) son mono: no llevan SPCC; " +
+                    "su escala entre filtros la iguala combinarMismoCanal (LinearFit) y el color se decide en la paleta (Paso 2 no lineal)");
+  // Master dual band en color sin modo banda estrecha: SPCC con curvas de banda ancha rompe la desmezcla (6 nov 2026,
+  // Qwen lo aplicó a HaO3, S2O3 y S2Hb con "banda_estrecha: no").
+  var filt = ""; src.keywords.forEach(function (k) { if (k.name === "FILTER") filt = String(k.value).toUpperCase(); });
+  var esDual = /DUAL|HAO3|HA.?O3|S2.?O3|S2.?HB|SII.?OIII|L-?EXTREME|L-?ENHANCE|L-?ULTIMATE|ALP-?T/.test(filt.replace(/'/g, ""));
+  if (esDual && !(o.spcc && o.spcc.narrowband) && !o.forzarBandaAncha)
+    throw new Error("El master es dual band (FILTER " + filt.replace(/'/g, "").trim() + "): no se calibra con SPCC de banda ancha. " +
+                    "Desmezclar antes (Paso 7, desmezclarDualBand); el SPCC va sólo sobre el RGB");
   if (!src.hasAstrometricSolution)
     throw new Error("La imagen no tiene solución astrométrica: SPCC fallaría. Hacer antes el Paso 8 (blindSolve)");
   var sim = src.mainView.image;
