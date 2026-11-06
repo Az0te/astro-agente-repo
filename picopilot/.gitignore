@@ -1,0 +1,16 @@
+# Salidas de compilación y ficheros locales de Visual Studio
+windows/vc17/x64/
+windows/vc17/*.user
+windows/vc17/*.bak
+build*/
+*.dll
+*.xsgn
+*.xssk
+*.obj
+*.lib
+*.exp
+*.iobj
+*.ipdb
+*.pdb
+linux/g++/x64/Release/*
+macosx/g++/*/Release/*

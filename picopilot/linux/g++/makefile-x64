@@ -1,0 +1,72 @@
+######################################################################
+# PixInsight Makefile Generator Script v1.155
+# Copyright (C) 2009-2026 Pleiades Astrophoto
+######################################################################
+# Generated on .... 2026-09-26T15:05:31.413Z
+# Project id ...... Sandbox
+# Project type .... Module
+# Platform ........ Linux/g++
+# Configuration ... Release/x64
+# Vector ISA ...... AVX2/FMA3
+######################################################################
+
+OBJ_DIR="$(PCLSRCDIR)/modules/processes/Sandbox/linux/g++/x64/Release"
+
+.PHONY: all
+all: $(OBJ_DIR)/Sandbox-pxm.so
+
+#
+# Source files
+#
+
+SRC_FILES= \
+../../SandboxInstance.cpp \
+../../SandboxInterface.cpp \
+../../SandboxModule.cpp \
+../../SandboxParameters.cpp \
+../../SandboxProcess.cpp
+
+#
+# Object files
+#
+
+OBJ_FILES= \
+./x64/Release/SandboxInstance.o \
+./x64/Release/SandboxInterface.o \
+./x64/Release/SandboxModule.o \
+./x64/Release/SandboxParameters.o \
+./x64/Release/SandboxProcess.o
+
+#
+# Dependency files
+#
+
+DEP_FILES= \
+./x64/Release/SandboxInstance.d \
+./x64/Release/SandboxInterface.d \
+./x64/Release/SandboxModule.d \
+./x64/Release/SandboxParameters.d \
+./x64/Release/SandboxProcess.d
+
+#
+# Rules
+#
+
+-include $(DEP_FILES)
+
+$(OBJ_DIR)/Sandbox-pxm.so: $(OBJ_FILES)
+	g++ -m64 -fPIC -pthread -Wl,-fuse-ld=gold -Wl,--enable-new-dtags -Wl,-z,noexecstack -Wl,-O1 -Wl,--gc-sections -rdynamic -shared -L"$(PCLLIBDIR64)" -L"$(PCLBINDIR64)/lib" -o $(OBJ_DIR)/Sandbox-pxm.so $(OBJ_FILES) -lpthread -lPCL-pxi -llz4-pxi -lzstd-pxi -lzlib-pxi -lRFC6234-pxi -llcms-pxi
+	$(MAKE) -f ./makefile-x64 --no-print-directory post-build
+
+.PHONY: clean
+clean:
+	rm -f $(OBJ_FILES) $(DEP_FILES) $(OBJ_DIR)/Sandbox-pxm.so
+
+.PHONY: post-build
+post-build:
+	cp -p $(OBJ_DIR)/Sandbox-pxm.so $(PCLBINDIR64)
+
+./x64/Release/%.o: ../../%.cpp
+	g++ -c -pipe -pthread -m64 -fPIC -D_REENTRANT -D__PCL_LINUX -D__PCL_AVX2 -D__PCL_FMA -I"$(PCLINCDIR)" -I"$(PCLSRCDIR)/3rdparty" -mavx2 -mfma -minline-all-stringops -O3 -ffunction-sections -fdata-sections -ffast-math -fvisibility=hidden -fvisibility-inlines-hidden -fnon-call-exceptions -std=c++20 -Wall -Wno-parentheses -MMD -MP -MF"$(@:%.o=%.d)" -o"$@" "$<"
+	@echo ' '
+

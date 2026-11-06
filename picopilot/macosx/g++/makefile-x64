@@ -1,0 +1,73 @@
+######################################################################
+# PixInsight Makefile Generator Script v1.155
+# Copyright (C) 2009-2026 Pleiades Astrophoto
+######################################################################
+# Generated on .... 2026-09-26T15:05:31.450Z
+# Project id ...... Sandbox
+# Project type .... Module
+# Platform ........ MacOSX/g++
+# Configuration ... Release/x64
+# Vector ISA ...... AVX2/FMA3
+######################################################################
+
+OBJ_DIR="$(PCLSRCDIR)/modules/processes/Sandbox/macosx/g++/x64/Release"
+
+.PHONY: all
+all: $(OBJ_DIR)/Sandbox-pxm.dylib
+
+#
+# Source files
+#
+
+SRC_FILES= \
+../../SandboxInstance.cpp \
+../../SandboxInterface.cpp \
+../../SandboxModule.cpp \
+../../SandboxParameters.cpp \
+../../SandboxProcess.cpp
+
+#
+# Object files
+#
+
+OBJ_FILES= \
+./x64/Release/SandboxInstance.o \
+./x64/Release/SandboxInterface.o \
+./x64/Release/SandboxModule.o \
+./x64/Release/SandboxParameters.o \
+./x64/Release/SandboxProcess.o
+
+#
+# Dependency files
+#
+
+DEP_FILES= \
+./x64/Release/SandboxInstance.d \
+./x64/Release/SandboxInterface.d \
+./x64/Release/SandboxModule.d \
+./x64/Release/SandboxParameters.d \
+./x64/Release/SandboxProcess.d
+
+#
+# Rules
+#
+
+-include $(DEP_FILES)
+
+$(OBJ_DIR)/Sandbox-pxm.dylib: $(OBJ_FILES)
+	clang++ -arch x86_64 -fPIC -headerpad_max_install_names -Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mmacosx-version-min=14 -stdlib=libc++ -Wl,-dead_strip -rdynamic -dynamiclib -install_name @executable_path/Sandbox-pxm.dylib -L"$(PCLLIBDIR64)" -L"$(PCLBINDIR64)" -Wl,-rpath,@executable_path/../../../bin -o $(OBJ_DIR)/Sandbox-pxm.dylib $(OBJ_FILES) -framework AppKit -lpthread -lPCL-pxi -llz4-pxi -lzstd-pxi -lzlib-pxi -lRFC6234-pxi -llcms-pxi
+	$(MAKE) -f ./makefile-x64 --no-print-directory post-build
+
+.PHONY: clean
+clean:
+	rm -f $(OBJ_FILES) $(DEP_FILES) $(OBJ_DIR)/Sandbox-pxm.dylib
+
+.PHONY: post-build
+post-build:
+	cp -p $(OBJ_DIR)/Sandbox-pxm.dylib $(PCLBINDIR64)
+	codesign --deep --options=runtime -s pleiades -f -v --timestamp $(PCLBINDIR64)/Sandbox-pxm.dylib
+
+./x64/Release/%.o: ../../%.cpp
+	clang++ -c -pipe -pthread -arch x86_64 -fPIC -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -mmacosx-version-min=14 -D_REENTRANT -D__PCL_MACOSX -D__PCL_AVX2 -D__PCL_FMA -I"$(PCLINCDIR)" -I"$(PCLSRCDIR)/3rdparty" -mavx2 -mfma -minline-all-stringops -O3 -ffunction-sections -fdata-sections -ffast-math -ffp-contract=on -Wno-overriding-option -fvisibility=hidden -fvisibility-inlines-hidden -std=c++20 -stdlib=libc++ -Wall -Wno-parentheses -Wno-missing-braces -Wno-nan-infinity-disabled -Wno-extern-c-compat -MMD -MP -MF"$(@:%.o=%.d)" -o"$@" "$<"
+	@echo ' '
+

@@ -1,0 +1,198 @@
+﻿// ----------------------------------------------------------------------------
+// PiCopilot - Asistente de IA para PixInsight
+// ----------------------------------------------------------------------------
+// PiCopilotAgent.h - Modelos, configuración, pasos de la guía y prompts.
+//
+// Esta parte no tiene interfaz gráfica. Las llamadas a los modelos se lanzan
+// desde PiCopilotInterface como procesos externos asíncronos:
+//   - Claude: Claude Code en modo no interactivo (claude -p), que ya tiene el
+//     MCP de PixInsight y puede ejecutar los pasos sobre la imagen.
+//   - ChatGPT y modelos locales: API OpenAI-compatible (chat/completions) por
+//     HTTP con curl.exe. Devuelven texto y, si procede, un script PJSR que el
+//     usuario puede ejecutar desde PiCopilot.
+// ----------------------------------------------------------------------------
+
+#ifndef __PiCopilotAgent_h
+#define __PiCopilotAgent_h
+
+#include <pcl/String.h>
+#include <pcl/StringList.h>
+
+#include <vector>
+
+namespace pcl
+{
+
+// ----------------------------------------------------------------------------
+
+struct PiCopilotModel
+{
+   String name;      // Texto en el ComboBox
+   String type;      // "claude" | "codex" | "openai"
+   String endpoint;  // URL de chat/completions (sólo "openai")
+   String model;     // Identificador del modelo (sólo "openai")
+   String keyEnv;    // Variable de entorno con la clave API (opcional)
+   bool   builtin = false;
+
+   bool IsClaude() const { return type == "claude"; }
+   bool IsCodex() const { return type == "codex"; }
+   // Agentes con herramientas (MCP de PixInsight): trabajan sobre la imagen ellos mismos.
+   bool IsAgent() const { return IsClaude() || IsCodex(); }
+
+   // Claude o un endpoint que no es local: habilita "Resolución Completa".
+   bool IsCloud() const;
+};
+
+// ----------------------------------------------------------------------------
+
+struct PiCopilotStep
+{
+   String label;        // Texto del botón
+   String file;         // Archivo de la guía, relativo a la carpeta guia/
+   bool   linear;       // Fase lineal / no lineal
+   bool   needsImage;   // Requiere una vista activa
+   bool   comparative;  // Lanza comparativas y genera un dossier
+
+   static const std::vector<PiCopilotStep>& Linear();
+   static const std::vector<PiCopilotStep>& NonLinear();
+};
+
+// ----------------------------------------------------------------------------
+
+class PiCopilotConfig
+{
+public:
+
+   std::vector<PiCopilotModel> models;
+   int    currentModel = 0;
+   String guideDir;     // .../astro-agente-repo/guia
+   String workDir;      // Dossiers y archivos temporales
+   String claudePath;   // claude.exe
+   String claudeArgs;   // Argumentos extra para claude -p
+   String dataDirs;               // Carpetas de datos para Claude, separadas por ';'
+   bool   watcherEnabled = true;  // Watcher MCP integrado
+   String watcherSource;          // pixinsight-mcp-watcher.js (fuente de los comandos)
+   String uiLanguage = "es";      // idioma de la interfaz: "es" | "en"
+
+   // Configurar IA: cada paso tiene una puntuación (valor base de la tabla
+   // + ajuste del usuario). Si es >= threshold se usa el modelo inferior
+   // (más barato); si es menor, el superior. Sólo Claude y ChatGPT.
+   int    threshold = 95;
+   std::vector<std::pair<String, int>> adjustments;   // clave de paso -> ajuste
+   String claudeLow, claudeHigh;  // p. ej. "sonnet" / "opus"
+   String openaiLow, openaiHigh;  // Codex: vacío = el modelo por defecto de Codex
+
+   // Límites para que Claude no se quede probando sin resultados.
+   int    maxTurnsStep = 80;      // --max-turns de un paso (0 = sin límite)
+   int    maxTurnsFull = 400;     // --max-turns de Resolución Completa
+   int    maxRetries = 3;         // intentos fallidos seguidos antes de parar
+
+   void Load();
+   void Save() const;
+
+   const PiCopilotModel& Current() const;
+
+   int  Adjustment( const String& stepKey ) const;
+   void SetAdjustment( const String& stepKey, int delta );
+   void ResetAI();   // valores por defecto de Configurar IA
+
+   // Modelo concreto para un paso (stepKey vacío = Prompt libre: superior).
+   // Devuelve el id que hay que pasar al proveedor y deja en 'why' el motivo.
+   String TierModel( const PiCopilotModel&, const String& stepKey, String& why ) const;
+
+   // ¿Este modelo admite Configurar IA? (Claude y ChatGPT de serie)
+   static bool HasTiers( const PiCopilotModel& );
+
+   // Tabla de pesos: se lee de <guía>/porcentajes_skill.json; si no existe,
+   // se usa la copia compilada en el módulo.
+   std::vector<std::pair<String, int>> scores;
+   String scoresSource;           // archivo leído (vacío = tabla interna)
+   String ScoresFile() const;
+   void   LoadScores();
+
+   // Valor base de la tabla de pesos para un paso; -1 si no está en la tabla.
+   int BaseScore( const String& stepKey ) const;
+   static int BuiltinScore( const String& stepKey );
+
+   // Clave del paso "Resolución Completa".
+   static String FullKey() { return "completa"; }
+
+   String DossierDir() const;
+   String TempDir() const;
+   String CurlPath() const;
+   String McpRunnerPath() const;
+
+   // Carpeta del puente del MCP de PixInsight (~/.pixinsight-mcp/bridge).
+   static String BridgeDir();
+
+   // Valores por defecto de las rutas.
+   static String DefaultWatcherSource();
+   static String DefaultGuideDir();
+   static String DefaultWorkDir();
+   static String DefaultClaudePath();
+   static String DefaultClaudeArgs();
+};
+
+// ----------------------------------------------------------------------------
+
+struct PiCopilotChatMessage
+{
+   String role;      // "system" | "user" | "assistant"
+   String content;
+   String image;     // JPG que acompaña al mensaje (modelos con visión), o vacío
+};
+
+// ----------------------------------------------------------------------------
+
+namespace PiCopilotPrompts
+{
+   String System();
+
+   // Paso individual de la guía. dossierPath sólo se usa en pasos comparativos.
+   // newSession: primera tarea de una sesión de Claude (una sesión por fase).
+   // secondViewId: segunda capa elegida por el usuario en los pasos que combinan dos imágenes (recombinación).
+   String Step( const PiCopilotConfig&, const PiCopilotModel&, const PiCopilotStep&,
+                const String& viewId, const String& dossierPath, bool newSession = false,
+                const String& secondViewId = String(), const String& dataFolder = String() );
+
+   // Pasos que necesitan una segunda capa: devuelve qué capa es ("capa de estrellas") o vacío.
+   String SecondLayer( const PiCopilotStep& );
+
+   // Pasos que trabajan con ficheros (inventario, selección, preprocesado): qué carpeta pedir, o vacío.
+   String DataFolder( const PiCopilotStep& );
+
+   // Procesado completo, de la fase lineal a la no lineal.
+   String Full( const PiCopilotConfig&, const PiCopilotModel&,
+                const String& viewId, const String& dossierPath );
+
+   // Prompt libre escrito por el usuario, con el contexto de la imagen.
+   String Free( const PiCopilotConfig&, const PiCopilotModel&, const String& text, const String& viewId, bool firstTurn );
+
+   // Extrae el último bloque ```javascript (o ```js) de una respuesta.
+   String ExtractScript( const String& response );
+}
+
+// ----------------------------------------------------------------------------
+
+namespace PiCopilotUtil
+{
+   String ReadText( const String& path, size_type maxChars = 0 );
+   bool   WriteText( const String& path, const String& text );
+   String EnvVar( const String& name );
+   String NewId();         // id corto para trabajos y archivos
+   String NewUUID();       // para --session-id de Claude Code
+   String Timestamp();     // HH:MM:SS
+   String JoinPath( const String& a, const String& b );
+   // Borra las vistas previas (prev_*.jpg, cmp_*.jpg) y scripts temporales (run_*) de la carpeta temporal de
+   // PiCopilot, y la página del chat. Al abrir el panel y al limpiar o empezar una conversación.
+   void   CleanTemp( const String& tempDir );
+}
+
+// ----------------------------------------------------------------------------
+
+} // pcl
+
+#endif   // __PiCopilotAgent_h
+
+// ----------------------------------------------------------------------------
+// EOF PiCopilotAgent.h
