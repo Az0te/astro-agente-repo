@@ -42,9 +42,17 @@ function beZones(view) {
   var k = Math.max(5, Math.floor(cells.length * 0.10));
   var med = function (arr, ch) { var v = arr.map(function (x) { return x[ch]; }).sort(function (p, q) { return p - q; }); return v[v.length >> 1]; };
   var bySum = cells.slice().sort(function (a, b2) { return (a[0] + (a[1] || 0) + (a[2] || 0)) - (b2[0] + (b2[1] || 0) + (b2[2] || 0)); });
-  var sky = bySum.slice(0, k), byR = cells.slice().sort(function (a, b2) { return b2[0] - a[0]; }).slice(0, k);
-  var s = [], h = [];
-  for (var ch = 0; ch < nc; ++ch) { s.push(med(sky, ch)); h.push(med(byR, ch)); }
+  var sky = bySum.slice(0, k), s = [], h = [], ch;
+  for (ch = 0; ch < nc; ++ch) s.push(med(sky, ch));
+  // Zona dominada por la raya roja: entre el 30 % de celdas con más exceso en R, las de mayor R/(G+B) sobre el cielo.
+  // Antes eran sólo las más brillantes en R, que en IC 1396 incluían estrellas y zonas mixtas (G/R 0,24 en vez de 0,14).
+  var byR = cells.slice().sort(function (a, b2) { return b2[0] - a[0]; }).slice(0, Math.max(k, Math.floor(cells.length * 0.3)));
+  if (nc >= 3) byR.sort(function (a, b2) {
+    var ra = (a[0] - s[0]) / Math.max(1e-9, (a[1] - s[1]) + (a[2] - s[2])), rb = (b2[0] - s[0]) / Math.max(1e-9, (b2[1] - s[1]) + (b2[2] - s[2]));
+    return rb - ra;
+  });
+  byR = byR.slice(0, k);
+  for (ch = 0; ch < nc; ++ch) h.push(med(byR, ch));
   return { cielo: s, zona_r: h };
 }
 
@@ -105,7 +113,10 @@ function desmezclarDualBand(viewId, o) {
   var lin = function (c) {
     return c[0] + "*($T[0]-" + p[0] + ") + " + c[1] + "*($T[1]-" + p[1] + ") + " + c[2] + "*($T[2]-" + p[2] + ")";
   };
-  var haId = beUnique(o.ha || (lineas[0] + "_raw")), oId = beUnique(o.oiii || (lineas[1] + "_raw"));
+  // Con varios dual band (HaO3 + S2O3 dan los dos OIII) los nombres llevan el filtro: SII_raw_S2O3, OIII_raw_S2O3,
+  // SII_raw_S2Hb, Hb_raw_S2Hb. Hα/OIII sigue siendo Ha_raw y OIII_raw.
+  var tag = lineas[0] === "Ha" ? "" : "_" + (lineas[1] === "Hb" ? "S2Hb" : "S2O3");
+  var haId = beUnique(o.ha || (lineas[0] + "_raw" + tag)), oId = beUnique(o.oiii || (lineas[1] + "_raw" + tag));
   var ha = bePM(v, lin(cHa), haId, true), oi = bePM(v, lin(cO), oId, true);
   // Sobre-restas (negativos) antes de recortar a 0.
   var neg = function (view) {
@@ -139,7 +150,7 @@ function desmezclarDualBand(viewId, o) {
     zona_roja: { raya: lineas[0], G_R: +gR.toFixed(3), B_R: +bR.toFixed(3), esperado: eG.toFixed(2) + " y " + eB.toFixed(2) },
     negativos_pct: { primera: nHa, segunda: nO }, no_cumple: noCumple,
     control: {
-      medido: { ratios_de_la_zona_roja_ok: noCumple.length === 0 || !/ratios/.test(noCumple[0]), sin_sobre_resta: nHa <= 1 && nO <= 1 },
+      medido: { ratios_de_la_zona_roja_ok: lineas[0] === "Ha" ? !noCumple.some(function (t) { return /ratios/.test(t); }) : "no aplica (SII)", sin_sobre_resta: nHa <= 1 && nO <= 1 },
       revisar_a_ojo: ["zonas negras por sobre-resta en la señal débil", "el OIII no debe ser continuo (compararlo con la R de la RGB)"],
       nota: "El modelo supone sólo rayas: el continuo (estrellas, reflexión) entra como Hα y OIII; restarlo en el Paso 16. Lo de revisar_a_ojo no lo mide esta función."
     }

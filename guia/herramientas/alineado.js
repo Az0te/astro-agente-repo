@@ -366,6 +366,10 @@ function alinearMasters(lista, o) {
       });
       if (!wr.hasAstrometricSolution) r.no_cumple.push("No se pudo resolver la astrometría de " + r.vista + ": hacer el Paso 8 a mano.");
       else r.control.revisar_a_ojo = r.control.revisar_a_ojo.filter(function (t) { return !/sin astrometría/.test(t); });
+    } else if (o.astrometria !== false && r.vista) {
+      // Sin blindSolve (script ejecutado fuera de PiCopilot o del watcher): que se vea, no en silencio.
+      r.astrometria = { resuelta: false, motivo: "blindSolve no está disponible en este script: resolver con resolverAstrometria(r.vista) y copiar con copyAstrometricSolution" };
+      r.no_cumple.push("Astrometría sin resolver (blindSolve no disponible): Paso 8 sobre " + r.vista + " y copiar a las demás.");
     }
   }
   return r;
