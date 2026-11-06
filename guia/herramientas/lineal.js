@@ -56,6 +56,8 @@ function lnFwhmPorCanal(view, base) {
 // Paso 8: astrometría con blindSolve (único método de la guía).
 function resolverAstrometria(viewId, o) {
   viewId = lnId(viewId); o = o || {};
+  if (!viewId) throw new Error("resolverAstrometria necesita el id de una vista (texto); ha recibido " + viewId +
+                               ". Tras alinearMasters usa r.vista o r.vistas[i] (y alinearMasters ya resuelve y copia la astrometría).");
   if (typeof blindSolve !== "function")
     throw new Error("blindSolve no está disponible: ejecuta el script desde PiCopilot (botón o «Ejecutar script») o con el watcher v8");
   var w = ImageWindow.windowById(viewId);

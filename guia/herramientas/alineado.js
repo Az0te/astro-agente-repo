@@ -16,7 +16,9 @@
 //      recorta todos a ese rectángulo, incluida la referencia. Guarda <nombre>_alin.xisf en salida.
 //   4. Controles: fracción del campo que se conserva, bordes sin 0 tras el recorte, estrellas emparejadas por
 //      StarAlignment, y si cada fichero conserva la astrometría (PixInsight 1.9.6+).
-// Devuelve { referencia, rect, conservado_pct, ficheros: [{ entrada, salida, escala, reescalado, emparejadas, wcs }],
+// Devuelve { referencia, rect, conservado_pct, franjas_borde_px, ficheros: [{ entrada, salida, escala, reescalado,
+//            emparejadas, wcs }], vistas (ids _alin abiertos, la referencia primero), vista (la referencia alineada),
+//            astrometria { resuelta, copiada_a } (con blindSolve: resuelve la referencia y la copia a las demás),
 //            no_cumple, control: { medido, revisar_a_ojo } }.
 
 // Píxeles sin datos (1 = vacío): a 0 o negativos en algún canal (cuña de StarAlignment), o con el valor de relleno de
@@ -351,6 +353,20 @@ function alinearMasters(lista, o) {
     r.ficheros.forEach(function (e) { if (e.entrada != ref && e.salida) r.vistas.push(abrirConSTF(e.salida, File.extractName(e.salida))); });
     var eRef = r.ficheros.filter(function (e) { return e.entrada == ref; })[0];
     if (eRef && eRef.salida) r.vistas.unshift(abrirConSTF(eRef.salida, File.extractName(eRef.salida)));
+    r.vista = r.vistas[0];   // la referencia alineada (los modelos la buscaban como r.vista)
+    // Astrometría: se resuelve la referencia y se copia a las demás (misma rejilla tras alinear y recortar). Así no hay
+    // que encadenar resolverAstrometria ni buscar ids en el resultado. astrometria: false para no hacerlo.
+    if (o.astrometria !== false && typeof blindSolve === "function" && r.vista) {
+      var wr = ImageWindow.windowById(r.vista);
+      if (!wr.hasAstrometricSolution) { try { blindSolve(r.vista); } catch (x) { } }
+      r.astrometria = { resuelta: wr.hasAstrometricSolution, copiada_a: [] };
+      if (wr.hasAstrometricSolution) r.vistas.slice(1).forEach(function (id) {
+        var wv = ImageWindow.windowById(id);
+        try { wv.copyAstrometricSolution(wr); if (wv.hasAstrometricSolution) r.astrometria.copiada_a.push(id); } catch (x) { }
+      });
+      if (!wr.hasAstrometricSolution) r.no_cumple.push("No se pudo resolver la astrometría de " + r.vista + ": hacer el Paso 8 a mano.");
+      else r.control.revisar_a_ojo = r.control.revisar_a_ojo.filter(function (t) { return !/sin astrometría/.test(t); });
+    }
   }
   return r;
 }

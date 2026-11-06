@@ -33,6 +33,11 @@ function anMedian(arr) {
 
 function analizarMaster(viewId) {
   if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId instanceof Array) {   // varias vistas: un resultado por vista
+    var todos = {}; viewId.forEach(function (id) { todos[id] = analizarMaster(id); }); return todos;
+  }
+  if (!viewId) throw new Error("analizarMaster necesita el id de una vista (o una lista de ids); ha recibido " + viewId +
+                               ". Tras alinearMasters usa r.vistas.");
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
   var v = win.mainView, im = v.image, W = im.width, H = im.height, nc = im.numberOfChannels;
