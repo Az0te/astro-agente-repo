@@ -141,6 +141,7 @@ function alinearMasters(lista, o) {
         return !/rejection|drizzle_weights|_alin\.|LN_Reference|_modelo|_model/i.test(File.extractName(f)); }).sort());
     else files.push(p);
   });
+  files = files.filter(function (f, i) { return files.indexOf(f) === i; });   // la misma imagen abierta dos veces, una sola vez
   if (files.length < 1) throw new Error("No hay masters en " + lista + ": pasa ficheros .xisf o la carpeta que los contiene");
   files.forEach(function (f) { if (!File.exists(f)) throw new Error("No existe " + f + ": pasa ids de vistas abiertas, ficheros .xisf o la carpeta que los contiene"); });
   var info = {}; files.forEach(function (f) { info[f] = alScale(f); });
