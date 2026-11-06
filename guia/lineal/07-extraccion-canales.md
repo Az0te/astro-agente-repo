@@ -80,6 +80,22 @@ Resultados, medidos en la nebulosa, sin estrellas (binado ×8 por mediana) y fre
 
 Se mantiene desmezclar en el Paso 7.
 
+**¿Y la rutina OSC completa antes de desmezclar? (medido, IC 1396, nov 2026).** Se compararon dos rutinas sobre los tres dual band alineados, con BXT 0,45/0,30, StarX y NXT 0,50 en ambas:
+- B, rutina OSC: gradiente → BXT correct only → SPCC narrowband en color (Hα 656/5, OIII 501/5…) → BXT → StarX → NXT → desmezclar al final.
+- A, esta guía: desmezclar → gradiente → BXT correct only → SPCC narrowband sobre cada pareja de rayas compuesta en RGB → BXT → StarX → NXT.
+
+Resultados, señal/ruido de la nebulosa (A / B):
+- Hα: 26,7 / 28,0. OIII del HaO3: 23,5 / 20,4. SII y Hβ: iguales.
+- Detalle: igual.
+- Coherencia OIII entre filtros (correlación HaO3 frente a S2O3): 0,968 / 0,954.
+
+Conclusiones:
+- **SPCC narrowband sobre las rayas ya desmezcladas apenas cambia nada** (factores 0,99, 0,92 y 0,89): los coeficientes QE de la desmezcla ya las dejan en unidades comparables.
+- Hecho antes de desmezclar, SPCC cambia los canales 0,74–0,86 y la desmezcla con los coeficientes brutos deja de ser exacta.
+- **SPCC no iguala filtros distintos.** El SII del S2O3 (3 nm) sale a 0,61 del S2Hb (5 nm) en bruto, 0,63 en A y 0,58 en B. Eso lo iguala `combinarMismoCanal` (LinearFit), no el color.
+
+Se mantiene desmezclar pronto y SPCC sólo en el RGB.
+
 **Dónde están los mejores datos (IC 1396).** Señal/ruido de la nebulosa (binado ×8):
 - SII: 9,2 del S2Hb frente a 6,1 del S2O3.
 - OIII: 14,8 del HaO3 frente a 10,1 del S2O3.
