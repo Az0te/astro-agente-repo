@@ -5,6 +5,7 @@
 // Uso (en el nivel superior del script):
 //   eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));
 //   var d = desmezclarDualBand("NB_lineal");                     // → Ha_raw y OIII_raw (gris), pedestales medidos
+//     (S2O3 → SII_raw y OIII_raw; S2Hb → SII_raw y Hb_raw, según FILTER o { filtro }; d.lineas dice cuál es cuál)
 //   var k = medirContinuo(d.ha, "RGB_spcc");                      // k por fotometría de apertura de estrellas (canal R)
 //   var c = restarContinuo("Ha_starless", "RGB_starless", { k: k.k });   // Ha_CS = Hα − k·R − c
 //   var p = previsualizarPaletas("Ha_st", "OIII_st", { carpeta: "<versión>/prev/paletas" });   // capas YA estiradas igual
@@ -64,19 +65,47 @@ function bePM(view, expr, newId, gray) {
 
 // ---------------------------------------------------------------------------------------------------
 // Paso 7: desmezcla del dual band Hα/OIII (Antlia HO 5 nm en IMX571; coeficientes de la ficha). Lineal, sin SPCC.
+// Respuesta del IMX571 (R, G, B) a cada raya: tabla de la ficha del Paso 7.
+var BE_QE = { Ha: [0.80, 0.11, 0.04], OIII: [0.04, 0.93, 0.50], SII: [0.74, 0.13, 0.05], Hb: [0.01, 0.67, 0.70] };
+
+// Qué dos rayas deja pasar el filtro: o.filtro ("HaO3", "S2O3", "S2Hb") o, si no, la palabra clave FILTER.
+function beFiltro(v, o) {
+  var f = String(o.filtro || "");
+  if (!f) { var k = v.window.keywords; for (var i = 0; i < k.length; ++i) if (k[i].name === "FILTER") f = String(k[i].value); }
+  f = f.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  var s = /S2|SII/.test(f), hb = /HB|HBETA/.test(f), o3 = /O3|OIII/.test(f);
+  if (s && hb) return ["SII", "Hb"];
+  if (s && o3) return ["SII", "OIII"];
+  return ["Ha", "OIII"];
+}
+
+// Mínimos cuadrados (ponderando G ×2 si se pide) de 3 ecuaciones con 2 incógnitas: filas de (MᵀWM)⁻¹MᵀW.
+function beUnmixRows(a, b, wG) {
+  var w = [1, wG, 1], s11 = 0, s12 = 0, s22 = 0, i;
+  for (i = 0; i < 3; i++) { s11 += w[i] * a[i] * a[i]; s12 += w[i] * a[i] * b[i]; s22 += w[i] * b[i] * b[i]; }
+  var d = s11 * s22 - s12 * s12, r1 = [], r2 = [];
+  for (i = 0; i < 3; i++) { r1.push(+(w[i] * (s22 * a[i] - s12 * b[i]) / d).toFixed(4)); r2.push(+(w[i] * (s11 * b[i] - s12 * a[i]) / d).toFixed(4)); }
+  return [r1, r2];
+}
+
 function desmezclarDualBand(viewId, o) {
   viewId = beId(viewId); o = o || {};
   var v = beView(viewId), im = v.image;
   if (im.numberOfChannels !== 3) throw new Error("Hace falta el master RGB del dual band");
   im.resetSelections();
   if (im.median() > 0.05) throw new Error("La imagen parece estirada: la desmezcla va en lineal y sin SPCC");
-  var z = beZones(v), p = o.pedestales || z.cielo;
-  var cHa = o.ponderarG ? [1.2565, -0.0330, -0.0391] : [1.2563, -0.0293, -0.0460];
-  var cO = o.ponderarG ? [-0.1425, 0.9430, 0.2574] : [-0.1378, 0.8370, 0.4542];
+  var z = beZones(v), p = o.pedestales || z.cielo, lineas = beFiltro(v, o);
+  var cHa, cO;
+  if (lineas[0] === "Ha") {   // coeficientes de la ficha (iguales a los de la tabla QE)
+    cHa = o.ponderarG ? [1.2565, -0.0330, -0.0391] : [1.2563, -0.0293, -0.0460];
+    cO = o.ponderarG ? [-0.1425, 0.9430, 0.2574] : [-0.1378, 0.8370, 0.4542];
+  } else {
+    var u = beUnmixRows(BE_QE[lineas[0]], BE_QE[lineas[1]], o.ponderarG ? 2 : 1); cHa = u[0]; cO = u[1];
+  }
   var lin = function (c) {
     return c[0] + "*($T[0]-" + p[0] + ") + " + c[1] + "*($T[1]-" + p[1] + ") + " + c[2] + "*($T[2]-" + p[2] + ")";
   };
-  var haId = beUnique(o.ha || "Ha_raw"), oId = beUnique(o.oiii || "OIII_raw");
+  var haId = beUnique(o.ha || (lineas[0] + "_raw")), oId = beUnique(o.oiii || (lineas[1] + "_raw"));
   var ha = bePM(v, lin(cHa), haId, true), oi = bePM(v, lin(cO), oId, true);
   // Sobre-restas (negativos) antes de recortar a 0.
   var neg = function (view) {
@@ -93,17 +122,24 @@ function desmezclarDualBand(viewId, o) {
   });
   if (v.window.hasAstrometricSolution) { ha.window.copyAstrometricSolution(v.window); oi.window.copyAstrometricSolution(v.window); }
   var dr = z.zona_r, gR = (dr[1] - p[1]) / (dr[0] - p[0]), bR = (dr[2] - p[2]) / (dr[0] - p[0]);
+  var q = BE_QE[lineas[0]], eG = q[1] / q[0], eB = q[2] / q[0];
   var noCumple = [];
-  if (Math.abs(gR - 0.14) > 0.08 || Math.abs(bR - 0.05) > 0.05)
-    noCumple.push("ratios en la zona de Hα G/R " + gR.toFixed(3) + " y B/R " + bR.toFixed(3) + " lejos de 0,14 y 0,05: el balance no es el bruto (¿SPCC, flats?) o hay continuo");
-  if (nHa > 1 || nO > 1) noCumple.push("sobre-resta: " + nHa + " % de Hα y " + nO + " % de OIII por debajo de 0 antes de recortar");
+  // Sólo con Hα: el SII es débil y la zona más roja suele ser OIII o continuo (IC 1396 S2O3 y S2Hb, 6 nov 2026: G/R 0,78
+  // y 1,20), así que con SII el ratio es informativo y no se marca.
+  if (lineas[0] === "Ha" && (Math.abs(gR - eG) > 0.08 || Math.abs(bR - eB) > 0.05))
+    noCumple.push("ratios en la zona de " + lineas[0] + " G/R " + gR.toFixed(3) + " y B/R " + bR.toFixed(3) + " lejos de " +
+                  eG.toFixed(2) + " y " + eB.toFixed(2) + ": el balance no es el bruto (¿SPCC, flats?) o hay continuo");
+  if (nHa > 1 || nO > 1) noCumple.push("sobre-resta: " + nHa + " % de " + lineas[0] + " y " + nO + " % de " + lineas[1] + " por debajo de 0 antes de recortar");
+  var vistas = {}; vistas[lineas[0]] = haId; vistas[lineas[1]] = oId;
   return {
-    ha: haId, oiii: oId, original: viewId, pedestales: p.map(function (x) { return +x.toPrecision(4); }),
-    coeficientes: { ha: cHa, oiii: cO, ponderar_G: !!o.ponderarG },
-    zona_ha: { G_R: +gR.toFixed(3), B_R: +bR.toFixed(3), esperado: "0,14 y 0,05" },
-    negativos_pct: { ha: nHa, oiii: nO }, no_cumple: noCumple,
+    // ha / oiii: primera y segunda raya (con S2O3 son SII y OIII; con S2Hb, SII y Hβ); 'lineas' dice cuál es cuál.
+    ha: haId, oiii: oId, lineas: vistas, filtro: lineas.join("+"), original: viewId,
+    pedestales: p.map(function (x) { return +x.toPrecision(4); }),
+    coeficientes: { primera: cHa, segunda: cO, ponderar_G: !!o.ponderarG },
+    zona_roja: { raya: lineas[0], G_R: +gR.toFixed(3), B_R: +bR.toFixed(3), esperado: eG.toFixed(2) + " y " + eB.toFixed(2) },
+    negativos_pct: { primera: nHa, segunda: nO }, no_cumple: noCumple,
     control: {
-      medido: { ratios_de_la_zona_ha_ok: noCumple.length === 0 || !/ratios/.test(noCumple[0]), sin_sobre_resta: nHa <= 1 && nO <= 1 },
+      medido: { ratios_de_la_zona_roja_ok: noCumple.length === 0 || !/ratios/.test(noCumple[0]), sin_sobre_resta: nHa <= 1 && nO <= 1 },
       revisar_a_ojo: ["zonas negras por sobre-resta en la señal débil", "el OIII no debe ser continuo (compararlo con la R de la RGB)"],
       nota: "El modelo supone sólo rayas: el continuo (estrellas, reflexión) entra como Hα y OIII; restarlo en el Paso 16. Lo de revisar_a_ojo no lo mide esta función."
     }

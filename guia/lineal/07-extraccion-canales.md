@@ -63,4 +63,31 @@ eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en
 JSON.stringify(desmezclarDualBand("MasterLight_NB"));
 ```
 
+**Otros filtros dual band (S2O3, S2Hb).** `desmezclarDualBand` lee la palabra clave FILTER, o `{ filtro: "S2O3" }`, y resuelve las dos rayas con la tabla QE de arriba por mínimos cuadrados. Con HaO3 da los mismos coeficientes de arriba:
+- S2O3: `SII = 1.3602·R − 0.0300·G − 0.0530·B` y `OIII = −0.1780·R + 0.8377·G + 0.4562·B`.
+- S2Hb: `SII = 1.3450·R + 0.0685·G − 0.0847·B` y `Hβ = −0.1748·R + 0.7041·G + 0.7572·B`.
+
+Crea `SII_raw` / `OIII_raw` / `Hb_raw` y devuelve en `lineas` qué vista es cada raya. El control de ratios sólo se aplica con Hα: con SII la zona más roja es OIII o continuo.
+
+**Orden: desmezclar pronto (medido).** IC 1396 (nov 2026), 3 masters OSC dual band alineados y recortados. Se aplicaron las mismas operaciones (gradiente polinómico, BXT correct only y NXT 0,50) en dos órdenes:
+- A: desmezclar primero (esta guía).
+- B: estilo DBXtract (procesar en color y desmezclar al final).
+
+Resultados, medidos en la nebulosa, sin estrellas (binado ×8 por mediana) y frente a la desmezcla en bruto:
+- Señal conservada: igual en A y B (66–81 % según la raya; la diferencia con el bruto es la misma en las dos).
+- Detalle conservado: correlación de 0,97 a 0,997 con el bruto, igual en A y B.
+- Señal/ruido: igual en SII y Hβ. En OIII es algo mejor con A: 14,8 frente a 13,5 en HaO3 y 10,1 frente a 9,8 en S2O3. NXT limpia mejor una raya en mono que el color que luego se desmezcla.
+
+Se mantiene desmezclar en el Paso 7.
+
+**Dónde están los mejores datos (IC 1396).** Señal/ruido de la nebulosa (binado ×8):
+- SII: 9,2 del S2Hb frente a 6,1 del S2O3.
+- OIII: 14,8 del HaO3 frente a 10,1 del S2O3.
+
+Las dos medidas de una misma raya coinciden (correlación 0,92 en SII y 0,95 en OIII). Se combinaron en el Paso 10 con `combinarMismoCanal` (LinearFit y pesos 1/σ²), midiendo en bruto tras el gradiente:
+- SII: pesos 0,70 para S2Hb y 0,30 para S2O3. El ruido por píxel baja un 14,5 % frente al S2Hb solo; la señal/ruido a 8 px pasa de 6,5 a 6,7. **Combinar.**
+- OIII: tras igualar escalas, el del S2O3 tiene 3× el ruido del HaO3 (peso 0,10). El ruido sólo baja un 0,4 % y la función lo marca. **Usar el del HaO3 solo.**
+
+Hay que medirlo en cada proyecto: la función dice si compensa.
+
 **Control.** Ratios G/R y B/R en una zona de Hα ≈ 0,14 y 0,05. Comparar con DBXtract si el usuario lo lanza (fuente "DBXtract / Mono" en AutoPalette Studio, nunca "OSC Dualband"). Revisar que no hay zonas negras por sobre-resta y que el OIII no está lleno de continuo (comparar con la R de la RGB).
