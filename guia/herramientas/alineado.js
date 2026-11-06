@@ -113,8 +113,28 @@ function alScale(path) {
 function alinearMasters(lista, o) {
   o = o || {};
   // Ficheros o carpetas (de una carpeta se toman sus .xisf, sin mapas de rechazo, pesos de drizzle ni ya alineados).
+  // También ids de vistas abiertas (o View/ImageWindow): se usa su fichero si está guardado y sin cambios; si no, se
+  // guarda una copia temporal. Qwen pasó los ids de los 4 masters abiertos y fallaba con "No existe <id>" (6 nov 2026).
+  var vistaAFichero = function (x) {
+    var id = (x && typeof x === "object") ? (x.mainView ? x.mainView.id : x.id) : String(x);
+    var w = ImageWindow.windowById(id);
+    if (w.isNull) return null;
+    var fp = String(w.filePath || "").replace(/\\/g, "/");
+    if (fp && File.exists(fp) && !w.mainView.isModified && /\.xisf$/i.test(fp)) return fp;
+    var dir = File.systemTempDirectory.replace(/\\/g, "/") + "/picopilot_alin";
+    if (!File.directoryExists(dir)) File.createDirectory(dir, true);
+    var out = dir + "/" + id + ".xisf";
+    var c = new ImageWindow(1, 1, 1, 32, true, false, "alTMPV");
+    c.mainView.beginProcess(); c.mainView.image.assign(w.mainView.image); c.mainView.endProcess();
+    c.keywords = w.keywords; if (w.hasAstrometricSolution) c.copyAstrometricSolution(w);
+    c.saveAs(out, false, false, false, false); c.forceClose();
+    return out;
+  };
+  if (o.referencia) { var rv = vistaAFichero(o.referencia); if (rv) o.referencia = rv; }
   var files = [];
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
+    var fv = vistaAFichero(x);
+    if (fv) { files.push(fv); return; }
     var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
     if (File.directoryExists(p))
       files = files.concat(alSearch(p + "/*.xisf", false).filter(function (f) {
@@ -122,7 +142,7 @@ function alinearMasters(lista, o) {
     else files.push(p);
   });
   if (files.length < 1) throw new Error("No hay masters en " + lista + ": pasa ficheros .xisf o la carpeta que los contiene");
-  files.forEach(function (f) { if (!File.exists(f)) throw new Error("No existe " + f); });
+  files.forEach(function (f) { if (!File.exists(f)) throw new Error("No existe " + f + ": pasa ids de vistas abiertas, ficheros .xisf o la carpeta que los contiene"); });
   var info = {}; files.forEach(function (f) { info[f] = alScale(f); });
   // Sin referencia: la de escala más fina ("/px menor; sin escala, la de más píxeles), para no perder resolución.
   var ref = o.referencia ? String(o.referencia).replace(/\\/g, "/") : files.slice().sort(function (a, b) {
