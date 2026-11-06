@@ -40,6 +40,72 @@ function mascaraSinDatos(im) {
   return empty;
 }
 
+// Franja de borde con datos pero distinta del interior (menos subs por el dithering o la rotación entre noches, o la
+// interpolación junto a la cuña): no está vacía, pero su fondo o su RUIDO se apartan de los de dentro. IC 1396 (6 nov 2026):
+// HaO3, franja a la derecha 0–16 px un 21 % más oscura que sube hasta ~60 px; SO3, franjas más claras y más ruidosas en
+// esquinas (cuñas triangulares). Por cada borde, en 12 tramos (una cuña sólo ocupa parte del borde), perfil de líneas de
+// 2 px desde el borde hacia dentro: mediana (fondo) y MAD (ruido). La franja acaba en un ESCALÓN del perfil frente a la
+// tendencia interior (los gradientes y la nebulosa son suaves a 8 px); tras el escalón se sigue la rampa hasta el doble.
+// Umbrales: fondo max(8σ, 1,5 %); ruido max(8σ, 15 %). Trabaja dentro de rect {x0,y0,x1,y1} (x1,y1 exclusivos).
+function bandaBorde(im, rect, maxD) {
+  maxD = maxD || 300;
+  var NT = 12, r = rect || { x0: 0, y0: 0, x1: im.width, y1: im.height }, W = r.x1 - r.x0, H = r.y1 - r.y0, nc = im.numberOfChannels;
+  var res = { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
+  if (W < 3 * (maxD + 60) || H < 3 * (maxD + 60)) return res;
+  function lineRect(lado, k, s) {
+    if (lado == "arriba" || lado == "abajo") {
+      var a = r.x0 + Math.floor(s * W / NT), b = r.x0 + Math.floor((s + 1) * W / NT), y = lado == "arriba" ? r.y0 + k : r.y1 - 2 - k;
+      return new Rect(a, y, b, y + 2);
+    }
+    var c = r.y0 + Math.floor(s * H / NT), d = r.y0 + Math.floor((s + 1) * H / NT), x = lado == "izquierda" ? r.x0 + k : r.x1 - 2 - k;
+    return new Rect(x, c, x + 2, d);
+  }
+  // Profundidad de la franja en un perfil (índices de 2 px), o -1.
+  function franja(prof, rel) {
+    var i0 = Math.floor(prof.length / 2), sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0, i;
+    for (i = i0; i < prof.length; i++) { sx += i; sy += prof[i]; sxx += i * i; sxy += i * prof[i]; n++; }
+    var bb = (n * sxy - sx * sy) / (n * sxx - sx * sx), aa = (sy - bb * sx) / n, rs = [], st = [];
+    for (i = i0; i < prof.length; i++) rs.push(Math.abs(prof[i] - (aa + bb * i)));
+    rs.sort(function (p, q) { return p - q; });
+    var lvl = Math.abs(aa + bb * i0);
+    for (i = 3; i < prof.length - 3; i++) st.push({ i: i, d: (prof[i] + prof[i + 1] + prof[i + 2]) / 3 - (prof[i - 1] + prof[i - 2] + prof[i - 3]) / 3 });
+    var inner = st.filter(function (q) { return q.i >= i0; }).map(function (q) { return Math.abs(q.d); }).sort(function (p, q) { return p - q; });
+    var sig = 1.4826 * inner[inner.length >> 1], best = null, last = -1;
+    st.forEach(function (q) { if (q.i < i0 && (!best || Math.abs(q.d) > Math.abs(best.d))) best = q; });
+    if (best && Math.abs(best.d) > Math.max(8 * sig, rel * lvl)) {
+      last = 2 * best.i + 6;
+      var sdev = 1.4826 * rs[rs.length >> 1], tdev = Math.max(6 * sdev, rel * lvl), quiet = 0, cap = 2 * last;
+      for (i = 0; i < i0 && 2 * i < cap; i++) {
+        if (Math.abs(prof[i] - (aa + bb * i)) > tdev) { if (2 * i + 6 > last) last = Math.min(cap, 2 * i + 6); quiet = 0; }
+        else if (++quiet >= 6) break;
+      }
+    } else if (Math.abs(prof[0] - aa) > Math.max(8 * sig, 2 * rel * lvl)) last = 8;   // franja de 0–6 px
+    return last;
+  }
+  // Una estrella brillante junto al borde (su halo) da un escalón en UN tramo; una cuña de apilado ocupa varios seguidos.
+  // Sólo cuenta un tramo si alguno de sus vecinos también tiene franja.
+  ["arriba", "abajo", "izquierda", "derecha"].forEach(function (lado) {
+    var dep = [];
+    for (var s = 0; s < NT; s++) {
+      var ds = -1;
+      for (var ch = 0; ch < nc; ch++) {
+        var pm = [], pn = [];
+        im.selectedChannel = ch;
+        for (var k = 0; k <= maxD + 60; k += 2) { im.selectedRect = lineRect(lado, k, s); var m = im.median(); pm.push(m); pn.push(im.MAD(m)); }
+        ds = Math.max(ds, franja(pm, 0.015), franja(pn, 0.15));
+      }
+      dep.push(ds);
+    }
+    for (var q = 0; q < NT; q++) {
+      // Profundidad apoyada por un vecino: min(la del tramo, la mayor de sus vecinos). Así el halo de una estrella en un
+      // tramo no alarga la franja (HaO3 derecha: 58, 132 por la estrella, 24 → 58).
+      var vec = Math.max(q > 0 ? dep[q - 1] : -1, q < NT - 1 ? dep[q + 1] : -1), dq = (q == 0 || q == NT - 1) ? dep[q] : Math.min(dep[q], vec);   // en las esquinas la punta de la cuña ocupa un solo tramo
+      if (dq > res[lado]) res[lado] = dq;
+    }  });
+  im.resetSelections();
+  return res;
+}
+
 function alSearch(p, r) { return File.searchDirectory ? File.searchDirectory(p, r) : searchDirectory(p, r); }
 
 // Abre un fichero en PixInsight con un STF automático (sólo visual, no cambia los píxeles) y devuelve el id de la vista.
@@ -119,6 +185,7 @@ function alinearMasters(lista, o) {
   // guarda una copia temporal. Qwen pasó los ids de los 4 masters abiertos y fallaba con "No existe <id>" (6 nov 2026).
   var vistaAFichero = function (x) {
     var id = (x && typeof x === "object") ? (x.mainView ? x.mainView.id : x.id) : String(x);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id)) return null;   // una ruta no es un id (windowById lanzaría un error)
     var w = ImageWindow.windowById(id);
     if (w.isNull) return null;
     var fp = String(w.filePath || "").replace(/\\/g, "/");
@@ -225,10 +292,28 @@ function alinearMasters(lista, o) {
     else { var xx = k == 2 ? x0++ : x1--; for (var y = y0; y <= y1; ++y) if (!valid[y * W + xx]) --rowBad[y]; }
     if (x1 - x0 < 16 || y1 - y0 < 16) throw new Error("Los masters apenas se solapan: no hay zona común");
   }
+  // Franjas de borde con datos pero distintas del interior (menos cobertura de apilado): se recortan también.
+  // Dos pasadas: tras recortar la franja más ancha puede asomar otra más estrecha en otro master (IC 1396 SO3 abajo).
+  var franja = { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
+  if (o.franjas !== false) {
+    var abiertos = reg.map(function (f, i) { return ImageWindow.open(f, "alBAND" + i, "verbosity 0", true)[0]; });
+    for (var pasada = 0; pasada < 2; ++pasada) {
+      var b2 = { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
+      abiertos.forEach(function (w) {
+        var b = bandaBorde(w.mainView.image, { x0: x0, y0: y0, x1: x1 + 1, y1: y1 + 1 });
+        for (var kk in b2) if (b[kk] > b2[kk]) b2[kk] = b[kk];
+      });
+      if (pasada > 0) for (var k2 in b2) if (b2[k2] <= 8) b2[k2] = 0;   // segunda pasada: sólo franjas claras
+      y0 += b2.arriba; y1 -= b2.abajo; x0 += b2.izquierda; x1 -= b2.derecha;
+      for (var k3 in franja) franja[k3] += b2[k3];
+    }
+    abiertos.forEach(function (w) { w.forceClose(); });
+  }
   var margen = o.margen !== undefined ? o.margen : 4;   // unos píxeles más por la interpolación del borde
   x0 += margen; y0 += margen; x1 -= margen; y1 -= margen;
   r.rect = { x0: x0, y0: y0, x1: x1 + 1, y1: y1 + 1, ancho: x1 - x0 + 1, alto: y1 - y0 + 1 };
   r.conservado_pct = +(100 * (x1 - x0 + 1) * (y1 - y0 + 1) / (W * H)).toFixed(1);
+  r.franjas_borde_px = franja;   // recortado de más por franjas con menos cobertura (no vacías)
 
   // 4. Recorte y controles.
   var porSalida = {};

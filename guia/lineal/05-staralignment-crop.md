@@ -22,7 +22,12 @@
 **En una llamada** (`herramientas/alineado.js`): `alinearMasters(masters o carpeta, { referencia, salida })` trabaja sobre ficheros y no toca los originales. También acepta ids de vistas abiertas: usa su fichero si está guardado y sin cambios, y si no, guarda antes una copia temporal. Sin `salida`, crea `alineados` junto a la referencia.
 1. Lee la escala de cada master, de su astrometría o del píxel y la focal. Si difiere más de un 3 % de la referencia, lo reescala antes con Resample Lanczos-3.
 2. Registra con StarAlignment en modo fichero, con corrección de distorsión y Lanczos-3.
-3. Calcula el rectángulo donde todos tienen datos y los recorta todos a él, también la referencia. Guarda `<nombre>_alin.xisf` en `salida`. "Sin datos" es 0 **o el relleno de WBPP**: WBPP no deja la cuña a 0 sino a un valor constante igual en los tres canales (IC 1396, SO3: 0,0008361), que a ojo parece cielo oscuro. Buscando sólo ceros, la cuña del SO3 (142/111/88/43 px) se quedaba dentro; ahora el recorte es 6113×3918 y ninguno de los 4 masters tiene bordes vacíos.
+3. Calcula el rectángulo donde todos tienen datos y los recorta todos a él, también la referencia. Guarda `<nombre>_alin.xisf` en `salida`. "Sin datos" es 0 **o el relleno de WBPP**: WBPP no deja la cuña a 0 sino a un valor constante igual en los tres canales (IC 1396, SO3: 0,0008361), que a ojo parece cielo oscuro. Buscando sólo ceros, la cuña del SO3 (142/111/88/43 px) se quedaba dentro; ahora el recorte es 6113×3918 y ninguno de los 4 masters tiene bordes vacíos. Además recorta las **franjas con menos cobertura de apilado**. No están vacías, pero su fondo o su ruido se apartan del interior: en IC 1396, el HaO3 tenía una franja a la derecha un 21 % más oscura (~60 px) y el SO3 franjas más claras y ruidosas en las esquinas (hasta ~100 px). `bandaBorde` las busca así:
+- Mira 12 tramos por borde y busca un escalón en la mediana o en la MAD de líneas de 2 px.
+- No cuenta el halo de una estrella junto al borde, porque sólo afecta a un tramo.
+- Hace dos pasadas.
+
+Con las franjas, IC 1396 conserva el 86 % del campo, con las esquinas limpias al estirar fuerte (`franjas: false` para no buscarlas).
 
 Al terminar abre los alineados en PixInsight con un STF automático, con la referencia delante (`abrir: false` para no abrirlos). Devuelve el rectángulo, el % del campo que se conserva, las estrellas emparejadas, los bordes a 0 y si cada uno conserva la astrometría.
 
