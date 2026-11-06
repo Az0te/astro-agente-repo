@@ -111,6 +111,8 @@ function alScale(path) {
 }
 
 function alinearMasters(lista, o) {
+  // Qwen la llamó como alinearMasters(null, [vistas]) (6 nov 2026): si la lista viene en el segundo argumento, se acepta.
+  if ((lista === null || lista === undefined) && o instanceof Array) { lista = o; o = arguments[2]; }
   o = o || {};
   // Ficheros o carpetas (de una carpeta se toman sus .xisf, sin mapas de rechazo, pesos de drizzle ni ya alineados).
   // También ids de vistas abiertas (o View/ImageWindow): se usa su fichero si está guardado y sin cambios; si no, se
