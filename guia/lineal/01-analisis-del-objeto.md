@@ -25,6 +25,7 @@
 4. ¿El objeto llena el campo o se difumina en el fondo? (M31, nebulosas extensas, polvo): riesgo de anillo oscuro en la corrección de gradiente y de que la IA se coma el objeto.
 5. ¿Hay IFN/polvo? Desconfiar de MGC y de cualquier extractor agresivo.
 6. Régimen de muestreo: submuestreado / bien muestreado / sobremuestreado (drizzle 2x), que condiciona BXT, NXT y nitidez.
+7. **¿Bordes sin datos?** (`bordes_sin_datos` de `analizarMaster`). Un master registrado sin recortar tiene cuñas en los bordes; WBPP las rellena con un valor constante, no con 0, y a ojo se confunden con cielo oscuro. Con varios masters, lo primero es el [Paso 5: alinear y recortar](05-staralignment-crop.md); con uno solo, recortar los bordes. Gradiente, BXT, SPCC o desmezcla con cuñas dan resultados falsos (`gradienteCandidatos` se niega).
 
 **Código: estado de partida del master**
 

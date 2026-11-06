@@ -96,6 +96,13 @@ function analizarMaster(viewId) {
   var lineal = true;
   for (var q = 0; q < canales.length; ++q) if (canales[q].mediana >= 0.05) lineal = false;
 
+  var bordes = bordesSinDatos(v);
+  var noCumple = [];
+  if (bordes.hay)
+    noCumple.push("bordes sin datos (cuñas del registro: arriba " + bordes.arriba + ", abajo " + bordes.abajo + ", izquierda " +
+                  bordes.izquierda + ", derecha " + bordes.derecha + " px): alinear y recortar (Paso 5, alinearMasters) ANTES de " +
+                  "gradiente, BXT, SPCC o cualquier otro paso; si es un solo master, recortar esos bordes");
+
   return {
     vista: viewId,
     cabecera: cab,
@@ -107,6 +114,53 @@ function analizarMaster(viewId) {
     lineal: lineal,
     saturada: { x: maxX, y: maxY, valor: +maxV.toPrecision(4) },
     campo: { fraccion_con_senal: +(above / cells.length).toFixed(3), cielo: +sky.toPrecision(4),
-             dispersion_cielo: +skyNoise.toPrecision(3), celdas: cells.length, desviacion_tipica_celdas: +dev.toPrecision(3) }
+             dispersion_cielo: +skyNoise.toPrecision(3), celdas: cells.length, desviacion_tipica_celdas: +dev.toPrecision(3) },
+    bordes_sin_datos: bordes,
+    no_cumple: noCumple
   };
+}
+
+// Cuñas sin datos en los bordes (masters registrados sin recortar): cuánto hay que recortar de cada borde para quedarse
+// sin píxeles vacíos (mascaraSinDatos). Una cuña falsea el gradiente (el modelo intenta ajustar el relleno), las
+// estadísticas y SPCC: se alinea y recorta (Paso 5) antes que nada.
+function bordesSinDatos(viewId) {
+  var v = (viewId && typeof viewId === "object") ? viewId : View.viewById(viewId);
+  var im = v.image, W = im.width, H = im.height;
+  var empty = mascaraSinDatos(im), x0 = 0, y0 = 0, x1 = W - 1, y1 = H - 1, rowBad = new Int32Array(H), colBad = new Int32Array(W), total = 0;
+  for (var y = 0; y < H; ++y) for (var x = 0; x < W; ++x) if (empty[y * W + x]) { ++rowBad[y]; ++colBad[x]; ++total; }
+  // Rectángulo con datos: se quita cada vez el borde con más píxeles vacíos (como alinearMasters).
+  for (var guard = 0; guard < W + H && total > 0; ++guard) {
+    var cand = [[rowBad[y0], 0], [rowBad[y1], 1], [colBad[x0], 2], [colBad[x1], 3]];
+    cand.sort(function (a, b) { return b[0] - a[0]; });
+    if (cand[0][0] == 0 || x1 - x0 < 16 || y1 - y0 < 16) break;
+    var k = cand[0][1];
+    if (k == 0 || k == 1) { var yy = k == 0 ? y0++ : y1--; for (var xq = x0; xq <= x1; ++xq) if (empty[yy * W + xq]) --colBad[xq]; }
+    else { var xx = k == 2 ? x0++ : x1--; for (var yq = y0; yq <= y1; ++yq) if (empty[yq * W + xx]) --rowBad[yq]; }
+  }
+  var r = { arriba: y0, abajo: H - 1 - y1, izquierda: x0, derecha: W - 1 - x1, vacio_pct: +(100 * total / (W * H)).toFixed(2) };
+  r.hay = r.vacio_pct > 0.05 && (r.arriba > 2 || r.abajo > 2 || r.izquierda > 2 || r.derecha > 2);
+  r.recorte = { x0: x0, y0: y0, x1: x1 + 1, y1: y1 + 1 };
+  return r;
+}
+
+// Píxeles sin datos (1 = vacío): a 0 o negativos en algún canal (cuña de StarAlignment), o con el valor de relleno de
+// WBPP, que NO es 0 sino una constante igual en todos los canales (IC 1396, 6 nov 2026: 0,0008361). Candidatos de
+// relleno = los valores de las 4 esquinas; un píxel real no repite en coma flotante el de una esquina en todos los canales.
+function mascaraSinDatos(im) {
+  var W = im.width, H = im.height, nc = im.numberOfChannels, n = W * H, empty = new Uint8Array(n), cb = new Float32Array(n);
+  var fills = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]].map(function (xy) {
+    var t = []; for (var c = 0; c < nc; ++c) t.push(im.sample(xy[0], xy[1], c)); return t;
+  });
+  // Sólo esquinas cuyos canales son iguales entre sí (relleno gris constante); en mono, cualquier esquina.
+  fills = fills.filter(function (t) { for (var c = 1; c < t.length; ++c) if (Math.abs(t[c] - t[0]) > 1e-7) return false; return true; });
+  var match = fills.map(function () { var m = new Uint8Array(n); for (var i = 0; i < n; ++i) m[i] = 1; return m; });
+  for (var c = 0; c < nc; ++c) {
+    im.getSamples(cb, new Rect(0, 0, W, H), c);
+    for (var i = 0; i < n; ++i) {
+      if (cb[i] <= 0) empty[i] = 1;
+      for (var f = 0; f < fills.length; ++f) if (match[f][i] && Math.abs(cb[i] - fills[f][c]) > 1e-7) match[f][i] = 0;
+    }
+  }
+  for (var f2 = 0; f2 < fills.length; ++f2) for (var j = 0; j < n; ++j) if (match[f2][j]) empty[j] = 1;
+  return empty;
 }

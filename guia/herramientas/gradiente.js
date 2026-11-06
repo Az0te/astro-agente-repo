@@ -176,6 +176,14 @@ function gradienteCandidatos(viewId, o) {
   if (win.isNull) throw new Error("No existe la vista " + viewId);
   var hasWCS = win.hasAstrometricSolution;
 
+  // Cuñas sin datos (masters sin alinear/recortar): el modelo de fondo intenta ajustar el relleno y falsea todo.
+  if (typeof bordesSinDatos !== "function") eval(File.readTextFile(GR_DIR + "/analisis.js"));
+  var bd = bordesSinDatos(win.mainView);
+  if (bd.hay && !o.ignorarBordes)
+    throw new Error("La imagen tiene bordes sin datos (arriba " + bd.arriba + ", abajo " + bd.abajo + ", izquierda " + bd.izquierda +
+                    ", derecha " + bd.derecha + " px): alinear y recortar primero (Paso 5, alinearMasters; con un solo master, " +
+                    "recortar esos bordes con Crop). La corrección de gradiente va después.");
+
   // Base para gcStructCopy (luminancia binada del original); las vistas auxiliares que cree son intermedias.
   var before = grIds();
   var base = gcPrepare(viewId, bin);

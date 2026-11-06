@@ -12,12 +12,33 @@
 //      un 3 % de la de la referencia, la reescala antes con Resample (Lanczos-3): registrar escalas distintas falló.
 //   2. StarAlignment en modo fichero contra la referencia (por defecto, la primera de la lista), con corrección de
 //      distorsión (thin plate splines) y Lanczos-3: una sola interpolación.
-//   3. Calcula el rectángulo donde TODOS los masters tienen datos (píxeles distintos de 0 en todos los canales) y
+//   3. Calcula el rectángulo donde TODOS los masters tienen datos (ni 0 ni el relleno constante de WBPP) y
 //      recorta todos a ese rectángulo, incluida la referencia. Guarda <nombre>_alin.xisf en salida.
 //   4. Controles: fracción del campo que se conserva, bordes sin 0 tras el recorte, estrellas emparejadas por
 //      StarAlignment, y si cada fichero conserva la astrometría (PixInsight 1.9.6+).
 // Devuelve { referencia, rect, conservado_pct, ficheros: [{ entrada, salida, escala, reescalado, emparejadas, wcs }],
 //            no_cumple, control: { medido, revisar_a_ojo } }.
+
+// Píxeles sin datos (1 = vacío): a 0 o negativos en algún canal (cuña de StarAlignment), o con el valor de relleno de
+// WBPP, que NO es 0 sino una constante igual en todos los canales (IC 1396, 6 nov 2026: 0,0008361; antes sólo se
+// buscaban ceros y la cuña se quedaba). Misma función que en analisis.js.
+function mascaraSinDatos(im) {
+  var W = im.width, H = im.height, nc = im.numberOfChannels, n = W * H, empty = new Uint8Array(n), cb = new Float32Array(n);
+  var fills = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]].map(function (xy) {
+    var t = []; for (var c = 0; c < nc; ++c) t.push(im.sample(xy[0], xy[1], c)); return t;
+  });
+  fills = fills.filter(function (t) { for (var c = 1; c < t.length; ++c) if (Math.abs(t[c] - t[0]) > 1e-7) return false; return true; });
+  var match = fills.map(function () { var m = new Uint8Array(n); for (var i = 0; i < n; ++i) m[i] = 1; return m; });
+  for (var c = 0; c < nc; ++c) {
+    im.getSamples(cb, new Rect(0, 0, W, H), c);
+    for (var i = 0; i < n; ++i) {
+      if (cb[i] <= 0) empty[i] = 1;
+      for (var f = 0; f < fills.length; ++f) if (match[f][i] && Math.abs(cb[i] - fills[f][c]) > 1e-7) match[f][i] = 0;
+    }
+  }
+  for (var f2 = 0; f2 < fills.length; ++f2) for (var j = 0; j < n; ++j) if (match[f2][j]) empty[j] = 1;
+  return empty;
+}
 
 function alSearch(p, r) { return File.searchDirectory ? File.searchDirectory(p, r) : searchDirectory(p, r); }
 
@@ -165,10 +186,8 @@ function alinearMasters(lista, o) {
   reg.forEach(function (f) {
     var w = ImageWindow.open(f, "alVAL", "verbosity 0", true)[0], im = w.mainView.image;
     if (im.width != W || im.height != H) { w.forceClose(); throw new Error("Tamaño distinto tras registrar: " + f); }
-    for (var c = 0; c < im.numberOfChannels; ++c) {
-      im.getSamples(buf, new Rect(0, 0, W, H), c);
-      for (var i = 0; i < W * H; ++i) if (buf[i] <= 0) valid[i] = 0;
-    }
+    var vac = mascaraSinDatos(im);   // 0 y también el relleno constante de WBPP (no es 0)
+    for (var i = 0; i < W * H; ++i) if (vac[i]) valid[i] = 0;
     w.forceClose();
   });
   // Rectángulo: se quita cada vez el borde (fila o columna) con más píxeles sin datos, hasta que no quede ninguno.
