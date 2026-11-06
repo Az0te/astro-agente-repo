@@ -170,5 +170,17 @@ function mascaraSinDatos(im) {
     }
   }
   for (var f2 = 0; f2 < fills.length; ++f2) for (var j = 0; j < n; ++j) if (match[f2][j]) empty[j] = 1;
-  return empty;
+  // Sólo cuenta lo vacío que llega al borde (una cuña es una racha desde el borde en su fila o columna). Los píxeles a 0
+  // sueltos del interior (una raya desmezclada y recortada a 0, IC 1396 6 nov 2026) no son cuñas: sin esto el SII del
+  // S2Hb daba "izquierda 5133 px".
+  var edge = new Uint8Array(n), x, y;
+  for (y = 0; y < H; ++y) {
+    for (x = 0; x < W && empty[y * W + x]; ++x) edge[y * W + x] = 1;
+    for (x = W - 1; x >= 0 && empty[y * W + x]; --x) edge[y * W + x] = 1;
+  }
+  for (x = 0; x < W; ++x) {
+    for (y = 0; y < H && empty[y * W + x]; ++y) edge[y * W + x] = 1;
+    for (y = H - 1; y >= 0 && empty[y * W + x]; --y) edge[y * W + x] = 1;
+  }
+  return edge;
 }

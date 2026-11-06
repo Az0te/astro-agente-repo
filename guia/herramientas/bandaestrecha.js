@@ -126,8 +126,12 @@ function desmezclarDualBand(viewId, o) {
     return +(100 * k / (n / 3)).toFixed(3);
   };
   var nHa = neg(ha), nO = neg(oi);
+  // Pedestal de salida: al restar el cielo, la mitad del ruido del fondo queda por debajo de 0 y recortarlo a 0 deja
+  // medio cielo a cero (sesga el fondo, estropea el gradiente y el denoise, y parece una cuña sin datos: IC 1396,
+  // 6 nov 2026). Se suma la media de los pedestales de entrada (o.pedestalSalida para otro valor; 0 = el recorte de antes).
+  var pedOut = o.pedestalSalida !== undefined ? o.pedestalSalida : (p[0] + p[1] + p[2]) / 3;
   [ha, oi].forEach(function (vv) {
-    var P = new PixelMath; P.useSingleExpression = true; P.expression = "max($T, 0)"; P.createNewImage = false;
+    var P = new PixelMath; P.useSingleExpression = true; P.expression = "max($T + " + pedOut + ", 0)"; P.createNewImage = false;
     P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1; P.executeOn(vv);
     vv.window.show();
   });
@@ -145,7 +149,7 @@ function desmezclarDualBand(viewId, o) {
   return {
     // ha / oiii: primera y segunda raya (con S2O3 son SII y OIII; con S2Hb, SII y Hβ); 'lineas' dice cuál es cuál.
     ha: haId, oiii: oId, lineas: vistas, filtro: lineas.join("+"), original: viewId,
-    pedestales: p.map(function (x) { return +x.toPrecision(4); }),
+    pedestales: p.map(function (x) { return +x.toPrecision(4); }), pedestal_salida: +pedOut.toPrecision(4),
     coeficientes: { primera: cHa, segunda: cO, ponderar_G: !!o.ponderarG },
     zona_roja: { raya: lineas[0], G_R: +gR.toFixed(3), B_R: +bR.toFixed(3), esperado: eG.toFixed(2) + " y " + eB.toFixed(2) },
     negativos_pct: { primera: nHa, segunda: nO }, no_cumple: noCumple,

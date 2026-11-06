@@ -29,7 +29,7 @@ El Antlia Hα/OIII 5 nm no deja pasar Hβ ni SII.
 - `OIII = -0.1378*R + 0.8370*G + 0.4542*B`
 - Variante ponderando G ×2 (doble de píxeles verdes en la matriz Bayer, menos ruido): `Ha = 1.2565*R - 0.0330*G - 0.0391*B`; `OIII = -0.1425*R + 0.9430*G + 0.2574*B`.
 
-Recortar a ≥ 0 **sólo al final** y vigilar sobre-restas (zonas negras) en señal débil. Comprobación en una zona dominada por Hα: `(G−pG)/(R−pR) ≈ 0,14` y `(B−pB)/(R−pR) ≈ 0,05`; si se aparta mucho, el balance de canales no es el bruto (SPCC, flats) o hay continuo.
+Recortar a ≥ 0 **sólo al final** y vigilar sobre-restas (zonas negras) en señal débil. **Sumar un pedestal antes de recortar.** Al restar el cielo, la mitad del ruido del fondo queda por debajo de 0. Recortado a 0, medio cielo se queda a cero: sesga el fondo, estropea el gradiente y el denoise, y parece una cuña sin datos (IC 1396, nov 2026). `desmezclarDualBand` suma la media de los pedestales de entrada (`pedestal_salida`). Comprobación en una zona dominada por Hα: `(G−pG)/(R−pR) ≈ 0,14` y `(B−pB)/(R−pR) ≈ 0,05`; si se aparta mucho, el balance de canales no es el bruto (SPCC, flats) o hay continuo.
 
 **Limitación del modelo:** "supone sólo rayas. El continuo que entra por las bandas de 5 nm (estrellas, nebulosa de reflexión, galaxias) también se reparte como 'Hα' y 'OIII': restar después el continuo con la RGB (sustracción de continuo) y, en objetos de reflexión como IC 63, no interpretar ese 'OIII' como emisión."
 
