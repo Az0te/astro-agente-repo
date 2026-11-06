@@ -116,7 +116,10 @@ function analizarMaster(viewId) {
     campo: { fraccion_con_senal: +(above / cells.length).toFixed(3), cielo: +sky.toPrecision(4),
              dispersion_cielo: +skyNoise.toPrecision(3), celdas: cells.length, desviacion_tipica_celdas: +dev.toPrecision(3) },
     bordes_sin_datos: bordes,
-    no_cumple: noCumple
+    no_cumple: noCumple,
+    leyenda: "campo.cielo es el FONDO (contaminación lumínica, Luna, banda del filtro), no señal del objeto: más cielo = peor " +
+             "cielo o filtro más ancho. La señal del objeto es lo que queda por encima del cielo (fraccion_con_senal). " +
+             "No identifiques el objeto ni el telescopio por tu cuenta: usa OBJECT y TELESCOP tal cual."
   };
 }
 
