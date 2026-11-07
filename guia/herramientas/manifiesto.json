@@ -1,0 +1,1291 @@
+{
+ "version": 1,
+ "nota": "Funciones de la guía que el MCP picopilot ofrece como herramientas. El runner (mcp/pjsr/picopilot-runner.js) solo ejecuta las que tiene en su lista blanca (LISTA); este fichero describe sus parámetros para el modelo. Niveles: lectura (no cambia nada), copias (crea vistas nuevas, no toca las de entrada), vista (cambia la vista indicada, con historial), disco (lee o escribe ficheros), libre (código arbitrario, apagado por defecto).",
+ "funciones": [
+  {
+   "nombre": "ping",
+   "fichero": null,
+   "nivel": "lectura",
+   "timeout_s": 15,
+   "descripcion": "Comprueba que PixInsight responde a través del runner. Devuelve la versión del runner, la de PixInsight y el número de ventanas abiertas.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "vistas",
+   "fichero": null,
+   "nivel": "lectura",
+   "timeout_s": 20,
+   "descripcion": "Lista las imágenes abiertas en PixInsight: id, tamaño, canales, color o mono, si tiene astrometría, fichero de origen y si tiene cambios sin guardar. La primera es la ventana activa.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "estadisticas",
+   "fichero": null,
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Mediana, MAD, media, mínimo y máximo por canal de una vista abierta (entera o de un rectángulo). Sirve para saber si está lineal (medianas < 0,05), comprobar el fondo o medir zonas concretas. Con bordes mide franjas de los cuatro bordes frente al centro (viñeteo, cuñas, zonas con menos subs).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "rect": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Zona a medir [x0, y0, x1, y1] en píxeles (x1 e y1 excluidos). Sin él, toda la imagen."
+     },
+     "bordes": {
+      "type": "number",
+      "description": "Ancho en píxeles de las franjas de borde (p. ej. 200). Añade estadísticas de izquierda, derecha, arriba, abajo y centro, y la caída de cada borde respecto al centro."
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "historial",
+   "fichero": null,
+   "nivel": "lectura",
+   "timeout_s": 30,
+   "descripcion": "Historial de procesos de una vista abierta (qué se le ha aplicado y en qué orden), para el dossier y la revisión. Con parametros=true incluye los parámetros de cada proceso.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "parametros": {
+      "type": "boolean",
+      "description": "Incluir los parámetros de cada proceso (código fuente recortado). Por defecto false."
+     },
+     "maxCaracteres": {
+      "type": "number",
+      "description": "Máximo de caracteres de parámetros por proceso (por defecto 1500)."
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "previa",
+   "fichero": null,
+   "nivel": "lectura",
+   "timeout_s": 90,
+   "descripcion": "Guarda un JPG de la vista (máx. 'lado' px, por defecto 1600) sin tocarla y devuelve su ruta para mirarla. Si la vista es lineal la estira como el STF automático; si ya está estirada la guarda tal cual. Con rect da un recorte (al 100 % si cabe en 'lado') para revisar detalle, estrellas, anillos o textura. Para revisar a ojo lo que una función no mide: lee el JPG que devuelve.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { lado: 1600, rect: [x0, y0, x1, y1] (recorte; al 100 % si cabe en lado), estirar: \"auto\" | true | false, enlazado: true (false = STF por canal), fichero: ruta .jpg (por defecto ~/.picopilot/previas/<vista>[_x0_y0].jpg) }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "analizarMaster",
+   "fichero": "analisis.js",
+   "nivel": "lectura",
+   "timeout_s": 120,
+   "descripcion": "Paso 1 lineal: cabecera (objeto, filtro, cámara, focal...), escala en \"/px, mediana/MAD/saturados por canal, si está lineal, estrella más brillante, fracción del campo con señal y bordes sin datos. No interpreta. Con una lista de vistas devuelve un resultado por vista.",
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "description": "Id de una vista abierta, o lista de ids.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "bordesSinDatos",
+   "fichero": "analisis.js",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Mide las franjas de borde sin datos (a 0 o con el relleno constante de WBPP) de una vista: píxeles por lado.",
+   "paso": "lineal/05-staralignment-crop.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "inventario",
+   "fichero": "preproceso.js",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "descripcion": "Paso 2 lineal: recorre una o varias carpetas (FITS/XISF), lee solo cabeceras y agrupa lights, flats, darks y bias por filtro, exposición, temperatura, gain y noche. Excluye carpetas que empiezan por \"_\" y las de salida de WBPP. No abre ventanas.",
+   "paso": "lineal/02-inventario.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "description": "Ruta absoluta de la carpeta del objeto, o lista de carpetas.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { excluir: \"_rechazados\", aliasFiltros }"
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
+   "nombre": "revisarCalibracion",
+   "fichero": "preproceso.js",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "descripcion": "Paso 3 lineal: comprueba con las cabeceras que darks, flats y darks de flats casan con los lights (exposición, temperatura, gain, offset, binning, tamaño, telescopio, filtro) y mide el nivel de los flats (saturados o subexpuestos). No abre ventanas.",
+   "paso": "lineal/03-blink-subframeselector.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "calibracion": {
+      "type": "object",
+      "description": "{ lights, flats, flatDarks, darks: carpeta(s) o ficheros; aliasFiltros: { \"nombre en FITS\": \"filtro real\" } }"
+     }
+    },
+    "required": [
+     "calibracion"
+    ]
+   }
+  },
+  {
+   "nombre": "seleccionarSubs",
+   "fichero": "preproceso.js",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "descripcion": "Paso 4 lineal: mide los subs con ImageAnalysis y rechaza por FWHM, excentricidad y nubes dentro de cada grupo (carpeta, filtro, exposición). Devuelve tabla, aprobados, dudosos, rechazados con motivo, pesos y un fichero de lista de aprobados para lanzarWBPP. Puede tardar varios minutos: devuelve un trabajo.",
+   "paso": "lineal/03-blink-subframeselector.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "subs": {
+      "description": "Carpeta LIGHT (o de la noche), lista de carpetas o de ficheros.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { fwhmTol: 0.5, fwhmDuda: 0.35, eccDelta: 0.1, eccDuda: 0.07, nubeZ: 2.5, nubeDuda, lista, csv, tabla }"
+     }
+    },
+    "required": [
+     "subs"
+    ]
+   }
+  },
+  {
+   "nombre": "lanzarWBPP",
+   "fichero": "preproceso.js",
+   "nivel": "disco",
+   "timeout_s": 60,
+   "descripcion": "Paso 4 lineal: lanza WBPP en una segunda instancia de PixInsight sin ventanas (se cierra sola). Después, estadoWBPP(salida) hasta que diga terminado. Rutas sin comas y cortas (<256 caracteres con los nombres de WBPP).",
+   "paso": "lineal/04-preprocesado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "wbpp": {
+      "type": "object",
+      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, salida (carpeta), parametros: { nombre: valor de la automatización de WBPP } }"
+     }
+    },
+    "required": [
+     "wbpp"
+    ]
+   }
+  },
+  {
+   "nombre": "estadoWBPP",
+   "fichero": "preproceso.js",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Estado de un WBPP lanzado (o de cualquier carpeta de salida de WBPP): terminado sí/no, duración, fallidos, rechazados y masters usados, resumen del log.",
+   "paso": "lineal/04-preprocesado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "salida": {
+      "type": "string",
+      "description": "Carpeta de salida de WBPP."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { abrir: true para abrir los masters al terminar }"
+     }
+    },
+    "required": [
+     "salida"
+    ]
+   }
+  },
+  {
+   "nombre": "alinearMasters",
+   "fichero": "alineado.js",
+   "nivel": "disco",
+   "timeout_s": 1800,
+   "descripcion": "Paso 5 lineal: registra los masters (ficheros, carpeta o vistas) sobre la referencia con StarAlignment (reescala si la escala difiere > 3 %), recorta todos a la zona común con datos (también franjas de borde con menos cobertura) y guarda <nombre>_alin.xisf en 'salida' (por defecto 'alineados' junto a los masters). Abre las vistas _alin y resuelve/copia la astrometría.",
+   "paso": "lineal/05-staralignment-crop.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "masters": {
+      "description": "Ficheros .xisf, carpeta(s) o ids de vistas abiertas.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { referencia: fichero o id (por defecto la de escala más fina), salida: carpeta, astrometria: true, abrir, franjas, margen }"
+     }
+    },
+    "required": [
+     "masters"
+    ]
+   }
+  },
+  {
+   "nombre": "componerHDR",
+   "fichero": "hdr.js",
+   "nivel": "disco",
+   "timeout_s": 900,
+   "descripcion": "Paso 6 lineal: HDRComposition de una toma larga y una o varias cortas ya alineadas (ficheros o vistas), con umbral medido de la meseta de saturación y controles (sustituido, razón de flujo, escalón en la transición).",
+   "paso": "lineal/06-hdr-composition.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "masters": {
+      "description": "Ficheros o vistas alineados (Paso 5).",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { nuevaVista: \"HDR\", umbral, suavizado: 7, crecimiento: 1 }"
+     }
+    },
+    "required": [
+     "masters"
+    ]
+   }
+  },
+  {
+   "nombre": "desmezclarDualBand",
+   "fichero": "bandaestrecha.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 7 lineal: separa un master dual band OSC en sus dos líneas (HaO3 → Ha_raw y OIII_raw; S2O3, S2Hb según FILTER) con pedestales medidos. Va antes de SPCC y del gradiente.",
+   "paso": "lineal/07-extraccion-canales.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { filtro: \"HaO3\" | \"S2O3\" | \"S2Hb\" si FILTER no lo dice, ha / oiii: ids de salida, pedestales, ponderarG }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "resolverAstrometria",
+   "fichero": "lineal.js",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "descripcion": "Paso 8 lineal: resuelve la astrometría de la vista con BlindSolver (escribe la solución en la propia vista; no cambia los píxeles).",
+   "paso": "lineal/08-plate-solve.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { pistas: { minScale, maxScale (\"/px) | minField, maxField (grados) | regionRA, regionDec, regionRadius } }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "gradienteCandidatos",
+   "fichero": "gradiente.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free, MGC con y sin bordes, polinomio robusto de grado 1 y 2) sobre copias GC_*, mide cuánto se come cada modelo del objeto y cuánto gradiente de cielo deja, y recomienda. No toca la original. Varios minutos: devuelve un trabajo.",
+   "paso": "lineal/09-correccion-gradiente.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { graxpert: [10, 8], mgc: [1024, 2048], mgcBorde: true, mgcOpts, polinomio: [1, 2] (lista de grados; false = sin polinomio), spfc: { qe, gray } del perfil, mars: ruta .xmars, dossier: ruta .json }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "graxpertBGE",
+   "fichero": "graxpert.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "GraXpert por línea de comandos (extracción de fondo): crea GC_GraXpert_<tag> y su _model con la astrometría copiada. Para comparar métodos usar gradienteCandidatos.",
+   "paso": "lineal/09-correccion-gradiente.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { method: \"sample_free\" | \"AI\" | \"RBF\" | \"Kriging\" | \"Splines\", scale: 1-10, smoothing: 0-1, correction: \"Subtraction\" | \"Division\", tag }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "graxpertDenoise",
+   "fichero": "graxpert.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "GraXpert por línea de comandos (reducción de ruido IA) en una vista nueva.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { strength: 0-1, batch, gpu, tag }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "combinarMasters",
+   "fichero": "combinacion.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 10 lineal: clasifica masters alineados (por FILTER) y hace lo que toca: misma clase → combinarMismoCanal; R,G,B mono → RGB; RGB + Hα → inyectarHa. L y banda estrecha sin RGB se dejan para el Paso 2 no lineal.",
+   "paso": "lineal/10-combinacion-rgb-nb.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "masters": {
+      "description": "Carpeta o lista de masters/vistas alineados.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", alfa, inyectar: true, clases: { \"fichero\": \"Ha\" } }"
+     }
+    },
+    "required": [
+     "masters"
+    ]
+   }
+  },
+  {
+   "nombre": "combinarMismoCanal",
+   "fichero": "combinacion.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 10 lineal: combina dos masters alineados del mismo canal pesando por 1/σ² tras LinearFit; controla ruido y nitidez.",
+   "paso": "lineal/10-combinacion-rgb-nb.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "a": {
+      "type": "string",
+      "description": "Primera vista."
+     },
+     "b": {
+      "type": "string",
+      "description": "Segunda vista."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { nuevaVista }"
+     }
+    },
+    "required": [
+     "a",
+     "b"
+    ]
+   }
+  },
+  {
+   "nombre": "inyectarHa",
+   "fichero": "combinacion.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 10 lineal: inyecta Hα (lineal, alineado, mejor starless y sin continuo) en el rojo de la RGB bajo máscara de nebulosa. Por defecto suma solo el exceso de Hα sobre R.",
+   "paso": "lineal/10-combinacion-rgb-nb.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "rgb": {
+      "type": "string",
+      "description": "Vista RGB."
+     },
+     "ha": {
+      "type": "string",
+      "description": "Vista Hα."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", modo: \"suma\" | \"mezcla\", alfa, clipLow, suavizado, nuevaVista }"
+     }
+    },
+    "required": [
+     "rgb",
+     "ha"
+    ]
+   }
+  },
+  {
+   "nombre": "bxtCorrectOnly",
+   "fichero": "lineal.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 11 lineal: BlurXTerminator solo corrección (correct only) en una copia, con FWHM por canal y ringing antes/después.",
+   "paso": "lineal/11-bxt-correct-only.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "calibrarColor",
+   "fichero": "color.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 12 lineal: SPCC en una copia (<vista>_spcc), con comprobaciones (astrometría, lineal) y cielo por canal antes y después.",
+   "paso": "lineal/12-spcc.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { spcc: { r, g, b, qe, narrowband } del perfil (vacío = OSC sin filtro), nuevaVista, fondoAuto (experimental), forzarBandaAncha }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "neutralizarCielo",
+   "fichero": "color.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Neutralización fina del cielo en LINEAL (desplazamiento aditivo por canal, como BackgroundNeutralization) en una copia (<vista>_bn). Para cuando tras SPCC el estirado da dominante en el cielo (> 5 %). Mide el cielo en las mismas zonas que el control del estirado (o en un rect de cielo limpio) y suma a cada canal lo que le falta; vale sobre la starless lineal sin rehacer BXT ni SXT.",
+   "paso": "lineal/12-spcc.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista RGB lineal."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { nuevaVista, rect: [x0, y0, x1, y1] de cielo limpio (si las zonas más oscuras son polvo o nebulosa), pasadas (def. 2) }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "bxtCandidatos",
+   "fichero": "deconvolucion.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 13 lineal: rejilla de BlurXTerminator en un recorte (no toca la imagen) con FWHM, ringing, gusanos y contraste por variante, y recomendación.",
+   "paso": "lineal/13-bxt-completo.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\" | \"cumulo\" | \"snr_bajo\", nonstellar: [..], stars, halos, recorte: 1500 }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "bxtAplicar",
+   "fichero": "deconvolucion.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 13 lineal: aplica BlurXTerminator con los valores elegidos en una copia.",
+   "paso": "lineal/13-bxt-completo.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { nonstellar, stars, halos, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "reducirRuido",
+   "fichero": "ruido.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Pasos 14 y 15 lineales y 6 no lineal: NoiseXTerminator (o híbrido MLDenoise + NXT en mono con modelo) en una copia, con ruido del cielo, contraste de zonas débiles y estructura del residuo.",
+   "paso": "lineal/14-noisex-suave.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { metodo: \"nxt\" | \"hibrido\", denoise: 0.5, detail: 0.15, iterations: 2, croma, modelo: .xmlm, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "separarEstrellas",
+   "fichero": "ruido.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 15 lineal: StarXTerminator en una copia: starless + capa de estrellas, con comprobaciones.",
+   "paso": "lineal/15-starx.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { nuevaVista: \"Starless\", nuevasEstrellas, overlap }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "medirContinuo",
+   "fichero": "bandaestrecha.js",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "descripcion": "Paso 16 lineal: mide k (continuo) por fotometría de apertura de estrellas entre la banda estrecha y el canal R de la RGB.",
+   "paso": "lineal/16-linearfit-continuo.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "nb": {
+      "type": "string",
+      "description": "Vista de banda estrecha (Hα)."
+     },
+     "continuo": {
+      "type": "string",
+      "description": "Vista RGB calibrada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { canal, maxEstrellas, picoMax }"
+     }
+    },
+    "required": [
+     "nb",
+     "continuo"
+    ]
+   }
+  },
+  {
+   "nombre": "restarContinuo",
+   "fichero": "bandaestrecha.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 16 lineal: Hα_CS = Hα − k·R − c en una vista nueva, con negativos y emisión conservada.",
+   "paso": "lineal/16-linearfit-continuo.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "nb": {
+      "type": "string",
+      "description": "Vista Hα (starless)."
+     },
+     "continuo": {
+      "type": "string",
+      "description": "Vista RGB (starless)."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { k (de medirContinuo), c, canal, nuevaVista }"
+     }
+    },
+    "required": [
+     "nb",
+     "continuo"
+    ]
+   }
+  },
+  {
+   "nombre": "checkpointLineal",
+   "fichero": "lineal.js",
+   "nivel": "disco",
+   "timeout_s": 600,
+   "descripcion": "Paso 17 lineal: informe del checkpoint (tabla de la ficha) y, con 'carpeta', guarda el XISF y un borrador de estado.md.",
+   "paso": "lineal/17-checkpoint.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { carpeta, objeto, version, fichero, notas, sobrescribir }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "estirarCapas",
+   "fichero": "estirado.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") y la capa de estrellas con starStretch, en vistas nuevas.",
+   "paso": "no-lineal/01-estirado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "starless": {
+      "type": "string",
+      "description": "Vista starless lineal."
+     },
+     "estrellas": {
+      "type": "string",
+      "description": "Vista de estrellas lineal."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { tipo: \"galaxia\" (cielo 0.07, ruidoMax 0.12, estrellas \"extraer\", saturacion 1.3), cielo: 0.10, ruidoMax, estrellas: \"extraer\" (mismo estirado que la starless + screenStarsExtract) | \"starStretch\", amount y saturacion (estrellas), nuevaStarless, nuevasEstrellas, modo: \"fondo\" (antiguo) }"
+     }
+    },
+    "required": [
+     "starless",
+     "estrellas"
+    ]
+   }
+  },
+  {
+   "nombre": "estirarStarless",
+   "fichero": "estirado.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 1 no lineal: solo la starless, \"al fallo\".",
+   "paso": "no-lineal/01-estirado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { cielo: 0.10, ruidoMax, ceroMax, altoMax, maxPasadas, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "estirarEstrellas",
+   "fichero": "estirado.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 1 no lineal: solo la capa de estrellas (starStretch).",
+   "paso": "no-lineal/01-estirado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { amount, saturacion, quitarVerde, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "previsualizarPaletas",
+   "fichero": "bandaestrecha.js",
+   "nivel": "disco",
+   "timeout_s": 600,
+   "descripcion": "Paso 2 no lineal: previas de paletas (~1200 px) desde Hα y OIII YA estirados igual; guarda JPG en 'carpeta' si se da.",
+   "paso": "no-lineal/02-lrgb-paleta.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ha": {
+      "type": "string",
+      "description": "Vista Hα estirada."
+     },
+     "oiii": {
+      "type": "string",
+      "description": "Vista OIII estirada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { carpeta, lado: 1200 }"
+     }
+    },
+    "required": [
+     "ha",
+     "oiii"
+    ]
+   }
+  },
+  {
+   "nombre": "quitarVerde",
+   "fichero": "lineal.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 3 no lineal: quita el verde del cielo (solo si G supera en > 3 % a R y B) bajo máscara de cielo, en una copia.",
+   "paso": "no-lineal/03-scnr.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { amount, umbral, forzar, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "crearMascara",
+   "fichero": "mascaras.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 4 no lineal: crea una máscara (vista gris) y mide su cobertura. No la aplica.",
+   "paso": "no-lineal/04-mascaras.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\", gamma, bin, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "comprimirNucleo",
+   "fichero": "nucleo.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 5 no lineal, galaxias, antes de saturar: HDRMultiscaleTransform 7 capas mezclado al 60 % con máscara de bulbo, en una copia. Mide la meseta del núcleo (> 0,95) antes y después, anillos oscuros y brillo del bulbo.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la starless estirada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { capas: 7, mezcla: 0.6, iteraciones: 1, mascaraDesde: 0.35, mascaraAncho: 0.25, nuevaVista, conservarMascara }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "medirMeseta",
+   "fichero": "nucleo.js",
+   "nivel": "lectura",
+   "timeout_s": 120,
+   "descripcion": "Mide la meseta quemada del núcleo: radio equivalente de lo que pasa de 0,95 alrededor del punto más brillante (con estructura: 0–3 px).",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista estirada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { umbral: 0.95 }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "saturarAlFallo",
+   "fichero": "boost.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 5 no lineal: curva S de saturación empujando hasta que algo falla (canales > 0,98, fondo teñido, ruido de croma) y se queda la anterior, en una copia.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", pasos, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "prepararEstrellas",
+   "fichero": "estrellas.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 8 no lineal: limpia y ajusta la capa de estrellas ya estirada (residuos, suelo, saturación, techo) en una copia.",
+   "paso": "no-lineal/08-estrellas.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { limpieza: 0.005, suelo, saturacion, maximo: 0.97, rodilla: 0.8, halosMagenta, atenuar, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "recombinarEstrellas",
+   "fichero": "recombinacion.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 9 no lineal: recombina starless y estrellas YA estiradas (screen) en una vista nueva, con controles.",
+   "paso": "no-lineal/09-recombinacion.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "starless": {
+      "type": "string",
+      "description": "Vista starless estirada."
+     },
+     "estrellas": {
+      "type": "string",
+      "description": "Vista de estrellas estirada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { metodo: \"auto\" | \"screen\", k: 1.0, original, nuevaVista }"
+     }
+    },
+    "required": [
+     "starless",
+     "estrellas"
+    ]
+   }
+  },
+  {
+   "nombre": "exportarFinal",
+   "fichero": "exportar.js",
+   "nivel": "disco",
+   "timeout_s": 600,
+   "descripcion": "Paso 10 no lineal: controles y exportación a XISF 32 bits, TIFF 16 bits y JPG sRGB en 'carpeta' (no sobrescribe).",
+   "paso": "no-lineal/10-recorte-exportacion.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "{ carpeta (obligatoria), nombre, girar: false (giro 180°), formatos: [\"xisf\",\"tif\",\"jpg\"], sobrescribir: false }"
+     }
+    },
+    "required": [
+     "vista",
+     "opciones"
+    ]
+   }
+  },
+  {
+   "nombre": "starStretch",
+   "fichero": "realces.js",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "descripcion": "Star Stretch (algoritmo de SetiAstro) sobre la propia vista de estrellas LINEAL (con historial, se puede deshacer).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { amount: 2 }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "darkStructureEnhance",
+   "fichero": "realces.js",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "descripcion": "DarkStructureEnhance sobre la propia vista NO lineal (con historial).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { median: 0.7 }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "backgroundEnhance",
+   "fichero": "realces.js",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "descripcion": "BackgroundEnhance sobre la propia vista NO lineal (con historial).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { amount: 0.5 }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "abrirImagen",
+   "fichero": null,
+   "nivel": "disco",
+   "timeout_s": 120,
+   "descripcion": "Abre un fichero de imagen (XISF, FITS, TIFF...) en PixInsight. Devuelve los ids de las vistas abiertas.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta."
+     }
+    },
+    "required": [
+     "fichero"
+    ]
+   }
+  },
+  {
+   "nombre": "guardarImagen",
+   "fichero": null,
+   "nivel": "disco",
+   "timeout_s": 300,
+   "descripcion": "Guarda una vista en un fichero (formato por la extensión). No sobrescribe salvo sobrescribir: true. Crea la carpeta si no existe.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta con extensión (.xisf, .fits, .tif, .jpg)."
+     },
+     "sobrescribir": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "vista",
+     "fichero"
+    ]
+   }
+  },
+  {
+   "nombre": "cerrarVista",
+   "fichero": null,
+   "nivel": "disco",
+   "timeout_s": 30,
+   "descripcion": "Cierra una vista. Si tiene cambios sin guardar no la cierra salvo descartar: true.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "description": "Id o lista de ids.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     },
+     "descartar": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "run_script",
+   "fichero": null,
+   "nivel": "libre",
+   "timeout_s": 600,
+   "descripcion": "PJSR libre en PixInsight, con las funciones de la guía cargadas. Solo existe si el usuario lo ha permitido (fichero ~/.picopilot/permitir_libre). Úsalo solo para lo que no cubren las demás herramientas. Devuelve el valor de la última expresión.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "codigo": {
+      "type": "string",
+      "description": "Código PJSR."
+     }
+    },
+    "required": [
+     "codigo"
+    ]
+   }
+  }
+ ]
+}

@@ -163,12 +163,15 @@ function grMeasure(base, modelId, correctedId, range0) {
 }
 
 function gradienteCandidatos(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   // Por defecto se comparan los tres métodos (no hay uno preferido: se aplica el que mejor mida en cada imagen).
   var scalesGX = o.graxpert || [10, 8];
   var scalesMGC = o.mgc || [1024, 2048];
-  var gradosPoly = o.polinomio || [1, 2];
+  // polinomio: lista de grados ([1, 2] por defecto); true = [1, 2], false = ninguno, un número = ese grado
+  // (6 nov 2026: con polinomio: true no se generaba ninguno).
+  var gradosPoly = o.polinomio === false ? [] : (o.polinomio === undefined || o.polinomio === true) ? [1, 2] :
+                   (typeof o.polinomio === "number" ? [o.polinomio] : o.polinomio);
   var bin = o.bin || 8;
   var r = { vista: viewId, candidatos: [], intermedias: [], recomendado: "", motivo: "", errores: [] };
 

@@ -32,7 +32,7 @@ function anMedian(arr) {
 }
 
 function analizarMaster(viewId) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   if (viewId instanceof Array) {   // varias vistas: un resultado por vista
     var todos = {}; viewId.forEach(function (id) { todos[id] = analizarMaster(id); }); return todos;
   }

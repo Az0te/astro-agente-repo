@@ -54,8 +54,22 @@ function stMeasure(view) {
   return out;
 }
 
+// Brillo total (suma de la luminancia, muestreada) y % de píxeles con luminancia > 0,02.
+function stFlux(view) {
+  var im = view.image, W = im.width, H = im.height, n = W * H, buf = new Float32Array(n), s = 0;
+  for (var c = 0; c < im.numberOfChannels; ++c) { im.getSamples(buf, new Rect(0, 0, W, H), c); for (var i = 0; i < n; i += 3) s += buf[i]; }
+  return s;
+}
+
+function stStarPct(view) {
+  var im = view.image, W = im.width, H = im.height, n = W * H, buf = new Float32Array(n), L = new Float32Array(n), k = 0;
+  for (var c = 0; c < im.numberOfChannels; ++c) { im.getSamples(buf, new Rect(0, 0, W, H), c); for (var i = 0; i < n; ++i) L[i] += buf[i] / im.numberOfChannels; }
+  for (var j = 0; j < n; ++j) if (L[j] > 0.02) ++k;
+  return +(100 * k / n).toFixed(2);
+}
+
 function prepararEstrellas(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var lim = (o.limpieza !== undefined) ? o.limpieza : 0.005;
   var maxT = o.maximo || 0.97, knee = o.rodilla || 0.80;
@@ -70,10 +84,21 @@ function prepararEstrellas(viewId, o) {
   w.mainView.beginProcess(); w.mainView.image.assign(sim); w.mainView.endProcess();
   if (src.hasAstrometricSolution) w.copyAstrometricSolution(src);
   w.show();
-  var v = w.mainView, pasos = [], antes = stMeasure(v);
+  var v = w.mainView, pasos = [], antes = stMeasure(v), flujo0 = stFlux(v), flujoQuitado = 0;
 
-  // 1. Residuos de SXT.
-  if (lim > 0) { stPM(v, ["iif($T < " + lim + ", 0, $T)"]); pasos.push("limpieza < " + lim); }
+  // 1. Residuos de SXT. Si la limpieza se llevara más del 10 % del brillo de la capa, no son residuos sino estrellas
+  // débiles (capa estirada poco): no se limpia y se avisa.
+  if (lim > 0) {
+    var tmp = new ImageWindow(sim.width, sim.height, 3, 32, true, true, "stTmpLimpieza");
+    tmp.mainView.beginProcess(); tmp.mainView.image.assign(v.image); tmp.mainView.endProcess();
+    stPM(tmp.mainView, ["iif($T < " + lim + ", 0, $T)"]);
+    flujoQuitado = flujo0 > 0 ? 100 * (1 - stFlux(tmp.mainView) / flujo0) : 0;
+    if (flujoQuitado <= 10 || o.forzarLimpieza) {
+      v.beginProcess(); v.image.assign(tmp.mainView.image); v.endProcess();
+      pasos.push("limpieza < " + lim + " (quita el " + flujoQuitado.toFixed(1) + " % del brillo)");
+    } else pasos.push("limpieza NO aplicada: se llevaría el " + flujoQuitado.toFixed(1) + " % del brillo (estrellas débiles, no residuos)");
+    tmp.forceClose();
+  }
 
   // 2. Suelo por canal (mediana + 2·MAD), reescalando para que los núcleos no cambien.
   if (o.suelo !== false) {
@@ -109,20 +134,30 @@ function prepararEstrellas(viewId, o) {
   stPM(v, ["iif($T > " + knee + ", " + knee + " + ($T - " + knee + ") * " + ((maxT - knee) / (1 - knee)) + ", $T)"]);
   pasos.push("luces comprimidas por encima de " + knee + " hasta " + maxT);
 
-  var despues = stMeasure(v), ok = true;
+  var despues = stMeasure(v), ok = true, noCumple = [], pe = stStarPct(v);
   for (var k = 0; k < 3; ++k) if (despues[k].maximo >= 0.98 || despues[k].mediana > 0.001) ok = false;
   var p90 = Math.max(despues[0].p90_estrellas || 0, despues[1].p90_estrellas || 0, despues[2].p90_estrellas || 0);
+  if (!ok) noCumple.push("fondo de la capa no está a cero o hay núcleos ≥ 0,98");
+  if (flujoQuitado > 10 && !o.forzarLimpieza)
+    noCumple.push("la limpieza < " + lim + " se llevaría el " + flujoQuitado.toFixed(1) + " % del brillo de la capa: está estirada muy poco. " +
+                  "Volver al Paso 1 con estirarCapas(..., { estrellas: \"extraer\" }) (en galaxias, tipo: \"galaxia\" ya lo hace)");
+  if (pe < 0.3)
+    noCumple.push("capa de estrellas casi vacía: sólo el " + pe + " % de los píxeles pasa de 0,02. Si el campo tiene muchas estrellas " +
+                  "(Vía Láctea, M31), volver al Paso 1 con estirarCapas(..., { estrellas: \"extraer\" }); no recombinar así");
   return {
     vista: id, original: viewId, pasos: pasos, antes: antes, despues: despues,
+    limpieza_quita_pct: +flujoQuitado.toFixed(1), pix_estrella_pct: pe, no_cumple: noCumple,
     control: { medido: {
                  fondo_a_cero: despues.every(function (d) { return d.mediana <= 0.001; }),
                  maximo_menor_098: despues.every(function (d) { return d.maximo < 0.98; }),
-                 p90_cerca_de_025: p90 >= 0.15 && p90 <= 0.35,
-                 cumple_lo_medido: ok },
+                 p90_suficiente: p90 >= 0.08,
+                 capa_con_estrellas: pe >= 0.3,
+                 cumple_lo_medido: ok && noCumple.length === 0 },
                revisar_a_ojo: ["anillos de color alrededor de las estrellas brillantes (al 200–400 %)",
                                "halos residuales en zonas brillantes",
                                "manchas de residuos de SXT entre estrellas (verdes o moradas)"],
-               nota: "El p90 (referencia 0,08–0,13 medido así) depende de cuánto se estiró la capa en el Paso 1; si queda muy por debajo, " +
-                     "subir 'amount' de starStretch allí, no aquí. Lo de revisar_a_ojo no lo mide esta función: no darlo por bueno." }
+               nota: "El p90 (referencia 0,08–0,13 con starStretch; más alto con estrellas 'extraer') depende de cómo se estiró la capa en el " +
+                     "Paso 1; si la capa está casi vacía o débil, se arregla allí (estrellas: 'extraer'), no aquí. pix_estrella_pct < 0,3 = casi sin estrellas " +
+                     "(M31 Qwen, 7 nov 2026: la final se quedó sin estrellas). Lo de revisar_a_ojo no lo mide esta función: no darlo por bueno." }
   };
 }

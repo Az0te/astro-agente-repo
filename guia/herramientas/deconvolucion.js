@@ -174,7 +174,7 @@ function dcBXT(view, stars, ns, halos) {
 }
 
 function bxtCandidatos(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var v = View.viewById(viewId);
   if (!v || v.isNull) throw new Error("No existe la vista " + viewId);
@@ -230,7 +230,7 @@ function bxtCandidatos(viewId, o) {
 }
 
 function bxtAplicar(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var src = ImageWindow.windowById(viewId);
   if (src.isNull) throw new Error("No existe la vista " + viewId);

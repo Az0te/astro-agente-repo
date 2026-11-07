@@ -6,8 +6,8 @@ La capa de estrellas (original − starless) lleva PSF, halos, aigrettes y resid
 
 **Preparación de la capa**
 
-- Estirarla recortando el fondo a cero (`starStretch`, Paso 1); nunca auto-stretch, que levanta el fondo y los residuos de SXT (manchas verdes o moradas).
-- Limpiar residuos: `iif($T < 0.005, 0, $T)`. Recuperar color con la curva de saturación `[[0,0],[0.40,0.65],[0.70,0.90],[1,1]]`.
+- Estirarla en el Paso 1: con el mismo estirado que la starless (`estrellas: "extraer"`, por defecto en galaxias) o con `starStretch`; nunca auto-stretch, que levanta el fondo y los residuos de SXT (manchas verdes o moradas).
+- Limpiar residuos: `iif($T < 0.005, 0, $T)`, **sólo si se lleva poco brillo** (≤ 10 %). Si se llevara más, lo que borra son estrellas débiles de una capa poco estirada: `prepararEstrellas` no limpia y lo dice en `no_cumple`; se arregla en el Paso 1. Recuperar color con la curva de saturación `[[0,0],[0.40,0.65],[0.70,0.90],[1,1]]`.
 - **Suelo antes del screen:** punto negro por canal = mediana + 2·MAD de la capa, reescalando para no tocar los núcleos. En campos densos ese "grano" pueden ser estrellas débiles reales: no subir el suelo hasta borrarlas.
 - Contenerlas atenuando el brillo (`iif($T > 0.02, $T*0.65, $T)`), nunca con erosión ni MorphologicalTransformation (anillos).
 
@@ -54,4 +54,4 @@ var r = prepararEstrellas("Stars_st", { nuevaVista: "Stars_v1" });
 JSON.stringify(r);   // pasos, antes/despues por canal (mediana, MAD, máximo, pix_098, p90_estrellas), control
 ```
 
-**Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) del orden de 0,08–0,13 (depende del amount del Paso 1); sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.
+**Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) ≥ 0,08 (0,08–0,13 con `starStretch`, más con `extraer`); `pix_estrella_pct` (píxeles con luminancia > 0,02) ≥ 0,3 % en campos con estrellas: por debajo, la capa está casi vacía y la final saldrá sin estrellas (M31 Qwen, nov 2026); `no_cumple` vacío; sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.

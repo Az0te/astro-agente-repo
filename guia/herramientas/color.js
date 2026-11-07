@@ -89,7 +89,7 @@ function ccProperty(view, id) {
 }
 
 function calibrarColor(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   if (typeof pxSPCC !== "function") {
     var g = o.guia || (typeof PICOPILOT_GUIA === "string" ? PICOPILOT_GUIA : null);
@@ -159,6 +159,98 @@ function calibrarColor(viewId, o) {
       nota: "cielo_despues.diferencia_en_sigmas compara el cielo de los tres canales con el ruido: por debajo de 0,5 no se " +
             "notará al estirar. factores_balance_blancos los deja SPCC en la vista (null si esta versión no los guarda). " +
             "Lo de revisar_a_ojo no lo mide esta función."
+    }
+  };
+}
+
+// Neutralización fina del cielo (BackgroundNeutralization aditiva) sobre una imagen RGB LINEAL, en una copia.
+// Para cuando SPCC deja el cielo ligeramente descompensado (diferencias < 1 % en lineal que salen como dominante del
+// 5–20 % al estirar: IC 1396 y LDN 1235, nov 2026). Mide el cielo por canal en las mismas zonas que el control del
+// estirado (el 10 % de celdas de 64 px más oscuras) o en el rectángulo que se le dé, y SUMA a cada canal lo que le
+// falta para igualar al canal de cielo más alto: no resta nada (no recorta sombras) y no toca el balance de blancos de
+// SPCC en las estrellas ni en el objeto más que ese desplazamiento constante, que es lo que hace BackgroundNeutralization.
+// Uso:
+//   var r = neutralizarCielo("LDN1235_v1_starless_dn75", { nuevaVista: "LDN1235_v1_starless_bn" });
+// Opciones:
+//   nuevaVista  copia donde se corrige (por defecto <vista>_bn). La original no se toca.
+//   rect        [x0, y0, x1, y1] zona de cielo limpio de referencia (por defecto, las celdas más oscuras).
+//   pasadas     máximo de pasadas (por defecto 2: la segunda corrige el cambio de celdas tras la primera).
+function ncCieloCanales(im, rect) {
+  if (rect) {
+    var R = new Rect(Math.max(0, rect[0]), Math.max(0, rect[1]), Math.min(im.width, rect[2]), Math.min(im.height, rect[3]));
+    if (R.width < 8 || R.height < 8) throw new Error("rect demasiado pequeño o fuera de la imagen");
+    var med = [];
+    for (var c = 0; c < 3; ++c) { im.resetSelections(); im.selectedRect = R; im.selectedChannel = c; med.push(im.median()); }
+    im.resetSelections();
+    return med;
+  }
+  var W = im.width, H = im.height, S = 64, cells = [], blk = new Float32Array(S * S), lum = new Float32Array(S * S);
+  for (var y0 = 0; y0 + S <= H; y0 += S)
+    for (var x0 = 0; x0 + S <= W; x0 += S) {
+      var Rc = new Rect(x0, y0, x0 + S, y0 + S); lum.fill(0);
+      for (var c1 = 0; c1 < 3; ++c1) { im.getSamples(blk, Rc, c1); for (var i = 0; i < blk.length; i += 4) lum[i] += blk[i]; }
+      var v = []; for (var j = 0; j < lum.length; j += 4) v.push(lum[j]);
+      v.sort(function (a, b) { return a - b; });
+      cells.push({ r: Rc, m: v[v.length >> 1] });
+    }
+  cells = cells.filter(function (c0) { return c0.m > 1e-6; });
+  cells.sort(function (a, b) { return a.m - b.m; });
+  var k = Math.max(5, Math.floor(cells.length * 0.10)), out = [];
+  for (var ch = 0; ch < 3; ++ch) {
+    var vals = [];
+    for (var q = 0; q < k; ++q) { im.getSamples(blk, cells[q].r, ch); for (var t = 0; t < blk.length; t += 4) vals.push(blk[t]); }
+    vals.sort(function (a, b) { return a - b; });
+    out.push(vals[vals.length >> 1]);
+  }
+  return out;
+}
+
+function neutralizarCielo(viewId, o) {
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
+  o = o || {};
+  var src = ImageWindow.windowById(viewId);
+  if (src.isNull) throw new Error("No existe la vista " + viewId);
+  var sim = src.mainView.image;
+  if (sim.numberOfChannels !== 3) throw new Error("neutralizarCielo necesita una imagen RGB");
+  sim.resetSelections();
+  if (sim.median() > 0.05) throw new Error("La imagen parece estirada: la neutralización del cielo se hace en LINEAL");
+  var base = o.nuevaVista || (viewId + "_bn"), id = base;
+  for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
+  var w = new ImageWindow(sim.width, sim.height, 3, 32, true, true, id);
+  w.mainView.beginProcess(); w.mainView.image.assign(sim); w.mainView.endProcess();
+  if (src.hasAstrometricSolution) w.copyAstrometricSolution(src);
+  w.show();
+  var v = w.mainView, im = v.image, nombres = ["rojo", "verde", "azul"];
+  var pct = function (m) { var mean = (m[0] + m[1] + m[2]) / 3; return mean > 0 ? 100 * (Math.max.apply(null, m) - Math.min.apply(null, m)) / mean : 0; };
+  var antes = ncCieloCanales(im, o.rect), cielo = antes, sumas = [0, 0, 0], pasadas = 0;
+  for (var p = 0; p < (o.pasadas || 2) && pct(cielo) > 0.05; ++p) {
+    var top = Math.max.apply(null, cielo), d = cielo.map(function (m) { return top - m; });
+    var PM = new PixelMath;
+    PM.useSingleExpression = false;
+    PM.expression = "$T+" + d[0].toExponential(6);
+    PM.expression1 = "$T+" + d[1].toExponential(6);
+    PM.expression2 = "$T+" + d[2].toExponential(6);
+    PM.createNewImage = false; PM.rescale = false; PM.truncate = true; PM.truncateLower = 0; PM.truncateUpper = 1;
+    if (!PM.executeOn(v)) throw new Error("PixelMath falló al neutralizar el cielo");
+    for (var c = 0; c < 3; ++c) sumas[c] += d[c];
+    cielo = ncCieloCanales(im, o.rect); ++pasadas;
+  }
+  var dAntes = pct(antes), dDespues = pct(cielo);
+  return {
+    vista: id, original: viewId, pasadas: pasadas,
+    referencia: o.rect ? ("rect " + JSON.stringify(o.rect)) : "10 % de celdas de 64 px más oscuras (las mismas que mide el estirado)",
+    cielo_antes: antes.map(function (m) { return +m.toPrecision(5); }),
+    cielo_despues: cielo.map(function (m) { return +m.toPrecision(5); }),
+    canal_alto_antes: nombres[antes.indexOf(Math.max.apply(null, antes))],
+    diferencia_lineal_pct_antes: +dAntes.toFixed(3), diferencia_lineal_pct_despues: +dDespues.toFixed(3),
+    sumado_por_canal: sumas.map(function (s) { return +s.toPrecision(4); }),
+    no_cumple: dDespues > 0.1 ? ["el cielo sigue " + dDespues.toFixed(2) + " % descompensado en lineal: revisar la referencia (rect de cielo limpio)"] : [],
+    control: {
+      medido: { lineal: true, cielo_igualado: dDespues <= 0.1 },
+      revisar_a_ojo: ["el objeto no cambia de color (sólo se desplaza el fondo)", "estirado de prueba: cielo gris neutro"],
+      nota: "Desplazamiento aditivo por canal, como BackgroundNeutralization. Va después de SPCC (y vale también sobre la " +
+            "starless lineal, sin rehacer BXT ni SXT). Si el cielo de referencia contiene nebulosa o polvo, pasa un rect de " +
+            "cielo limpio: si no, se neutraliza el color del polvo."
     }
   };
 }

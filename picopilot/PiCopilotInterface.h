@@ -65,7 +65,7 @@ public:
    bool SubmitChat( const String& text );
    void ResetChat();
    void CleanTempFiles();   // previas y scripts temporales (también al pulsar Limpiar)
-   void RunScript( const String& code );
+   void RunScript( const String& code, bool ask = true );
 
    bool IsBusy() const { return m_busy; }
 
@@ -82,6 +82,19 @@ private:
    bool m_interpretPending = false; // falta devolverle al modelo el resultado del script de la tarea
    bool m_scriptWaiting = false;    // hay un script propuesto que el usuario aún no ha ejecutado
    bool m_scriptRunning = false;    // se está ejecutando un script de la respuesta (estado del panel)
+
+   // Serie de pasos con modelos sin herramientas (Rafael, 7 nov 2026): si el usuario pide varios pasos o la resolución
+   // completa, el panel ejecuta cada script y pide el siguiente sin esperar; si pide que espere o que le recomiende el
+   // siguiente paso, se queda como antes (un script cada vez y el usuario pulsa «Ejecutar script»).
+   bool   m_autoChain = false;       // la serie está en marcha
+   bool   m_autoRunPending = false;  // ejecutar m_autoScript en el próximo tic (fuera del evento que lo trajo)
+   String m_autoScript;
+   String m_autoGoal;                // lo que pidió el usuario, para recordárselo al modelo en cada paso
+   int    m_autoSteps = 0;           // scripts ejecutados en la serie
+   static const int AutoMaxSteps = 30;
+   static bool WantsSeries( const String& text );
+   void StopAutoChain( const String& why );
+   String AutoNextText() const;   // lo que se añade a la interpretación para pedir el paso siguiente
 
    struct Job
    {
@@ -115,6 +128,17 @@ private:
    std::vector<std::pair<String, String>> CandidatePreviews( const String& resultJson );
 
    std::unique_ptr<ExternalProcess>  m_process;
+   // El proceso anterior no se destruye al lanzar otro: si el lanzamiento ocurre dentro de uno de sus eventos (build 82,
+   // serie de pasos), destruirlo dejaba a PixInsight volviendo a un objeto borrado (access violation, 7 nov 2026).
+   std::unique_ptr<ExternalProcess>  m_oldProcess;
+   bool                              m_inProcessEvent = false;   // dentro de e_ProcessFinished / e_ProcessError
+   bool                              m_inTimer = false;          // e_Timer en curso (ProcessEvents lo puede reentrar)
+   double                            m_autoRunAt = 0;            // no antes de este instante (serie de pasos)
+   // Interpretación o corrección pedida al terminar un script: se lanza desde el temporizador, no dentro de RunScript
+   // (build 87: PixInsight se cerraba al lanzar la interpretación del estirado con la previa, 7 nov 2026).
+   struct QueuedJob { bool pending = false; JobKind kind = JobKind::Chat; String title, prompt; };
+   QueuedJob                         m_queued;
+   void QueueJob( JobKind kind, const String& title, const String& prompt );
    Job                               m_job;
    bool                              m_busy = false;
 
@@ -131,6 +155,7 @@ private:
    {
       String path;
       double since = 0;
+      bool   quiet = false;   // no abrir la ventana: el modelo elige solo (resolución completa)
    };
    std::vector<PendingDossier> m_pendingDossiers;
 

@@ -110,7 +110,7 @@ function combinarMasters(lista, o) {
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
     var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
     if (File.directoryExists(p))
-      files = files.concat((File.searchDirectory ? File.searchDirectory(p + "/*.xisf", false) : searchDirectory(p + "/*.xisf", false))
+      files = files.concat((File.searchDirectory ? File.searchDirectory(p + "/" + "*.xisf", false) : searchDirectory(p + "/" + "*.xisf", false))
         .filter(function (f) { return !/mask|mascara|rejection|drizzle_weights|LN_Reference/i.test(File.extractName(f)); }).sort());
     else files.push(p);
   });

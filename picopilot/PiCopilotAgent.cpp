@@ -11,6 +11,7 @@
 #include <pcl/File.h>
 #include <pcl/ImageWindow.h>
 #include <pcl/Settings.h>
+#include <pcl/StringList.h>
 #include <pcl/View.h>
 
 #include <cstdlib>
@@ -220,11 +221,53 @@ String PiCopilotConfig::DefaultClaudePath()
    return "claude";
 }
 
+String PiCopilotConfig::PicopilotMcpServer() const
+{
+   // Servidor MCP propio (mcp/dist/picopilot-mcp.mjs), junto a la guía en el mismo repo.
+   String g = guideDir.EndsWith( '/' ) || guideDir.EndsWith( '\\' ) ? guideDir.Left( guideDir.Length()-1 ) : guideDir;
+   String repo = File::ExtractDirectory( g );
+   StringList cands;
+   cands << PiCopilotUtil::JoinPath( repo, "mcp/dist/picopilot-mcp.mjs" )
+         << PiCopilotUtil::JoinPath( File::ExtractDrive( g ) + repo, "mcp/dist/picopilot-mcp.mjs" )
+         << PiCopilotUtil::JoinPath( File::HomeDirectory(), "astro-agente-repo/mcp/dist/picopilot-mcp.mjs" );
+   String s;
+   for ( const String& c : cands )
+      if ( File::Exists( c ) )
+      {
+         s = File::FullPath( c );
+         break;
+      }
+   if ( s.IsEmpty() )
+      return String();
+   s.ReplaceString( u"\\", u"/" );
+   return s;
+}
+
+String PiCopilotConfig::PicopilotRunner() const
+{
+   // Runner del MCP picopilot (mcp/pjsr/picopilot-runner.js), al lado del servidor.
+   String s = PicopilotMcpServer();
+   if ( s.IsEmpty() )
+      return String();
+   s.ReplaceString( u"/mcp/dist/picopilot-mcp.mjs", u"/mcp/pjsr/picopilot-runner.js" );
+   return File::Exists( s ) ? s : String();
+}
+
+String PiCopilotConfig::ClassicMcpServer()
+{
+   // Servidor MCP antiguo (derivado de pixinsight-mcp), que necesita el watcher.
+   String s = PiCopilotUtil::JoinPath( File::HomeDirectory(), "astro-agente-repo/servidor-mcp/build/index.js" );
+   if ( !File::Exists( s ) )
+      return String();
+   s.ReplaceString( u"\\", u"/" );
+   return s;
+}
+
 String PiCopilotConfig::DefaultClaudeArgs()
 {
    // Herramientas permitidas sin preguntar en modo no interactivo: el MCP de
    // PixInsight y lectura/escritura de archivos (guía y carpeta de trabajo).
-   return "--allowedTools mcp__pixinsight,Read,Glob,Grep,Write";
+   return "--allowedTools mcp__picopilot,Read,Glob,Grep,Write";
 }
 
 static String ClassicWatcherSource();
@@ -268,8 +311,21 @@ void PiCopilotConfig::Load()
       claudePath = DefaultClaudePath();
    if ( !Settings::Read( "ClaudeArgs", claudeArgs ) )
       claudeArgs = DefaultClaudeArgs();
+   // Desde la build 78 el MCP antiguo (mcp__pixinsight) ya no se usa: se cambia por el nuevo (picopilot).
+   else if ( claudeArgs.Contains( "mcp__pixinsight" ) )
+   {
+      claudeArgs.ReplaceString( "mcp__picopilot,mcp__pixinsight", "mcp__picopilot" );
+      claudeArgs.ReplaceString( "mcp__pixinsight", "mcp__picopilot" );
+   }
    if ( !Settings::Read( "WatcherEnabled", watcherEnabled ) )
-      watcherEnabled = true;
+      watcherEnabled = false;
+   // Build 78: el watcher del MCP antiguo se apaga una vez (se puede volver a encender a mano).
+   bool watcherOff78 = false;
+   if ( !Settings::Read( "WatcherOff78", watcherOff78 ) || !watcherOff78 )
+   {
+      watcherEnabled = false;
+      Settings::Write( "WatcherOff78", true );
+   }
    // Las versiones anteriores guardaban el watcher clásico por defecto: se
    // migra al v8 salvo que el usuario haya elegido otra ruta.
    if ( !Settings::Read( "WatcherSource", watcherSource ) || watcherSource.IsEmpty() ||
@@ -832,9 +888,11 @@ String PiCopilotPrompts::Step( const PiCopilotConfig& cfg, const PiCopilotModel&
         << u") y perfil.md si aún no los has leído en esta sesión, y la ficha del paso (" << guideFile
         << u"). Los ficheros de detalle/ y los anexos, sólo si la ficha no basta. "
            u"Sigue su método predeterminado y sus ajustes de partida.\n"
-        << u"2) Ejecuta el paso sobre la vista indicada con las herramientas MCP de PixInsight (mcp__pixinsight__*). "
+        << u"2) Ejecuta el paso sobre la vista indicada con las herramientas MCP de PiCopilot (mcp__picopilot__*): "
+           u"cada función de la guía es una herramienta con el mismo nombre (analizarMaster, gradienteCandidatos, "
+           u"estirarAlFallo...). Si una tarda más de 45 s devuelve un trabajo: recógelo con estado(trabajo). "
            u"Trabaja sobre una copia cuando la guía lo aconseje y no cierres ni sobrescribas la original sin decirlo.\n"
-        << u"3) Mide antes y después (get_image_statistics y las métricas que pida la guía) y comprueba el resultado.\n"
+        << u"3) Mide antes y después (estadisticas, previa y las métricas que pida la guía) y comprueba el resultado.\n"
         << u"4) Termina con un resumen breve: qué hiciste, con qué parámetros, qué mediste y qué vistas nuevas existen."
         << RetryRule( cfg );
       if ( step.comparative )
@@ -873,8 +931,10 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
       { "lineal/01-analisis-del-objeto.md", u"analizarMaster(\"%V\")", u"analisis.js" },
       { "lineal/13-bxt-completo.md", u"bxtCandidatos(\"%V\", { tipo: ... }) y, en el mismo script, bxtAplicar(\"%V\", { nonstellar: r.recomendada.nonstellar, stars: r.recomendada.stars, nuevaVista: ... }) devolviendo JSON.stringify({ candidatos: r, aplicado: a })", u"deconvolucion.js" },
       { "lineal/14-noisex-suave.md", u"reducirRuido(\"%V\", { denoise: 0.50, detail: 0.15, iterations: 2, nuevaVista: ... })", u"ruido.js" },
-      { "lineal/15-starx.md", u"separarEstrellas(\"%V\", { nuevaVista: ..., nuevasEstrellas: ... }) y, en el mismo script, reducirRuido(s.starless, ...) (híbrido con el modelo del perfil si es mono; { denoise: 0.95 } si es RGB) devolviendo JSON.stringify({ separacion: s, denoise: d })", u"ruido.js" },
-      { "no-lineal/05-boost.md", u"saturarAlFallo(\"%V\", { tipo: \"nebulosa\" | \"galaxia\", nuevaVista: ... }) para la saturación (el LHE y las curvas, si hacen falta, después y a mano)", u"boost.js" },
+      { "lineal/15-starx.md", u"separarEstrellas(\"%V\", { nuevaVista: ..., nuevasEstrellas: ... }) y, en el mismo script, reducirRuido(s.starless, ...) (híbrido con el modelo del perfil si es mono; { denoise: 0.50 } si es RGB y ya pasó el NXT suave del Paso 14, 0.70 sin él: con más salen manchas de color; mira moteado_color_despues) devolviendo JSON.stringify({ separacion: s, denoise: d })", u"ruido.js" },
+      { "no-lineal/05-boost.md", u"saturarAlFallo(\"%V\", { tipo: \"nebulosa\" | \"galaxia\", nuevaVista: ... }) para la saturación (el LHE y las curvas, si hacen falta, después y a mano). "
+        u"En galaxias, ANTES y en su propio script, comprimirNucleo(\"%V\", { nuevaVista: ... }) (nucleo.js) si el estirado dio meseta_nucleo.radio_px > 3, "
+        u"y la saturación sobre su resultado", u"boost.js" },
       { "no-lineal/10-recorte-exportacion.md", u"exportarFinal(\"%V\", { carpeta: ..., nombre: ..., girar180: ... })", u"exportar.js" },
       { "no-lineal/06-noisex.md", u"reducirRuido(\"%V\", { denoise: 0.30, detail: 0.15, nuevaVista: ... })", u"ruido.js" },
       { "lineal/08-plate-solve.md", u"resolverAstrometria(\"%V\")", u"lineal.js" },
@@ -886,7 +946,8 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
       { "lineal/17-checkpoint.md", u"checkpointLineal(\"%V\", { carpeta: ..., objeto: ..., version: ... })", u"lineal.js" },
       { "no-lineal/03-scnr.md", u"quitarVerde(\"%V\", { nuevaVista: ... })", u"lineal.js" },
       { "lineal/12-spcc.md", u"calibrarColor(\"%V\", { nuevaVista: ..., spcc: { ...filtros y QE del perfil... } })", u"color.js" },
-      { "no-lineal/01-estirado.md", u"estirarCapas(\"%V\", \"%S\", { cielo: 0.10, nuevaStarless: ..., nuevasEstrellas: ... })", u"estirado.js" },
+      { "no-lineal/01-estirado.md", u"estirarCapas(\"%V\", \"%S\", { cielo: 0.10, nuevaStarless: ..., nuevasEstrellas: ... }) (si el objeto es una galaxia, "
+        u"OBLIGATORIO { tipo: \"galaxia\", nuevaStarless: ..., nuevasEstrellas: ... } sin cielo: cielo 0,07 y estrellas con el mismo estirado)", u"estirado.js" },
       { "no-lineal/08-estrellas.md", u"prepararEstrellas(\"%V\", { nuevaVista: ... })", u"estrellas.js" },
       { "no-lineal/09-recombinacion.md", u"recombinarEstrellas(\"%V\", \"%S\", { nuevaVista: ... })", u"recombinacion.js" },
       { "lineal/10-combinacion-rgb-nb.md", u"combinarMasters(<carpeta o lista de masters alineados>, { tipo: \"nebulosa\" | \"galaxia\" }) (no usa ninguna vista: "
@@ -957,6 +1018,10 @@ String PiCopilotPrompts::Full( const PiCopilotConfig& cfg, const PiCopilotModel&
    s << u"\n\nEn la corrección de gradiente:" << ComparativeBlock( model, dossierPath )
      << u"\n   Después continúa con la copia recomendada.";
    if ( !model.IsAgent() )
+      // Qwen metía los 11 pasos en un script de 8 minutos y cada corrección lo repetía entero (7 nov 2026).
+      s << u"\n\nHazlo en varios scripts: UN PASO POR SCRIPT (como mucho dos muy ligados). Ahora propón sólo el primero; "
+           u"cuando veas su resultado, el siguiente, con los ids de las vistas que devolvió.";
+   if ( !model.IsAgent() )
       s << HttpContext( cfg, model ) << ClosingLine();
    return s;
 }
@@ -969,8 +1034,9 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
    String g = cfg.guideDir;
    g.ReplaceString( u"\\", u"/" );
    return
-      u"\n\nFunciones ya hechas de la guía (" + g + u"/herramientas). Cárgalas con eval(File.readTextFile(\"" + g +
-      u"/herramientas/<fichero>.js\")) en el nivel superior del script; cada una trabaja sobre una copia, mide y devuelve "
+      u"\n\nFunciones ya hechas de la guía (" + g + u"/herramientas). PiCopilot ya las tiene cargadas al ejecutar tu script; "
+      u"si aun así las cargas, usa sólo estos ficheros con eval(File.readTextFile(\"" + g +
+      u"/herramientas/<fichero>.js\")) en el nivel superior del script (checkpoint.js y similares no existen). Cada una trabaja sobre una copia, mide y devuelve "
       u"un objeto (vista nueva, medidas, no_cumple, control). Úsalas en vez de escribir el código:\n"
       u"- analisis.js: analizarMaster(vista o lista de vistas) — Paso 1 lineal (análisis del objeto)\n"
       u"- preproceso.js (trabajan con ficheros; aceptan una carpeta o una lista de carpetas o ficheros, y ellas buscan los "
@@ -995,21 +1061,43 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
       u"- bandaestrecha.js: desmezclarDualBand(vista) — Paso 7; medirContinuo(nb, rgb, { canal }) y restarContinuo(nb, rgb, { k }) — Paso 16; "
       u"previsualizarPaletas(ha, oiii, { carpeta }) — Paso 2 no lineal\n"
       u"- mascaras.js: crearMascara(vista, { tipo: luminancia | cielo | fondo_lhe }) — Paso 4 no lineal\n"
-      u"- gradiente.js: gradienteCandidatos(vista, {...}) — Paso 9 lineal (gradiente)\n"
-      u"- color.js: calibrarColor(vista, { nuevaVista, spcc: {filtros del perfil} }) — Paso 12 lineal (SPCC)\n"
+      u"- gradiente.js: r = gradienteCandidatos(vista, {...}) — Paso 9 lineal (gradiente). NO corrige la vista: compara copias "
+      u"GC_* y devuelve r.recomendado (id de la copia recomendada). Los pasos siguientes van sobre r.recomendado, nunca sobre "
+      u"r.vista (que es la original SIN corregir)\n"
+      u"- color.js: calibrarColor(vista, { nuevaVista, spcc: {filtros del perfil} }) — Paso 12 lineal (SPCC; OSC sin filtro: spcc vacío, "
+      u"no existe la opción filtros); neutralizarCielo(vista lineal, { nuevaVista }) — si calibrarColor, checkpointLineal o el "
+      u"estirado dan el cielo no neutro / dominante del cielo: neutraliza el fondo en LINEAL (vale sobre la starless lineal) y "
+      u"se vuelve a estirar. Nunca SCNR ni curvas para eso\n"
       u"- deconvolucion.js: r = bxtCandidatos(vista, { tipo }) y bxtAplicar(vista, { nonstellar: r.recomendada.nonstellar, stars: r.recomendada.stars, nuevaVista }) — Paso 13 (BlurX completo)\n"
-      u"- ruido.js: reducirRuido(vista, { denoise, detail, iterations, nuevaVista }) — Paso 14 lineal (denoise 0,50), Paso 15 sobre la starless (0,95 en RGB) y Paso 6 no lineal (0,30); separarEstrellas(vista, { nuevaVista, nuevasEstrellas }) — Paso 15 (StarX)\n"
-      u"- estirado.js: estirarCapas(starless, estrellas, { cielo: 0.10, nuevaStarless, nuevasEstrellas }) — Paso 1 no lineal\n"
+      u"- ruido.js: reducirRuido(vista, { denoise, detail, iterations, nuevaVista }) — Paso 14 lineal (denoise 0,50), Paso 15 sobre la starless (RGB: 0,50 tras el NXT suave del 14, 0,70 sin él; si moteado_color_despues > 1,5, menos) y Paso 6 no lineal (0,30); separarEstrellas(vista, { nuevaVista, nuevasEstrellas }) — Paso 15 (StarX)\n"
+      u"- estirado.js: estirarCapas(starless, estrellas, { cielo: 0.10, nuevaStarless, nuevasEstrellas }) — Paso 1 no lineal; en GALAXIAS (M31, M33, M51, M81, M101…) "
+      u"SIEMPRE { tipo: \"galaxia\", nuevaStarless, nuevasEstrellas } y sin cielo (cielo 0,07 y estrellas con el mismo estirado que la starless); "
+      u"en campos con muchas estrellas, { estrellas: \"extraer\" }\n"
+      u"- nucleo.js: comprimirNucleo(vista, { nuevaVista }) — Paso 5 no lineal en GALAXIAS, antes de saturar (HDRMT al 60 % con máscara de bulbo; "
+      u"obligatorio si estirarCapas dio meseta_nucleo.radio_px > 3); medirMeseta(vista) sólo mide\n"
       u"- boost.js: saturarAlFallo(vista, { tipo }) — Paso 5 no lineal (saturación)\n"
       u"- estrellas.js: prepararEstrellas(vista, { nuevaVista }) — Paso 8 no lineal\n"
       u"- recombinacion.js: recombinarEstrellas(starless, estrellas, { nuevaVista }) — Paso 9 no lineal\n"
       u"- exportar.js: exportarFinal(vista, { carpeta, nombre, girar180 }) — Paso 10 no lineal\n"
-      u"Para encadenar varios pasos en un mismo script, usa la vista que devuelve cada función como entrada de la "
-      u"siguiente (r.vista, a.vista, s.starless, s.estrellas...) y termina con JSON.stringify({ ...todos los resultados... }). "
+      u"UN PASO POR SCRIPT (como mucho dos muy ligados, p. ej. bxtCandidatos + bxtAplicar o separarEstrellas + su denoise): "
+      u"aunque te pidan el procesado completo, propón el script del primer paso, y al ver su resultado el del siguiente. Así, "
+      u"si un paso falla, no se repiten los anteriores (cada uno tarda minutos). Entre scripts usa los ids de las vistas que "
+      u"devolvió el paso anterior. Dentro de un script, la vista de una función es la entrada de la siguiente (r.vista, "
+      u"s.starless, s.estrellas...; las funciones aceptan también el resultado entero) y se termina con JSON.stringify({ ...resultados... }). "
       u"Esas vistas son ids (texto): pásalos tal cual, sin .id. no_cumple es una lista (vacía si todo cumple): NO pares el "
-      u"script por ella ni la uses en un if; devuélvela en el resultado para revisarla al final. "
-      u"Orden lineal: … BlurX correct only (11, ya hecho si el master viene del flujo) → SPCC (12) → BlurX completo (13) → "
-      u"NoiseX suave (14) → StarX + denoise de la starless (15). Si te piden desde un paso, empieza en ese paso.\n"
+      u"script por ella ni la uses en un if; devuélvela en el resultado. PERO al ver el resultado, si no_cumple no está vacío, "
+      u"NO pases al paso siguiente: haz lo que dice el mensaje (repetir ese paso o volver al que indica, p. ej. neutralizarCielo "
+      u"si el checkpoint da el cielo no neutro, o estirarCapas con estrellas: \"extraer\" si las estrellas casi no aportan). "
+      u"Los únicos umbrales son los de las funciones: no inventes otros («límite 2,0» no existe). SCNR y más NoiseX no quitan "
+      u"manchas de color grandes en no lineal. "
+      u"Orden lineal (respétalo: el gradiente SIEMPRE antes de SPCC): análisis (1) → alinear masters (5, si hay varios) → HDR (6) → "
+      u"desmezcla dual band (7) → astrometría (8) → gradiente (9: gradienteCandidatos, y se sigue con r.recomendado) → "
+      u"combinación RGB/NB (10) → BlurX correct only (11, ya hecho si el master viene del flujo) → SPCC (12) → BlurX completo (13) → "
+      u"NoiseX suave (14) → StarX + denoise de la starless (15) → continuo (16) → checkpointLineal (17). Orden no lineal: "
+      u"estirarCapas (1) → paleta (2) → SCNR (3) → máscaras (4, sólo si se van a usar) → en galaxias comprimirNucleo (5) → saturarAlFallo (5) → "
+      u"NoiseX (6) → prepararEstrellas (8) → "
+      u"recombinarEstrellas (9) → exportarFinal (10). estirarCapas devuelve { starless: {vista, ...}, estrellas: {vista, ...} }: "
+      u"las vistas estiradas son r.starless.vista y r.estrellas.vista. Si te piden desde un paso, empieza en ese paso.\n"
       u"Nombres reales de los procesos: SPCC = SpectrophotometricColorCalibration, BXT = BlurXTerminator, "
       u"NXT = NoiseXTerminator, SXT = StarXTerminator, GHS = GeneralizedHyperbolicStretch. No existen StarReduction, "
       u"StarSplitting, Image.activeImage ni alert(); un script PJSR no puede usar return en el nivel superior.\n"
@@ -1066,7 +1154,7 @@ String PiCopilotPrompts::Free( const PiCopilotConfig& cfg, const PiCopilotModel&
    String s;
    s << u"[Contexto de PiCopilot: imagen activa en PixInsight: vista " << ViewText( viewId ) << u"." << AllViewsLine();
    if ( model.IsAgent() )
-      s << u" Puedes actuar sobre ella con las herramientas MCP de PixInsight si te lo pido.";
+      s << u" Puedes actuar sobre ella con las herramientas MCP de PiCopilot (mcp__picopilot__*) si te lo pido.";
    else
       s << u" Si propones un script PJSR, ponlo en un único bloque ```javascript.";
    s << u"]";

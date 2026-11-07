@@ -131,6 +131,10 @@ public:
    static String DefaultWorkDir();
    static String DefaultClaudePath();
    static String DefaultClaudeArgs();
+   // Rutas (con /) de los servidores MCP; vacías si no existen.
+   String PicopilotMcpServer() const;
+   String PicopilotRunner() const;   // mcp/pjsr/picopilot-runner.js, o vacío
+   static String ClassicMcpServer();
 };
 
 // ----------------------------------------------------------------------------

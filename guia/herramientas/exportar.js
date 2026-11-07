@@ -55,7 +55,7 @@ function exSave(win, path) {
 }
 
 function exportarFinal(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var v = View.viewById(viewId);
   if (!v || v.isNull) throw new Error("No existe la vista " + viewId);

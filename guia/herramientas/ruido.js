@@ -86,6 +86,32 @@ function rdResidual(a, b) {
   return sd > 0 ? sdm / (sd / 16) : 0;
 }
 
+// Moteado de color de gran escala: dispersión (MAD) entre las celdas del cielo de la mediana de R−G y B−G, en unidades
+// del ruido del cielo de la luminancia. Antes del denoise el grano lo tapa (valor bajo); si tras el denoise pasa de ~1,
+// las manchas de color de 100–300 px se ven más que el grano y salen al estirar (M31 con NXT 0,95, Rafael 7 nov 2026).
+function rdMoteado(view, sky, noise) {
+  try {
+    var im = view.image;
+    if (im.numberOfChannels < 3 || !(noise > 0)) return null;
+    var W = im.width, H = im.height, ch = [], comp = [[], []];
+    for (var c = 0; c < 3; ++c) { var b = new Float32Array(W * H); im.getSamples(b, new Rect(0, 0, W, H), c); ch.push(b); }
+    for (var q = 0; q < sky.length; ++q) {
+      var cl = sky[q], rg = [], bg = [];
+      for (var y = cl.y; y < cl.y + 32; y += 2) for (var x = cl.x; x < cl.x + 32; x += 2) {
+        var i = y * W + x; rg.push(ch[0][i] - ch[1][i]); bg.push(ch[2][i] - ch[1][i]);
+      }
+      rg.sort(function (p, r) { return p - r; }); bg.sort(function (p, r) { return p - r; });
+      comp[0].push(rg[rg.length >> 1]); comp[1].push(bg[bg.length >> 1]);
+    }
+    var mad = function (a) {
+      var s = a.slice().sort(function (p, r) { return p - r; }), m = s[s.length >> 1];
+      var d = s.map(function (v) { return Math.abs(v - m); }).sort(function (p, r) { return p - r; });
+      return 1.4826 * d[d.length >> 1];
+    };
+    return +(Math.max(mad(comp[0]), mad(comp[1])) / noise).toFixed(2);
+  } catch (e) { return null; }
+}
+
 function rdQuality(before, after) {
   var a = rdLum(before), b = rdLum(after), cells = rdCells(a);
   var sorted = cells.filter(function (c0) { return c0.m > 1e-6; }).sort(function (p, q) { return p.m - q.m; });   // fuera bordes negros
@@ -97,7 +123,8 @@ function rdQuality(before, after) {
   return { ruido_antes: +na.toPrecision(3), ruido_despues: +nb.toPrecision(3),
            ruido_baja_pct: +(100 * (1 - nb / na)).toFixed(1),
            contraste_zona_debil_pct: +(100 * (cb / ca - 1)).toFixed(1),
-           residual_estructura: +rdResidual(a, b).toFixed(2), celdas_zona_debil: faint.length };
+           residual_estructura: +rdResidual(a, b).toFixed(2), celdas_zona_debil: faint.length,
+           moteado_color_antes: rdMoteado(before, sky, na), moteado_color_despues: rdMoteado(after, sky, nb) };
 }
 
 function rdCopy(viewId, newId) {
@@ -136,7 +163,7 @@ function rdBox(a, W, H, r) {
 }
 
 function reducirRuido(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
@@ -144,8 +171,8 @@ function reducirRuido(viewId, o) {
   var mono = src.image.numberOfChannels === 1;
   if (metodo === "hibrido" && (!mono || typeof MLDenoise !== "function" || !o.modelo || !File.exists(o.modelo))) {
     aviso = "híbrido no disponible (" + (!mono ? "imagen RGB: MLDenoise sólo mono" : typeof MLDenoise !== "function" ?
-            "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT 0,95";
-    metodo = "nxt"; o.denoise = 0.95;
+            "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,95" : "0,70");
+    metodo = "nxt"; o.denoise = mono ? 0.95 : 0.70;   // RGB: 0,95 deja manchas de color (M31, 7 nov 2026)
   }
   var w = rdCopy(viewId, o.nuevaVista || (viewId + "_dn")), v = w.mainView;
   if (metodo === "nxt") rdNXT(v, o);
@@ -166,6 +193,21 @@ function reducirRuido(viewId, o) {
   if (q.contraste_zona_debil_pct < -5) noCumple.push("el contraste de la zona débil baja " + (-q.contraste_zona_debil_pct) + " % (> 5 %): se ha llevado señal; bajar denoise");
   if (q.residual_estructura > 2.0) noCumple.push("la residual tiene estructura (" + q.residual_estructura + "): se ha llevado filamentos o bordes; bajar denoise o detail");
   if (q.ruido_baja_pct > 95) noCumple.push("el ruido del cielo baja " + q.ruido_baja_pct + " %: fondo muerto, bajar denoise");
+  var linealSrc = src.image.median() < 0.05;   // (src sin selección: rdQuality no la cambia)
+  if (q.moteado_color_despues !== null && q.moteado_color_despues > 1.5) {
+    if (linealSrc)
+      noCumple.push("moteado de color " + q.moteado_color_despues + " (> 1,5): sin el grano se ven manchas de color grandes en el fondo y saldrán al " +
+                    "estirar (M31 OSC con NXT 0,95, 7 nov 2026); repetir sobre la MISMA entrada con menos denoise (0,50), no encadenar otro NXT");
+    else
+      noCumple.push("moteado de color " + q.moteado_color_despues + " (> 1,5) en la imagen estirada: MÁS NXT NO LO ARREGLA (lo sube: M31 Qwen, 7 nov " +
+                    "2026, 1,45 → 2,03 con 0,30) ni tampoco SCNR. Quedarse con la entrada sin este NXT; las manchas vienen de la fase lineal " +
+                    "(dominante o doble NXT lineal) o de saturar demasiado: bajar la saturación o volver al checkpoint. No hay otro límite que 1,5");
+  }
+  if (q.moteado_color_antes !== null && q.moteado_color_despues !== null && q.moteado_color_despues - q.moteado_color_antes > 0.5)
+    noCumple.push("este denoise SUBE el moteado de color de " + q.moteado_color_antes + " a " + q.moteado_color_despues + ": " +
+                  (linealSrc ? "repetir sobre la misma entrada con menos denoise (0,50); si la entrada ya pasó por el NXT suave del Paso 14, " +
+                               "basta con 0,50 o menos (M31, 7 nov 2026: 0,50 + 0,70 subió el moteado de 0,35 a 0,92)"
+                             : "no aplicar este NXT"));
   return {
     vista: v.id, original: viewId, metodo: metodo === "nxt" ? "NoiseXTerminator" : "híbrido MLDenoise + NXT",
     parametros: metodo === "nxt" ? { denoise: (o.denoise !== undefined) ? o.denoise : 0.50, detail: (o.detail !== undefined) ? o.detail : 0.15,
@@ -174,16 +216,19 @@ function reducirRuido(viewId, o) {
     control: {
       medido: { contraste_conservado: q.contraste_zona_debil_pct >= -5, residual_solo_ruido: q.residual_estructura <= 2.0,
                 fondo_no_muerto: q.ruido_baja_pct <= 95 },
-      revisar_a_ojo: ["aspecto de cera o plástico", "fondo moteado / piel de naranja (4–16 px)", "halos oscuros en estrellas (detail alto)"],
+      revisar_a_ojo: ["aspecto de cera o plástico", "fondo moteado / piel de naranja (4–16 px)", "halos oscuros en estrellas (detail alto)",
+                      "manchas de color grandes en el fondo (moteado_color_despues > 1: se verán al estirar)"],
       nota: "ruido_baja_pct: en el denoise principal (Paso 15) se espera 50–80 %; en las pasadas suaves (Pasos 14 y 6), poco. " +
-            "residual_estructura ~1–2 = la imagen quitada es sólo ruido (el moteado de baja frecuencia la sube un poco). Lo de revisar_a_ojo no lo mide esta función."
+            "residual_estructura ~1–2 = la imagen quitada es sólo ruido (el moteado de baja frecuencia la sube un poco). " +
+            "moteado_color (RGB): manchas de color de gran escala del cielo en unidades del grano; por encima de ~1 se ven más que el grano " +
+            "(orientativo, sin calibrar). Lo de revisar_a_ojo no lo mide esta función."
     }
   };
 }
 
 // StarXTerminator en lineal sobre una copia: starless + capa de estrellas, con las comprobaciones de la ficha.
 function separarEstrellas(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
@@ -234,7 +279,8 @@ function separarEstrellas(viewId, o) {
       revisar_a_ojo: ["diferencia original − starless (la capa de estrellas): sólo estrellas y halos, sin filamentos, polvo ni núcleos de galaxia (estructura_en_estrellas_pct alto lo sugiere, pero en campos densos es normal)",
                       "residuos de estrellas en la starless (manchas, agujeros)"],
       nota: "Siguiente: denoise principal sobre la starless con reducirRuido(starless, { metodo: 'hibrido', modelo }) " +
-            "(mono) o NXT 0,95 (RGB). Lo de revisar_a_ojo no lo mide esta función."
+            "(mono) o NXT 0,70 (RGB; 0,95 deja manchas de color; 0,50 si la entrada ya pasó por el NXT suave del Paso 14). " +
+            "Lo de revisar_a_ojo no lo mide esta función."
     }
   };
 }

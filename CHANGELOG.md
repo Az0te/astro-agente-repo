@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+- **Lo aprendido comparando M31 de Qwen (PiCopilot build88) con M31 v7 de Opus** (7 nov 2026, mismo master). Qwen salió casi sin estrellas (269 detectables frente a 13 721), con el núcleo y M32 quemados (meseta de 22 px) y el fondo manchado. Cambios:
+  - `estirado.js`: `estrellas: "extraer"` saca la capa de estrellas con el mismo estirado que la starless (se repiten las pasadas de GHS y los puntos negros sobre starless + estrellas y se separa con `screenStarsExtract`); `tipo: "galaxia"` lo usa por defecto. Nueva medida `meseta_nucleo` con `no_cumple` si pasa de 3 px.
+  - Nuevo `nucleo.js`: `comprimirNucleo` (HDRMT 7 capas al 60 % con máscara de bulbo, la receta de Opus) y `medirMeseta`. Añadido al runner y al manifiesto del MCP.
+  - `estrellas.js`: la limpieza < 0,005 sólo se aplica si quita ≤ 10 % del brillo; `no_cumple` si la capa queda casi vacía; corregido el control del p90 (pedía 0,15–0,35 y la ficha 0,08–0,13).
+  - `recombinacion.js`: `no_cumple` (no existía) con `aporte_estrellas_pct` < 0,5 % (Qwen: 0,19 %), fondo que sube o baja y recorte nuevo.
+  - `ruido.js`: en no lineal, el moteado > 1,5 ya no sugiere subir el NXT (no lo arregla); aviso si un denoise sube el moteado más de 0,5; Paso 15 en RGB a 0,50 si ya hubo NXT suave en el 14.
+  - `lineal.js`: el cielo no neutro del checkpoint dice que no se pase a no lineal sin `neutralizarCielo`.
+  - Fichas 1, 5, 6, 8 y 9 no lineales, Anexo D (cadena de M31) y trampas de `SKILL.md`.
+  - PiCopilot (prompt de Qwen): `tipo: "galaxia"` obligatorio en galaxias, `comprimirNucleo` en el orden, no seguir con `no_cumple` sin resolver y no inventar umbrales.
+
 - **Idioma**: el asistente responde ahora en el idioma en que se le pregunte (inglés o cualquier otro), no sólo en español; la guía sigue escrita en español. Actualizadas las envolturas de ChatGPT y de modelos locales y el README.
 
 - Guía: **MLDenoise frente a NoiseX**, medido en IC 1396 (Hα, OIII, SII) con una referencia de subs independientes. Nueva ficha `guia/detalle/lineal-15-denoise-mldenoise.md` (método, puntuaciones, parámetros de MLDenoise y receta híbrida ML fino + NXT grueso, que gana en los tres canales) y resumen en el Paso 15 lineal. Trampa documentada: NXT repetido sobre el mismo id de ventana devuelve el mismo resultado.

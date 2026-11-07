@@ -62,7 +62,7 @@ function componerHDR(lista, o) {
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
     var p = (typeof x === "string") ? x.replace(/\\/g, "/").replace(/\/$/, "") : x;
     if (typeof p === "string" && File.directoryExists(p))
-      items = items.concat((File.searchDirectory ? File.searchDirectory(p + "/*.xisf", false) : searchDirectory(p + "/*.xisf", false))
+      items = items.concat((File.searchDirectory ? File.searchDirectory(p + "/" + "*.xisf", false) : searchDirectory(p + "/" + "*.xisf", false))
         .filter(function (f) { return !/mask|mascara|rejection|drizzle_weights|LN_Reference|HDR/i.test(File.extractName(f)); }));
     else items.push(p);
   });
@@ -163,7 +163,7 @@ function componerHDR(lista, o) {
   r.control.revisar_a_ojo.push("Revisar al 100 % los bordes de la sustitución en las estrellas brillantes y los núcleos (sin anillos de color ni escalones).");
 
   ins.forEach(function (a) { if (a.tmp) a.win.forceClose(); });
-  var tmpFiles = File.searchDirectory ? File.searchDirectory(tmpDir + "/*.xisf", false) : [];
+  var tmpFiles = File.searchDirectory ? File.searchDirectory(tmpDir + "/" + "*.xisf", false) : [];
   tmpFiles.forEach(function (f) { try { File.remove(f); } catch (e) { } });
   hdrW.show();
   return r;

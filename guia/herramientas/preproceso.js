@@ -260,7 +260,7 @@ function inventario(carpeta, o) {
     ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) { fr = fr.concat(ppSearch(rz + "/" + e, true)); });
     // Fuera: carpetas que empiezan por "_" (_proc, _rechazados...) y las de salida de WBPP.
     files = files.concat(fr.filter(function (f) { var rel = f.substring(rz.length);
-      return f.indexOf(excl) < 0 && !/\/_[^\/]*\//.test(rel) && !/\/(calibrated|debayered|registered|master|logs|cache)\//i.test(rel); }));
+      return f.indexOf(excl) < 0 && !/\/_[^\/]*[\/]/.test(rel) && !/\/(calibrated|debayered|registered|master|logs|cache)[\/]/i.test(rel); }));
   });
   files = ppUnique(files, function (f) { return f; });
   if (files.length == 0) throw new Error("No hay imágenes en " + raices.join(", "));
@@ -303,7 +303,7 @@ function inventario(carpeta, o) {
     var g = { noche: h0.noche, filtro: h0.filtro || "(sin FILTER)", exposicion_s: h0.exp, n: G.length, horas: +(G.length * h0.exp / 3600).toFixed(2),
               gain: h0.gain, offset: h0.offset, bin: h0.bin, telescopio: h0.TELESCOP || "",
               temp: temps.length ? [Math.min.apply(null, temps), Math.max.apply(null, temps)] : null,
-              carpetas: ppUnique(G, function (h) { return (File.extractDrive(h.fichero) + File.extractDirectory(h.fichero)).replace(raiz || "\u0000", "").replace(/^\//, ""); }) };
+              carpetas: ppUnique(G, function (h) { return (File.extractDrive(h.fichero) + File.extractDirectory(h.fichero)).replace(raiz || "\u0000", "").replace(/^[\/]/, ""); }) };
     if (rot.length) g.rotador = rot.length > 3 ? rot.slice(0, 3).concat(["…"]) : rot;
     // Flats de su filtro y su noche (o de la mañana siguiente), mismo sensor y telescopio.
     var flats = H.filter(function (f) { return /flat/.test(f.clase) && f.filtro == h0.filtro && f.bin == h0.bin && f.ancho == h0.ancho &&
@@ -394,7 +394,7 @@ function lanzarWBPP(o) {
 // Estado de un WBPP lanzado con lanzarWBPP (o de cualquier carpeta de salida de WBPP) y resumen de su log.
 function estadoWBPP(salida, o) {
   salida = salida.replace(/\\/g, "/").replace(/\/$/, "");
-  var logs = ppSearch(salida + "/logs/*.log", false).sort();
+  var logs = ppSearch(salida + "/logs/" + "*.log", false).sort();
   if (logs.length == 0) return { terminado: false, estado: "sin log todavía (arrancando)" };
   var log = logs[logs.length - 1], lines = File.readLines(log), last = "";
   for (var i = lines.length - 1; i >= 0 && !last; --i) if (lines[i].replace(/^\[[^\]]*\]\s*/, "").trim()) last = lines[i];

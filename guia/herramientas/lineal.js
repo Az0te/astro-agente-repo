@@ -141,7 +141,10 @@ function checkpointLineal(viewId, o) {
   var n128 = frac(64), n32 = frac(16), noCumple = [];
   if (!lineal) noCumple.push("la imagen no parece lineal (mediana > 0,05)");
   if (!w.hasAstrometricSolution) noCumple.push("sin solución astrométrica");
-  if (sky && sky.diferencia_en_sigmas > 0.5) noCumple.push("cielo no neutro: " + sky.canal_alto + " " + sky.diferencia_en_sigmas + " sigmas por encima");
+  if (sky && sky.diferencia_en_sigmas > 0.5)
+    noCumple.push("CIELO NO NEUTRO: " + sky.canal_alto + " " + sky.diferencia_en_sigmas + " sigmas por encima (límite 0,5). NO pasar a la fase no " +
+                  "lineal así: al estirar y saturar sale como manchas de color (M31 Qwen, 7 nov 2026: 0,67 σ aceptados → fondo manchado). " +
+                  "Corregir ahora con neutralizarCielo (color.js) sobre esta vista y repetir checkpointLineal");
   if (clip.some(function (x) { return x > 0.01; })) noCumple.push("canales recortados a 1: " + clip.join(" / ") + " %");
   if (fw.ringing !== null && fw.ringing < -0.01) noCumple.push("ringing (" + fw.ringing + ")");
   if (n128 > 2 || n32 > 10) noCumple.push("núcleo quemado: " + n128 + " % > 0,93 en 128 px, " + n32 + " % en 32 px");

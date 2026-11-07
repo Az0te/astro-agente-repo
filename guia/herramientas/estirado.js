@@ -64,7 +64,7 @@ function esGHS(view, D, b, SP, LP, HP, canal) {
 }
 
 function estirarAFondo(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var fondo = o.fondo || 0.20, tol = o.tolerancia || 0.02, canal = o.canal || "RGB";
   var win = ImageWindow.windowById(viewId);
@@ -243,7 +243,7 @@ function esSkyDominance(view) {
            canales: med.map(function (m) { return +m.toFixed(4); }) };
 }
 function estirarStarless(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   if (o.modo === "fondo") return estirarAFondo(viewId, o);
   var cielo = o.cielo || 0.10, D = o.paso || 1.0, canal = o.canal || "RGB";
@@ -256,12 +256,14 @@ function estirarStarless(viewId, o) {
   w.show();
   var v = w.mainView, pasadas = [];
   esGHS(v, 2.5, 12, med0, 0, 0.95, canal);
+  var ops = [{ g: [2.5, 12, med0, 0, 0.95] }];   // registro exacto del estirado, para repetirlo en otra imagen
   var c = esCheck(v);
   pasadas.push({ n: 1, fase: 1, D: 2.5, b: 12, SP: +med0.toPrecision(4), HP: 0.95, cielo: c.cielo, ruido_rel: c.ruido_rel, p99: c.p99 });
   var prev = esCopy(v.id, "esPrev"), motivo = "máximo de pasadas", maxN = o.maxPasadas || 25, descartadas = 0;
   for (var n = 2; n <= maxN; ++n) {
     esAssign(prev.mainView, v);
-    esGHS(v, D, 6, Math.max(c.cielo, 1e-5), 0, 0.92, canal);
+    var sp = Math.max(c.cielo, 1e-5);
+    esGHS(v, D, 6, sp, 0, 0.92, canal);
     var c1 = esCheck(v), bp = 0;
     if (c1.cielo > cielo) { bp = esBlackPoint(v, c1.cielo, cielo); c1 = esCheck(v); }
     var f = esFallo(c1, lim);
@@ -274,9 +276,13 @@ function estirarStarless(viewId, o) {
     }
     pasadas.push({ n: n, D: D, b: 6, SP: +c.cielo.toPrecision(3), HP: 0.92, punto_negro: +bp.toPrecision(3),
                    cielo: c1.cielo, ruido_rel: c1.ruido_rel, p99: c1.p99 });
+    ops.push({ g: [D, 6, sp, 0, 0.92] });
+    if (bp > 0) ops.push({ bp: bp });
     c = c1;
   }
   prev.forceClose();
+  ES_OPS[v.id] = { canal: canal, ops: ops };
+  var meseta = esMeseta(v);
 
   var im = v.image, porCanal = [];
   for (var ch = 0; ch < im.numberOfChannels; ++ch) { im.selectedChannel = ch; porCanal.push(+im.median().toFixed(4)); }
@@ -285,23 +291,28 @@ function estirarStarless(viewId, o) {
   if (dom >= 5) {
     var nombres = ["rojo", "verde", "azul"], k = sd.canales.indexOf(Math.max.apply(null, sd.canales));
     noCumple.push("DOMINANTE DEL CIELO " + dom + " % hacia el " + nombres[k] + " (límite 5 %): no es aceptable; viene de la " +
-                  "fase lineal (fondo tras el gradiente o SPCC) y hay que corregirla allí antes de seguir");
+                  "fase lineal (fondo tras el gradiente o SPCC) y hay que corregirla allí antes de seguir: neutralizarCielo (color.js) " +
+                  "sobre la starless lineal, y volver a estirar");
   }
   if (Math.abs(c.cielo - cielo) > 0.02) noCumple.push("cielo " + c.cielo + " fuera del objetivo " + cielo);
+  if (meseta.radio_px > 3)
+    noCumple.push("NÚCLEO QUEMADO: meseta de " + meseta.radio_px + " px de radio con luminancia > 0,95 (con estructura: 0–3 px). " +
+                  "Siguiente paso, antes de saturar: comprimirNucleo (nucleo.js) sobre esta starless. No volver a estirar ni subir curvas");
   return {
     vista: v.id, original: viewId, metodo: "al fallo (pasadas cortas de GHS + punto negro)", cielo_objetivo: cielo,
     pasadas: pasadas, pasadas_descartadas: descartadas, parada: motivo,
     no_cumple: noCumple,
-    medidas: c, mediana_por_canal: porCanal, cielo_por_canal: sd.canales, dominante_cielo_pct: dom,
+    medidas: c, mediana_por_canal: porCanal, cielo_por_canal: sd.canales, dominante_cielo_pct: dom, meseta_nucleo: meseta,
     control: {
       medido: {
         cielo_en_objetivo: Math.abs(c.cielo - cielo) <= 0.02,
         ruido_del_cielo_bajo_el_limite: c.ruido_rel <= lim.ruido,
         sin_sombras_aplastadas: c.cero_pct <= lim.cero,
         sin_luces_quemadas: c.alto_pct <= lim.alto,
-        sin_dominante_en_el_cielo: dom < 5
+        sin_dominante_en_el_cielo: dom < 5,
+        nucleo_con_estructura: meseta.radio_px <= 3
       },
-      revisar_a_ojo: ["núcleos brillantes (galaxias): si se ven quemados, HDRMT en los pasos siguientes",
+      revisar_a_ojo: ["núcleos brillantes (galaxias): aunque la meseta sea pequeña, si se ven planos, comprimirNucleo (nucleo.js)",
                       "dientes de sierra al ampliar el histograma (posterización)",
                       "ruido del fondo al 100 %: si molesta, repetir con ruidoMax menor (0,12)"],
       nota: "Se estira hasta el fallo y se queda la pasada anterior: la imagen está todo lo estirada que permiten el ruido " +
@@ -326,7 +337,7 @@ function esStarP90(sample, A) {
 }
 
 function estirarEstrellas(viewId, o) {
-  if (viewId && typeof viewId === "object" && viewId.id !== undefined) viewId = viewId.id;   // también vale la View
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var sat = o.saturacion || 1;
   if (typeof starStretch !== "function" && typeof PICOPILOT_GUIA === "string")
@@ -376,13 +387,135 @@ function estirarEstrellas(viewId, o) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------
+// Registro del estirado "al fallo" de cada starless (vista estirada → { canal, ops }), para repetir EXACTAMENTE el mismo
+// estirado sobre la imagen con estrellas y sacar la capa de estrellas con screenStarsExtract (como Opus en M31 v6/v7).
+var ES_OPS = {};
+
+function esReplay(view, rec) {
+  for (var i = 0; i < rec.ops.length; ++i) {
+    var p = rec.ops[i];
+    if (p.g) esGHS(view, p.g[0], p.g[1], p.g[2], p.g[3], p.g[4], rec.canal);
+    else if (p.bp > 0) {
+      var P = new PixelMath;
+      P.expression = "max(0, ($T - " + p.bp + ") / (1 - " + p.bp + "))";
+      P.useSingleExpression = true; P.createNewImage = false;
+      P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
+      if (!P.executeOn(view)) throw new Error("Punto negro (repetición del estirado) falló");
+    }
+  }
+}
+
+// Meseta del núcleo: radio equivalente (px) de los píxeles con luminancia > umbral en 256×256 px alrededor del punto más
+// brillante (bloques de 16 px). Con estructura da 0–3 px; quemado, decenas (M31 Qwen, 7 nov 2026: 22 px; Opus v7: 1 px).
+function esMeseta(view, thr) {
+  thr = thr || 0.95;
+  var im = view.image, W = im.width, H = im.height, n = W * H, nc = im.numberOfChannels, R = new Rect(0, 0, W, H);
+  var L = new Float32Array(n), b = new Float32Array(n);
+  for (var c = 0; c < nc; ++c) { im.getSamples(b, R, c); for (var i = 0; i < n; ++i) L[i] += b[i] / nc; }
+  var best = -1, bx = 0, by = 0, tot = 0, k = 0, h = 128;
+  for (var yy = 0; yy + 16 <= H; yy += 16) for (var xx = 0; xx + 16 <= W; xx += 16) {
+    var s = 0; for (var y = yy; y < yy + 16; y += 2) for (var x = xx; x < xx + 16; x += 2) s += L[y * W + x];
+    if (s > best) { best = s; bx = xx + 8; by = yy + 8; }
+  }
+  for (var y2 = Math.max(0, by - h); y2 < Math.min(H, by + h); ++y2)
+    for (var x2 = Math.max(0, bx - h); x2 < Math.min(W, bx + h); ++x2) if (L[y2 * W + x2] > thr) ++k;
+  for (var j = 0; j < n; ++j) if (L[j] > thr) ++tot;
+  return { radio_px: +Math.sqrt(k / Math.PI).toFixed(1), pix_total: tot, centro: [bx, by], umbral: thr };
+}
+
+// Capa de estrellas con el MISMO estirado que la starless: original lineal = starless + estrellas (SXT lineal es una suma
+// exacta), se le repite el estirado registrado y se separa con screenStarsExtract. Las estrellas quedan con el mismo
+// brillo relativo que tendrían en la imagen estirada entera. En M31 (7 nov 2026) starStretch amount 2 dejó 269 estrellas
+// detectables en la final frente a 13 721 con este método (Opus v7).
+function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
+  o = o || {};
+  var rec = ES_OPS[starlessStId];
+  if (!rec) throw new Error("no hay registro del estirado de " + starlessStId + " (sólo con el modo al fallo)");
+  if (typeof screenStarsExtract !== "function" && typeof PICOPILOT_GUIA === "string")
+    try { eval.call(null, File.readTextFile(PICOPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
+  if (typeof screenStarsExtract !== "function") throw new Error("screenStarsExtract no está cargado (herramientas/realces.js)");
+  var stv = View.viewById(starsLinId);
+  if (!stv || stv.isNull) throw new Error("No existe la vista " + starsLinId);
+  if (esMedian(stv) > 0.05) throw new Error("la capa de estrellas parece ya estirada");
+  var orig = esCopy(starlessLinId, "esTmpConEstrellas");
+  var P = new PixelMath;
+  P.expression = "$T + " + starsLinId; P.useSingleExpression = true; P.createNewImage = false;
+  P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
+  if (!P.executeOn(orig.mainView)) { orig.forceClose(); throw new Error("suma starless + estrellas falló"); }
+  var r;
+  try {
+    esReplay(orig.mainView, rec);
+    r = screenStarsExtract(orig.mainView.id, starlessStId, { newId: o.nuevaVista || (starsLinId + "_st") });
+  } finally { orig.forceClose(); }
+  var w = ImageWindow.windowById(r.created), v = w.mainView, sat = o.saturacion || 1;
+  var slw = ImageWindow.windowById(starlessStId);
+  if (!slw.isNull && slw.hasAstrometricSolution) w.copyAstrometricSolution(slw);
+  w.show();
+  if (sat > 1 && v.image.isColor) {   // misma saturación por tono que starStretch
+    var CS = new ColorSaturation;
+    CS.HS = [[0.0, 0.40 * sat], [0.5, 0.70 * sat], [1.0, 0.40 * sat]];
+    CS.HSt = esK(ColorSaturation, "AkimaSubsplines");
+    CS.hueShift = 0;
+    if (!CS.executeOn(v)) throw new Error("Saturación de la capa de estrellas falló");
+  }
+  var im = v.image, W = im.width, H = im.height, n = W * H, R = new Rect(0, 0, W, H), buf = new Float32Array(n);
+  var st = [], mx = 0, med = [], uno = 0, L = new Float32Array(n);
+  for (var c = 0; c < im.numberOfChannels; ++c) {
+    im.getSamples(buf, R, c);
+    for (var k = 0; k < n; ++k) {
+      var x = buf[k]; L[k] += x / im.numberOfChannels;
+      if (x > mx) mx = x; if (x >= 0.999) ++uno; if (c === 0 && x > 0.005 && (k % 5) === 0) st.push(x);
+    }
+    im.selectedChannel = c; med.push(+im.median().toPrecision(3));
+  }
+  im.resetSelections();
+  var pe = 0; for (var q = 0; q < n; ++q) if (L[q] > 0.02) ++pe;
+  st.sort(function (a, b) { return a - b; });
+  var p90 = st.length ? st[Math.floor(0.9 * (st.length - 1))] : 0;
+  return {
+    vista: v.id, original: starsLinId, metodo: "mismo estirado que la starless + screenStarsExtract", saturacion: sat,
+    p90_estrellas: +p90.toFixed(3), pix_estrella_pct: +(100 * pe / n).toFixed(2), mediana_fondo: med, maximo: +mx.toFixed(4),
+    control: {
+      medido: { fondo_a_cero: med.every(function (m) { return m < 0.01; }), nucleos_a_1_pct: +(100 * uno / (3 * n)).toFixed(4) },
+      revisar_a_ojo: ["halos o agujeros alrededor de las estrellas brillantes (si los hay, los estirados no coinciden)",
+                      "núcleos de galaxias en la capa de estrellas (SXT a veces se los lleva: devolverlos a la starless)"],
+      nota: "pix_estrella_pct = % de píxeles de la capa con luminancia > 0,02 (orientativo, sin calibrar; muy por debajo del 0,5 % en un campo con muchas estrellas = capa débil). " +
+            "Los núcleos a 1 se contienen en el Paso 8. Lo de revisar_a_ojo no lo mide esta función."
+    }
+  };
+}
+
+// Valores por tipo de objeto (o.tipo); lo que se pase explícito manda. Galaxia: M31 OSC (Rafael, 7 nov 2026): con cielo
+// 0,10 el fondo quedaba gris y las estrellas (amount 2, saturación 1) diminutas y pálidas; con estos, "mucho mejor ambas".
+// estrellas "extraer": capa de estrellas con el mismo estirado (estirarEstrellasExtraer); amount sólo si hay que volver a
+// starStretch. Comparación M31 Qwen/Opus (7 nov 2026): con starStretch la final se quedó casi sin estrellas.
+var ES_TIPOS = {
+  galaxia: { cielo: 0.07, ruidoMax: 0.12, amount: 4, saturacion: 1.3, estrellas: "extraer" }
+};
+
 // Las dos capas del Paso 1 en una llamada.
 //   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // { starless: {...}, estrellas: {...} }
+//   var r = estirarCapas("Starless", "Stars", { tipo: "galaxia" });   // cielo 0,07, ruidoMax 0,12, estrellas "extraer", saturación 1,3
+//   var r = estirarCapas("Starless", "Stars", { estrellas: "extraer" });   // estrellas con el mismo estirado que la starless
 function estirarCapas(starlessId, starsId, o) {
-  if (starlessId && typeof starlessId === "object" && starlessId.id !== undefined) starlessId = starlessId.id;   // también vale la View
-  if (starsId && typeof starsId === "object" && starsId.id !== undefined) starsId = starsId.id;   // también vale la View
+  if (starlessId && typeof starlessId === "object") starlessId = (starlessId.id !== undefined) ? starlessId.id : (typeof starlessId.vista === "string" ? starlessId.vista : starlessId);   // también vale la View o el resultado de otra función ({ vista: ... })
+  if (starsId && typeof starsId === "object") starsId = (starsId.id !== undefined) ? starsId.id : (typeof starsId.vista === "string" ? starsId.vista : starsId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
+  var t = ES_TIPOS[String(o.tipo || "").toLowerCase()];
+  if (t) { var o2 = {}; for (var k in o) o2[k] = o[k]; for (var k2 in t) if (o2[k2] === undefined) o2[k2] = t[k2]; o = o2; }
   var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3 }) };
-  if (starsId) r.estrellas = estirarEstrellas(starsId, { nuevaVista: o.nuevasEstrellas, amount: o.amount, saturacion: o.saturacion });
+  if (starsId) {
+    var aviso = null;
+    if (o.estrellas === "extraer") {
+      try { r.estrellas = estirarEstrellasExtraer(starlessId, starsId, r.starless.vista, { nuevaVista: o.nuevasEstrellas, saturacion: o.saturacion }); }
+      catch (e) { aviso = "no se pudo sacar la capa de estrellas con el mismo estirado (" + e.message + "): se usa starStretch"; }
+    }
+    if (!r.estrellas) {
+      r.estrellas = estirarEstrellas(starsId, { nuevaVista: o.nuevasEstrellas, amount: o.amount, saturacion: o.saturacion });
+      if (aviso) r.estrellas.aviso = aviso;
+    }
+  }
+  if (t) r.tipo = { nombre: String(o.tipo), valores: t };
   return r;
 }

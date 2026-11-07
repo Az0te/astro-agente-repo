@@ -29,12 +29,12 @@ if (!SXT.executeOn(v)) throw new Error("StarX falló");
 "starless + MasterLight_stars";
 ```
 
-**En una llamada** (`herramientas/ruido.js`): `separarEstrellas` hace SXT sobre una copia (unscreen según sea lineal o no), localiza la capa de estrellas y comprueba que starless + estrellas reproduce el original; la estructura extensa de la capa de estrellas se da como orientación (en campos densos es alta sin fallo). Después, el denoise principal con `reducirRuido` (híbrido en mono con el modelo del perfil; NXT 0,95 en RGB).
+**En una llamada** (`herramientas/ruido.js`): `separarEstrellas` hace SXT sobre una copia (unscreen según sea lineal o no), localiza la capa de estrellas y comprueba que starless + estrellas reproduce el original; la estructura extensa de la capa de estrellas se da como orientación (en campos densos es alta sin fallo). Después, el denoise principal con `reducirRuido` (híbrido en mono con el modelo del perfil; en RGB, NXT 0,70 y mirar `moteado_color_despues`).
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/ruido.js"));   // en el nivel superior del script
 var s = separarEstrellas("MasterLight_nxt", { nuevaVista: "Starless", nuevasEstrellas: "Stars" });
-var d = reducirRuido(s.starless, { metodo: "hibrido", modelo: "<.xmlm del perfil>", nuevaVista: "Starless_dn" });   // RGB: { denoise: 0.95 }
+var d = reducirRuido(s.starless, { metodo: "hibrido", modelo: "<.xmlm del perfil>", nuevaVista: "Starless_dn" });   // RGB: { denoise: 0.70 } (ver «RGB» abajo)
 JSON.stringify({ separacion: s, denoise: d });
 ```
 
@@ -104,5 +104,7 @@ MLDenoise tarda ~2 min en 26 MP: supera el corte de 60 s del MCP, esperar con `w
 
 - En una rejilla, cada prueba de NXT sobre una ventana con un **id nuevo**, y fijar también `denoise_intensity`: con el mismo id NXT devolvió el mismo resultado aunque cambiara `denoise`.
 - La rejilla de antes (denoise 0,50 / 0,70 / 0,85) se quedaba corta: medido contra una referencia, 0,70 pierde frente a 0,95 en los tres canales. Bajar σ del cielo sin referencia no distingue ruido quitado de señal borrada.
+
+**RGB (OSC): no 0,95.** Lo de arriba se midió en canales mono. En RGB, quitar casi todo el grano deja a la vista el moteado de color de gran escala del cielo (manchas verdes y moradas de 100–300 px) que el grano tapaba, y sale al estirar. M31 OSC (7 nov 2026): NXT 0,95 bajó el ruido un 90 % y la starless quedó con manchas muy visibles; NXT 0,50 (50 %) quedó limpia, con `moteado_color` 0,36 → 0,65. El moteado sube en proporción a lo que baja el grano, así que con 0,95 rondaba 3,5. Regla: el denoise que deje `moteado_color_despues` por debajo de ~1 (en esa M31, quitar como mucho un 65–70 % del ruido); `reducirRuido` da no_cumple por encima de 1,5. Si hace falta más limpieza, en la fase no lineal (Paso 6) con separación de color, no subiendo aquí el denoise.
 
 **Control del denoise.** σ del cielo (bajar un 50–80 %, nunca a cero), contraste de una zona débil (no bajar más de ~5 %) e imagen residual (antes − después): sólo ruido, sin filamentos ni bordes. Con el híbrido, revisar además que no aparezca moteado a 4–16 px en el cielo.

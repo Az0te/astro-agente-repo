@@ -1,0 +1,22 @@
+{
+  "name": "picopilot-mcp",
+  "version": "0.1.0",
+  "description": "Servidor MCP de PiCopilot: las funciones de la guía de procesado como herramientas para PixInsight",
+  "type": "module",
+  "main": "dist/picopilot-mcp.mjs",
+  "bin": { "picopilot-mcp": "dist/picopilot-mcp.mjs" },
+  "scripts": {
+    "check": "tsc -p . --noEmit",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node18 \"--banner:js=import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --outfile=dist/picopilot-mcp.mjs"
+  },
+  "author": "Rafael Vidal",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

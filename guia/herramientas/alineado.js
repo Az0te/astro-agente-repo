@@ -220,7 +220,7 @@ function alinearMasters(lista, o) {
     if (fv) { files.push(fv); return; }
     var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
     if (File.directoryExists(p))
-      files = files.concat(alSearch(p + "/*.xisf", false).filter(function (f) {
+      files = files.concat(alSearch(p + "/" + "*.xisf", false).filter(function (f) {
         return !/rejection|drizzle_weights|_alin\.|LN_Reference|_modelo|_model/i.test(File.extractName(f)); }).sort());
     else files.push(p);
   });
@@ -348,7 +348,7 @@ function alinearMasters(lista, o) {
     if (e.bordes_a_cero_pct > 0.5) r.no_cumple.push(File.extractName(e.entrada) + ": " + e.bordes_a_cero_pct + " % de píxeles a 0 en los bordes tras recortar.");
   });
   // Limpieza de temporales.
-  alSearch(tmp + "/*.xisf", false).forEach(function (f) { try { File.remove(f); } catch (x) { } });
+  alSearch(tmp + "/" + "*.xisf", false).forEach(function (f) { try { File.remove(f); } catch (x) { } });
   try { File.removeDirectory(tmp); } catch (x) { }
   r.ficheros.forEach(function (e) { delete e.registrado; });
 

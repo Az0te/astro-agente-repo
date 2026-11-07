@@ -22,6 +22,11 @@ for (var i = 0; i < h.length; ++i) out.push(i + ": " + h.at(i).toSource());
 out.join("\n\n");
 ```
 
+**Con el MCP picopilot** (Claude, Codex):
+
+- Historial: `historial(vista)` (con `parametros: true` si hacen falta los valores). Las funciones de la guía trabajan sobre copias, así que el historial de la vista final sólo tiene lo aplicado sobre ella: el resto de la cadena sale del resultado de cada función (vista de entrada, vista nueva, parámetros y medidas). Reconstruirla con eso y decir de dónde sale cada paso.
+- Revisión crítica: mirar la imagen antes de puntuar, nunca puntuar sin verla. `previa(vista)` da el JPG entero y `previa(vista, { rect: [x0, y0, x1, y1] })` recortes al 100 % (mínimo: el centro del objeto, una esquina con estrellas y la estrella más brillante). Leer cada JPG y puntuar con lo que se ve; si algo no se puede juzgar en el JPG, decirlo.
+
 **Al terminar.** Proponer añadir a `perfil.md` las preferencias nuevas del usuario (qué versión eligió y por qué) y a la guía lo aprendido que sirva para cualquiera, sin datos personales.
 
 **Control.** El historial debe contener, como mínimo: calibración/integración (del master), corrección de gradiente, BXT CO, SPCC, BXT, SXT, NXT, GHS/MAS, LHE, SCNR, recombinación. Si falta alguno, o se hizo en otro sitio o no se hizo: decirlo.
