@@ -12,10 +12,10 @@
 //   nuevaVista  copia donde se calibra (por defecto <vista>_spcc). La original no se toca.
 //   guia        carpeta de la guía, si procesos.js no está cargado y no hay PICOPILOT_GUIA.
 //   fondoAuto   false (por defecto): referencia de fondo = toda la imagen, como SPCC. true = el bloque de 512 px más
-//               oscuro (EXPERIMENTAL: en IC 1396, nov 2026, empeoró el cielo de 1 a 17 sigmas; no usar sin comprobar).
+//               oscuro (EXPERIMENTAL: en una nebulosa dual band, nov 2026, empeoró el cielo de 1 a 17 sigmas; no usar sin comprobar).
 // Comprueba antes: que exista la solución astrométrica (si no, Paso 8: blindSolve) y que la imagen sea lineal.
 // Mide antes y después el cielo por canal en las zonas más oscuras y su diferencia en sigmas del ruido: en lineal,
-// una diferencia de 1 % ya sale como dominante clara tras estirar (IC 1396, nov 2026: 1,6 % en lineal → 19 % estirada).
+// una diferencia de 1 % ya sale como dominante clara tras estirar (nebulosa dual band, nov 2026: 1,6 % en lineal → 19 % estirada).
 
 function ccSky(view) {
   var im = view.image, W = im.width, H = im.height, S = 64, n = W * H, R = new Rect(0, 0, W, H);
@@ -165,7 +165,7 @@ function calibrarColor(viewId, o) {
 
 // Neutralización fina del cielo (BackgroundNeutralization aditiva) sobre una imagen RGB LINEAL, en una copia.
 // Para cuando SPCC deja el cielo ligeramente descompensado (diferencias < 1 % en lineal que salen como dominante del
-// 5–20 % al estirar: IC 1396 y LDN 1235, nov 2026). Mide el cielo por canal en las mismas zonas que el control del
+// 5–20 % al estirar: nebulosa dual band y nebulosa oscura, nov 2026). Mide el cielo por canal en las mismas zonas que el control del
 // estirado (el 10 % de celdas de 64 px más oscuras) o en el rectángulo que se le dé, y SUMA a cada canal lo que le
 // falta para igualar al canal de cielo más alto: no resta nada (no recorta sombras) y no toca el balance de blancos de
 // SPCC en las estrellas ni en el objeto más que ese desplazamiento constante, que es lo que hace BackgroundNeutralization.

@@ -14,7 +14,7 @@
 //   'cielo' (0,10 por defecto). Se mide después de cada pasada.
 // - Fallo: ruido del cielo > 15 % del cielo (ruidoMax), > 0,05 % de píxeles a 0 (ceroMax) o > 0,95 (altoMax). Si una
 //   pasada falla se deshace y se prueba otra la mitad de corta; si ni la más corta (D 0,125) cabe, se queda la anterior.
-// - Calibrado con M31 (4 nov 2026): el arcsinh aceptado tenía un ruido del cielo del 11,8 %; al fallo da bulbo 0,747 y
+// - Calibrado con una galaxia grande (4 nov 2026): el arcsinh aceptado tenía un ruido del cielo del 11,8 %; al fallo da bulbo 0,747 y
 //   disco 0,238 frente a 0,751 y 0,214 del arcsinh; a fondo fijo 0,10 daba 0,45 y 0,13 (galaxia apagada).
 // - "cielo" es la mediana de las celdas de 64 px más oscuras (10 %), no la mediana de la imagen: en nebulosas que llenan
 //   el campo la mediana queda por encima.
@@ -389,7 +389,7 @@ function estirarEstrellas(viewId, o) {
 
 // ---------------------------------------------------------------------------------------------------
 // Registro del estirado "al fallo" de cada starless (vista estirada → { canal, ops }), para repetir EXACTAMENTE el mismo
-// estirado sobre la imagen con estrellas y sacar la capa de estrellas con screenStarsExtract (como Opus en M31 v6/v7).
+// estirado sobre la imagen con estrellas y sacar la capa de estrellas con screenStarsExtract (como Opus en una galaxia grande).
 var ES_OPS = {};
 
 function esReplay(view, rec) {
@@ -407,7 +407,7 @@ function esReplay(view, rec) {
 }
 
 // Meseta del núcleo: radio equivalente (px) de los píxeles con luminancia > umbral en 256×256 px alrededor del punto más
-// brillante (bloques de 16 px). Con estructura da 0–3 px; quemado, decenas (M31 Qwen, 7 nov 2026: 22 px; Opus v7: 1 px).
+// brillante (bloques de 16 px). Con estructura da 0–3 px; quemado, decenas (galaxia grande con Qwen, 7 nov 2026: 22 px; Opus v7: 1 px).
 function esMeseta(view, thr) {
   thr = thr || 0.95;
   var im = view.image, W = im.width, H = im.height, n = W * H, nc = im.numberOfChannels, R = new Rect(0, 0, W, H);
@@ -426,7 +426,7 @@ function esMeseta(view, thr) {
 
 // Capa de estrellas con el MISMO estirado que la starless: original lineal = starless + estrellas (SXT lineal es una suma
 // exacta), se le repite el estirado registrado y se separa con screenStarsExtract. Las estrellas quedan con el mismo
-// brillo relativo que tendrían en la imagen estirada entera. En M31 (7 nov 2026) starStretch amount 2 dejó 269 estrellas
+// brillo relativo que tendrían en la imagen estirada entera. En galaxia grande (7 nov 2026) starStretch amount 2 dejó 269 estrellas
 // detectables en la final frente a 13 721 con este método (Opus v7).
 function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   o = o || {};
@@ -472,9 +472,12 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   im.resetSelections();
   var pe = 0; for (var q = 0; q < n; ++q) if (L[q] > 0.02) ++pe;
   st.sort(function (a, b) { return a - b; });
-  var p90 = st.length ? st[Math.floor(0.9 * (st.length - 1))] : 0;
+  var p90 = st.length ? st[Math.floor(0.9 * (st.length - 1))] : 0, pePct = 100 * pe / n, noCumpleE = [];
+  if (pePct > 10) noCumpleE.push("CAPA DE ESTRELLAS HINCHADA: el " + pePct.toFixed(1) + " % de los píxeles pasa de 0,02 (límite 10 %). " +
+    "Con el estirado de una nebulosa débil, 'extraer' hincha las estrellas (nebulosa oscura, 7 nov 2026: 25 %): repetir estirarCapas SIN " +
+    "estrellas \"extraer\" (starStretch). 'extraer' es para galaxias");
   return {
-    vista: v.id, original: starsLinId, metodo: "mismo estirado que la starless + screenStarsExtract", saturacion: sat,
+    vista: v.id, original: starsLinId, metodo: "mismo estirado que la starless + screenStarsExtract", saturacion: sat, no_cumple: noCumpleE,
     p90_estrellas: +p90.toFixed(3), pix_estrella_pct: +(100 * pe / n).toFixed(2), mediana_fondo: med, maximo: +mx.toFixed(4),
     control: {
       medido: { fondo_a_cero: med.every(function (m) { return m < 0.01; }), nucleos_a_1_pct: +(100 * uno / (3 * n)).toFixed(4) },
@@ -486,12 +489,16 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   };
 }
 
-// Valores por tipo de objeto (o.tipo); lo que se pase explícito manda. Galaxia: M31 OSC (Rafael, 7 nov 2026): con cielo
+// Valores por tipo de objeto (o.tipo); lo que se pase explícito manda. Galaxia: galaxia grande OSC (Rafael, 7 nov 2026): con cielo
 // 0,10 el fondo quedaba gris y las estrellas (amount 2, saturación 1) diminutas y pálidas; con estos, "mucho mejor ambas".
 // estrellas "extraer": capa de estrellas con el mismo estirado (estirarEstrellasExtraer); amount sólo si hay que volver a
-// starStretch. Comparación M31 Qwen/Opus (7 nov 2026): con starStretch la final se quedó casi sin estrellas.
+// starStretch. Comparación Qwen/Opus en una galaxia grande (7 nov 2026): con starStretch la final se quedó casi sin estrellas.
+// nebulosa_oscura (polvo, LDN/LBN/vdB, sin emisión): cielo 0,15 y algo más de ruido permitido para separar el polvo del fondo
+// (nebulosa oscura, 7 nov 2026: con cielo 0,10 el cuerpo quedaba 0,009 sobre el cielo en la final; Opus con MAS a 0,17 + curvas con
+// máscara, 0,051). Sin calibrar con más casos. Estrellas con starStretch, nunca "extraer".
 var ES_TIPOS = {
-  galaxia: { cielo: 0.07, ruidoMax: 0.12, amount: 4, saturacion: 1.3, estrellas: "extraer" }
+  galaxia: { cielo: 0.07, ruidoMax: 0.12, amount: 4, saturacion: 1.3, estrellas: "extraer" },
+  nebulosa_oscura: { cielo: 0.15, ruidoMax: 0.20, amount: 4, saturacion: 1.2 }   // amount 2 dejó las estrellas casi invisibles (T90, aporte 0,7 %)
 };
 
 // Las dos capas del Paso 1 en una llamada.
@@ -515,6 +522,8 @@ function estirarCapas(starlessId, starsId, o) {
       r.estrellas = estirarEstrellas(starsId, { nuevaVista: o.nuevasEstrellas, amount: o.amount, saturacion: o.saturacion });
       if (aviso) r.estrellas.aviso = aviso;
     }
+    if (r.estrellas.no_cumple && r.estrellas.no_cumple.length)
+      r.no_cumple = (r.starless.no_cumple || []).concat(r.estrellas.no_cumple);
   }
   if (t) r.tipo = { nombre: String(o.tipo), valores: t };
   return r;

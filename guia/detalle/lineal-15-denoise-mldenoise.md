@@ -6,7 +6,7 @@ Material de apoyo de la ficha: comparación medida de MLDenoise (proceso nativo 
 
 **Resultado.** En los tres canales gana el **híbrido**: el detalle fino de MLDenoise (amount 1,0) con lo grueso de NXT 0,95. Iguala a NXT en ruido a todas las escalas y borra menos detalle de nebulosa. Con señal fuerte (Hα), MLDenoise solo ya empata con NXT 0,95. Con señal débil (OIII, SII), MLDenoise solo deja hasta el doble de ruido a 16 px: hace falta NXT para lo grueso.
 
-**Cómo se midió (IC 1396, SQA106 + OSC dual band, 3–4 nov 2026).** Medir sólo cuánto baja σ no distingue ruido quitado de señal borrada. Por eso se usó una referencia independiente:
+**Cómo se midió (nebulosa dual band, SQA106 + OSC dual band, 3–4 nov 2026).** Medir sólo cuánto baja σ no distingue ruido quitado de señal borrada. Por eso se usó una referencia independiente:
 
 - **A** = 1 de cada 4 subs registrados (24 de Hα, 29 de OIII y de SII), integrados aparte: la imagen ruidosa que se filtra.
 - **B** = el resto de subs de esas sesiones más otra sesión (122 / 148 subs), sin ningún sub en común con A: la "verdad" con ~4× menos ruido.
@@ -85,4 +85,4 @@ Variante sólo ML (Hα, sin NXT): en lugar de `nx`, MLDenoise sobre una copia re
 - NoiseXTerminator ejecutado varias veces sobre ventanas con el **mismo id** devolvió el mismo resultado aunque cambiara `denoise`: usar un id nuevo por prueba y fijar también `denoise_intensity`.
 - Las pruebas largas (varios MLDenoise seguidos, 8+ min en un `run_script`) acabaron con "Invalid task termination intent" en la consola y el watcher sin recoger comandos: lanzar tandas de menos de 1 min y guardar resultados en disco entre medias.
 
-Banco de pruebas reutilizable (scripts `dn_ref.js`, `dn_paso.js`, resultados JSON) en `IC1396/_proc/denoise_cmp/` del equipo de prueba.
+Banco de pruebas reutilizable (scripts `dn_ref.js`, `dn_paso.js`, resultados JSON) en `<objeto>/_proc/denoise_cmp/` del equipo de prueba.

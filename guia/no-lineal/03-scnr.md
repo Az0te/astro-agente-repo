@@ -13,11 +13,11 @@
 **Alternativa con máscara** (mejor que el SCNR global cuando hay dominante de fondo)
 
 - "Sólo si la G/R del cielo supera ~1,03; máscara de cielo por luminancia (sigma-clip del fondo, rampa de 1,5σ a 5σ, suavizada); suavizar los canales (gauss σ ≈ 6 px) y restar en el cielo `amount·max(G_s − max(R_s,B_s), 0)` (amount ≈ 0,85)."
-- "El tope max(R,B) neutraliza el verde sin volverlo magenta; un recorte píxel a píxel dejó el cielo de M31 por debajo de neutro (G/R 1,06 → 0,93). No tocar el verde/cian real del objeto (OIII)."
-- Caso M42: "la corrección sin máscara neutralizó el cielo pero volvió verde el núcleo (G/R 0,91 → 1,13, porque su OIII es real); con máscara quedó en 0,92."
+- "El tope max(R,B) neutraliza el verde sin volverlo magenta; un recorte píxel a píxel dejó el cielo de una galaxia grande por debajo de neutro (G/R 1,06 → 0,93). No tocar el verde/cian real del objeto (OIII)."
+- Caso nebulosa brillante: "la corrección sin máscara neutralizó el cielo pero volvió verde el núcleo (G/R 0,91 → 1,13, porque su OIII es real); con máscara quedó en 0,92."
 - Fórmula puntual para halos: `G = iif(min(R,B) > G, min(R,B), G)`.
 - En NarrowbandNormalization: SCNR interno `G = min(G, (R+B)/2)`, "no en HOO".
-- En LDN 1235: quitar verde con `G − 0,85·max(0, G − max(R,B))`.
+- En nebulosa oscura: quitar verde con `G − 0,85·max(0, G − max(R,B))`.
 - SCNR invertido (invertir, SCNR suave, invertir) para halos verdes o azules.
 
 **Código**
@@ -36,7 +36,7 @@ PM.newImageId = "Starless_noGreen";
 if (!PM.executeOn(View.viewById("Starless"))) throw new Error("Neutralización de verde falló");
 ```
 
-**En una llamada** (`herramientas/lineal.js`): `quitarVerde(vista, { amount: 0.85 })` sólo actúa si el verde del cielo supera en más de un 3 % a R **y** a B (con el azul también alto, G/R engaña: en IC 1396 el cielo era azulado y no había verde que quitar). Aplica la fórmula de arriba bajo una máscara de cielo (rampa de 1,5σ a 5σ) y comprueba que el color del objeto no cambia. Si no hace falta, no aplica nada y lo dice.
+**En una llamada** (`herramientas/lineal.js`): `quitarVerde(vista, { amount: 0.85 })` sólo actúa si el verde del cielo supera en más de un 3 % a R **y** a B (con el azul también alto, G/R engaña: en una nebulosa dual band el cielo era azulado y no había verde que quitar). Aplica la fórmula de arriba bajo una máscara de cielo (rampa de 1,5σ a 5σ) y comprueba que el color del objeto no cambia. Si no hace falta, no aplica nada y lo dice.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script

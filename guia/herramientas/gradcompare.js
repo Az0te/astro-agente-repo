@@ -15,7 +15,7 @@
 //   así que sirve en nebulosas que llenan el campo y en nebulosas oscuras. Comprobarlo SIEMPRE a la vista
 //   con el modelo menos su gradiente liso (estructura en el modelo = señal perdida).
 // Las métricas eat/keep/flat/ring dependen de la máscara automática del objeto, que en campos llenos de
-//   nebulosa o con estrellas muy brillantes marca estrellas o el campo entero (IC 63: 98 %): no fiarse ahí.
+//   nebulosa o con estrellas muy brillantes marca estrellas o el campo entero (nebulosa de emisión y reflexión: 98 %): no fiarse ahí.
 //
 // Todo se mide sobre la luminancia (media de canales) binada con mediana (quita estrellas)
 // y en las mismas unidades que la imagen. Métricas:
@@ -347,7 +347,7 @@ function gcFormat(s) {
     (100 * s.flat).toFixed(1) + '%  anillo ' + (100 * s.ring).toFixed(1) + '%';
 }
 
-// --- estructura copiada en el modelo (probada en M31, LDN 1235, IC 1396 e IC 63, oct 2026) ---
+// --- estructura copiada en el modelo (probada en galaxia grande, nebulosa oscura, nebulosa dual band y nebulosa de emisión y reflexión, oct 2026) ---
 function gcStarExcl(base) {
   var w = base.O.w, h = base.O.h, n = w * h, i;
   var Ob = gcBlur(base.O.a, w, h, 3, 2), hfv = [];

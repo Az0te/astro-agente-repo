@@ -42,7 +42,7 @@ Documentación citada por el PDF: `ghsastro.co.uk/doc/tools/GeneralizedHyperboli
 - DRC demasiado alto aplana. DRC ≠ HDRMT (HDRMT después, si aún sobra dinámica).
 - Scale separation: subirla hasta que la vista "large scale" quede casi vacía.
 - Riesgos: ringing/halos en estrellas brillantes, microcontraste granuloso, ruido amplificado, núcleo aplanado. "Validar en la imagen entera, no sólo en un recorte (depende del tamaño)."
-- Clases: nebulosa débil = estirado suave, recuperación moderada; nebulosa compleja = equilibrio recuperación/DRC; galaxia = DRC para el bulbo, recuperación medida; núcleo muy brillante (M42) = HDRComposition con tomas cortas → MAS con saturación off → HDRMT → curvas de saturación.
+- Clases: nebulosa débil = estirado suave, recuperación moderada; nebulosa compleja = equilibrio recuperación/DRC; galaxia = DRC para el bulbo, recuperación medida; núcleo muy brillante (nebulosa brillante) = HDRComposition con tomas cortas → MAS con saturación off → HDRMT → curvas de saturación.
 - "MAS no sustituye HDRMT ni repara datos recortados. Como usa estadísticas, da estirados parecidos en imágenes distintas."
 
 **Capa de estrellas**
@@ -51,6 +51,6 @@ Documentación citada por el PDF: `ghsastro.co.uk/doc/tools/GeneralizedHyperboli
 - Objetivo de NOVA: "p90 de la capa en ~0,25 (factor de Star Stretch 1–3, más suave que el 5 por defecto), probando la fuerza con saturación y SCNR fijos."
 - Alternativa arcsinh que conserva color: `f = asinh(k·L)/asinh(k)/L` con `L = max(RGB)` (k ≈ 5000 para muchas estrellas), saturación ×1,6 alrededor de la media, núcleos saturados neutros; o ArcsinhStretch "hasta que se vean claramente sin hincharse (GHS opcional después)".
 
-**Código.** Un master lineal con pedestal puede pasar de 0,01 de mediana (LDN 1235: 0,0102); uno estirado suele estar por encima de 0,1, de ahí el umbral 0,05 de la ficha. En el watcher clásico las constantes de GHS van con `.prototype`.
+**Código.** Un master lineal con pedestal puede pasar de 0,01 de mediana (nebulosa oscura: 0,0102); uno estirado suele estar por encima de 0,1, de ahí el umbral 0,05 de la ficha. En el watcher clásico las constantes de GHS van con `.prototype`.
 
 **Control.** "El estirado revela todo: la limpieza se hace en lineal, y varias curvas pequeñas son mejores que una grande." Si el fondo se aplasta, bajar el punto negro o subir el fondo objetivo. Con dientes de sierra, menos pasadas destructivas y revisar el paso anterior.

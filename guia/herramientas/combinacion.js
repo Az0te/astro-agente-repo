@@ -235,7 +235,7 @@ function inyectarHa(rgb, ha, o) {
 
   // Máscara de nebulosa: Hα con estirado automático (fondo a 0,25), clipLow y suavizado.
   // Máscara en lineal, referida al CIELO (celdas más oscuras), no a la mediana: en nebulosas que llenan el campo
-  // (IC 1396) la mediana ya es nebulosa. Empieza en cielo + clipLow·(p99,5 − cielo) y llega a 1 en el p99,5,
+  // (nebulosa dual band) la mediana ya es nebulosa. Empieza en cielo + clipLow·(p99,5 − cielo) y llega a 1 en el p99,5,
   // con raíz cuadrada para que la nebulosa débil entre con peso.
   var him = wH.mainView.image, mId = cbNewId("cbMask");
   var cielo = cbSky(him)[0], smp = [], rowH = new Float32Array(him.width);
@@ -262,7 +262,7 @@ function inyectarHa(rgb, ha, o) {
   P2.useSingleExpression = false; P2.symbols = "a, m";
   // modo "suma" (por defecto): sólo se añade el exceso de Hα sobre el R → más rojo donde hay emisión, sin tocar el resto.
   // modo "mezcla": R' = (1−α·M)·R + α·M·Hα (la fórmula clásica); con un Hα ajustado por LinearFit global apagó el color
-  // de la nebulosa en IC 1396 (5 nov 2026), así que queda como opción.
+  // de la nebulosa en una nebulosa dual band (5 nov 2026), así que queda como opción.
   if (modo == "mezcla")
     P2.expression = "a = " + alfa + "; m = " + mId + "; (1 - a*m)*$T + a*m*" + wH.mainView.id;
   else

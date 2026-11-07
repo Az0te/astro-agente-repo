@@ -11,7 +11,7 @@
 | denoise | 0,50 (pasada ligera) |
 | detail | 0,10–0,20 ("más alto crea halos oscuros en estrellas") |
 | iterations | 2–3 |
-| Separación color | croma > luminancia (LDN 1235: croma 0,90, luminancia 0,40, detail 0,25) |
+| Separación color | croma > luminancia (nebulosa oscura: croma 0,90, luminancia 0,40, detail 0,25) |
 | tile overlap | 0,50 si aparecen bloques |
 | Valor por defecto | **No** el 0,90: "denoise 0,70–0,80 (no el 0,90 por defecto)" |
 
@@ -32,7 +32,7 @@ if (!NXT.executeOn(v)) throw new Error("NXT ligero falló");
 "NXT 0,50 aplicado";
 ```
 
-**En una llamada** (`herramientas/ruido.js`): `reducirRuido` aplica NXT sobre una copia y mide los controles de abajo: σ del cielo antes y después, contraste de la zona débil y estructura de la imagen residual (~1–2 = sólo ruido). En IC 1396 (nov 2026), NXT 0,50 bajó el ruido del cielo un 43 % con el contraste intacto (−0,5 %). Recomendado para modelos sin herramientas.
+**En una llamada** (`herramientas/ruido.js`): `reducirRuido` aplica NXT sobre una copia y mide los controles de abajo: σ del cielo antes y después, contraste de la zona débil y estructura de la imagen residual (~1–2 = sólo ruido). En nebulosa dual band (nov 2026), NXT 0,50 bajó el ruido del cielo un 43 % con el contraste intacto (−0,5 %). Recomendado para modelos sin herramientas.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/ruido.js"));   // en el nivel superior del script

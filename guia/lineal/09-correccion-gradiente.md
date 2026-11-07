@@ -5,8 +5,8 @@
 El gradiente es un offset de gran escala que no es del objeto: contamina SPCC, aplasta el polvo y el IFN y sale como velo al estirar. Se corrige **en lineal, por canal si los canales vienen de noches, filtros o cámaras distintos**, y antes de combinar y de BXT Correct Only.
 
 **Sin método fijo: se comparan siempre los candidatos y se aplica el que mejor funcione en esa imagen**: el que quita el gradiente copiando menos el objeto en su modelo (`gradienteCandidatos`, abajo). Ningún método gana siempre:
-- GraXpert sample_free escala 10 copió poco objeto en LDN 1235, IC 1396 e IC 63.
-- En M31 v6 ganó un polinomio de grado 2: GraXpert se comía el 8,5 % de la galaxia.
+- GraXpert sample_free escala 10 copió poco objeto en una nebulosa oscura, nebulosa dual band y una nebulosa de emisión y reflexión.
+- En galaxia grande ganó un polinomio de grado 2: GraXpert se comía el 8,5 % de la galaxia.
 - En polvo e IFN, MGC se comió el 75 % del contraste.
 
 El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida, conserva la astrometría) y `GraXpert_background` (modelo).
@@ -22,7 +22,7 @@ El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida
 
 - **Sustracción** para contaminación lumínica (aditiva); **división** sólo para viñeteo residual. Ante la duda, probar las dos y comparar el modelo.
 - Queda gradiente en el cielo → escala 8 (copia algo más, fondo más plano) o, si el residuo es liso, plano robusto grado 1 encima (no puede comerse formas).
-- No usar la escala por defecto de sample_free (se comió el 18 % de M31) ni `-sample_free_simplified true`.
+- No usar la escala por defecto de sample_free (se comió el 18 % de una galaxia grande) ni `-sample_free_simplified true`.
 - IA de GraXpert: sólo objetos pequeños en campo amplio; se come objetos extensos.
 - Con GraXpert por sustracción el fondo sale además con el color neutralizado; MGC no lo hace. Comparar el color del fondo después de SPCC.
 - `herramientas/graxpert.js` (ejecutable externo) sólo para RBF, Kriging, Splines con muestras propias o denoise.
@@ -69,7 +69,7 @@ Mide cada uno así:
 
 Recomienda, entre los que no se comen el objeto (≤ 3 % y |corr| < 0,3), el que deja el cielo más plano. Nombra las vistas `GC_GX10`, `GC_MGC2048_borde`, `GC_POLY2`… con su `_modelo`. Si se le pasa una ruta, escribe el dossier. El resultado lleva una `leyenda` de cómo leer las medidas.
 
-Comprobado con M31 v2 (nov 2026, 100 s con los 8 candidatos). Reproduce la decisión de octubre:
+Comprobado con una galaxia grande (nov 2026, 100 s con los 8 candidatos). Reproduce la decisión de octubre:
 - GraXpert 10 se lleva el **8,5 %** de la galaxia.
 - MGC 2048 se lleva el 1,8 %.
 - El polinomio de grado 2, el 0 %, con el cielo igual de plano (13 % del gradiente): recomendado.
@@ -88,9 +88,9 @@ JSON.stringify(r);   // candidatos (corr, copia, fondoResidual), recomendado, mo
 ```
 En MGC, si la nebulosa aparece en el modelo, subir la escala; si aparece en negativo, bajarla.
 
-**MGC en PixInsight 1.9.6+** (medido en LDN 1235 binada ×2, nov 2026):
-- `edgeCorrection` (corrección de bordes): `gradienteCandidatos` prueba cada escala con y sin ella (`GC_MGC2048_borde`). En LDN 1235 dejó los bordes a ±1·10⁻⁵ del centro (sin ella, hasta −5·10⁻⁵) y bajó el gradiente que queda del 83 % al 59 %, pero el modelo copia algo más el polvo (corr −0,13 → +0,16). Elegir con las medidas, y mirar el modelo en nebulosas oscuras.
-- `autoScaleFactors`: ajusta a la imagen el factor de cada canal de MARS (LDN 1235: R 0,92, G 0,61, B 0,64), pero el modelo cambió sólo un 2–6 %. Se deja apagado; `gradienteCandidatos` devuelve en `ajuste_mars` el factor y la correlación con MARS de cada canal (correlación baja, < 0,3 = MARS se parece poco a la imagen: desconfiar de MGC).
+**MGC en PixInsight 1.9.6+** (medido en una nebulosa oscura binada ×2, nov 2026):
+- `edgeCorrection` (corrección de bordes): `gradienteCandidatos` prueba cada escala con y sin ella (`GC_MGC2048_borde`). En nebulosa oscura dejó los bordes a ±1·10⁻⁵ del centro (sin ella, hasta −5·10⁻⁵) y bajó el gradiente que queda del 83 % al 59 %, pero el modelo copia algo más el polvo (corr −0,13 → +0,16). Elegir con las medidas, y mirar el modelo en nebulosas oscuras.
+- `autoScaleFactors`: ajusta a la imagen el factor de cada canal de MARS (nebulosa oscura: R 0,92, G 0,61, B 0,64), pero el modelo cambió sólo un 2–6 %. Se deja apagado; `gradienteCandidatos` devuelve en `ajuste_mars` el factor y la correlación con MARS de cada canal (correlación baja, < 0,3 = MARS se parece poco a la imagen: desconfiar de MGC).
 - Sin la opción `mars`, `pxMGC` y `gradienteCandidatos` usan la base MARS configurada en las preferencias de MGC (comando de servidor `set-default-database-files`).
 - Píxeles a 0 (bordes negros del registro): MGC los trata como sin datos. Siguen a 0 y la franja de al lado queda igual que si se hubiera recortado. Aun así, recortar primero (Paso 5).
 - En `pxMGC`: opciones `edgeCorrection`, `edgeAggressiveness` (2) y `autoScaleFactors`; se ignoran en versiones sin ellas.

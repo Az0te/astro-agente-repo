@@ -152,7 +152,7 @@ function grPolyExpr(c) {
 }
 
 // fondoResidual: rango de las medianas del CIELO (rejilla 8×8 fuera del objeto, gcScore.flat) de la corregida frente
-// al original. Antes era la rejilla 4×3 de toda la imagen, que en objetos grandes (M31) medía la galaxia y no el
+// al original. Antes era la rejilla 4×3 de toda la imagen, que en objetos grandes (galaxia grande) medía la galaxia y no el
 // gradiente, y hacía ganar a GraXpert aunque se comiera parte de ella (5 nov 2026).
 // come_objeto_pct: señal del objeto que se lleva el modelo (gcScore.eat), en % de la señal del objeto.
 function grMeasure(base, modelId, correctedId, range0) {
@@ -259,7 +259,7 @@ function gradienteCandidatos(viewId, o) {
   }
 
   // Polinomio robusto (grado 1 = plano, grado 2) por canal, ajustado fuera del objeto: no puede comerse formas.
-  // En M31 v6 (oct 2026) el grado 2 ganó a GraXpert, que se comía el 8,5 % de la galaxia.
+  // En galaxia grande (oct 2026) el grado 2 ganó a GraXpert, que se comía el 8,5 % de la galaxia.
   var nch = win.mainView.image.numberOfChannels;
   for (var gp = 0; gp < gradosPoly.length; ++gp) {
     var grado = gradosPoly[gp];

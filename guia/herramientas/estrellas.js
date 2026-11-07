@@ -93,6 +93,13 @@ function prepararEstrellas(viewId, o) {
     tmp.mainView.beginProcess(); tmp.mainView.image.assign(v.image); tmp.mainView.endProcess();
     stPM(tmp.mainView, ["iif($T < " + lim + ", 0, $T)"]);
     flujoQuitado = flujo0 > 0 ? 100 * (1 - stFlux(tmp.mainView) / flujo0) : 0;
+    if (flujoQuitado > 10 && !o.forzarLimpieza && o.limpieza === undefined) {   // campo denso de estrellas débiles: umbral más bajo
+      var lim2 = 0.002;
+      tmp.mainView.beginProcess(); tmp.mainView.image.assign(v.image); tmp.mainView.endProcess();
+      stPM(tmp.mainView, ["iif($T < " + lim2 + ", 0, $T)"]);
+      var q2 = flujo0 > 0 ? 100 * (1 - stFlux(tmp.mainView) / flujo0) : 0;
+      if (q2 <= 10) { pasos.push("limpieza < " + lim + " se llevaba el " + flujoQuitado.toFixed(1) + " %: se usa < " + lim2); lim = lim2; flujoQuitado = q2; }
+    }
     if (flujoQuitado <= 10 || o.forzarLimpieza) {
       v.beginProcess(); v.image.assign(tmp.mainView.image); v.endProcess();
       pasos.push("limpieza < " + lim + " (quita el " + flujoQuitado.toFixed(1) + " % del brillo)");
@@ -138,26 +145,32 @@ function prepararEstrellas(viewId, o) {
   for (var k = 0; k < 3; ++k) if (despues[k].maximo >= 0.98 || despues[k].mediana > 0.001) ok = false;
   var p90 = Math.max(despues[0].p90_estrellas || 0, despues[1].p90_estrellas || 0, despues[2].p90_estrellas || 0);
   if (!ok) noCumple.push("fondo de la capa no está a cero o hay núcleos ≥ 0,98");
+  var aviso = null;
   if (flujoQuitado > 10 && !o.forzarLimpieza)
-    noCumple.push("la limpieza < " + lim + " se llevaría el " + flujoQuitado.toFixed(1) + " % del brillo de la capa: está estirada muy poco. " +
-                  "Volver al Paso 1 con estirarCapas(..., { estrellas: \"extraer\" }) (en galaxias, tipo: \"galaxia\" ya lo hace)");
+    aviso = "limpieza no aplicada (se llevaría el " + flujoQuitado.toFixed(1) + " % del brillo: muchas estrellas débiles); el suelo por canal " +
+            "ya deja el fondo a 0. Sólo en GALAXIAS: si no se usó tipo \"galaxia\" en el Paso 1, volver a estirarCapas con él. En nebulosas, seguir";
   if (pe < 0.3)
-    noCumple.push("capa de estrellas casi vacía: sólo el " + pe + " % de los píxeles pasa de 0,02. Si el campo tiene muchas estrellas " +
-                  "(Vía Láctea, M31), volver al Paso 1 con estirarCapas(..., { estrellas: \"extraer\" }); no recombinar así");
+    noCumple.push("capa de estrellas casi vacía: sólo el " + pe + " % de los píxeles pasa de 0,02. Galaxia: volver al Paso 1 con " +
+                  "estirarCapas(..., { tipo: \"galaxia\" }). Nebulosa: volver al Paso 1 con amount 3 (mira p90_segun_amount); no recombinar así");
+  if (pe > 10)
+    noCumple.push("CAPA DE ESTRELLAS HINCHADA: el " + pe + " % de los píxeles pasa de 0,02 (límite 10 %): las estrellas taparán el objeto. " +
+                  "Si viene de estrellas \"extraer\" en una NEBULOSA (el estirado de la nebulosa es enorme e hincha las estrellas), " +
+                  "volver al Paso 1 con estirarCapas SIN estrellas \"extraer\" (starStretch, amount 2). \"extraer\" es sólo para galaxias");
   return {
     vista: id, original: viewId, pasos: pasos, antes: antes, despues: despues,
-    limpieza_quita_pct: +flujoQuitado.toFixed(1), pix_estrella_pct: pe, no_cumple: noCumple,
+    limpieza_quita_pct: +flujoQuitado.toFixed(1), pix_estrella_pct: pe, aviso: aviso, no_cumple: noCumple,
     control: { medido: {
                  fondo_a_cero: despues.every(function (d) { return d.mediana <= 0.001; }),
                  maximo_menor_098: despues.every(function (d) { return d.maximo < 0.98; }),
                  p90_suficiente: p90 >= 0.08,
                  capa_con_estrellas: pe >= 0.3,
+                 capa_no_hinchada: pe <= 10,
                  cumple_lo_medido: ok && noCumple.length === 0 },
                revisar_a_ojo: ["anillos de color alrededor de las estrellas brillantes (al 200–400 %)",
                                "halos residuales en zonas brillantes",
                                "manchas de residuos de SXT entre estrellas (verdes o moradas)"],
                nota: "El p90 (referencia 0,08–0,13 con starStretch; más alto con estrellas 'extraer') depende de cómo se estiró la capa en el " +
                      "Paso 1; si la capa está casi vacía o débil, se arregla allí (estrellas: 'extraer'), no aquí. pix_estrella_pct < 0,3 = casi sin estrellas " +
-                     "(M31 Qwen, 7 nov 2026: la final se quedó sin estrellas). Lo de revisar_a_ojo no lo mide esta función: no darlo por bueno." }
+                     "(galaxia grande con Qwen, 7 nov 2026: la final se quedó sin estrellas); > 10 % = hinchada (nebulosa oscura con Qwen, 7 nov 2026: 19 % con 'extraer' en una nebulosa oscura, estrellas gordas que tapaban el polvo; Opus 1,8 % de estrellas en la final). Lo de revisar_a_ojo no lo mide esta función: no darlo por bueno." }
   };
 }

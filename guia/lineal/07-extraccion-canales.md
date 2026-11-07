@@ -29,9 +29,9 @@ El Antlia Hα/OIII 5 nm no deja pasar Hβ ni SII.
 - `OIII = -0.1378*R + 0.8370*G + 0.4542*B`
 - Variante ponderando G ×2 (doble de píxeles verdes en la matriz Bayer, menos ruido): `Ha = 1.2565*R - 0.0330*G - 0.0391*B`; `OIII = -0.1425*R + 0.9430*G + 0.2574*B`.
 
-Recortar a ≥ 0 **sólo al final** y vigilar sobre-restas (zonas negras) en señal débil. **Sumar un pedestal antes de recortar.** Al restar el cielo, la mitad del ruido del fondo queda por debajo de 0. Recortado a 0, medio cielo se queda a cero: sesga el fondo, estropea el gradiente y el denoise, y parece una cuña sin datos (IC 1396, nov 2026). `desmezclarDualBand` suma la media de los pedestales de entrada (`pedestal_salida`). Comprobación en una zona dominada por Hα: `(G−pG)/(R−pR) ≈ 0,14` y `(B−pB)/(R−pR) ≈ 0,05`; si se aparta mucho, el balance de canales no es el bruto (SPCC, flats) o hay continuo.
+Recortar a ≥ 0 **sólo al final** y vigilar sobre-restas (zonas negras) en señal débil. **Sumar un pedestal antes de recortar.** Al restar el cielo, la mitad del ruido del fondo queda por debajo de 0. Recortado a 0, medio cielo se queda a cero: sesga el fondo, estropea el gradiente y el denoise, y parece una cuña sin datos (nebulosa dual band, nov 2026). `desmezclarDualBand` suma la media de los pedestales de entrada (`pedestal_salida`). Comprobación en una zona dominada por Hα: `(G−pG)/(R−pR) ≈ 0,14` y `(B−pB)/(R−pR) ≈ 0,05`; si se aparta mucho, el balance de canales no es el bruto (SPCC, flats) o hay continuo.
 
-**Limitación del modelo:** "supone sólo rayas. El continuo que entra por las bandas de 5 nm (estrellas, nebulosa de reflexión, galaxias) también se reparte como 'Hα' y 'OIII': restar después el continuo con la RGB (sustracción de continuo) y, en objetos de reflexión como IC 63, no interpretar ese 'OIII' como emisión."
+**Limitación del modelo:** "supone sólo rayas. El continuo que entra por las bandas de 5 nm (estrellas, nebulosa de reflexión, galaxias) también se reparte como 'Hα' y 'OIII': restar después el continuo con la RGB (sustracción de continuo) y, en objetos de reflexión como una nebulosa de emisión y reflexión, no interpretar ese 'OIII' como emisión."
 
 **Código: una imagen por raya, con pedestal restado**
 
@@ -56,7 +56,7 @@ if (!PM.executeOn(View.viewById("MasterLight"))) throw new Error("Desmezcla Hα 
 
 El mismo bloque con `newImageId = "OIII_raw"` y la expresión `-0.1378*($T[0]-pR) + 0.8370*($T[1]-pG) + 0.4542*($T[2]-pB)`. Con `createNewImage` desde `executeOn(view)` basta color space y formato; `executeGlobal` exige además `newImageWidth/Height`.
 
-**En una llamada** (`herramientas/bandaestrecha.js`): `desmezclarDualBand(vista, { ponderarG })` mide los pedestales en el cielo, crea `Ha_raw` y `OIII_raw` (gris, con la solución astrométrica), cuenta las sobre-restas antes de recortar a 0 y comprueba los ratios G/R y B/R en la zona de Hα. IC 63 v4 (nov 2026): ratios 0,146 y 0,072, sin sobre-resta; misma estructura que DBXtract (correlación 0,96 en bloques de 16 px; DBXtract escala distinto).
+**En una llamada** (`herramientas/bandaestrecha.js`): `desmezclarDualBand(vista, { ponderarG })` mide los pedestales en el cielo, crea `Ha_raw` y `OIII_raw` (gris, con la solución astrométrica), cuenta las sobre-restas antes de recortar a 0 y comprueba los ratios G/R y B/R en la zona de Hα. nebulosa de emisión y reflexión (nov 2026): ratios 0,146 y 0,072, sin sobre-resta; misma estructura que DBXtract (correlación 0,96 en bloques de 16 px; DBXtract escala distinto).
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en el nivel superior del script
@@ -69,7 +69,7 @@ JSON.stringify(desmezclarDualBand("MasterLight_NB"));
 
 Crea `SII_raw` / `OIII_raw` / `Hb_raw` y devuelve en `lineas` qué vista es cada raya. El control de ratios sólo se aplica con Hα: con SII la zona más roja es OIII o continuo.
 
-**Orden: desmezclar pronto (medido).** IC 1396 (nov 2026), 3 masters OSC dual band alineados y recortados. Se aplicaron las mismas operaciones (gradiente polinómico, BXT correct only y NXT 0,50) en dos órdenes:
+**Orden: desmezclar pronto (medido).** nebulosa dual band (nov 2026), 3 masters OSC dual band alineados y recortados. Se aplicaron las mismas operaciones (gradiente polinómico, BXT correct only y NXT 0,50) en dos órdenes:
 - A: desmezclar primero (esta guía).
 - B: estilo DBXtract (procesar en color y desmezclar al final).
 
@@ -80,7 +80,7 @@ Resultados, medidos en la nebulosa, sin estrellas (binado ×8 por mediana) y fre
 
 Se mantiene desmezclar en el Paso 7.
 
-**¿Y la rutina OSC completa antes de desmezclar? (medido, IC 1396, nov 2026).** Se compararon dos rutinas sobre los tres dual band alineados, con BXT 0,45/0,30, StarX y NXT 0,50 en ambas:
+**¿Y la rutina OSC completa antes de desmezclar? (medido, nebulosa dual band, nov 2026).** Se compararon dos rutinas sobre los tres dual band alineados, con BXT 0,45/0,30, StarX y NXT 0,50 en ambas:
 - B, rutina OSC: gradiente → BXT correct only → SPCC narrowband en color (Hα 656/5, OIII 501/5…) → BXT → StarX → NXT → desmezclar al final.
 - A, esta guía: desmezclar → gradiente → BXT correct only → SPCC narrowband sobre cada pareja de rayas compuesta en RGB → BXT → StarX → NXT.
 
@@ -96,7 +96,7 @@ Conclusiones:
 
 Se mantiene desmezclar pronto y SPCC sólo en el RGB.
 
-**Dónde están los mejores datos (IC 1396).** Señal/ruido de la nebulosa (binado ×8):
+**Dónde están los mejores datos (nebulosa dual band).** Señal/ruido de la nebulosa (binado ×8):
 - SII: 9,2 del S2Hb frente a 6,1 del S2O3.
 - OIII: 14,8 del HaO3 frente a 10,1 del S2O3.
 

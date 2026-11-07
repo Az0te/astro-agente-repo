@@ -9,7 +9,7 @@
 // prueba desde la imagen de partida; se queda la última que no falla. Fallo, medido en cada prueba:
 //   - canales > 0,98: aumentan más de un 0,01 % de los píxeles respecto a la partida
 //   - fondo teñido: la dominante del cielo (zonas más oscuras) pasa de 8 % o sube más de 4 puntos (provisional: con 5 %
-//     M31, con el cielo a 3 %, no pasaba de 0,58)
+//     galaxia grande, con el cielo a 3 %, no pasaba de 0,58)
 //   - ruido de color amplificado: el ruido de croma del cielo crece más de 1,5 veces
 // Rangos esperados: nebulosas 0,70–0,78; galaxias 0,63–0,70. Opciones: tipo, pasos (lista de puntos medios),
 // nuevaVista. No toca la original. Si ni la primera pasa, no satura y lo dice ("no aplicar es un resultado válido").

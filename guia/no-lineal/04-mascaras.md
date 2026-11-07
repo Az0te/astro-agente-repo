@@ -17,10 +17,10 @@
 
 **Máscara de cielo** (para neutralizar sin tocar el objeto): "máscara de cielo por luminancia (sigma-clip del fondo, rampa de 1,5σ a 5σ, suavizada)". Sólo si las esquinas se desvían > 0,10 de neutro. "La zona más oscura no siempre es cielo limpio (IFN, polvo, nebulosidad débil)."
 
-**Máscaras por escalas (polvo, reflexión, fondo)** — caso LDN 1235
+**Máscaras por escalas (polvo, reflexión, fondo)** — caso nebulosa oscura
 
 - "Máscaras de gran escala, calculadas binando 8×, suavizando y ampliando de nuevo: polvo = luminancia entre el cielo y ~+0,03 (incluye cirros débiles, señal real); azul = (B − (R+G)/2 > 0,010) × (L > cielo + 0,04), más una versión ancha (gauss σ 25 binado) para ampliar la zona de reflexión; fondo = inversa del polvo."
-- Máscara de fondo para LHE (IC 63 v4B): `1 − clip((L64 − 0,20)/0,25)`, con L64 = luminancia suavizada a ~64 px: "protege la nebulosa brillante y el halo de γ Cas".
+- Máscara de fondo para LHE (nebulosa de emisión y reflexión): `1 − clip((L64 − 0,20)/0,25)`, con L64 = luminancia suavizada a ~64 px: "protege la nebulosa brillante y el halo de la estrella brillante".
 
 **Código**
 

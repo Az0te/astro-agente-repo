@@ -36,7 +36,7 @@ eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el
 JSON.stringify(inventario("<carpeta del objeto>", { darks: "<carpeta de master darks>" }));
 ```
 
-Comprobado con IC 1396 (nov 2026; 11 grupos en 10 noches, 1147 ficheros). Detectó que los lights Hα/OIII del 12-9 y del 14-9 no tienen flats de ese filtro en su noche (sí del 20-9, 24-9 y 25-9).
+Comprobado con una nebulosa dual band (nov 2026; 11 grupos en 10 noches, 1147 ficheros). Detectó que los lights Hα/OIII del 12-9 y del 14-9 no tienen flats de ese filtro en su noche (sí del 20-9, 24-9 y 25-9).
 
 **Código.** Para listar vistas abiertas, la herramienta del watcher es `list_open_images`. Para comprobar que un master contiene realmente una integración y con cuántos subs, se lee su historial:
 

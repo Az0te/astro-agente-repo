@@ -100,7 +100,7 @@ function recombinarEstrellas(starlessId, starsId, o) {
   var medFin = rcMedians(fin), dif = rcDiff(fin, sl), clipSl = rcCount(sl, 0.99), clipFin = rcCount(fin, 0.99);
   var nuncaBaja = dif.every(function (d) { return d.pct_por_debajo < 0.01; });
   var fondoSube = medFin.map(function (m, i) { return +(m - medSl[i]).toPrecision(3); });
-  // Aporte de las estrellas: % de píxeles que suben más de 0,01 (el mayor de los canales). M31 (7 nov 2026): con la capa de
+  // Aporte de las estrellas: % de píxeles que suben más de 0,01 (el mayor de los canales). galaxia grande (7 nov 2026): con la capa de
   // starStretch amount 2 salió 0,14–0,19 % y la final se quedó casi sin estrellas; con la capa del mismo estirado (Opus v7)
   // la final tiene ~50 veces más estrellas detectables. Umbral 0,5 % calibrado con ese único caso.
   var aporte = Math.max.apply(null, dif.map(function (d) { return d.pct_sube_mas_de_001; })), noCumple = [];

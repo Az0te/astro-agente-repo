@@ -7,10 +7,10 @@
 //   var r = comprimirNucleo("Starless_st", { nuevaVista: "Starless_hdr" });   // HDRMT 7 capas al 60 % en el bulbo
 //   JSON.stringify(r);
 //
-// Receta (Opus, M31 v4–v7, oct 2026): HDRMT de 7–8 capas mezclado al 60 % con una máscara de bulbo (luminancia de gran
+// Receta (Opus, galaxia grande, oct 2026): HDRMT de 7–8 capas mezclado al 60 % con una máscara de bulbo (luminancia de gran
 // escala > 0,35). HDRMT a pleno y LHE de radio 200 sobre el bulbo dieron un anillo oscuro y un bulbo plano: evitarlo.
-// El LHE del disco va aparte, con máscara de galaxia × (1 − bulbo). Comparación M31 Qwen/Opus (7 nov 2026): sin este paso el
-// núcleo y M32 quedaron como una meseta de 22 px de radio por encima de 0,95; con él, 1 px.
+// El LHE del disco va aparte, con máscara de galaxia × (1 − bulbo). Comparación Qwen/Opus en una galaxia grande (7 nov 2026): sin este paso el
+// núcleo y la galaxia satélite quedaron como una meseta de 22 px de radio por encima de 0,95; con él, 1 px.
 // Opciones de comprimirNucleo:
 //   capas 7, iteraciones 1, mezcla 0.6 (fracción de HDRMT dentro de la máscara)
 //   mascaraDesde 0.35, mascaraAncho 0.25: máscara = clip((L_gran_escala − desde) / ancho)
@@ -50,7 +50,7 @@ function nuLum(view) {
 
 // Meseta: radio equivalente (px) de los píxeles con L > umbral en 256×256 px alrededor del punto más brillante (bloques de
 // 16 px), y total de píxeles > umbral en toda la imagen. Con estructura: 0–3 px. Con `centro` ([x,y]) mide ahí, sin buscar
-// el máximo: tras comprimir el núcleo, el punto más brillante puede pasar a ser otro (M32, una estrella).
+// el máximo: tras comprimir el núcleo, el punto más brillante puede pasar a ser otro (una galaxia satélite, una estrella).
 function nuMeseta(a, thr, centro) {
   var L = a.L, W = a.W, H = a.H, best = -1, bx = 0, by = 0, k = 0, tot = 0, h = 128;
   if (centro) { bx = centro[0]; by = centro[1]; }
@@ -177,9 +177,9 @@ function comprimirNucleo(viewId, o) {
     control: {
       medido: { nucleo_con_estructura: despues.radio_px <= 3, sin_anillo_nuevo: nuevos.length === 0, bulbo_no_aplanado: baja <= 30 },
       revisar_a_ojo: ["núcleo al 100 %: gradiente suave hacia el centro, sin anillo oscuro ni bulbo gris y plano",
-                      "galaxias satélite (M32, M110): sus núcleos también con estructura",
+                      "galaxias satélite: sus núcleos también con estructura",
                       "borde de la máscara: sin transición visible en el disco"],
-      nota: "HDRMT a pleno o LHE de radio grande sobre el bulbo hacen anillo y bulbo plano (M31, oct 2026): por eso se mezcla al 60 %. " +
+      nota: "HDRMT a pleno o LHE de radio grande sobre el bulbo hacen anillo y bulbo plano (galaxia grande, oct 2026): por eso se mezcla al 60 %. " +
             "Después, saturación con saturarAlFallo; el LHE del disco, si se usa, con máscara que excluya el bulbo. " +
             "Lo de revisar_a_ojo no lo mide esta función."
     }

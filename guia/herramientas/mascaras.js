@@ -104,7 +104,7 @@ function crearMascara(viewId, o) {
     mkBlur(w, o.bin || 32);   // L64 ≈ luminancia suavizada a ~64 px
     var P = new PixelMath; P.useSingleExpression = true; P.expression = "1 - min(max(($T - 0.20) / 0.25, 0), 1)";
     P.createNewImage = false; P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1; P.executeOn(w.mainView);
-    desc = "fondo para LHE (IC 63 v4B): 1 − clip((L64 − 0,20)/0,25); protege la nebulosa brillante";
+    desc = "fondo para LHE (nebulosa de emisión y reflexión): 1 − clip((L64 − 0,20)/0,25); protege la nebulosa brillante";
   } else throw new Error("Tipo de máscara desconocido: " + tipo + " (luminancia | cielo | fondo_lhe)");
   w.show();
   var cov = mkCoverage(w, v);

@@ -460,10 +460,10 @@ void PiCopilotConfig::Save() const
 }
 
 // ----------------------------------------------------------------------------
-// Tabla de pesos Sonnet/Opus (proyecto IC 1396)
+// Tabla de pesos Sonnet/Opus (proyecto nebulosa dual band)
 //
 // Valor base de cada paso = calidad de Sonnet en % de la de Opus, medida en
-// IC 1396 v2 (porcentajes_skill.json, nov 2026). Regla: si la puntuación es
+// nebulosa dual band (porcentajes_skill.json, nov 2026). Regla: si la puntuación es
 // mayor que N se usa el modelo inferior; si es igual o menor, el superior.
 // El paso 10 se midió en dos partes (NB 100, RGB 95): se toma la menor.
 // Los pasos sin valor (-1: Dossier, Resolución Completa) usan el superior.
@@ -723,7 +723,7 @@ static String HttpContext( const PiCopilotConfig& cfg, const PiCopilotModel& mod
    u"El usuario lo revisará y lo ejecutará desde PiCopilot. Escribe en la consola (console.writeln) "
    u"las medidas antes y después. Sé breve en la explicación para que el script quepa entero.";
 
-   // Rutas reales y trampas vistas en la prueba con Qwen 3.8 (Paso 9, IC 1396):
+   // Rutas reales y trampas vistas en la prueba con Qwen 3.8 (Paso 9, nebulosa dual band):
    // inventaba la ruta de la guía y funciones de PJSR que no existen.
    String guide = cfg.guideDir;
    guide.ReplaceString( "\\", "/" );
@@ -947,7 +947,8 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
       { "no-lineal/03-scnr.md", u"quitarVerde(\"%V\", { nuevaVista: ... })", u"lineal.js" },
       { "lineal/12-spcc.md", u"calibrarColor(\"%V\", { nuevaVista: ..., spcc: { ...filtros y QE del perfil... } })", u"color.js" },
       { "no-lineal/01-estirado.md", u"estirarCapas(\"%V\", \"%S\", { cielo: 0.10, nuevaStarless: ..., nuevasEstrellas: ... }) (si el objeto es una galaxia, "
-        u"OBLIGATORIO { tipo: \"galaxia\", nuevaStarless: ..., nuevasEstrellas: ... } sin cielo: cielo 0,07 y estrellas con el mismo estirado)", u"estirado.js" },
+        u"OBLIGATORIO { tipo: \"galaxia\", nuevaStarless: ..., nuevasEstrellas: ... } sin cielo: cielo 0,07 y estrellas con el mismo estirado; "
+        u"si es una nebulosa oscura de polvo, { tipo: \"nebulosa_oscura\", ... } sin cielo)", u"estirado.js" },
       { "no-lineal/08-estrellas.md", u"prepararEstrellas(\"%V\", { nuevaVista: ... })", u"estrellas.js" },
       { "no-lineal/09-recombinacion.md", u"recombinarEstrellas(\"%V\", \"%S\", { nuevaVista: ... })", u"recombinacion.js" },
       { "lineal/10-combinacion-rgb-nb.md", u"combinarMasters(<carpeta o lista de masters alineados>, { tipo: \"nebulosa\" | \"galaxia\" }) (no usa ninguna vista: "
@@ -1070,9 +1071,10 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
       u"se vuelve a estirar. Nunca SCNR ni curvas para eso\n"
       u"- deconvolucion.js: r = bxtCandidatos(vista, { tipo }) y bxtAplicar(vista, { nonstellar: r.recomendada.nonstellar, stars: r.recomendada.stars, nuevaVista }) — Paso 13 (BlurX completo)\n"
       u"- ruido.js: reducirRuido(vista, { denoise, detail, iterations, nuevaVista }) — Paso 14 lineal (denoise 0,50), Paso 15 sobre la starless (RGB: 0,50 tras el NXT suave del 14, 0,70 sin él; si moteado_color_despues > 1,5, menos) y Paso 6 no lineal (0,30); separarEstrellas(vista, { nuevaVista, nuevasEstrellas }) — Paso 15 (StarX)\n"
-      u"- estirado.js: estirarCapas(starless, estrellas, { cielo: 0.10, nuevaStarless, nuevasEstrellas }) — Paso 1 no lineal; en GALAXIAS (M31, M33, M51, M81, M101…) "
+      u"- estirado.js: estirarCapas(starless, estrellas, { cielo: 0.10, nuevaStarless, nuevasEstrellas }) — Paso 1 no lineal; en GALAXIAS "
       u"SIEMPRE { tipo: \"galaxia\", nuevaStarless, nuevasEstrellas } y sin cielo (cielo 0,07 y estrellas con el mismo estirado que la starless); "
-      u"en campos con muchas estrellas, { estrellas: \"extraer\" }\n"
+      u"en NEBULOSAS OSCURAS (polvo: LDN, LBN, vdB, sin emisión) { tipo: \"nebulosa_oscura\", nuevaStarless, nuevasEstrellas } sin cielo (cielo 0,15); "
+      u"estrellas: \"extraer\" SÓLO en galaxias (en nebulosas hincha las estrellas)\n"
       u"- nucleo.js: comprimirNucleo(vista, { nuevaVista }) — Paso 5 no lineal en GALAXIAS, antes de saturar (HDRMT al 60 % con máscara de bulbo; "
       u"obligatorio si estirarCapas dio meseta_nucleo.radio_px > 3); medirMeseta(vista) sólo mide\n"
       u"- boost.js: saturarAlFallo(vista, { tipo }) — Paso 5 no lineal (saturación)\n"
@@ -1087,7 +1089,11 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
       u"Esas vistas son ids (texto): pásalos tal cual, sin .id. no_cumple es una lista (vacía si todo cumple): NO pares el "
       u"script por ella ni la uses en un if; devuélvela en el resultado. PERO al ver el resultado, si no_cumple no está vacío, "
       u"NO pases al paso siguiente: haz lo que dice el mensaje (repetir ese paso o volver al que indica, p. ej. neutralizarCielo "
-      u"si el checkpoint da el cielo no neutro, o estirarCapas con estrellas: \"extraer\" si las estrellas casi no aportan). "
+      u"si el checkpoint da el cielo no neutro, o estirarCapas con tipo \"galaxia\" si en una galaxia las estrellas casi no aportan). "
+      u"El nombre del objeto y la carpeta de trabajo salen de la cabecera (OBJECT), de la ruta del master o de lo que diga el usuario; "
+      u"si no los sabes, pregúntalos: NUNCA uses nombres que aparezcan en la guía ni los deduzcas de las coordenadas. "
+      u"El continuo (16) sólo aplica si hay un master de banda estrecha (Hα, OIII) y otro de banda ancha: con un solo master RGB/OSC, sáltalo. "
+      u"En el Paso 15 sobre la starless RGB, denoise 0,50 si ya se hizo el NoiseX suave del 14 (0,70 sólo sin él). "
       u"Los únicos umbrales son los de las funciones: no inventes otros («límite 2,0» no existe). SCNR y más NoiseX no quitan "
       u"manchas de color grandes en no lineal. "
       u"Orden lineal (respétalo: el gradiente SIEMPRE antes de SPCC): análisis (1) → alinear masters (5, si hay varios) → HDR (6) → "

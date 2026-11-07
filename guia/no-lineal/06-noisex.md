@@ -9,7 +9,7 @@
 | Parámetro | Valor |
 |---|---|
 | Pasada final tras estirar | 0,15–0,30 por defecto; 0,50–0,70 sólo si tras los realces se ve ruido de croma |
-| Receta IC 63 v4B | NXT 0,75 bajo la máscara de fondo del LHE + 0,30 global |
+| Receta nebulosa de emisión y reflexión | NXT 0,75 bajo la máscara de fondo del LHE + 0,30 global |
 | Separación de color | croma 0,90 / luminancia 0,40 (si hay saturación fuerte o el ruido de croma se ve) |
 | detail | 0,25 con separación de color |
 | Tras LHE/HDRMT en galaxias | NXT final 0,30 ("más suaviza el detalle recuperado") |
@@ -19,8 +19,8 @@
 - "Varias pasadas suaves mejor que una fuerte (una fuerte da aspecto de cera)." Alternativa de aescaffre: denoise 0,20–0,25 y detail 0,15 en lineal antes de SXT, tras estirar la L y tras estirar la RGB, y 0,15 final tras LHE/HDRMT.
 - Rangos de partida de reflected-space: denoise ≤ 0,70 y detail ≤ 0,25 (a menudo menos), siempre después de la deconvolución.
 - "NXT no sustituye a la señal: con poca integración, mejor menos denoise que un fondo plano artificial."
-- **Manchas de color grandes (moteado) no se quitan con NXT ni con SCNR.** M31 Qwen (7 nov 2026): NXT 0,30 sobre la imagen estirada subió el moteado de 1,45 a 2,03, y 0,20 a 1,79. Vienen de la fase lineal (dominante del checkpoint aceptada, dos NXT lineales encadenados) o de saturar demasiado. Si `reducirRuido` da `moteado_color_despues` > 1,5 aquí, quedarse con la entrada sin este NXT y bajar la saturación o volver al checkpoint. El único límite es 1,5: no inventar otro.
-- Los Pasos 14 y 15 lineales son dos NXT encadenados. En RGB/OSC, si se hizo el suave del 14, el principal del 15 va con menos denoise (0,50) y mirando `moteado_color_despues`: en M31 (0,50 + 0,70) el segundo subió el moteado de 0,35 a 0,92 y dejó el disco con aspecto pintado; Opus hizo una sola pasada lineal.
+- **Manchas de color grandes (moteado) no se quitan con NXT ni con SCNR.** galaxia grande con Qwen (7 nov 2026): NXT 0,30 sobre la imagen estirada subió el moteado de 1,45 a 2,03, y 0,20 a 1,79. Vienen de la fase lineal (dominante del checkpoint aceptada, dos NXT lineales encadenados) o de saturar demasiado. Si `reducirRuido` da `moteado_color_despues` > 1,5 aquí, quedarse con la entrada sin este NXT y bajar la saturación o volver al checkpoint. El único límite es 1,5: no inventar otro.
+- Los Pasos 14 y 15 lineales son dos NXT encadenados. En RGB/OSC, si se hizo el suave del 14, el principal del 15 va con menos denoise (0,50) y mirando `moteado_color_despues`: en una galaxia grande (0,50 + 0,70) el segundo subió el moteado de 0,35 a 0,92 y dejó el disco con aspecto pintado; Opus hizo una sola pasada lineal.
 
 **Síntomas**
 

@@ -79,7 +79,7 @@ Lista completa y criterio de parada: [Anexo F](anexos/F-anti-patrones.md), cuand
 
 ## Modelo por paso: rápido o potente
 
-Si la plataforma ofrece varios modelos o niveles de razonamiento, cada paso se puede hacer con uno **rápido** (más barato) o uno **potente**. El % de cada paso es la calidad del rápido respecto al potente haciendo ese paso, **medida con Claude** (Sonnet 5.5 frente a Opus 5.5; IC 1396 v2, noviembre de 2026; rúbrica de 40 puntos: exactitud, completitud, verificación y utilidad).
+Si la plataforma ofrece varios modelos o niveles de razonamiento, cada paso se puede hacer con uno **rápido** (más barato) o uno **potente**. El % de cada paso es la calidad del rápido respecto al potente haciendo ese paso, **medida con Claude** (Sonnet 5.5 frente a Opus 5.5; nebulosa dual band, noviembre de 2026; rúbrica de 40 puntos: exactitud, completitud, verificación y utilidad).
 
 - Lineal: 1 → 86 · 2 → 97 · 3 → 92 · 4 → 84 · 5 → 84 · 6 → 100 · 7 → 100 · 8 → 100 · 9 → 87 · 10 → 100 (NB) / 95 (RGB) · 11–17 → 95
 - No lineal: 1 → 95 · 2 → 95 · 3–10 → 89 · 11 (dossier) → 80 (asignado, sin medir)

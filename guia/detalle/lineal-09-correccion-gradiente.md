@@ -6,7 +6,7 @@ Material de apoyo de la ficha: medidas, funcionamiento de GraXpert, opciones de 
 
 **Por qué.** El gradiente es un offset de gran escala que no pertenece al objeto: contamina la calibración de color (SPCC mide el fondo), aplasta el contraste del polvo y del IFN y aparece como un velo al estirar. Y se corrige **en lineal y por canal**, antes de combinar: "Si los canales tienen gradientes distintos (otras noches/filtros/cámaras), corregir por canal antes de combinar". Un gradiente que llega al estirado ya no se puede separar de la señal débil.
 
-**Sin método predeterminado** (decisión del usuario, 5 nov 2026): se comparan los candidatos en cada imagen y se aplica el que mejor mida. GraXpert sample_free escala 10 por sustracción fue el mejor en la prueba de la tabla de abajo, pero en M31 v6 ganó un polinomio de grado 2. El GraXpert se ejecuta con el **proceso GraXpert de PixInsight**, que da el mismo resultado que `herramientas/graxpert.js` sin el ejecutable aparte (comparativa abajo); `graxpert.js` queda para los métodos que el proceso no ofrece (RBF, Kriging, Splines con muestras propias) y para el denoise.
+**Sin método predeterminado** (decisión del usuario, 5 nov 2026): se comparan los candidatos en cada imagen y se aplica el que mejor mida. GraXpert sample_free escala 10 por sustracción fue el mejor en la prueba de la tabla de abajo, pero en una galaxia grande ganó un polinomio de grado 2. El GraXpert se ejecuta con el **proceso GraXpert de PixInsight**, que da el mismo resultado que `herramientas/graxpert.js` sin el ejecutable aparte (comparativa abajo); `graxpert.js` queda para los métodos que el proceso no ofrece (RBF, Kriging, Splines con muestras propias) y para el denoise.
 
 **Cadena de procesos alrededor del gradiente**
 
@@ -47,25 +47,25 @@ var r = graxpertBGE("<vista>");      // sample_free, escala 10 por defecto
 
   | Objeto | `gcStructCopy` graxpert.js | `gcStructCopy` proceso | Diferencia entre las corregidas |
   |---|---|---|---|
-  | LDN 1235 | copia 0,8 % (0,13) | copia 0,5 % (0,07) | p95 0,07σ del cielo |
-  | IC 1396 (`master_RGB`) | copia 4,3 % (0,32) | copia 4,1 % (0,31) | p95 0,08σ |
+  | nebulosa oscura | copia 0,8 % (0,13) | copia 0,5 % (0,07) | p95 0,07σ del cielo |
+  | nebulosa dual band (`master_RGB`) | copia 4,3 % (0,32) | copia 4,1 % (0,31) | p95 0,08σ |
 
-  Mismo resultado en la práctica, con el modelo igual o algo más limpio. En IC 1396 este master da un 4,3 % con graxpert.js, no el 14 % de la tabla de abajo: aquella medida se hizo sobre otra versión del master (Anexo C).
+  Mismo resultado en la práctica, con el modelo igual o algo más limpio. En nebulosa dual band este master da un 4,3 % con graxpert.js, no el 14 % de la tabla de abajo: aquella medida se hizo sobre otra versión del master (Anexo C).
 
 
 - Denoise: `graxpertDenoise("<vista>", {strength: 0.5})`; "es una alternativa a comparar con NXT, no un sustituto".
 - Si cambia la versión de GraXpert, confirmar las opciones de `graxpert.js` con `GraXpert -cli -cmd background-extraction -h` y las del proceso con `describe_process GraXpert`.
 
-**Ajustes de partida (medidos el 29 oct 2026 en M31, LDN 1235, IC 1396 e IC 63)**
+**Ajustes de partida (medidos el 29 oct 2026 en galaxia grande, nebulosa oscura, nebulosa dual band y nebulosa de emisión y reflexión)**
 
 | Ajuste | Instrucción |
 |---|---|
 | Base | sample_free, escala 10, sustracción: el que menos objeto copia en el modelo en los cuatro casos |
 | Escala 8 | "si queda gradiente en el cielo: copia un poco más, pero deja el fondo más plano" |
-| Escala por defecto de sample_free | **No usarla**: se comió el 18 % de M31 y copió la estructura de IC 1396 |
-| `-sample_free_simplified true` | Peor: 30 % de M31 |
+| Escala por defecto de sample_free | **No usarla**: se comió el 18 % de una galaxia grande y copió la estructura de una nebulosa dual band |
+| `-sample_free_simplified true` | Peor: 30 % de una galaxia grande |
 | `-sample_free_protect` | "no cambia nada" en GraXpert 4.0.0 (resultados idénticos activado o no) |
-| IA | El suavizado casi no influye (de 0 a 1: M31 pasó de 21,5 % a 17,9 %); se come objetos extensos (bulbo y halo de M31, nubes de IC 1396, halo de γ Cas). Sólo con objetos pequeños en campo amplio, o si sample_free deja un gradiente complejo, y siempre revisando el modelo |
+| IA | El suavizado casi no influye (de 0 a 1: galaxia grande pasó de 21,5 % a 17,9 %); se come objetos extensos (bulbo y halo de una galaxia grande, nubes de una nebulosa dual band, halo de la estrella brillante). Sólo con objetos pequeños en campo amplio, o si sample_free deja un gradiente complejo, y siempre revisando el modelo |
 | División | Sólo para viñeteo residual |
 | Tiempo | IA ~4 s y sample_free ~14 s en una imagen de 6000×4000 con GPU |
 | Gradiente residual liso | "quitarlo con el plano robusto de grado 1 (no puede comerse formas) en vez de bajar la escala" |
@@ -74,14 +74,14 @@ var r = graxpertBGE("<vista>");      // sample_free, escala 10 por defecto
 
 | Objeto | IA s0,1 | IA s1,0 | SF por defecto | SF escala 8 | SF escala 10 |
 |---|---|---|---|---|---|
-| M31 (galaxia extensa) | come 21 %, copia 6 % (0,56) | come 18 % (0,51) | come 18 % (0,09) | come 6,6 % (0,07) | **come 4 % (0,10)** |
-| LDN 1235 (nebulosa oscura) | copia 0,1 % (0,02) | — | copia 2 % (0,18) | copia 1,2 % (0,15) | **copia 0,8 % (0,13)** |
-| IC 1396 (nebulosa que llena el campo) | copia 48 % (0,79) | IA s0,5: 37 % (0,74) | copia 39 % (0,76) | copia 22 % (0,68) | **copia 14 % (0,61)** |
-| IC 63 (γ Cas) | modelo con mancha en γ Cas | — | estructura alrededor del fantasma | liso | liso |
+| galaxia grande | come 21 %, copia 6 % (0,56) | come 18 % (0,51) | come 18 % (0,09) | come 6,6 % (0,07) | **come 4 % (0,10)** |
+| nebulosa oscura | copia 0,1 % (0,02) | — | copia 2 % (0,18) | copia 1,2 % (0,15) | **copia 0,8 % (0,13)** |
+| nebulosa dual band (llena el campo) | copia 48 % (0,79) | IA s0,5: 37 % (0,74) | copia 39 % (0,76) | copia 22 % (0,68) | **copia 14 % (0,61)** |
+| nebulosa de emisión y reflexión  | modelo con mancha en la estrella brillante | — | estructura alrededor del fantasma | liso | liso |
 
-Masters lineales sin tocar (IC 1396, LDN 1235 e IC 63 binados ×2), luminancia binada ×8, con BXT Correct Only previo. En IC 63 la medida está dominada por el halo de γ Cas: se juzgó a la vista. Conclusión: **sample_free escala 10 como punto de partida**; en nebulosas que llenan el campo (IC 1396) aún copia algo: revisar el modelo y, si hace falta, comparar con el plano robusto o RBF con muestras propias.
+Masters lineales sin tocar (nebulosa dual band, nebulosa oscura y una nebulosa de emisión y reflexión binados ×2), luminancia binada ×8, con BXT Correct Only previo. En nebulosa de emisión y reflexión la medida está dominada por el halo de la estrella brillante: se juzgó a la vista. Conclusión: **sample_free escala 10 como punto de partida**; en nebulosas que llenan el campo (nebulosa dual band) aún copia algo: revisar el modelo y, si hace falta, comparar con el plano robusto o RBF con muestras propias.
 
-Resultados anteriores, sin GraXpert: LDN 1235 (nebulosa oscura) → ganó el plano de grado 1, MGC 2048/4096 se comió el 75 % del contraste del polvo; IC 63 (emisión + reflexión) → MGC, sin comparar con otros métodos.
+Resultados anteriores, sin GraXpert: nebulosa oscura → ganó el plano de grado 1, MGC 2048/4096 se comió el 75 % del contraste del polvo; nebulosa de emisión y reflexión (emisión + reflexión) → MGC, sin comparar con otros métodos.
 
 En imágenes grandes GraXpert puede pasar del corte de 60 s del MCP: esperar con `watcher_status` y comprobar las ventanas `GC_GraXpert_*`.
 
@@ -90,12 +90,12 @@ En imágenes grandes GraXpert puede pasar del corte de 60 s del MCP: esperar con
 - Modelo: `I ≈ k·R + G + ε`. Prerrequisitos en orden: master lineal recortado (sin bordes de apilado) → astrometría (`blindSolve`) → SPFC → MGC → SPCC.
 - Parámetros: Gradient scale (pequeña = riesgo de absorber cielo real; grande = subcorrección), Structure separation, Model smoothness, Scale factors R/G/B (corregir si el objeto imprime en el modelo), Gray filter en mono.
 - Diagnóstico: modelo liso, sin objeto fantasma, sin bordes, fondo corregido no aplastado, mismo STF antes/después, control por canal. "El modelo de gradiente es la prueba." Si la nebulosa aparece en el modelo, el brillo de los objetos está infravalorado (subir escala); si aparece en negativo, sobrevalorado.
-- **Medirlo, no sólo mirarlo:** medianas en cajas de 300 px sobre el objeto y sobre el cielo cercano, antes y después. En LDN 1235, con escala 2048 y 4096 el modelo reproducía el borde del tiburón y el contraste polvo−cielo bajaba de 1,16 a 0,26–0,30 ×10⁻⁴ (−75 %). "**En nebulosas oscuras, IFN y polvo extenso, desconfiar de MGC.**"
+- **Medirlo, no sólo mirarlo:** medianas en cajas de 300 px sobre el objeto y sobre el cielo cercano, antes y después. En nebulosa oscura, con escala 2048 y 4096 el modelo reproducía el borde del tiburón y el contraste polvo−cielo bajaba de 1,16 a 0,26–0,30 ×10⁻⁴ (−75 %). "**En nebulosas oscuras, IFN y polvo extenso, desconfiar de MGC.**"
 - MGC ya no es el método predeterminado: usarlo como candidato en la comparativa.
 
 **DBE clásico como referencia**: "tolerancia ~2,0, shadows relaxation ~6, pocas muestras (gradiente = gran escala), nunca sobre nebulosa".
 
-**Plano robusto (control conservador).** "Plano robusto de grado 1 (rejilla 24×16 de medianas, mínimos cuadrados con rechazo iterativo a 2σ) restado con PixelMath por canal. No puede crear ni borrar formas; antes, confirmar en una vista binada con mediana que el gradiente es liso (en LDN 1235, brillo verdoso hacia arriba a la derecha)."
+**Plano robusto (control conservador).** "Plano robusto de grado 1 (rejilla 24×16 de medianas, mínimos cuadrados con rechazo iterativo a 2σ) restado con PixelMath por canal. No puede crear ni borrar formas; antes, confirmar en una vista binada con mediana que el gradiente es liso (en una nebulosa oscura, brillo verdoso hacia arriba a la derecha)."
 
 **Protocolo de comparativa** (cuando el modelo de GraXpert no convence: correlación de `gcStructCopy` alta o forma del objeto visible en el modelo)
 

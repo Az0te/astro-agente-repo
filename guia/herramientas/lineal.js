@@ -7,7 +7,7 @@
 //   eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));
 //   var a = resolverAstrometria("MasterLight");                       // necesita blindSolve (watcher v8 o PiCopilot)
 //   var b = bxtCorrectOnly("MasterLight", { nuevaVista: "MasterLight_bxtco" });
-//   var c = checkpointLineal("MasterLight_dn", { carpeta: "<carpeta de la versión>", objeto: "IC 1396", version: "v1" });
+//   var c = checkpointLineal("MasterLight_dn", { carpeta: "<carpeta de la versión>", objeto: "<objeto>", version: "v1" });
 //   var d = quitarVerde("Starless_st", { nuevaVista: "Starless_sinverde" });
 
 function lnNeed(fnName, file, o) {
@@ -143,7 +143,7 @@ function checkpointLineal(viewId, o) {
   if (!w.hasAstrometricSolution) noCumple.push("sin solución astrométrica");
   if (sky && sky.diferencia_en_sigmas > 0.5)
     noCumple.push("CIELO NO NEUTRO: " + sky.canal_alto + " " + sky.diferencia_en_sigmas + " sigmas por encima (límite 0,5). NO pasar a la fase no " +
-                  "lineal así: al estirar y saturar sale como manchas de color (M31 Qwen, 7 nov 2026: 0,67 σ aceptados → fondo manchado). " +
+                  "lineal así: al estirar y saturar sale como manchas de color (galaxia grande con Qwen, 7 nov 2026: 0,67 σ aceptados → fondo manchado). " +
                   "Corregir ahora con neutralizarCielo (color.js) sobre esta vista y repetir checkpointLineal");
   if (clip.some(function (x) { return x > 0.01; })) noCumple.push("canales recortados a 1: " + clip.join(" / ") + " %");
   if (fw.ringing !== null && fw.ringing < -0.01) noCumple.push("ringing (" + fw.ringing + ")");

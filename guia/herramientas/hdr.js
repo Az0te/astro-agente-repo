@@ -9,7 +9,7 @@
 // Se ordenan de mayor a menor exposición (EXPTIME de la cabecera; si falta, por el brillo de las estrellas).
 // Qué hace:
 //   1. Mide la meseta de saturación por canal de cada toma salvo la más corta (percentil 99,99 % de los píxeles
-//      brillantes): con LocalNormalization no saturan a 1 (IC 63: 0,89–0,96).
+//      brillantes): con LocalNormalization no saturan a 1 (nebulosa de emisión y reflexión: 0,89–0,96).
 //   2. Umbral de binarización = 0,9 × la meseta más baja (por defecto; opción umbral): en OSC hay que sustituir en
 //      cuanto se satura cualquier canal. Suavizado 7 y crecimiento 1 (opciones suavizado, crecimiento).
 //   3. HDRComposition (executeGlobal) → vista nueva con el resultado y sus máscaras.

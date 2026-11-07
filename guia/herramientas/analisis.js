@@ -152,7 +152,7 @@ function bordesSinDatos(viewId) {
 }
 
 // Píxeles sin datos (1 = vacío): a 0 o negativos en algún canal (cuña de StarAlignment), o con el valor de relleno de
-// WBPP, que NO es 0 sino una constante igual en todos los canales (IC 1396, 6 nov 2026: 0,0008361). Candidatos de
+// WBPP, que NO es 0 sino una constante igual en todos los canales (nebulosa dual band, 6 nov 2026: 0,0008361). Candidatos de
 // relleno = los valores de las 4 esquinas; un píxel real no repite en coma flotante el de una esquina en todos los canales.
 function mascaraSinDatos(im) {
   var W = im.width, H = im.height, nc = im.numberOfChannels, n = W * H, empty = new Uint8Array(n), cb = new Float32Array(n);
@@ -171,7 +171,7 @@ function mascaraSinDatos(im) {
   }
   for (var f2 = 0; f2 < fills.length; ++f2) for (var j = 0; j < n; ++j) if (match[f2][j]) empty[j] = 1;
   // Sólo cuenta lo vacío que llega al borde (una cuña es una racha desde el borde en su fila o columna). Los píxeles a 0
-  // sueltos del interior (una raya desmezclada y recortada a 0, IC 1396 6 nov 2026) no son cuñas: sin esto el SII del
+  // sueltos del interior (una raya desmezclada y recortada a 0, nebulosa dual band 6 nov 2026) no son cuñas: sin esto el SII del
   // S2Hb daba "izquierda 5133 px".
   var edge = new Uint8Array(n), x, y;
   for (y = 0; y < H; ++y) {

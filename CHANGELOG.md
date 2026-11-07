@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+- **Lo aprendido comparando LDN 1235 de Qwen (build89) con la v1 de Opus** (7 nov 2026, datos de Dominic Gareau). Qwen dejó el polvo casi pegado al cielo (cuerpo 0,009 por encima frente a 0,051), estrellas hinchadas (9,5 % del campo frente a 1,8 %) y llamó al objeto IC 63. Cambios:
+  - `estrellas.js`: si la limpieza < 0,005 se lleva > 10 % del brillo, prueba < 0,002; si tampoco, sólo avisa (ya no manda a `extraer`). `no_cumple` nuevo si la capa pasa del 10 % de píxeles > 0,02 (hinchada).
+  - `estirado.js`: `estrellas: "extraer"` da `no_cumple` si la capa pasa del 10 % (es sólo para galaxias); nuevo `tipo: "nebulosa_oscura"` (cielo 0,15, ruidoMax 0,20; sin calibrar).
+  - `bandaestrecha.js`: `medirContinuo` explica que el canal es 0/1/2 y que con un solo master RGB el Paso 16 no aplica (antes fallaba con un error de getSamples).
+  - PiCopilot (prompt): `extraer` sólo en galaxias, `nebulosa_oscura` para polvo, no inventar el nombre del objeto ni la carpeta, continuo sólo con banda estrecha, NXT 0,50 en el Paso 15 tras el 14.
+
 - **Lo aprendido comparando M31 de Qwen (PiCopilot build88) con M31 v7 de Opus** (7 nov 2026, mismo master). Qwen salió casi sin estrellas (269 detectables frente a 13 721), con el núcleo y M32 quemados (meseta de 22 px) y el fondo manchado. Cambios:
   - `estirado.js`: `estrellas: "extraer"` saca la capa de estrellas con el mismo estirado que la starless (se repiten las pasadas de GHS y los puntos negros sobre starless + estrellas y se separa con `screenStarsExtract`); `tipo: "galaxia"` lo usa por defecto. Nueva medida `meseta_nucleo` con `no_cumple` si pasa de 3 px.
   - Nuevo `nucleo.js`: `comprimirNucleo` (HDRMT 7 capas al 60 % con máscara de bulbo, la receta de Opus) y `medirMeseta`. Añadido al runner y al manifiesto del MCP.

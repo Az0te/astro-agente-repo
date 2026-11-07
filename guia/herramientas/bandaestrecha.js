@@ -45,7 +45,7 @@ function beZones(view) {
   var sky = bySum.slice(0, k), s = [], h = [], ch;
   for (ch = 0; ch < nc; ++ch) s.push(med(sky, ch));
   // Zona dominada por la raya roja: entre el 30 % de celdas con más exceso en R, las de mayor R/(G+B) sobre el cielo.
-  // Antes eran sólo las más brillantes en R, que en IC 1396 incluían estrellas y zonas mixtas (G/R 0,24 en vez de 0,14).
+  // Antes eran sólo las más brillantes en R, que en una nebulosa dual band incluían estrellas y zonas mixtas (G/R 0,24 en vez de 0,14).
   var byR = cells.slice().sort(function (a, b2) { return b2[0] - a[0]; }).slice(0, Math.max(k, Math.floor(cells.length * 0.3)));
   if (nc >= 3) byR.sort(function (a, b2) {
     var ra = (a[0] - s[0]) / Math.max(1e-9, (a[1] - s[1]) + (a[2] - s[2])), rb = (b2[0] - s[0]) / Math.max(1e-9, (b2[1] - s[1]) + (b2[2] - s[2]));
@@ -127,7 +127,7 @@ function desmezclarDualBand(viewId, o) {
   };
   var nHa = neg(ha), nO = neg(oi);
   // Pedestal de salida: al restar el cielo, la mitad del ruido del fondo queda por debajo de 0 y recortarlo a 0 deja
-  // medio cielo a cero (sesga el fondo, estropea el gradiente y el denoise, y parece una cuña sin datos: IC 1396,
+  // medio cielo a cero (sesga el fondo, estropea el gradiente y el denoise, y parece una cuña sin datos: nebulosa dual band,
   // 6 nov 2026). Se suma la media de los pedestales de entrada (o.pedestalSalida para otro valor; 0 = el recorte de antes).
   var pedOut = o.pedestalSalida !== undefined ? o.pedestalSalida : (p[0] + p[1] + p[2]) / 3;
   [ha, oi].forEach(function (vv) {
@@ -139,7 +139,7 @@ function desmezclarDualBand(viewId, o) {
   var dr = z.zona_r, gR = (dr[1] - p[1]) / (dr[0] - p[0]), bR = (dr[2] - p[2]) / (dr[0] - p[0]);
   var q = BE_QE[lineas[0]], eG = q[1] / q[0], eB = q[2] / q[0];
   var noCumple = [];
-  // Sólo con Hα: el SII es débil y la zona más roja suele ser OIII o continuo (IC 1396 S2O3 y S2Hb, 6 nov 2026: G/R 0,78
+  // Sólo con Hα: el SII es débil y la zona más roja suele ser OIII o continuo (nebulosa dual band S2O3 y S2Hb, 6 nov 2026: G/R 0,78
   // y 1,20), así que con SII el ratio es informativo y no se marca.
   if (lineas[0] === "Ha" && (Math.abs(gR - eG) > 0.08 || Math.abs(bR - eB) > 0.05))
     noCumple.push("ratios en la zona de " + lineas[0] + " G/R " + gR.toFixed(3) + " y B/R " + bR.toFixed(3) + " lejos de " +
@@ -167,6 +167,9 @@ function desmezclarDualBand(viewId, o) {
 function medirContinuo(nbId, contId, o) {
   nbId = beId(nbId); contId = beId(contId); o = o || {};
   var nb = beView(nbId), ct = beView(contId), ch = (o.canal !== undefined) ? o.canal : 0;
+  if (ch !== 0 && ch !== 1 && ch !== 2)
+    throw new Error("canal debe ser 0, 1 o 2 (no '" + ch + "'). El continuo sólo se mide con un master de BANDA ESTRECHA (Hα, OIII) " +
+                    "frente a uno de banda ancha: con un solo master RGB/OSC el Paso 16 no aplica, sáltalo");
   var W = nb.image.width, H = nb.image.height;
   if (ct.image.width !== W || ct.image.height !== H) throw new Error("Las dos imágenes no tienen el mismo tamaño (registrarlas antes)");
   var n = W * H, N = new Float32Array(n), C = new Float32Array(n);
@@ -235,7 +238,7 @@ function restarContinuo(nbId, contId, o) {
            negativos_pct: negPct, emision_conservada_pct: keep === null ? null : Math.round(100 * keep), no_cumple: noCumple,
            control: { medido: { sin_fondo_negativo: negPct <= 0.5, emision_conservada: keep === null || keep >= 0.80 },
                       revisar_a_ojo: ["residuos simétricos alrededor de estrellas", "discos oscuros en zonas de continuo fuerte (enmascarar o cubrir con la estrella)"],
-                      nota: "En IC 63 el continuo sólo quitaba un 2–5 % al fantasma. Lo de revisar_a_ojo no lo mide esta función." } };
+                      nota: "En nebulosa de emisión y reflexión el continuo sólo quitaba un 2–5 % al fantasma. Lo de revisar_a_ojo no lo mide esta función." } };
 }
 
 // ---------------------------------------------------------------------------------------------------

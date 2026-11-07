@@ -88,7 +88,7 @@ function rdResidual(a, b) {
 
 // Moteado de color de gran escala: dispersión (MAD) entre las celdas del cielo de la mediana de R−G y B−G, en unidades
 // del ruido del cielo de la luminancia. Antes del denoise el grano lo tapa (valor bajo); si tras el denoise pasa de ~1,
-// las manchas de color de 100–300 px se ven más que el grano y salen al estirar (M31 con NXT 0,95, Rafael 7 nov 2026).
+// las manchas de color de 100–300 px se ven más que el grano y salen al estirar (galaxia grande con NXT 0,95, Rafael 7 nov 2026).
 function rdMoteado(view, sky, noise) {
   try {
     var im = view.image;
@@ -172,7 +172,7 @@ function reducirRuido(viewId, o) {
   if (metodo === "hibrido" && (!mono || typeof MLDenoise !== "function" || !o.modelo || !File.exists(o.modelo))) {
     aviso = "híbrido no disponible (" + (!mono ? "imagen RGB: MLDenoise sólo mono" : typeof MLDenoise !== "function" ?
             "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,95" : "0,70");
-    metodo = "nxt"; o.denoise = mono ? 0.95 : 0.70;   // RGB: 0,95 deja manchas de color (M31, 7 nov 2026)
+    metodo = "nxt"; o.denoise = mono ? 0.95 : 0.70;   // RGB: 0,95 deja manchas de color (galaxia grande, 7 nov 2026)
   }
   var w = rdCopy(viewId, o.nuevaVista || (viewId + "_dn")), v = w.mainView;
   if (metodo === "nxt") rdNXT(v, o);
@@ -197,16 +197,16 @@ function reducirRuido(viewId, o) {
   if (q.moteado_color_despues !== null && q.moteado_color_despues > 1.5) {
     if (linealSrc)
       noCumple.push("moteado de color " + q.moteado_color_despues + " (> 1,5): sin el grano se ven manchas de color grandes en el fondo y saldrán al " +
-                    "estirar (M31 OSC con NXT 0,95, 7 nov 2026); repetir sobre la MISMA entrada con menos denoise (0,50), no encadenar otro NXT");
+                    "estirar (galaxia grande OSC con NXT 0,95, 7 nov 2026); repetir sobre la MISMA entrada con menos denoise (0,50), no encadenar otro NXT");
     else
-      noCumple.push("moteado de color " + q.moteado_color_despues + " (> 1,5) en la imagen estirada: MÁS NXT NO LO ARREGLA (lo sube: M31 Qwen, 7 nov " +
+      noCumple.push("moteado de color " + q.moteado_color_despues + " (> 1,5) en la imagen estirada: MÁS NXT NO LO ARREGLA (lo sube: galaxia grande con Qwen, 7 nov " +
                     "2026, 1,45 → 2,03 con 0,30) ni tampoco SCNR. Quedarse con la entrada sin este NXT; las manchas vienen de la fase lineal " +
                     "(dominante o doble NXT lineal) o de saturar demasiado: bajar la saturación o volver al checkpoint. No hay otro límite que 1,5");
   }
   if (q.moteado_color_antes !== null && q.moteado_color_despues !== null && q.moteado_color_despues - q.moteado_color_antes > 0.5)
     noCumple.push("este denoise SUBE el moteado de color de " + q.moteado_color_antes + " a " + q.moteado_color_despues + ": " +
                   (linealSrc ? "repetir sobre la misma entrada con menos denoise (0,50); si la entrada ya pasó por el NXT suave del Paso 14, " +
-                               "basta con 0,50 o menos (M31, 7 nov 2026: 0,50 + 0,70 subió el moteado de 0,35 a 0,92)"
+                               "basta con 0,50 o menos (galaxia grande, 7 nov 2026: 0,50 + 0,70 subió el moteado de 0,35 a 0,92)"
                              : "no aplicar este NXT"));
   return {
     vista: v.id, original: viewId, metodo: metodo === "nxt" ? "NoiseXTerminator" : "híbrido MLDenoise + NXT",
@@ -270,7 +270,7 @@ function separarEstrellas(viewId, o) {
   var noCumple = [];
   if (lineal && maxErr > 1e-4) noCumple.push("starless + estrellas no reproduce el original (error máx " + maxErr.toExponential(2) + ")");
   // estructura_en_estrellas_pct es orientativa: en campos densos (Vía Láctea) el halo de estrellas débiles no resueltas
-  // la sube sin que SXT se haya llevado nebulosa (IC 1396, nov 2026: 19 %). No se usa como fallo; se revisa a ojo.
+  // la sube sin que SXT se haya llevado nebulosa (nebulosa dual band, nov 2026: 19 %). No se usa como fallo; se revisa a ojo.
   return {
     starless: v.id, estrellas: starsId, original: viewId, lineal: lineal, overlap: S.overlap, segundos: seg,
     reconstruccion_error_max: +maxErr.toExponential(2), estructura_en_estrellas_pct: +extPct.toFixed(2), no_cumple: noCumple,

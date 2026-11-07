@@ -18,7 +18,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | HDR global cuando sólo el núcleo lo necesita | Mezcla sólo bajo máscara de núcleo (`hdr_core_blend`) |
 | HDRMT sobre núcleos ya recortados | Dejar margen (~0,93–0,97) o tomas cortas |
 | LHE + HDRMT juntos, LHE amount > 0,5, radios pequeños con estrellas | Uno u otro; sobre starless o con máscara |
-| Mapa de "estructuras oscuras" por diferencia de escalas sin mirarlo (en IC 63 era ruido) | `darkStructureEnhance` con `keepMask: true`: sólo si la máscara sigue estructuras reales; si no, LHE con máscara de fondo |
+| Mapa de "estructuras oscuras" por diferencia de escalas sin mirarlo (en una nebulosa de emisión y reflexión era ruido) | `darkStructureEnhance` con `keepMask: true`: sólo si la máscara sigue estructuras reales; si no, LHE con máscara de fondo |
 
 ## F.2 Color
 
@@ -85,7 +85,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 
 ## F.7 Criterio de parada
 
-**La regla base:** "no aplicar un paso es un resultado válido". En M66 la reducción de halos, el realce de estructuras oscuras, CLAHE y el HDR de núcleo perdieron todos contra no hacer nada en un apilado limpio.
+**La regla base:** "no aplicar un paso es un resultado válido". En galaxia la reducción de halos, el realce de estructuras oscuras, CLAHE y el HDR de núcleo perdieron todos contra no hacer nada en un apilado limpio.
 
 Se para cuando:
 

@@ -4,9 +4,9 @@
 
 **Por qué.** "Los errores aquí no se arreglan después": un master con flats mal calibrados, darks incompatibles o grupos mezclados no se recupera en postprocesado. Todo lo que sigue en esta guía asume que el master es correcto.
 
-**Revisión previa al WBPP (lecciones LDN 1235, oct 2026)** — antes de medir subs:
+**Revisión previa al WBPP (lecciones nebulosa oscura, oct 2026)** — antes de medir subs:
 
-- **Flats por canal Bayer:** mediana y % de píxeles a 65535 en R, G1, G2, B de varios flats de cada tanda (no sólo el primero). En LDN 1235 los 29 flats del 11-9 estaban saturados; el master flat salió plano (0,4017 en centro y esquinas) y esos lights entraron sin corrección. Comprobar también la relación esquina/centro del master flat (≈ 0,95 con el SQA106 sin filtro).
+- **Flats por canal Bayer:** mediana y % de píxeles a 65535 en R, G1, G2, B de varios flats de cada tanda (no sólo el primero). En nebulosa oscura los 29 flats del 11-9 estaban saturados; el master flat salió plano (0,4017 en centro y esquinas) y esos lights entraron sin corrección. Comprobar también la relación esquina/centro del master flat (≈ 0,95 con el SQA106 sin filtro).
 - **Un grupo por filtro:** leer la lista de subs integrados en el historial del master XISF (`ImageIntegration` dentro de `PixInsight:ProcessingHistory`). El master previo mezclaba 30 Triband + 44 sin filtro en el grupo "Nada".
 - **Cobertura entre sesiones:** registrar un sub de cada sesión sobre la referencia y contar la fracción de píxeles con datos. El Triband cubría sólo el 54 % (otro centro y rotación) y dejaba zonas con distinto número de subs.
 - **Darks:** comprobar en el log qué master dark usó cada grupo; la biblioteca de darks de lights puede estar en otra carpeta. Alguno con `IMAGETYP='Dark'` en vez de `Master Dark`: añadirlo con Add Custom como master.
@@ -52,7 +52,7 @@ JSON.stringify(lanzarWBPP({ lights: "<LIGHT>", flats: "<FLAT>", flatDarks: "<DAR
 JSON.stringify(estadoWBPP("C:/wbpp/objeto"));
 ```
 
-Comprobado con LDN 1235 (nov 2026). En la noche del 11-9, `revisarCalibracion` encontró sin abrir ninguna imagen lo que en octubre costó una tarde: sin dark de 240 s, flats sin `FILTER`, flats con `TELESCOP` TS65Q (los lights, SQA106) y flats saturados. En la del 19-9 todo casa, con un aviso: el canal R de los flats a 0,94. En M31 (7-9) detectó los flats con el azul saturado y que no había dark de 60 s. En IC 1396 (13-9) detectó que los flats llevan el nombre de filtro "Astodon HA 3nn" y los lights "Antlia Dualband S2 Hb 5nm", algo que WBPP no empareja. Era el mismo filtro, renombrado en NINA después de los flats: con `aliasFiltros: { "Astodon HA 3nn": "Antlia Dualband S2 Hb 5nm" }` la revisión los empareja. Para WBPP hay que corregir `FILTER` en copias de esos flats (o añadirlos a mano al grupo). WBPP con 8 lights, 10 flats y 10 darks de flats tardó 2 min.
+Comprobado con una nebulosa oscura (nov 2026). En la noche del 11-9, `revisarCalibracion` encontró sin abrir ninguna imagen lo que en octubre costó una tarde: sin dark de 240 s, flats sin `FILTER`, flats con `TELESCOP` TS65Q (los lights, SQA106) y flats saturados. En la del 19-9 todo casa, con un aviso: el canal R de los flats a 0,94. En galaxia grande (7-9) detectó los flats con el azul saturado y que no había dark de 60 s. En nebulosa dual band (13-9) detectó que los flats llevan el nombre de filtro "Astodon HA 3nn" y los lights "Antlia Dualband S2 Hb 5nm", algo que WBPP no empareja. Era el mismo filtro, renombrado en NINA después de los flats: con `aliasFiltros: { "Astodon HA 3nn": "Antlia Dualband S2 Hb 5nm" }` la revisión los empareja. Para WBPP hay que corregir `FILTER` en copias de esos flats (o añadirlos a mano al grupo). WBPP con 8 lights, 10 flats y 10 darks de flats tardó 2 min.
 
 **Sin WBPP:** el preprocesado es la cadena de procesos equivalente con los ajustes de la tabla: ImageCalibration → CosmeticCorrection → Debayer → ImageAnalysis → StarAlignment → LocalNormalization → ImageIntegration → DrizzleIntegration, todos con ficheros de entrada y carpeta de salida. Con los masters hechos, se audita el resultado:
 

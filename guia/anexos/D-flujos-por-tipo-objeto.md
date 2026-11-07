@@ -6,11 +6,11 @@ Material por tipo de objeto que no se ha convertido en paso porque **sustituye**
 
 **Qué combinación elegir.** Colores naturales y galaxias → RGB, LRGB o LHa-RHaGB; simplicidad e impacto → HOO; separación máxima de rayas → SHO; nebulosa rica con estrellas naturales → SHORGB; grandes campos complejos u objetos mixtos → LSHORGB (L + SHO sin estrellas + estrellas RGB).
 
-**Emisión frente a reflexión.** "Emisión = rayas (contraste alto, colores de paleta); reflexión = continuo, dominante azul natural (azul, no cian), contraste suave, más sensible a gradientes; los halos de la estrella que la ilumina son el problema principal (tomas cortas/HDR para esa estrella). Objetos mixtos (IC 63, NGC 2024, IC 4592): tratar por capas/máscaras, preservar coherencia de color y estrellas; no saturar el azul. Con mono: la reflexión sale de L/RGB, la emisión de la banda estrecha."
+**Emisión frente a reflexión.** "Emisión = rayas (contraste alto, colores de paleta); reflexión = continuo, dominante azul natural (azul, no cian), contraste suave, más sensible a gradientes; los halos de la estrella que la ilumina son el problema principal (tomas cortas/HDR para esa estrella). Objetos mixtos: tratar por capas/máscaras, preservar coherencia de color y estrellas; no saturar el azul. Con mono: la reflexión sale de L/RGB, la emisión de la banda estrecha."
 
 **Nebulosa oscura (LDN, Barnard).** "El tema es la silueta; un estirado excesivo la destruye. Textura de polvo con LHE suave; el color de las estrellas del fondo es parte del atractivo."
 
-Flujo que gustó en LDN 1235 (v2 + v5), en orden:
+Flujo que gustó en una nebulosa oscura (v2 + v5), en orden:
 
 1. MAS (fondo 0,17, agresividad 0,6, recuperación de contraste 0,5, fondo de referencia en cielo limpio) y curva que separa el polvo del fondo (0,167 → 0,165; 0,18 → 0,215; 0,20 → 0,27).
 2. NXT con separación de color: croma 0,90, luminancia 0,40, detalle 0,25.
@@ -29,18 +29,18 @@ Errores a no repetir en este tipo de objeto: "NXT 0,75 por igual a luminancia y 
 
 Parámetros orientativos de aescaffre para galaxias: fondo 0,10; HDRMT 6–7 capas con máscara gamma 1,5; LHE radio 64, amount 0,25 (de canto) a 0,35 (de cara), slopeLimit 1,3–1,5; LRGB lightness 0,35 (de canto) / 0,50 (de cara), saturación 0,70; LinearFit de L a la luminancia RGB antes de combinar; NXT final 0,30; SCNR 0,30–0,35; sin reducción de estrellas. Cúmulos de galaxias: fondo 0,08–0,10, NXT sólo tras estirar (0,25–0,35), LRGB lightness 0,45–0,55, "la diversidad de color entre galaxias es un rasgo".
 
-**Galaxias de gran dinámica (M31).** "Stretch global suave + máscara de protección del núcleo + stretch localizado de extensiones; HDRComposition/HDRMT; LHE/HDRMT ligeros para polvo; reducir estrellas ligeramente si hace falta."
+**Galaxias de gran dinámica.** "Stretch global suave + máscara de protección del núcleo + stretch localizado de extensiones; HDRComposition/HDRMT; LHE/HDRMT ligeros para polvo; reducir estrellas ligeramente si hace falta."
 
-Cadena que funcionó en M31 (Opus v6/v7, oct 2026) y que la comparación con Qwen (7 nov 2026) confirmó por lo que faltó:
+Cadena que funcionó en una galaxia grande (Opus v6/v7, oct 2026) y que la comparación con Qwen (7 nov 2026) confirmó por lo que faltó:
 
 1. Lineal: gradiente polinomio grado 2 → BXT correct only → SPCC → BXT (estrellas 0,25, halos 0, no estelar 0,65) → SXT → **un** NXT lineal moderado. Checkpoint con el cielo neutro (≤ 0,5 σ); si no, `neutralizarCielo` antes de estirar.
-2. `estirarCapas(..., { tipo: "galaxia" })`: cielo 0,07 y estrellas con el mismo estirado (`estrellas: "extraer"`). SXT se lleva a veces los núcleos de M31, M32 y M110: devolverlos a la starless.
+2. `estirarCapas(..., { tipo: "galaxia" })`: cielo 0,07 y estrellas con el mismo estirado (`estrellas: "extraer"`). SXT se lleva a veces los núcleos de la galaxia y de sus satélites: devolverlos a la starless.
 3. `comprimirNucleo`: HDRMT 7 capas al 60 % con máscara de bulbo. Nunca a pleno ni LHE 200 sobre el bulbo (anillo y bulbo plano).
 4. LHE r64 (y r32 para más detalle) sólo en el disco, con máscara galaxia × (1 − bulbo).
 5. Saturación (`saturarAlFallo` tipo galaxia, o ColorSaturation por tono con la misma máscara: sin excluir el bulbo, el núcleo recorta).
 6. Estrellas: `prepararEstrellas` y `recombinarEstrellas`; comprobar `aporte_estrellas_pct`.
 
-Sin los pasos 2–4 (Qwen, 7 nov 2026): 269 estrellas detectables frente a 13 721, núcleo y M32 como una meseta de 22 px y fondo con manchas de color (R/G del cielo 0,70–1,24 frente a 0,94–1,04).
+Sin los pasos 2–4 (Qwen, 7 nov 2026): 269 estrellas detectables frente a 13 721, núcleo y la galaxia satélite como una meseta de 22 px y fondo con manchas de color (R/G del cielo 0,70–1,24 frente a 0,94–1,04).
 
 **IFN / cirros.** "Flujo minimalista; gradiente con muestreo amplio; denoise ligero con máscara; stretch suave y progresivo; MMT/LHE con parsimonia; validar con DSS2, Planck, WISE/Hα y otras imágenes; nunca dar por señal estructuras aisladas."
 

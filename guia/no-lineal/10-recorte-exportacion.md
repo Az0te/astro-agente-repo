@@ -13,7 +13,7 @@
 **Cuidados de PJSR**
 
 - "`window.saveAs` no guarda el historial de procesos en el XISF: anotar los parámetros en el dossier".
-- Desde PixInsight 1.9.6, Crop, DynamicCrop (también girado), Resample y FastRotation **conservan la astrometría** y la ajustan al nuevo marco. Comprobado (IC 1396, nov 2026): tras Crop + Resample 0,5 + DynamicCrop de 10°, una nueva resolución coincide con la heredada a 0,05 px; tras FastRotation 180°, igual que el original. Con 1.9.5 o anterior se perdía y `FastRotation` sobre una ventana con astrometría llegó a colgar el watcher: girar con PixelMath `pixel($T, w()-1-x(), h()-1-y())`.
+- Desde PixInsight 1.9.6, Crop, DynamicCrop (también girado), Resample y FastRotation **conservan la astrometría** y la ajustan al nuevo marco. Comprobado (nebulosa dual band, nov 2026): tras Crop + Resample 0,5 + DynamicCrop de 10°, una nueva resolución coincide con la heredada a 0,05 px; tras FastRotation 180°, igual que el original. Con 1.9.5 o anterior se perdía y `FastRotation` sobre una ventana con astrometría llegó a colgar el watcher: girar con PixelMath `pixel($T, w()-1-x(), h()-1-y())`.
 
 **Código**
 
@@ -26,7 +26,7 @@ icc.targetProfile = "sRGB IEC61966-2.1";   // comprobado en PixInsight 1.9.6
 icc.toDefaultProfile = false;
 if (!icc.executeOn(v)) throw new Error("ICC sRGB falló");
 var w = ImageWindow.windowById("Final");
-if (!w.saveAs("C:/ASTRO/IC63/final/IC63_v4.xisf", false, false, false, false))
+if (!w.saveAs("C:/ASTRO/<objeto>/final/IC63_v4.xisf", false, false, false, false))
    throw new Error("No se pudo guardar el XISF");
 "guardado: sin historial en el XISF, anotar los parámetros en el dossier";
 ```

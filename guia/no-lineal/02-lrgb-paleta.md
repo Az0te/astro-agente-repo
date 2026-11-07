@@ -13,10 +13,10 @@
 - Truco de saturación: "Saturar la nebulosa con una L muy desenfocada: sobre la capa sin estrellas, LRGBCombination con la propia luminancia muy suavizada como L y channel weight de L ≈ 0,15–0,19; sube la croma sin amplificar el ruido de luminancia."
 - Luminancia sintética (sin L real): `L = wR·R + wG·G + wB·B` con Σw = 1; pesos perceptual 0,30/0,59/0,11; neutro 0,33/0,33/0,33; alta resolución 0,4/0,4/0,2; o por SNR (`w ∝ 1/σ²`).
 
-**Composición natural Hα/OIII + RGB (OSC; la que gustó en IC 63)**
+**Composición natural Hα/OIII + RGB (OSC; la que gustó en una nebulosa de emisión y reflexión)**
 
 1. Estirar por separado con MAS (fondo 0,15) la RGB sin estrellas y el Hα (saturación de MAS desactivada).
-2. `hx = max(Has − mediana(Has), 0)`, anulado cerca de estrellas muy brillantes. R += ~1,5·hx, G += ~0,2·hx, B += ~0,45·hx (rosa natural Hα + Hβ). En IC 63 se eligió un rojo de 1,40–1,49 frente a 1,65: más rojo tapa los blancos.
+2. `hx = max(Has − mediana(Has), 0)`, anulado cerca de estrellas muy brillantes. R += ~1,5·hx, G += ~0,2·hx, B += ~0,45·hx (rosa natural Hα + Hβ). En nebulosa de emisión y reflexión se eligió un rojo de 1,40–1,49 frente a 1,65: más rojo tapa los blancos.
 3. La suma satura el rojo en las zonas brillantes: calcular sin truncar y aplicar la **rodilla suave** sobre el máximo de los tres canales (Anexo E).
 4. El Hα de un dual band OSC sale de la desmezcla (Paso 7 lineal) con el continuo restado (Paso 16 lineal). Alternativa: la inyección en tres partes de aescaffre (R condicional + realce de luminancia + capa de detalle) con máscara de nebulosa derivada del Hα (clipLow 0,04, blur 8; fuerza ~0,65, umbral 0,3).
 5. Blancos y azules de reflexión, nebulosidad de fondo en Hα y compresión de altas luces: Anexo E. Curvas y saturación: Paso 5. NXT tras los realces: Paso 6.
@@ -61,7 +61,7 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 
 **NarrowbandNormalization 1.0** (proceso, sí se ejecuta desde el watcher)
 
-- Equilibra la intensidad de los canales con **Hα siempre como referencia**: aplica a cada canal una MTF para que su desviación positiva media sobre la mediana iguale la del Hα, sólo por encima del punto de sombra (**shadowpoint 1 = desde la mediana; 0 = toda la imagen**). "Es un ajuste estético: cambia las proporciones entre rayas (documentarlo)."
+- Equilibra la intensidad de los canales con **Hα siempre como referencia**: aplica a cada cana una MTF para que su desviación positiva media sobre la mediana iguale la del Hα, sólo por encima del punto de sombra (**shadowpoint 1 = desde la mediana; 0 = toda la imagen**). "Es un ajuste estético: cambia las proporciones entre rayas (documentarlo)."
 - "Vale en lineal o no lineal, pero con **Lightness = Off en lineal**."
 - Paleta: SHO, HOO, HSO, HOS (dual band OSC → HOO). En HOO toma el OIII del canal verde (más SNR en OSC); R = Hα, B = OIII normalizado y G = (1−amount)·base + amount·mezcla, con Mode1 = Hα original sobre OIII normalizado, Mode2 = OIII normalizado sobre OIII original, Mode3 = Hα original sobre OIII original.
 - Otros: SCNR (`G = min(G, (R+B)/2)`, no en HOO), OIII boost y SII boost, Highlight reduction, Brightness. Orden interno: normalización → SCNR → Lightness → Highlight reduction → Brightness.

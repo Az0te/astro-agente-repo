@@ -6,10 +6,10 @@
 
 **Cuándo aplica.** Sólo cuando hay **masters separados que juntar**:
 - Mono: L, R, G, B por separado (LRGB), o Hα, OIII, SII, Hβ.
-- Banda estrecha + RGB de banda ancha, aunque sea OSC: p. ej. RGB sin filtro + Hα/OIII extraídos del dual band (Paso 7). Con dual band OSC el R ya lleva casi todo el Hα y la inyección aporta poco (IC 1396: el R cambió un 0,6 %).
+- Banda estrecha + RGB de banda ancha, aunque sea OSC: p. ej. RGB sin filtro + Hα/OIII extraídos del dual band (Paso 7). Con dual band OSC el R ya lleva casi todo el Hα y la inyección aporta poco (nebulosa dual band: el R cambió un 0,6 %).
 - Dos masters del mismo canal (Hα de la mono + Hα del dual band).
 
-**No aplica** con una sola OSC sin filtro (p. ej. M31), ni con sólo dual band: la paleta HOO/SHO se monta en el Paso 2 no lineal. Si no aplica, decirlo y pasar al Paso 11 sin escribir ningún script.
+**No aplica** con una sola OSC sin filtro (p. ej. galaxia grande), ni con sólo dual band: la paleta HOO/SHO se monta en el Paso 2 no lineal. Si no aplica, decirlo y pasar al Paso 11 sin escribir ningún script.
 
 **Regla previa.** "Antes de procesar: alinear todos los stacks entre sí y recortar bordes negros a la misma dimensión" (flujo OSC5 de astro-photographie). Si los canales vienen de cámaras o noches distintas, **normalizar antes de combinar**: "Cada noche y cámara cambia fondo, transparencia y FWHM: LocalNormalization/LinearFit antes de combinar, ponderar por calidad, flats por configuración, no mezclar filtros ni material incompatible en una integración."
 
@@ -49,20 +49,20 @@ Nunca mezclar subs de cámaras distintas en una integración: cada cámara y fil
   - la RGB con el Hα con `inyectarHa`.
 - Deja abiertos la L y la banda estrecha sin RGB para el Paso 2 no lineal (LRGB y paletas).
 
-Comprobado con IC 1396: con RGB + Hα + OIII inyecta el Hα y deja el OIII; con R, G y B mono los junta en `RGB_comb`.
+Comprobado con una nebulosa dual band: con RGB + Hα + OIII inyecta el Hα y deja el OIII; con R, G y B mono los junta en `RGB_comb`.
 
 **Las piezas, sobre vistas** (sobre copias):
 
 - `combinarMismoCanal(a, b, { nuevaVista })`: dos masters del mismo canal, alineados.
   - LinearFit del segundo al primero y suma pesada por 1/σ² (ruido MRS).
   - Avisa si el ruido apenas baja (< 2 %) o si las estrellas empeoran más de un 10 %.
-  - IC 1396 Hα, 24 frente a 122 subs: pesos 0,05 / 0,95 y ruido −2,4 %, lo que predice 1/σ² con esa diferencia de ruido.
+  - nebulosa dual band Hα, 24 frente a 122 subs: pesos 0,05 / 0,95 y ruido −2,4 %, lo que predice 1/σ² con esa diferencia de ruido.
 - `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, clipLow })`: RGB y Hα lineales, sin estrellas y alineados.
   - LinearFit del Hα al R y máscara de nebulosa referida al cielo (celdas más oscuras), no a la mediana: en nebulosas que llenan el campo, la mediana ya es nebulosa.
   - Por defecto, **modo "suma"**: `R' = R + α·M·max(0, Hα − R)`, con α 0,6 en nebulosas y 0,3 en galaxias. Añade sólo la emisión que el R no tiene.
-  - La fórmula clásica `R' = (1 − α·M)·R + α·M·Hα` queda como `modo: "mezcla"`. Con el Hα ajustado por LinearFit global, en IC 1396 **apagó el rojo de la nebulosa**, que quedó grisácea: el Hα ajustado es más bajo que el R en buena parte de la emisión.
+  - La fórmula clásica `R' = (1 − α·M)·R + α·M·Hα` queda como `modo: "mezcla"`. Con el Hα ajustado por LinearFit global, en una nebulosa dual band **apagó el rojo de la nebulosa**, que quedó grisácea: el Hα ajustado es más bajo que el R en buena parte de la emisión.
   - Mide la dominante del cielo antes y después (aviso si enrojece más de un 3 %), el % del campo bajo la máscara y cuánto sube el R donde más cambia (percentil 95).
-  - IC 1396 (Hα del dual band con la RGB sin filtro): máscara sobre el 60 % del campo, cielo +0,8 %; en el 5 % de la nebulosa donde más cambia, el R sube un 1,6 % en lineal, visible tras estirar.
+  - nebulosa dual band (Hα del dual band con la RGB sin filtro): máscara sobre el 60 % del campo, cielo +0,8 %; en el 5 % de la nebulosa donde más cambia, el R sube un 1,6 % en lineal, visible tras estirar.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/combinacion.js"));   // en el nivel superior del script

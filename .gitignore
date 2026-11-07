@@ -15,5 +15,8 @@ Thumbs.db
 *.tif
 *.tiff
 
+# Previas y comparaciones temporales de pruebas
+tmp_*/
+
 # Perfil personal (rutas, equipo y preferencias): no se publica
 guia/perfil.md

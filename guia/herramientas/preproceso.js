@@ -22,12 +22,12 @@
 //     Se compara con el cuartil inferior y no con la mediana porque en una noche que mejora (o empeora) poco a poco
 //     la mitad de los subs pueden ser malos y la mediana se va con ellos.
 //   - Excentricidad > mediana del grupo + eccDelta (0,1): seguimiento o viento. Entre +eccDuda (0,07) y +eccDelta,
-//     dudoso: en subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas (M31 7-9: los subs de
+//     dudoso: en subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas (galaxia grande 7-9: los subs de
 //     mejor FWHM tenían +0,08).
 //   - CloudExtinction con z robusto > nubeZ (2,5): pérdida de transparencia (nubes, rocío).
 // Devuelve la tabla, aprobados, rechazados con motivo y pesos (PSF Signal Weight / máximo del grupo). Los trazos
 // (satélites, aviones) sólo se anotan: los quita el rechazo de píxeles de la integración.
-// Los umbrales se ajustaron con LDN 1235 (11-9-2026, subs crudos CFA): revisar con otros datos.
+// Los umbrales se ajustaron con una nebulosa oscura (11-9-2026, subs crudos CFA): revisar con otros datos.
 
 // File.searchDirectory en 1.9.6+ (searchDirectory global está obsoleta y avisa en la consola).
 function ppSearch(patron, recursivo) {
@@ -473,7 +473,7 @@ function seleccionarSubs(x, o) {
 
   // Grupos (carpeta, filtro, exposición) por cabecera, y ImageAnalysis por separado en cada uno: la extinción por
   // nubes es relativa al conjunto medido, y mezclar noches o filtros la falsea (5 nov 2026: 0,13 → 1,64 al juntar
-  // las dos noches de LDN 1235).
+  // las dos noches de una nebulosa oscura).
   var C = ImageAnalysis;
   function col(n) { var k = "measurements_measurement" + n; return C[k] !== undefined ? C[k] : C.prototype[k]; }
   var iP = col("Path"), iF = col("FWHMpx"), iE = col("Eccentricity"), iS = col("Stars"), iW = col("PSFSignalWeight"),

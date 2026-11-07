@@ -44,7 +44,7 @@ JSON.stringify({ separacion: s, denoise: d });
 
 Es el denoise fuerte del flujo: va aquí, sobre la capa sin estrellas y todavía en lineal, no antes de BXT ni sobre la imagen con estrellas.
 
-**Por defecto: híbrido MLDenoise + NXT.** Es la mejor opción medida, en los tres canales probados frente a una referencia de subs independientes (IC 1396; [detalle](../detalle/lineal-15-denoise-mldenoise.md)). Toma el detalle fino de MLDenoise y lo grueso de NXT 0,95: `ML − suave(ML) + suave(NXT)`, con caja de radio 3. Iguala a NXT 0,95 en ruido a 1, 4 y 16 px y borra menos detalle.
+**Por defecto: híbrido MLDenoise + NXT.** Es la mejor opción medida, en los tres canales probados frente a una referencia de subs independientes (nebulosa dual band; [detalle](../detalle/lineal-15-denoise-mldenoise.md)). Toma el detalle fino de MLDenoise y lo grueso de NXT 0,95: `ML − suave(ML) + suave(NXT)`, con caja de radio 3. Iguala a NXT 0,95 en ruido a 1, 4 y 16 px y borra menos detalle.
 
 | Variante (puntuación 0–100) | Hα | OIII | SII |
 |---|---|---|---|
@@ -99,12 +99,12 @@ MLDenoise tarda ~2 min en 26 MP: supera el corte de 60 s del MCP, esperar con `w
 
 | Parámetro NXT (variantes) | Valor |
 |---|---|
-| Separación de color (RGB) | croma > luminancia (LDN 1235: croma 0,90, luminancia 0,40, detail 0,25); 0,75 por igual dio aspecto plástico |
+| Separación de color (RGB) | croma > luminancia (nebulosa oscura: croma 0,90, luminancia 0,40, detail 0,25); 0,75 por igual dio aspecto plástico |
 | Variante "full" (RC-Astro) | separación intensidad/color y de frecuencia: HF y LF 0,80 en intensidad y color, escala HF/LF 5, iterations 5 |
 
 - En una rejilla, cada prueba de NXT sobre una ventana con un **id nuevo**, y fijar también `denoise_intensity`: con el mismo id NXT devolvió el mismo resultado aunque cambiara `denoise`.
 - La rejilla de antes (denoise 0,50 / 0,70 / 0,85) se quedaba corta: medido contra una referencia, 0,70 pierde frente a 0,95 en los tres canales. Bajar σ del cielo sin referencia no distingue ruido quitado de señal borrada.
 
-**RGB (OSC): no 0,95.** Lo de arriba se midió en canales mono. En RGB, quitar casi todo el grano deja a la vista el moteado de color de gran escala del cielo (manchas verdes y moradas de 100–300 px) que el grano tapaba, y sale al estirar. M31 OSC (7 nov 2026): NXT 0,95 bajó el ruido un 90 % y la starless quedó con manchas muy visibles; NXT 0,50 (50 %) quedó limpia, con `moteado_color` 0,36 → 0,65. El moteado sube en proporción a lo que baja el grano, así que con 0,95 rondaba 3,5. Regla: el denoise que deje `moteado_color_despues` por debajo de ~1 (en esa M31, quitar como mucho un 65–70 % del ruido); `reducirRuido` da no_cumple por encima de 1,5. Si hace falta más limpieza, en la fase no lineal (Paso 6) con separación de color, no subiendo aquí el denoise.
+**RGB (OSC): no 0,95.** Lo de arriba se midió en canales mono. En RGB, quitar casi todo el grano deja a la vista el moteado de color de gran escala del cielo (manchas verdes y moradas de 100–300 px) que el grano tapaba, y sale al estirar. galaxia grande OSC (7 nov 2026): NXT 0,95 bajó el ruido un 90 % y la starless quedó con manchas muy visibles; NXT 0,50 (50 %) quedó limpia, con `moteado_color` 0,36 → 0,65. El moteado sube en proporción a lo que baja el grano, así que con 0,95 rondaba 3,5. Regla: el denoise que deje `moteado_color_despues` por debajo de ~1 (en esa galaxia grande, quitar como mucho un 65–70 % del ruido); `reducirRuido` da no_cumple por encima de 1,5. Si hace falta más limpieza, en la fase no lineal (Paso 6) con separación de color, no subiendo aquí el denoise.
 
 **Control del denoise.** σ del cielo (bajar un 50–80 %, nunca a cero), contraste de una zona débil (no bajar más de ~5 %) e imagen residual (antes − después): sólo ruido, sin filamentos ni bordes. Con el híbrido, revisar además que no aparezca moteado a 4–16 px en el cielo.

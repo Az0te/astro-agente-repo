@@ -1,6 +1,6 @@
 # Paso 8: Procesado de estrellas
 
-[← Índice](../SKILL.md) · Anterior: [Paso 7: Nitidez](07-nitidez.md) · Siguiente: [Paso 9: Recombinación](09-recombinacion.md) · Diagnóstico de halos y recetas de IC 63 y LDN 1235: [detalle](../detalle/no-lineal-08-estrellas.md)
+[← Índice](../SKILL.md) · Anterior: [Paso 7: Nitidez](07-nitidez.md) · Siguiente: [Paso 9: Recombinación](09-recombinacion.md) · Diagnóstico de halos y recetas de una nebulosa de emisión y reflexión y una nebulosa oscura: [detalle](../detalle/no-lineal-08-estrellas.md)
 
 La capa de estrellas (original − starless) lleva PSF, halos, aigrettes y residuos de SXT. Tiene que quedar con el fondo a cero, el color recuperado y sin residuos, o el screen mete esa basura en la imagen final.
 
@@ -54,4 +54,4 @@ var r = prepararEstrellas("Stars_st", { nuevaVista: "Stars_v1" });
 JSON.stringify(r);   // pasos, antes/despues por canal (mediana, MAD, máximo, pix_098, p90_estrellas), control
 ```
 
-**Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) ≥ 0,08 (0,08–0,13 con `starStretch`, más con `extraer`); `pix_estrella_pct` (píxeles con luminancia > 0,02) ≥ 0,3 % en campos con estrellas: por debajo, la capa está casi vacía y la final saldrá sin estrellas (M31 Qwen, nov 2026); `no_cumple` vacío; sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.
+**Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) ≥ 0,08 (0,08–0,13 con `starStretch`, más con `extraer`); `pix_estrella_pct` (píxeles con luminancia > 0,02) ≥ 0,3 % en campos con estrellas: por debajo, la capa está casi vacía y la final saldrá sin estrellas (galaxia grande con Qwen, nov 2026); `no_cumple` vacío; sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.

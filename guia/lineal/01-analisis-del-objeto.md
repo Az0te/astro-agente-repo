@@ -22,7 +22,7 @@
 1. Tipo de objeto y "el tema" ([Anexo D](../anexos/D-flujos-por-tipo-objeto.md): galaxia, emisión, reflexión, oscura, planetaria, resto de supernova, cúmulo, IFN).
 2. ¿Hay banda estrecha? Sin ella no hay paletas.
 3. Estrella más brillante del campo y magnitud: decide si hacen falta tomas cortas y a qué exposición.
-4. ¿El objeto llena el campo o se difumina en el fondo? (M31, nebulosas extensas, polvo): riesgo de anillo oscuro en la corrección de gradiente y de que la IA se coma el objeto.
+4. ¿El objeto llena el campo o se difumina en el fondo? (galaxia grande, nebulosas extensas, polvo): riesgo de anillo oscuro en la corrección de gradiente y de que la IA se coma el objeto.
 5. ¿Hay IFN/polvo? Desconfiar de MGC y de cualquier extractor agresivo.
 6. Régimen de muestreo: submuestreado / bien muestreado / sobremuestreado (drizzle 2x), que condiciona BXT, NXT y nitidez.
 7. **¿Bordes sin datos?** (`bordes_sin_datos` de `analizarMaster`). Un master registrado sin recortar tiene cuñas en los bordes; WBPP las rellena con un valor constante, no con 0, y a ojo se confunden con cielo oscuro. Con varios masters, lo primero es el [Paso 5: alinear y recortar](05-staralignment-crop.md); con uno solo, recortar los bordes. Gradiente, BXT, SPCC o desmezcla con cuñas dan resultados falsos (`gradienteCandidatos` se niega).
@@ -52,4 +52,4 @@ out.join("\n");
 eval(File.readTextFile("<ruta de guia>/herramientas/analisis.js"));   // en el nivel superior del script
 JSON.stringify(analizarMaster("MasterLight"));
 ```
-**Control.** La mediana de un master lineal está en torno a 0,001–0,02 (con pedestal puede pasar de 0,01: el de LDN 1235 da 0,0102). Si es mucho mayor (> 0,05), la imagen ya está estirada y no es la entrada correcta. Máximos por canal muy distintos = saturación desigual, no fallo de color.
+**Control.** La mediana de un master lineal está en torno a 0,001–0,02 (con pedestal puede pasar de 0,01: el de una nebulosa oscura da 0,0102). Si es mucho mayor (> 0,05), la imagen ya está estirada y no es la entrada correcta. Máximos por canal muy distintos = saturación desigual, no fallo de color.

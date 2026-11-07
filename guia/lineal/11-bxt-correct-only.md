@@ -20,8 +20,8 @@
 
 **Diagnóstico previo (¿hace falta halos negativos?)**
 
-- "En IC 63 los FWHM por canal (R 4,4 / G 3,7 / B 4,0 px) indicaban que habría servido."
-- SPFC deja en la vista `PCL:SPFC:FWHMx/FWHMy` por canal: "en IC63 v4 (R 4,4 / G 3,7 / B 4,0 px) no había blue bloat y se usó halos 0,00".
+- "En nebulosa de emisión y reflexión los FWHM por canal (R 4,4 / G 3,7 / B 4,0 px) indicaban que habría servido."
+- SPFC deja en la vista `PCL:SPFC:FWHMx/FWHMy` por canal: "en una nebulosa de emisión y reflexión (R 4,4 / G 3,7 / B 4,0 px) no había blue bloat y se usó halos 0,00".
 - Regla: "Usar −0,30 sólo si hay blue bloat y comprobar anillos oscuros al 100 % alrededor de estrellas brillantes".
 
 **Astrometría.** "BlurXTerminator elimina la solución astrométrica de la vista (aescaffre): tras BXT, `copyAstrometricSolution` desde el master original antes de SPFC/SPCC". Matiz del mismo archivo: "BXT, en cambio, la conservó en PI 1.9.5: comprobar `hasAstrometricSolution` en vez de suponer". Tras BXT CO, si se ha perdido: volver a resolver con `blindSolve` (Paso 8), sin copiar soluciones. En PixInsight 1.9.6 BXT Correct Only y BXT completo la conservaron (prueba del 31 oct 2026), pero se comprueba igual.
@@ -46,7 +46,7 @@ if (!w.hasAstrometricSolution) {
 "BXT CO + WCS OK";
 ```
 
-**En una llamada** (`herramientas/lineal.js`): `bxtCorrectOnly(vista, { nuevaVista })` aplica BXT correct only sobre una copia y mide el FWHM por canal antes y después (sobre las mismas estrellas), el ringing de la estrella más brillante y si conserva la solución astrométrica (si no, la recupera con `blindSolve`). IC 1396 (nov 2026): diferencia de FWHM entre canales 0,34 → 0,24 px, sin ringing, WCS conservada.
+**En una llamada** (`herramientas/lineal.js`): `bxtCorrectOnly(vista, { nuevaVista })` aplica BXT correct only sobre una copia y mide el FWHM por canal antes y después (sobre las mismas estrellas), el ringing de la estrella más brillante y si conserva la solución astrométrica (si no, la recupera con `blindSolve`). nebulosa dual band (nov 2026): diferencia de FWHM entre canales 0,34 → 0,24 px, sin ringing, WCS conservada.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script

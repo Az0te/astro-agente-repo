@@ -22,7 +22,7 @@
 //            no_cumple, control: { medido, revisar_a_ojo } }.
 
 // Píxeles sin datos (1 = vacío): a 0 o negativos en algún canal (cuña de StarAlignment), o con el valor de relleno de
-// WBPP, que NO es 0 sino una constante igual en todos los canales (IC 1396, 6 nov 2026: 0,0008361; antes sólo se
+// WBPP, que NO es 0 sino una constante igual en todos los canales (nebulosa dual band, 6 nov 2026: 0,0008361; antes sólo se
 // buscaban ceros y la cuña se quedaba). Misma función que en analisis.js.
 function mascaraSinDatos(im) {
   var W = im.width, H = im.height, nc = im.numberOfChannels, n = W * H, empty = new Uint8Array(n), cb = new Float32Array(n);
@@ -40,7 +40,7 @@ function mascaraSinDatos(im) {
   }
   for (var f2 = 0; f2 < fills.length; ++f2) for (var j = 0; j < n; ++j) if (match[f2][j]) empty[j] = 1;
   // Sólo cuenta lo vacío que llega al borde (una cuña es una racha desde el borde en su fila o columna). Los píxeles a 0
-  // sueltos del interior (una raya desmezclada y recortada a 0, IC 1396 6 nov 2026) no son cuñas: sin esto el SII del
+  // sueltos del interior (una raya desmezclada y recortada a 0, nebulosa dual band 6 nov 2026) no son cuñas: sin esto el SII del
   // S2Hb daba "izquierda 5133 px".
   var edge = new Uint8Array(n), x, y;
   for (y = 0; y < H; ++y) {
@@ -55,7 +55,7 @@ function mascaraSinDatos(im) {
 }
 
 // Franja de borde con datos pero distinta del interior (menos subs por el dithering o la rotación entre noches, o la
-// interpolación junto a la cuña): no está vacía, pero su fondo o su RUIDO se apartan de los de dentro. IC 1396 (6 nov 2026):
+// interpolación junto a la cuña): no está vacía, pero su fondo o su RUIDO se apartan de los de dentro. nebulosa dual band (6 nov 2026):
 // HaO3, franja a la derecha 0–16 px un 21 % más oscura que sube hasta ~60 px; SO3, franjas más claras y más ruidosas en
 // esquinas (cuñas triangulares). Por cada borde, en 12 tramos (una cuña sólo ocupa parte del borde), perfil de líneas de
 // 2 px desde el borde hacia dentro: mediana (fondo) y MAD (ruido). La franja acaba en un ESCALÓN del perfil frente a la
@@ -152,7 +152,7 @@ function abrirConSTF(path, id) {
 // PixInsight 1.9.6 conserva la astrometría LINEAL al recortar, reescalar o girar, pero la que lleva corrección de
 // distorsión (splines) no se puede transformar: el proceso abre un diálogo "Some of these side effects could be
 // irreversible. Proceed?" que deja el script esperando. Esto la reduce a su parte lineal (se queda en la ventana,
-// no en el fichero): comprobado con IC 63 v4, tras IntegerResample ×2 coincide con una resolución nueva a 0,11 px.
+// no en el fichero): comprobado con una nebulosa de emisión y reflexión, tras IntegerResample ×2 coincide con una resolución nueva a 0,11 px.
 // Devuelve true si había splines y se quitaron.
 function astrometriaLineal(win) {
   if (!win || win.isNull || !win.hasAstrometricSolution) return false;
@@ -307,7 +307,7 @@ function alinearMasters(lista, o) {
     if (x1 - x0 < 16 || y1 - y0 < 16) throw new Error("Los masters apenas se solapan: no hay zona común");
   }
   // Franjas de borde con datos pero distintas del interior (menos cobertura de apilado): se recortan también.
-  // Dos pasadas: tras recortar la franja más ancha puede asomar otra más estrecha en otro master (IC 1396 SO3 abajo).
+  // Dos pasadas: tras recortar la franja más ancha puede asomar otra más estrecha en otro master (nebulosa dual band SO3 abajo).
   var franja = { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
   if (o.franjas !== false) {
     var abiertos = reg.map(function (f, i) { return ImageWindow.open(f, "alBAND" + i, "verbosity 0", true)[0]; });
