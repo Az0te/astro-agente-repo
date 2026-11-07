@@ -65,6 +65,7 @@ function grDuplicate(srcId, newId) {
   w.mainView.image.assign(im);
   w.mainView.endProcess();
   if (src.hasAstrometricSolution) w.copyAstrometricSolution(src);
+  try { w.keywords = src.keywords; } catch (e) { }   // FILTER y demás: combinarMasters clasifica por FILTER
   w.show();
   return w.mainView.id;
 }
@@ -213,6 +214,7 @@ function gradienteCandidatos(viewId, o) {
       }
       if (!corr || !mod) throw new Error("no encuentro las salidas de GraXpert (nuevas: " + nuevas.join(", ") + ")");
       corr = grRename(corr, "GC_GX" + s);
+      try { ImageWindow.windowById(corr).keywords = win.keywords; } catch (e) { }
       mod = grRename(mod, "GC_GX" + s + "_modelo");
       r.candidatos.push({ vista: corr, modelo: mod, metodo: "GraXpert", parametros: "sample_free escala " + s + ", sustracción",
                           metricas: grMeasure(base, mod, corr, range0),

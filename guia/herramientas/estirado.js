@@ -521,12 +521,14 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
 // 0,10 el fondo quedaba gris y las estrellas (amount 2, saturación 1) diminutas y pálidas; con estos, "mucho mejor ambas".
 // estrellas "extraer": capa de estrellas con el mismo estirado (estirarEstrellasExtraer); amount sólo si hay que volver a
 // starStretch. Comparación Qwen/Opus en una galaxia grande (7 nov 2026): con starStretch la final se quedó casi sin estrellas.
-// nebulosa_oscura (polvo, LDN/LBN/vdB, sin emisión): cielo 0,15 y algo más de ruido permitido para separar el polvo del fondo
+// nebulosa_oscura (polvo, LDN/LBN/vdB, sin emisión): cielo 0,12 y algo más de ruido permitido para separar el polvo del fondo.
+// Con 0,15 el fondo quedó gris y sin zonas oscuras (7 nov 2026: cielo de la final 0,17 frente a 0,145 de la versión de
+// referencia, mismo p90); el polvo lo sube el resto de pasadas, que no mueven el cielo.
 // (nebulosa oscura, 7 nov 2026: con cielo 0,10 el cuerpo quedaba 0,009 sobre el cielo en la final; Opus con MAS a 0,17 + curvas con
 // máscara, 0,051). Sin calibrar con más casos. Estrellas con starStretch, nunca "extraer".
 var ES_TIPOS = {
   galaxia: { cielo: 0.07, ruidoMax: 0.12, saturacion: 1.3, estrellas: "extraer" },
-  nebulosa_oscura: { cielo: 0.15, ruidoMax: 0.20 }   // estrellas con arcsinh k 3000 (con starStretch amount 2, aporte 0,7–0,8 %)
+  nebulosa_oscura: { cielo: 0.12, ruidoMax: 0.20 }   // estrellas con arcsinh k 3000 (con starStretch amount 2, aporte 0,7–0,8 %)
 };
 
 // Las dos capas del Paso 1 en una llamada.

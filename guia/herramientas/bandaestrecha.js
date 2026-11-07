@@ -136,6 +136,14 @@ function desmezclarDualBand(viewId, o) {
     vv.window.show();
   });
   if (v.window.hasAstrometricSolution) { ha.window.copyAstrometricSolution(v.window); oi.window.copyAstrometricSolution(v.window); }
+  // Cabecera del master con FILTER = la línea: combinarMasters reconoce así la vista aunque luego se llame GC_POLY2_3.
+  [[ha, lineas[0]], [oi, lineas[1]]].forEach(function (x) {
+    try {
+      var ks = v.window.keywords.filter(function (k) { return k.name !== "FILTER"; });
+      ks.push(new FITSKeyword("FILTER", "'" + x[1] + "'", "línea separada por desmezclarDualBand"));
+      x[0].window.keywords = ks;
+    } catch (e) { }
+  });
   var dr = z.zona_r, gR = (dr[1] - p[1]) / (dr[0] - p[0]), bR = (dr[2] - p[2]) / (dr[0] - p[0]);
   var q = BE_QE[lineas[0]], eG = q[1] / q[0], eB = q[2] / q[0];
   var noCumple = [];

@@ -1076,7 +1076,7 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
       u"- ruido.js: reducirRuido(vista, { denoise, detail, iterations, nuevaVista }) — Paso 14 lineal (denoise 0,50), Paso 15 sobre la starless (RGB: 0,50 tras el NXT suave del 14, 0,70 sin él; si moteado_color_despues > 1,5, menos) y Paso 6 no lineal (0,30); separarEstrellas(vista, { nuevaVista, nuevasEstrellas }) — Paso 15 (StarX)\n"
       u"- estirado.js: estirarCapas(starless, estrellas, { cielo: 0.10, nuevaStarless, nuevasEstrellas }) — Paso 1 no lineal; en GALAXIAS "
       u"SIEMPRE { tipo: \"galaxia\", nuevaStarless, nuevasEstrellas } y sin cielo (cielo 0,07 y estrellas con el mismo estirado que la starless); "
-      u"en NEBULOSAS OSCURAS (polvo: LDN, LBN, vdB, sin emisión) { tipo: \"nebulosa_oscura\", nuevaStarless, nuevasEstrellas } sin cielo (cielo 0,15); "
+      u"en NEBULOSAS OSCURAS (polvo: LDN, LBN, vdB, sin emisión) { tipo: \"nebulosa_oscura\", nuevaStarless, nuevasEstrellas } sin cielo (cielo 0,12); "
       u"estrellas: \"extraer\" SÓLO en galaxias (en nebulosas hincha las estrellas); la capa de estrellas sale con arcsinh: NO pases amount (starStretch pierde las estrellas débiles). "
       u"Si NO sabes qué tipo de objeto es (sin OBJECT y con un nombre de fichero genérico), antes del Paso 1 no lineal PARA y PREGUNTA al usuario el tipo "
       u"(galaxia, nebulosa oscura, de emisión, de reflexión, planetaria, cúmulo…); no estires con los valores por defecto\n"

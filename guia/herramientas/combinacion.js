@@ -109,6 +109,9 @@ function combinarMasters(lista, o) {
   var files = [];
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
     var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
+    // Id de una vista abierta (Qwen pasó las vistas GC_POLY2_* del gradiente, 7 nov 2026: antes se trataban como ficheros
+    // y fallaba con "Cannot read properties of undefined (reading 'mainView')").
+    if (p.indexOf("/") < 0 && !ImageWindow.windowById(p).isNull) { files.push("vista:" + p); return; }
     if (File.directoryExists(p))
       files = files.concat((File.searchDirectory ? File.searchDirectory(p + "/" + "*.xisf", false) : searchDirectory(p + "/" + "*.xisf", false))
         .filter(function (f) { return !/mask|mascara|rejection|drizzle_weights|LN_Reference/i.test(File.extractName(f)); }).sort());
@@ -119,10 +122,16 @@ function combinarMasters(lista, o) {
   if (files.length > 8) throw new Error("Demasiados masters (" + files.length + "): pasa sólo los que se combinan (LRGB, Hα/OIII/SII con RGB...)");
   var r = { masters: [], hecho: [], vistas: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } }, por = {}, W = 0, H = 0;
   files.forEach(function (f) {
-    var abierta = null, ws = ImageWindow.windows;
-    for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == f) abierta = ws[i];
-    var w = abierta || ImageWindow.open(f)[0];
-    var cl = (o.clases && (o.clases[f] || o.clases[File.extractName(f)])) || cbClase(w, f);
+    var abierta = null, ws = ImageWindow.windows, esVista = f.indexOf("vista:") == 0;
+    if (esVista) { f = f.substring(6); abierta = ImageWindow.windowById(f); }
+    else for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == f) abierta = ws[i];
+    var w = abierta;
+    if (!w) {
+      if (!File.exists(f)) throw new Error("No existe la vista ni el fichero " + f);
+      w = ImageWindow.open(f)[0];
+      if (!w || w.isNull) throw new Error("No se pudo abrir " + f);
+    }
+    var cl = (o.clases && (o.clases[f] || o.clases[File.extractName(f)])) || cbClase(w, esVista ? "" : f);
     if (!W) { W = w.mainView.image.width; H = w.mainView.image.height; }
     if (w.mainView.image.width != W || w.mainView.image.height != H)
       throw new Error("Tamaños distintos (" + File.extractName(f) + "): alinear y recortar antes (Paso 5, alinearMasters)");
@@ -132,7 +141,7 @@ function combinarMasters(lista, o) {
     (por[cl] = por[cl] || []).push(w.mainView.id);
     r.masters.push({ fichero: f, clase: cl, vista: w.mainView.id });
   });
-  if (por["?"]) r.no_cumple.push("No se reconoce el filtro de: " + por["?"].join(", ") + ". Pásalo en clases: { \"<fichero>\": \"Ha\" | \"OIII\" | \"L\" | \"R\"... }.");
+  if (por["?"]) r.no_cumple.push("No se reconoce el filtro de: " + por["?"].join(", ") + ". Pásalo en clases, con el id de la vista o el nombre del fichero como clave, por ejemplo clases: { \"" + por["?"][0] + "\": \"Ha\" } (valores: Ha, OIII, SII, Hb, L, R, G, B, RGB).");
 
   // 1. Mismo canal: combinar de dos en dos.
   for (var cl in por) {
