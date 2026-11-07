@@ -334,6 +334,8 @@ void PiCopilotConfig::Load()
    if ( !Settings::Read( "DataDirs", dataDirs ) )
       dataDirs = String();   // la elige el usuario en Configuración (carpetas de datos)
 
+   if ( !Settings::Read( "AutoRun", autoRun ) )
+      autoRun = true;
    if ( !Settings::Read( "UILanguage", uiLanguage ) || uiLanguage.IsEmpty() )
       uiLanguage = "es";
    SetPiCopilotEnglish( uiLanguage == "en" );
@@ -442,6 +444,7 @@ void PiCopilotConfig::Save() const
    Settings::Write( "WatcherEnabled", watcherEnabled );
    Settings::Write( "WatcherSource", watcherSource );
    Settings::Write( "UILanguage", uiLanguage );
+   Settings::Write( "AutoRun", autoRun );
    Settings::Write( "DataDirs", dataDirs );
 
    Settings::Write( "AIThreshold", threshold );
@@ -1074,7 +1077,9 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
       u"- estirado.js: estirarCapas(starless, estrellas, { cielo: 0.10, nuevaStarless, nuevasEstrellas }) — Paso 1 no lineal; en GALAXIAS "
       u"SIEMPRE { tipo: \"galaxia\", nuevaStarless, nuevasEstrellas } y sin cielo (cielo 0,07 y estrellas con el mismo estirado que la starless); "
       u"en NEBULOSAS OSCURAS (polvo: LDN, LBN, vdB, sin emisión) { tipo: \"nebulosa_oscura\", nuevaStarless, nuevasEstrellas } sin cielo (cielo 0,15); "
-      u"estrellas: \"extraer\" SÓLO en galaxias (en nebulosas hincha las estrellas)\n"
+      u"estrellas: \"extraer\" SÓLO en galaxias (en nebulosas hincha las estrellas); la capa de estrellas sale con arcsinh: NO pases amount (starStretch pierde las estrellas débiles). "
+      u"Si NO sabes qué tipo de objeto es (sin OBJECT y con un nombre de fichero genérico), antes del Paso 1 no lineal PARA y PREGUNTA al usuario el tipo "
+      u"(galaxia, nebulosa oscura, de emisión, de reflexión, planetaria, cúmulo…); no estires con los valores por defecto\n"
       u"- nucleo.js: comprimirNucleo(vista, { nuevaVista }) — Paso 5 no lineal en GALAXIAS, antes de saturar (HDRMT al 60 % con máscara de bulbo; "
       u"obligatorio si estirarCapas dio meseta_nucleo.radio_px > 3); medirMeseta(vista) sólo mide\n"
       u"- boost.js: saturarAlFallo(vista, { tipo }) — Paso 5 no lineal (saturación)\n"
@@ -1089,7 +1094,7 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
       u"Esas vistas son ids (texto): pásalos tal cual, sin .id. no_cumple es una lista (vacía si todo cumple): NO pares el "
       u"script por ella ni la uses en un if; devuélvela en el resultado. PERO al ver el resultado, si no_cumple no está vacío, "
       u"NO pases al paso siguiente: haz lo que dice el mensaje (repetir ese paso o volver al que indica, p. ej. neutralizarCielo "
-      u"si el checkpoint da el cielo no neutro, o estirarCapas con tipo \"galaxia\" si en una galaxia las estrellas casi no aportan). "
+      u"si el checkpoint da el cielo no neutro, o repetir estirarCapas sin amount —en galaxias con tipo \"galaxia\"— si las estrellas casi no aportan). "
       u"El nombre del objeto y la carpeta de trabajo salen de la cabecera (OBJECT), de la ruta del master o de lo que diga el usuario; "
       u"si no los sabes, pregúntalos: NUNCA uses nombres que aparezcan en la guía ni los deduzcas de las coordenadas. "
       u"El continuo (16) sólo aplica si hay un master de banda estrecha (Hα, OIII) y otro de banda ancha: con un solo master RGB/OSC, sáltalo. "

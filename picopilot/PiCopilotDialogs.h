@@ -12,6 +12,7 @@
 #ifndef __PiCopilotDialogs_h
 #define __PiCopilotDialogs_h
 
+#include <pcl/CheckBox.h>
 #include <pcl/ComboBox.h>
 #include <pcl/Dialog.h>
 #include <pcl/Edit.h>
@@ -21,6 +22,7 @@
 #include <pcl/SpinBox.h>
 #include <pcl/Sizer.h>
 #include <pcl/TextBox.h>
+#include <pcl/Timer.h>
 #include <pcl/TreeBox.h>
 #include <pcl/WebView.h>
 
@@ -84,8 +86,10 @@ private:
          HorizontalSizer   Buttons_Sizer;
             PushButton        Send_Button;
             PushButton        RunScript_Button;
+            CheckBox          AutoRun_CheckBox;
             PushButton        Clear_Button;
             PushButton        New_Button;
+         Timer             Link_Timer;   // recoge los enlaces de paso pulsados en el WebView
    };
 
    GUIData* GUI = nullptr;
@@ -97,6 +101,8 @@ private:
 
    void Refresh();
    void RefreshHistory();
+   void e_LinkTimer( Timer& sender );
+   void e_LinkResult( WebView& sender, const Variant& result );
 
    void e_Click( Button& sender, bool checked );
 

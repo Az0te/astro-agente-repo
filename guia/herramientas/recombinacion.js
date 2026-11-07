@@ -102,15 +102,16 @@ function recombinarEstrellas(starlessId, starsId, o) {
   var fondoSube = medFin.map(function (m, i) { return +(m - medSl[i]).toPrecision(3); });
   // Aporte de las estrellas: % de píxeles que suben más de 0,01 (el mayor de los canales). galaxia grande (7 nov 2026): con la capa de
   // starStretch amount 2 salió 0,14–0,19 % y la final se quedó casi sin estrellas; con la capa del mismo estirado (Opus v7)
-  // la final tiene ~50 veces más estrellas detectables. Umbral 0,5 % calibrado con ese único caso.
+  // la final tiene ~50 veces más estrellas detectables (aporte 5,9 %). Nebulosa oscura (7 nov 2026): starStretch amount 2 dio 0,8 %
+  // y estrellas casi invisibles; el arcsinh k 3000 de Opus, 10 %. Umbral 2 % (sin calibrar con más casos).
   var aporte = Math.max.apply(null, dif.map(function (d) { return d.pct_sube_mas_de_001; })), noCumple = [];
   var recNuevo = clipFin.map(function (c, i) { return c - clipSl[i]; });
   if (!nuncaBaja) noCumple.push("el fondo baja respecto a la starless en algunos píxeles: las capas no son coherentes (el screen nunca oscurece)");
   if (fondoSube.some(function (s) { return Math.abs(s) >= 0.01; })) noCumple.push("el fondo sube " + fondoSube.join(" / ") + ": la capa de estrellas no tiene el fondo a cero; volver al Paso 8");
   if (recNuevo.some(function (c) { return c > 0.00005 * fin.image.width * fin.image.height; })) noCumple.push("recorte nuevo de " + recNuevo.join(" / ") + " px a 0,99: bajar el máximo de la capa de estrellas o usar k < 1");
-  if (aporte < 0.5)
-    noCumple.push("LAS ESTRELLAS CASI NO APORTAN: sólo el " + aporte + " % de los píxeles sube más de 0,01 (umbral 0,5 %). La imagen " +
-                  "final se verá casi sin estrellas. Volver al Paso 1 con estirarCapas(..., { estrellas: \"extraer\" }) (galaxias: tipo \"galaxia\"), " +
+  if (aporte < 2)
+    noCumple.push("LAS ESTRELLAS CASI NO APORTAN: sólo el " + aporte + " % de los píxeles sube más de 0,01 (umbral 2 %; bien procesadas, 6–10 %). La imagen " +
+                  "final se verá casi sin estrellas. Volver al Paso 1 y estirar la capa de estrellas con el arcsinh por defecto (sin amount; en galaxias, tipo \"galaxia\"), " +
                   "repetir el Paso 8 y recombinar. Sólo es aceptable en un campo con muy pocas estrellas, y hay que decirlo");
   var res = {
     vista: id, starless: starlessId, estrellas: starsId, metodo: usado,
@@ -119,7 +120,7 @@ function recombinarEstrellas(starlessId, starsId, o) {
     aporte_estrellas: dif, aporte_estrellas_pct: aporte, no_cumple: noCumple,
     control: {
       medido: {
-        estrellas_aportan: aporte >= 0.5,
+        estrellas_aportan: aporte >= 2,
         nunca_baja_respecto_a_starless: nuncaBaja,
         fondo_casi_igual: fondoSube.every(function (s) { return Math.abs(s) < 0.01; }),
         sin_recorte_nuevo: clipFin.every(function (c, i) { return c <= clipSl[i]; }),

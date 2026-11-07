@@ -179,6 +179,11 @@ void PiCopilotChatDialog::e_Click( Button& sender, bool /*checked*/ )
       if ( ThePiCopilotInterface->SubmitChat( text ) )
          GUI->Prompt_TextBox.Clear();
    }
+   else if ( sender == GUI->AutoRun_CheckBox )
+   {
+      if ( ThePiCopilotInterface != nullptr )
+         ThePiCopilotInterface->SetAutoRun( GUI->AutoRun_CheckBox.IsChecked() );
+   }
    else if ( sender == GUI->RunScript_Button )
    {
       if ( !m_lastScript.IsEmpty() && ThePiCopilotInterface != nullptr )
@@ -196,12 +201,40 @@ void PiCopilotChatDialog::e_Click( Button& sender, bool /*checked*/ )
    }
 }
 
+void PiCopilotChatDialog::e_LinkTimer( Timer& )
+{
+   if ( GUI == nullptr || !IsVisible() )
+      return;
+   GUI->History_WebView.EvaluateScript( u"(function(){var x=(typeof picoClick==='string')?picoClick:'';picoClick='';return x;})();" );
+}
+
+void PiCopilotChatDialog::e_LinkResult( WebView&, const Variant& result )
+{
+   if ( !result.IsValid() || ThePiCopilotInterface == nullptr )
+      return;
+   String v = result.ToString();
+   size_type bar = v.Find( '|' );
+   if ( v.IsEmpty() || bar == String::notFound )
+      return;
+   String text = v.Substring( bar + 1 ).Trimmed();
+   if ( text.IsEmpty() )
+      return;
+   int index = -1;
+   v.Left( bar ).TryToInt( index );
+   int lastAssistant = -1;
+   for ( size_t i = 0; i < m_entries.size(); ++i )
+      if ( m_entries[i].kind == PiCopilotChatEntry::Assistant )
+         lastAssistant = int( i );
+   ThePiCopilotInterface->StepLinkClicked( text, index >= 0 && index == lastAssistant, m_lastScript );
+}
+
 PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
 {
    Context_Label.EnableWordWrapping();
 
    History_WebView.SetScaledMinSize( 520, 300 );
    History_WebView.SetBackgroundColor( 0xff232629 );
+   History_WebView.OnScriptResultAvailable( (WebView::result_event_handler)&PiCopilotChatDialog::e_LinkResult, w );
 
    Prompt_Label.SetText( Tr( u"Prompt:" ) );
 
@@ -217,6 +250,17 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
                                 u"Revísalo antes: se te pedirá confirmación.</p>" ) );
    RunScript_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
 
+   AutoRun_CheckBox.SetText( Tr( u"Ejecutar sin preguntar" ) );
+   AutoRun_CheckBox.SetToolTip( Tr( u"<p>El script de la respuesta a tu Prompt se ejecuta en PixInsight sin esperar a que pulses "
+                                u"«Ejecutar script». Los enlaces «Siguiente paso» del chat ejecutan ese paso con un clic.</p>" ) );
+   AutoRun_CheckBox.SetChecked( ThePiCopilotInterface == nullptr || ThePiCopilotInterface->AutoRunEnabled() );
+   AutoRun_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
+
+   Link_Timer.SetInterval( 0.4 );
+   Link_Timer.SetPeriodic( true );
+   Link_Timer.OnTimer( (Timer::timer_event_handler)&PiCopilotChatDialog::e_LinkTimer, w );
+   Link_Timer.Start();
+
    Clear_Button.SetText( Tr( u"Limpiar" ) );
    Clear_Button.SetToolTip( Tr( u"<p>Vacía la ventana. El modelo conserva el contexto de la conversación.</p>" ) );
    Clear_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
@@ -228,6 +272,7 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
    Buttons_Sizer.SetSpacing( 6 );
    Buttons_Sizer.Add( Send_Button );
    Buttons_Sizer.Add( RunScript_Button );
+   Buttons_Sizer.Add( AutoRun_CheckBox );
    Buttons_Sizer.AddStretch();
    Buttons_Sizer.Add( Clear_Button );
    Buttons_Sizer.Add( New_Button );

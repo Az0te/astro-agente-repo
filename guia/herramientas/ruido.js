@@ -171,8 +171,10 @@ function reducirRuido(viewId, o) {
   var mono = src.image.numberOfChannels === 1;
   if (metodo === "hibrido" && (!mono || typeof MLDenoise !== "function" || !o.modelo || !File.exists(o.modelo))) {
     aviso = "híbrido no disponible (" + (!mono ? "imagen RGB: MLDenoise sólo mono" : typeof MLDenoise !== "function" ?
-            "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,95" : "0,70");
-    metodo = "nxt"; o.denoise = mono ? 0.95 : 0.70;   // RGB: 0,95 deja manchas de color (galaxia grande, 7 nov 2026)
+            "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,95" : "0,50");
+    // RGB: 0,95 deja manchas de color (galaxia grande, 7 nov 2026) y 0,70 tras el NXT suave del Paso 14 subió el moteado
+    // de 0,25 a 0,63 (nebulosa oscura, 7 nov 2026): 0,50.
+    metodo = "nxt"; o.denoise = mono ? 0.95 : 0.50;
   }
   var w = rdCopy(viewId, o.nuevaVista || (viewId + "_dn")), v = w.mainView;
   if (metodo === "nxt") rdNXT(v, o);
@@ -203,7 +205,7 @@ function reducirRuido(viewId, o) {
                     "2026, 1,45 → 2,03 con 0,30) ni tampoco SCNR. Quedarse con la entrada sin este NXT; las manchas vienen de la fase lineal " +
                     "(dominante o doble NXT lineal) o de saturar demasiado: bajar la saturación o volver al checkpoint. No hay otro límite que 1,5");
   }
-  if (q.moteado_color_antes !== null && q.moteado_color_despues !== null && q.moteado_color_despues - q.moteado_color_antes > 0.5)
+  if (q.moteado_color_antes !== null && q.moteado_color_despues !== null && q.moteado_color_despues - q.moteado_color_antes > 0.3)
     noCumple.push("este denoise SUBE el moteado de color de " + q.moteado_color_antes + " a " + q.moteado_color_despues + ": " +
                   (linealSrc ? "repetir sobre la misma entrada con menos denoise (0,50); si la entrada ya pasó por el NXT suave del Paso 14, " +
                                "basta con 0,50 o menos (galaxia grande, 7 nov 2026: 0,50 + 0,70 subió el moteado de 0,35 a 0,92)"

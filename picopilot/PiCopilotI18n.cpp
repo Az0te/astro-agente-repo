@@ -207,6 +207,17 @@ static const std::map<String, String>& Table()
       { u"<p>Escribe tu petición y pulsa <b>Enviar</b>. La respuesta llega en segundo plano: puedes seguir trabajando en PixInsight mientras tanto.</p>",
         u"<p>Type your request and press <b>Send</b>. The answer arrives in the background: you can keep working in PixInsight meanwhile.</p>" },
       { u"Ejecutar script", u"Run script" },
+      { u"Ejecutar sin preguntar", u"Run without asking" },
+      { u"<p>El script de la respuesta a tu Prompt se ejecuta en PixInsight sin esperar a que pulses "
+        u"«Ejecutar script». Los enlaces «Siguiente paso» del chat ejecutan ese paso con un clic.</p>",
+        u"<p>The script in the answer to your Prompt runs in PixInsight without waiting for you to press "
+        u"«Run script». The «Next step» links in the chat run that step with one click.</p>" },
+      { u">>> Ejecuto el plan sin esperar (casilla «Ejecutar sin preguntar» de la ventana de Prompt).",
+        u">>> Running the plan without waiting («Run without asking» box in the Prompt window)." },
+      { u"Espera a que termine lo que está en marcha antes de pulsar otro paso.",
+        u"Wait for the current work to finish before clicking another step." },
+      { u">>> Ejecuto el paso: ", u">>> Running the step: " },
+      { u"Haz ahora este paso: ", u"Do this step now: " },
       { u"<p>Ejecuta en PixInsight el último bloque <i>```javascript</i> de la respuesta. Revísalo antes: se te pedirá confirmación.</p>",
         u"<p>Runs the last <i>```javascript</i> block of the answer in PixInsight. Review it first: you will be asked to confirm.</p>" },
       { u"Limpiar", u"Clear" },

@@ -668,6 +668,36 @@ void PiCopilotInterface::LaunchFull()
    }
 }
 
+void PiCopilotInterface::SetAutoRun( bool on )
+{
+   m_cfg.autoRun = on;
+   m_cfg.Save();
+}
+
+void PiCopilotInterface::StepLinkClicked( const String& text, bool lastMessage, const String& lastScript )
+{
+   if ( m_busy || m_scriptRunning || m_autoRunPending )
+   {
+      Chat().AppendInfo( Tr( u"Espera a que termine lo que está en marcha antes de pulsar otro paso." ) );
+      return;
+   }
+   // El enlace del último mensaje con un script sin ejecutar es ese script: se ejecuta tal cual, desde el temporizador.
+   if ( lastMessage && m_scriptWaiting && !lastScript.IsEmpty() )
+   {
+      m_autoChain = false;
+      m_autoScript = lastScript;
+      m_autoSingle = true;
+      m_autoRunPending = true;
+      m_autoRunAt = NowSeconds() + 0.3;
+      m_interpretPending = true;
+      Chat().AppendInfo( Tr( u">>> Ejecuto el paso: " ) + text );
+      return;
+   }
+   // Si no, se le pide al modelo (y su script se ejecuta solo si la casilla está marcada).
+   String ask = Tr( u"Haz ahora este paso: " ) + text;
+   SubmitChat( ask );
+}
+
 bool PiCopilotInterface::SubmitChat( const String& text )
 {
    UpdateView();
@@ -1725,6 +1755,16 @@ void PiCopilotInterface::FinishJob( const String& response, bool error )
                                 Tr( u" sin esperar (pulsa «Cancelar» mientras el modelo piensa para parar)." ) );
             }
          }
+         // Respuesta a un Prompt o a un botón de paso: el plan se ejecuta sin esperar si la casilla está marcada (Rafael, 7 nov
+         // 2026). Las interpretaciones fuera de una serie no se ejecutan solas: traen el paso siguiente como enlace.
+         if ( !m_autoRunPending && m_cfg.autoRun && (m_job.kind == JobKind::Chat || m_job.kind == JobKind::Step) && !m_job.model.IsAgent() )
+         {
+            m_autoScript = PiCopilotPrompts::ExtractScript( response );
+            m_autoSingle = true;
+            m_autoRunPending = true;
+            m_autoRunAt = NowSeconds() + 1.0;
+            chat.AppendInfo( Tr( u">>> Ejecuto el plan sin esperar (casilla «Ejecutar sin preguntar» de la ventana de Prompt)." ) );
+         }
          if ( !m_autoRunPending )
             chat.AppendInfo( Tr( u">>> Plan listo, todavía sin aplicar. PULSE «Ejecutar script» para llevarlo a cabo en PixInsight." ) );
       }
@@ -2242,9 +2282,12 @@ void PiCopilotInterface::e_Timer( Timer& )
    if ( m_autoRunPending && !m_queued.pending && !m_busy && !m_scriptRunning && !m_inTimer && !m_inProcessEvent && NowSeconds() >= m_autoRunAt )
    {
       m_autoRunPending = false;
-      if ( m_autoChain && !m_autoScript.IsEmpty() )
+      bool single = m_autoSingle;
+      m_autoSingle = false;
+      if ( (m_autoChain || single) && !m_autoScript.IsEmpty() )
       {
-         ++m_autoSteps;
+         if ( m_autoChain )
+            ++m_autoSteps;
          String code = m_autoScript;
          m_autoScript.Clear();
          String first = code.Trimmed();

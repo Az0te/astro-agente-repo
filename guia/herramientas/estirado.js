@@ -321,11 +321,15 @@ function estirarStarless(viewId, o) {
   };
 }
 // ---------------------------------------------------------------------------------------------------
-// Capa de estrellas LINEAL con starStretch (Star Stretch de SetiAstro) sobre una copia. amount por defecto 2 (campos
-// con muchas estrellas: 1–3; con pocas, hasta 5). Como la curva de starStretch es punto a punto, devuelve también el
-// p90 de los píxeles de estrella (> 0,005) que daría cada amount, calculado sobre una muestra sin tocar la imagen,
-// para poder decidir si conviene otro amount.
-//   var e = estirarEstrellas("Stars", { nuevaVista: "Stars_st", amount: 2, saturacion: 1 });
+// Capa de estrellas LINEAL estirada sobre una copia. Por defecto (metodo "asinh") arcsinh que conserva el color:
+// L = máx(R,G,B), f = asinh(k·L) / (asinh(k)·L), cada canal × f, k = 3000. Lo débil sube mucho y lo brillante casi nada:
+// salen las estrellas débiles sin hinchar las brillantes. En una nebulosa oscura (7 nov 2026) starStretch amount 2 dejó
+// el 0,8 % de aporte en la final y ~2 200 estrellas visibles; el arcsinh k 3000 de Opus, el 10 % y ~18 000.
+// metodo "starstretch" (o pasar amount): Star Stretch de SetiAstro, amount 1–5; su curva k·x/((k−1)·x+1) con k = 3^amount
+// sube lo débil sólo ×9 con amount 2 (×345 el arcsinh): se pierden las estrellas débiles.
+//   var e = estirarEstrellas("Stars", { nuevaVista: "Stars_st" });                       // arcsinh k 3000
+//   var e = estirarEstrellas("Stars", { nuevaVista: "Stars_st", k: 1000 });              // menos estrellas débiles
+//   var e = estirarEstrellas("Stars", { nuevaVista: "Stars_st", metodo: "starstretch", amount: 2, saturacion: 1 });
 function esStarCurve(x, A) { var k = Math.pow(3, A); return k * x / ((k - 1) * x + 1); }
 
 function esStarP90(sample, A) {
@@ -336,13 +340,24 @@ function esStarP90(sample, A) {
   return s[Math.floor(0.9 * (s.length - 1))];
 }
 
+function esAsinh(x) { return Math.log(x + Math.sqrt(x * x + 1)); }
+function esAsinhF(L, k) { return L > 1e-9 ? esAsinh(k * L) / (esAsinh(k) * L) : 0; }
+function esAsinhP90(sample, k) {
+  var s = [];
+  for (var i = 0; i < sample.length; ++i) { var y = sample[i] * esAsinhF(sample[i], k); if (y > 0.005) s.push(y); }
+  if (!s.length) return 0;
+  s.sort(function (a, b) { return a - b; });
+  return s[Math.floor(0.9 * (s.length - 1))];
+}
+
 function estirarEstrellas(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var sat = o.saturacion || 1;
-  if (typeof starStretch !== "function" && typeof PICOPILOT_GUIA === "string")
+  var metodo = String(o.metodo || (o.amount !== undefined ? "starstretch" : "asinh")).toLowerCase();
+  if (metodo === "starstretch" && typeof starStretch !== "function" && typeof PICOPILOT_GUIA === "string")
     try { eval.call(null, File.readTextFile(PICOPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
-  if (typeof starStretch !== "function") throw new Error("starStretch no está cargado (herramientas/realces.js)");
+  if (metodo === "starstretch" && typeof starStretch !== "function") throw new Error("starStretch no está cargado (herramientas/realces.js)");
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
   var med0 = esMedian(win.mainView);
@@ -358,11 +373,20 @@ function estirarEstrellas(viewId, o) {
   var sample = [];
   for (var j = 0; j < n; j += 3) sample.push(mxs[j]);
 
-  var A = (o.amount !== undefined) ? o.amount : 2, curva = [];
-  for (var a = 1; a <= 5.001; a += 1) curva.push({ amount: a, p90: +esStarP90(sample, a).toFixed(3) });
+  var A = (o.amount !== undefined) ? o.amount : 2, K = o.k || 3000, curva = [];
+  if (metodo === "starstretch") for (var a = 1; a <= 5.001; a += 1) curva.push({ amount: a, p90: +esStarP90(sample, a).toFixed(3) });
+  else [300, 1000, 3000, 10000].forEach(function (kk) { curva.push({ k: kk, p90: +esAsinhP90(sample, kk).toFixed(3) }); });
   var w = esCopy(viewId, o.nuevaVista || (viewId + "_st"));
   w.show();
-  starStretch(w.mainView.id, { amount: A, saturation: sat, removeGreen: !!o.quitarVerde });
+  if (metodo === "starstretch") starStretch(w.mainView.id, { amount: A, saturation: sat, removeGreen: !!o.quitarVerde });
+  else {
+    var wi = w.mainView.image, nc = wi.numberOfChannels, ch = [];
+    for (var c1 = 0; c1 < nc; ++c1) { ch.push(new Float32Array(n)); wi.getSamples(ch[c1], R, c1); }
+    for (var p = 0; p < n; ++p) { var f = esAsinhF(mxs[p], K); for (var c3 = 0; c3 < nc; ++c3) ch[c3][p] = Math.min(1, ch[c3][p] * f); }
+    w.mainView.beginProcess();
+    for (var c4 = 0; c4 < nc; ++c4) wi.setSamples(ch[c4], R, c4);
+    w.mainView.endProcess();
+  }
 
   // Medidas.
   var v = w.mainView, vi = v.image, st = [], mx = 0, med = [], uno = 0;
@@ -375,14 +399,18 @@ function estirarEstrellas(viewId, o) {
   st.sort(function (p, r) { return p - r; });
   var p90 = st.length ? st[Math.floor(0.9 * (st.length - 1))] : 0;
   return {
-    vista: v.id, original: viewId, amount: A, saturacion: sat, p90_segun_amount: curva,
+    vista: v.id, original: viewId, metodo: metodo === "starstretch" ? "starStretch" : "arcsinh que conserva el color",
+    amount: metodo === "starstretch" ? A : undefined, k: metodo === "starstretch" ? undefined : K,
+    saturacion: metodo === "starstretch" ? sat : "sin cambio (la satura el Paso 8)",
+    p90_segun_amount: metodo === "starstretch" ? curva : undefined, p90_segun_k: metodo === "starstretch" ? undefined : curva,
     p90_estrellas: +p90.toFixed(3), mediana_fondo: med, maximo: +mx.toFixed(4),
     control: {
       medido: { fondo_a_cero: med.every(function (m) { return m < 0.01; }), nucleos_a_1_pct: +(100 * uno / (3 * n)).toFixed(4) },
       revisar_a_ojo: ["estrellas hinchadas o con anillos de color", "estrellas pálidas (subir saturación a 1,2–1,5)"],
-      nota: "p90_segun_amount dice cuánto subiría el p90 con cada amount: si las estrellas quedan débiles para el campo, " +
-            "repetir con un amount mayor (hasta 3 en campos densos, 5 con pocas estrellas). Los núcleos a 1 se " +
-            "contienen en el Paso 8. Lo de revisar_a_ojo no lo mide esta función."
+      nota: (metodo === "starstretch" ? "p90_segun_amount dice cuánto subiría el p90 con cada amount. starStretch pierde las estrellas débiles: " +
+            "si la final se queda sin estrellas, repetir sin amount (arcsinh). " : "p90_segun_k dice el p90 con cada k: si salen demasiadas " +
+            "estrellas débiles o ruido entre ellas, bajar k (1000); si quedan débiles, subirlo (10000). ") +
+            "Los núcleos a 1 se contienen en el Paso 8. Lo de revisar_a_ojo no lo mide esta función."
     }
   };
 }
@@ -497,8 +525,8 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
 // (nebulosa oscura, 7 nov 2026: con cielo 0,10 el cuerpo quedaba 0,009 sobre el cielo en la final; Opus con MAS a 0,17 + curvas con
 // máscara, 0,051). Sin calibrar con más casos. Estrellas con starStretch, nunca "extraer".
 var ES_TIPOS = {
-  galaxia: { cielo: 0.07, ruidoMax: 0.12, amount: 4, saturacion: 1.3, estrellas: "extraer" },
-  nebulosa_oscura: { cielo: 0.15, ruidoMax: 0.20, amount: 4, saturacion: 1.2 }   // amount 2 dejó las estrellas casi invisibles (T90, aporte 0,7 %)
+  galaxia: { cielo: 0.07, ruidoMax: 0.12, saturacion: 1.3, estrellas: "extraer" },
+  nebulosa_oscura: { cielo: 0.15, ruidoMax: 0.20 }   // estrellas con arcsinh k 3000 (con starStretch amount 2, aporte 0,7–0,8 %)
 };
 
 // Las dos capas del Paso 1 en una llamada.
@@ -519,7 +547,7 @@ function estirarCapas(starlessId, starsId, o) {
       catch (e) { aviso = "no se pudo sacar la capa de estrellas con el mismo estirado (" + e.message + "): se usa starStretch"; }
     }
     if (!r.estrellas) {
-      r.estrellas = estirarEstrellas(starsId, { nuevaVista: o.nuevasEstrellas, amount: o.amount, saturacion: o.saturacion });
+      r.estrellas = estirarEstrellas(starsId, { nuevaVista: o.nuevasEstrellas, metodo: o.metodoEstrellas, k: o.k, amount: o.amount, saturacion: o.saturacion });
       if (aviso) r.estrellas.aviso = aviso;
     }
     if (r.estrellas.no_cumple && r.estrellas.no_cumple.length)

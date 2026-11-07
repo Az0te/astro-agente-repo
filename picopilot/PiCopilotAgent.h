@@ -73,6 +73,7 @@ public:
    bool   watcherEnabled = true;  // Watcher MCP integrado
    String watcherSource;          // pixinsight-mcp-watcher.js (fuente de los comandos)
    String uiLanguage = "es";      // idioma de la interfaz: "es" | "en"
+   bool   autoRun = true;         // ejecutar sin preguntar el script de la respuesta a un Prompt (Rafael, 7 nov 2026)
 
    // Configurar IA: cada paso tiene una puntuación (valor base de la tabla
    // + ajuste del usuario). Si es >= threshold se usa el modelo inferior

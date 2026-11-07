@@ -37,7 +37,7 @@ String PiCopilotRender::Escape( const String& s )
 }
 
 // Formato en línea sobre texto ya escapado: `código`, **negrita**, *cursiva*, [enlace](url).
-static String Inline( const String& raw )
+static String InlineBase( const String& raw )
 {
    String s = PiCopilotRender::Escape( raw ), out;
    size_type i = 0, n = s.Length();
@@ -111,6 +111,57 @@ static StringList Cells( const String& l )
    StringList c;
    t.Break( c, '|', true );
    return c;
+}
+
+// Enlaces de paso (Rafael, 7 nov 2026): "Siguiente paso: ..." / "Paso siguiente: ..." / "Next step: ..." y las líneas que
+// empiezan por "Paso N ..." se pintan como enlace subrayado. Al pulsarlo, la página deja el texto en window.picoClick
+// (con el número de mensaje, data-m) y el diálogo del Prompt lo recoge con su temporizador: ejecuta el script pendiente
+// de ese mensaje o le pide el paso al modelo.
+static String StepAnchor( const String& target, const String& after )
+{
+   String plain = target;
+   plain.ReplaceString( "**", "" );
+   plain.ReplaceString( "`", "" );
+   plain = plain.Trimmed();
+   if ( plain.IsEmpty() )
+      return String();
+   return String( "<a class=\"step\" href=\"#\" data-m=\"@M@\" data-step=\"" ) + PiCopilotRender::Escape( plain ) +
+          "\" onclick=\"return picoStep(this)\">" + InlineBase( target ) + "</a>" + InlineBase( after );
+}
+
+static String Inline( const String& raw )
+{
+   String low = raw.Lowercase();
+   static const char* keys[] = { "siguiente paso:", "paso siguiente:", "siguiente paso (", "next step:", nullptr };
+   for ( int k = 0; keys[k] != nullptr; ++k )
+   {
+      size_type p = low.Find( keys[k] );
+      if ( p == String::notFound )
+         continue;
+      size_type e = p + IsoString( keys[k] ).Length();
+      if ( keys[k][IsoString( keys[k] ).Length() - 1] == '(' )   // "Siguiente paso (Paso 11): ..."
+         e = p + IsoString( keys[k] ).Length() - 1;
+      String before = raw.Left( e ), rest = raw.Substring( e );
+      // El rótulo en negrita ("**Siguiente paso:** ...") se queda fuera del enlace.
+      if ( rest.StartsWith( "**" ) ) { before << "**"; rest = rest.Substring( 2 ); }
+      size_type dot = rest.Find( ". " );
+      String target = (dot != String::notFound) ? rest.Left( dot + 1 ) : rest, after = (dot != String::notFound) ? rest.Substring( dot + 1 ) : String();
+      String a = StepAnchor( target, after );
+      if ( !a.IsEmpty() )
+         return InlineBase( before ) + a;
+   }
+   String t = raw.Trimmed();
+   size_type s = 0;
+   while ( s < t.Length() && t[s] == '*' ) ++s;
+   if ( t.Substring( s ).StartsWith( "Paso " ) && t.Length() > s + 5 && t[s+5] >= '0' && t[s+5] <= '9' )
+   {
+      size_type dot = t.Find( ". " );
+      String target = (dot != String::notFound) ? t.Left( dot + 1 ) : t, after = (dot != String::notFound) ? t.Substring( dot + 1 ) : String();
+      String a = StepAnchor( target, after );
+      if ( !a.IsEmpty() )
+         return a;
+   }
+   return InlineBase( raw );
 }
 
 String PiCopilotRender::Markdown( const String& md )
@@ -401,6 +452,7 @@ static const char* s_css =
    ".asst .bubble{background:#2b2f33;border:1px solid #3a4046;border-left:3px solid #6aa6e8;border-radius:6px;padding:8px 12px}"
    "h2,h3,h4,h5{margin:10px 0 5px;color:#9cc7f5}h2{font-size:16px}h3{font-size:14.5px}h4{font-size:13.5px}h5{font-size:13px}"
    "p{margin:5px 0}b{color:#ffffff}i{color:#e8d9a8}a{color:#79b8ff}"
+   "a.step{text-decoration:underline;cursor:pointer;color:#7fd0ff;font-weight:600}a.step.done{color:#8a9199}"
    "code{font-family:Consolas,Menlo,monospace;font-size:12px;background:#1b1d1f;color:#e6c07b;padding:1px 4px;border-radius:3px}"
    "pre.code{background:#1b1d1f;border:1px solid #33383d;border-radius:5px;padding:6px 9px;overflow-x:auto;white-space:pre}"
    "pre.code code{background:none;padding:0;color:#c9d1d9}.lang{font-size:10px;color:#7d8590;margin-bottom:3px}"
@@ -429,12 +481,21 @@ static const char* s_css =
    "figcaption{font-size:11px;color:#c8ccd0;padding:3px 6px}"
    "figure.rec{border:2px solid #4fbf7a}";
 
+static String StepIndex( String html, int index )
+{
+   html.ReplaceString( String( "data-m=\"@M@\"" ), String( "data-m=\"" ) + String().Format( "%d", index ) + "\"" );
+   return html;
+}
+
 String PiCopilotRender::Page( const std::vector<PiCopilotChatEntry>& entries )
 {
    String h = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>";
-   h << s_css << "</style></head><body>";
+   h << s_css << "</style><script>var picoClick='';function picoStep(a){picoClick=a.getAttribute('data-m')+'|'+"
+        "a.getAttribute('data-step');a.className='step done';return false;}</script></head><body>";
+   int index = -1;
    for ( const PiCopilotChatEntry& e : entries )
    {
+      ++index;
       switch ( e.kind )
       {
       case PiCopilotChatEntry::User:
@@ -443,7 +504,7 @@ String PiCopilotRender::Page( const std::vector<PiCopilotChatEntry>& entries )
          break;
       case PiCopilotChatEntry::Assistant:
          h << "<div class=\"msg asst\"><div class=\"who\">" << Escape( e.time ) << " &middot; <b>" << Escape( e.title ) << "</b></div>"
-           << "<div class=\"bubble\">" << Markdown( e.text ) << "</div></div>";
+           << "<div class=\"bubble\">" << StepIndex( Markdown( e.text ), index ) << "</div></div>";
          break;
       default:
          h << "<div class=\"msg\"><div class=\"who\">" << Escape( e.time ) << "</div>" << Info( e.text );
