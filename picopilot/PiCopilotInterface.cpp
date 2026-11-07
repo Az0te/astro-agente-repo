@@ -540,6 +540,121 @@ void PiCopilotInterface::StopAutoChain( const String& why )
       Chat().AppendInfo( Tr( u"Serie de pasos terminada (" ) + why + String().Format( "; %d scripts).", m_autoSteps ) );
 }
 
+// ----------------------------------------------------------------------------
+// Funciones de la guía (herramientas/manifiesto.json): nombre -> fichero. Qwen se inventa ficheros (denoise.js,
+// checkpoint.js, no_lineal.js) y funciones (estiradoInicial) cuando la conversación es larga (Rafael, 7 nov 2026):
+// el panel corrige la carga de ficheros y le recuerda la lista.
+static std::vector<std::pair<String, String>> GuideFunctions( const String& guideDir )
+{
+   std::vector<std::pair<String, String>> fns;
+   try
+   {
+      String path = guideDir + u"/herramientas/manifiesto.json";
+      if ( !File::Exists( path ) )
+         return fns;
+      JsonValue root;
+      String why;
+      if ( !JsonValue::Parse( File::ReadTextFile( path ), root, why ) )
+         return fns;
+      const JsonValue& list = root["funciones"];
+      for ( size_t i = 0; i < list.Size(); ++i )
+      {
+         const JsonValue& f = list[i];
+         if ( f["nombre"].type == JsonValue::Str && f["fichero"].type == JsonValue::Str )
+            fns.push_back( { f["nombre"].s, f["fichero"].s } );
+      }
+   }
+   catch ( ... ) {}
+   return fns;
+}
+
+static String GuideFunctionList( const std::vector<std::pair<String, String>>& fns )
+{
+   // "estirado.js: estirarCapas, estirarStarless; ruido.js: reducirRuido, ..." en el orden del manifiesto.
+   String out, file;
+   for ( const auto& f : fns )
+   {
+      if ( f.second != file )
+      {
+         if ( !out.IsEmpty() ) out << u"; ";
+         out << f.second << u": ";
+         file = f.second;
+      }
+      else
+         out << u", ";
+      out << f.first;
+   }
+   return out;
+}
+
+static bool CallsFunction( const String& code, const String& name )
+{
+   for ( size_type p = code.Find( name ); p != String::notFound; p = code.Find( name, p + 1 ) )
+   {
+      char16_t c = (p > 0) ? char16_t( code[p-1] ) : u' ';
+      bool startOk = !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '$' || c == '.');
+      size_type e = p + name.Length();
+      while ( e < code.Length() && (code[e] == ' ' || code[e] == '\t') ) ++e;
+      if ( startOk && e < code.Length() && code[e] == '(' )
+         return true;
+   }
+   return false;
+}
+
+// Quita las cargas de ficheros de herramientas/ que no existen y añade las de las funciones de la guía que el script
+// llama sin cargar su fichero. 'notes' cuenta lo que se ha cambiado (vacío si nada).
+static String FixGuideLoads( const String& code, const String& guideDir, String& notes )
+{
+   std::vector<std::pair<String, String>> fns = GuideFunctions( guideDir );
+   StringList lines;
+   code.Break( lines, '\n' );
+   String out;
+   for ( size_type i = 0; i < lines.Length(); ++i )
+   {
+      String line = lines[i];
+      size_type r = line.Find( u"readTextFile(" );
+      if ( r != String::notFound && line.Contains( u"herramientas" ) )
+      {
+         size_type q1 = line.Find( '"', r );
+         if ( q1 == String::notFound ) q1 = line.Find( '\'', r );
+         size_type q2 = (q1 != String::notFound) ? line.Find( line[q1], q1 + 1 ) : String::notFound;
+         if ( q2 != String::notFound )
+         {
+            String p = line.Substring( q1 + 1, q2 - q1 - 1 );
+            if ( p.EndsWith( u".js" ) && !File::Exists( p ) )
+            {
+               notes << (notes.IsEmpty() ? u"" : u"; ") << File::ExtractNameAndSuffix( p ) << u" no existe (se quita)";
+               line = u"// [PiCopilot] " + line;
+            }
+         }
+      }
+      out << line;
+      if ( i + 1 < lines.Length() ) out << '\n';
+   }
+   String guia = guideDir;
+   guia.ReplaceString( u"\\", u"/" );
+   String pre;
+   std::set<String> added;
+   for ( const auto& f : fns )
+      if ( CallsFunction( out, f.first ) && added.count( f.second ) == 0 )
+      {
+         // ¿Ya se carga ese fichero (sin comentar)?
+         bool loaded = false;
+         StringList ls;
+         out.Break( ls, '\n' );
+         for ( const String& l : ls )
+            if ( !l.Trimmed().StartsWith( u"//" ) && l.Contains( u"readTextFile(" ) && l.Contains( u"/" + f.second ) )
+               loaded = true;
+         if ( !loaded )
+         {
+            pre << u"eval(File.readTextFile(\"" << guia << u"/herramientas/" << f.second << u"\"));\n";
+            notes << (notes.IsEmpty() ? u"" : u"; ") << u"cargo " << f.second << u" (" << f.first << u")";
+         }
+         added.insert( f.second );
+      }
+   return pre + out;
+}
+
 String PiCopilotInterface::AutoNextText() const
 {
    return u"\n\nSERIE DE PASOS EN MARCHA. Lo que pidió el usuario: «" + m_autoGoal + u"». Scripts ya ejecutados en la serie: " +
@@ -549,7 +664,13 @@ String PiCopilotInterface::AutoNextText() const
           u"que acaba de devolver este resultado: PiCopilot lo ejecutará sin esperar al usuario, así que no le preguntes si "
           u"quiere seguir. Si ya están hechos todos los pasos pedidos, o una medida indica un problema que el usuario tiene "
           u"que decidir (no algo que se arregla repitiendo el paso con otros parámetros), NO escribas script: escribe una "
-          u"línea que empiece por «PARO:» con el motivo.";
+          u"línea que empiece por «PARO:» con el motivo.\n"
+          u"Usa SÓLO estas funciones de la guía (fichero: funciones): " + GuideFunctionList( GuideFunctions( m_cfg.guideDir ) ) + u". "
+          u"No inventes ficheros ni funciones, y no uses procesos sueltos (new HistogramTransformation, new LocalHistogramEqualization...) "
+          u"para un paso que tiene función. Orden no lineal: estirarCapas(starless, estrellas, { tipo }) (1) → en galaxias "
+          u"comprimirNucleo (5) → saturarAlFallo (5) → prepararEstrellas (8) → recombinarEstrellas (9) → exportarFinal (10). "
+          u"Antes de estirarCapas, si no sabes el tipo de objeto (galaxia, nebulosa oscura, de emisión, de reflexión...), "
+          u"escribe «PARO:» y pregunta el tipo al usuario.";
 }
 
 void PiCopilotInterface::LaunchStep( const PiCopilotStep& step )
@@ -905,8 +1026,9 @@ std::vector<std::pair<String, String>> PiCopilotInterface::CandidatePreviews( co
    return imgs;
 }
 
-void PiCopilotInterface::RunScript( const String& code, bool ask )
+void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
 {
+   String code = codeIn;
    int lines = 1;
    for ( String::const_iterator i = code.Begin(); i != code.End(); ++i )
       if ( *i == '\n' )
@@ -918,6 +1040,13 @@ void PiCopilotInterface::RunScript( const String& code, bool ask )
 
    CopilotLog( u"Ejecutando el script de la respuesta..." );
    m_scriptWaiting = false;
+   if ( !m_cfg.guideDir.IsEmpty() && code.Contains( u"herramientas" ) )
+   {
+      String notes;
+      code = FixGuideLoads( codeIn, m_cfg.guideDir, notes );
+      if ( !notes.IsEmpty() )
+         Chat().AppendInfo( Tr( u"Corrijo la carga de ficheros de la guía: " ) + notes + u"." );
+   }
    // El script corre en este mismo hilo: el estado se pinta antes y se fuerza el repintado, si no el panel seguía en
    // "Listo." hasta el final (Rafael, 6 nov 2026). El guard lo devuelve a su estado aunque el script falle.
    m_scriptRunning = true;
@@ -1078,7 +1207,11 @@ void PiCopilotInterface::RunScript( const String& code, bool ask )
          QueueJob( JobKind::Fix, String().Format( "Corregir script (%d/%d)", m_scriptFixes, limit ),
                    u"Lo he ejecutado en PixInsight y ha fallado con este error:\n" + e.Message() +
                    u"\nLas vistas que se crearon antes del error siguen abiertas. Corrige el script y devuélvelo completo "
-                   u"en un único bloque ```javascript, sin explicaciones largas." );
+                   u"en un único bloque ```javascript, sin explicaciones largas." +
+                   ((e.Message().Contains( u"is not defined" ) || e.Message().Contains( u"not a function" ) || e.Message().Contains( u"Unable to open file" ))
+                    ? u"\nEsa función o fichero no existe. Las funciones de la guía son (fichero: funciones): " +
+                      GuideFunctionList( GuideFunctions( m_cfg.guideDir ) ) + u". Usa una de ellas; no inventes otras."
+                    : String()) );
       }
       else
          Chat().AppendInfo( m_cfg.Current().IsAgent() || m_history.empty()

@@ -170,7 +170,7 @@ function calibrarColor(viewId, o) {
 // falta para igualar al canal de cielo más alto: no resta nada (no recorta sombras) y no toca el balance de blancos de
 // SPCC en las estrellas ni en el objeto más que ese desplazamiento constante, que es lo que hace BackgroundNeutralization.
 // Uso:
-//   var r = neutralizarCielo("LDN1235_v1_starless_dn75", { nuevaVista: "LDN1235_v1_starless_bn" });
+//   var r = neutralizarCielo("Starless_dn", { nuevaVista: "Starless_bn" });
 // Opciones:
 //   nuevaVista  copia donde se corrige (por defecto <vista>_bn). La original no se toca.
 //   rect        [x0, y0, x1, y1] zona de cielo limpio de referencia (por defecto, las celdas más oscuras).

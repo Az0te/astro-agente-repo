@@ -7,7 +7,7 @@
 //   eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));
 //   var a = resolverAstrometria("MasterLight");                       // necesita blindSolve (watcher v8 o PiCopilot)
 //   var b = bxtCorrectOnly("MasterLight", { nuevaVista: "MasterLight_bxtco" });
-//   var c = checkpointLineal("MasterLight_dn", { carpeta: "<carpeta de la versión>", objeto: "<objeto>", version: "v1" });
+//   var c = checkpointLineal("MasterLight_dn", { carpeta: carpetaVersion, objeto: nombreObjeto, version: "v1" });
 //   var d = quitarVerde("Starless_st", { nuevaVista: "Starless_sinverde" });
 
 function lnNeed(fnName, file, o) {
@@ -111,6 +111,12 @@ function bxtCorrectOnly(viewId, o) {
 // Paso 17: informe del checkpoint lineal (tabla de la ficha) y, con 'carpeta', borrador de estado.md.
 function checkpointLineal(viewId, o) {
   viewId = lnId(viewId); o = o || {};
+  // Qwen copió "<objeto>" de un ejemplo como si fuera una ruta (7 nov 2026): se para con un error claro.
+  ["carpeta", "objeto"].forEach(function (k) {
+    if (o[k] && /[<>]/.test(String(o[k])))
+      throw new Error("checkpointLineal: '" + k + "' = " + o[k] + " es un ejemplo, no un valor real. Usa la carpeta real " +
+                      "del master (sin < >) y el nombre del objeto de OBJECT, del nombre del fichero o preguntado al usuario.");
+  });
   lnNeed("ccSky", "color.js", o);
   var w = ImageWindow.windowById(viewId);
   if (w.isNull) throw new Error("No existe la vista " + viewId);

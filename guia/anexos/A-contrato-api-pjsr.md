@@ -76,7 +76,7 @@ JSON.stringify(r);
 ```javascript
 var src = ImageWindow.windowById("MasterLight");
 var im = src.mainView.image;
-var w2 = new ImageWindow(im.width, im.height, im.numberOfChannels, 32, true, im.isColor, "M31_v3");
+var w2 = new ImageWindow(im.width, im.height, im.numberOfChannels, 32, true, im.isColor, "Final_v3");
 w2.mainView.beginProcess();
 w2.mainView.image.assign(im);
 w2.mainView.endProcess();

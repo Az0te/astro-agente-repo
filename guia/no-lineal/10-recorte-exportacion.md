@@ -26,7 +26,7 @@ icc.targetProfile = "sRGB IEC61966-2.1";   // comprobado en PixInsight 1.9.6
 icc.toDefaultProfile = false;
 if (!icc.executeOn(v)) throw new Error("ICC sRGB falló");
 var w = ImageWindow.windowById("Final");
-if (!w.saveAs("C:/ASTRO/<objeto>/final/IC63_v4.xisf", false, false, false, false))
+if (!w.saveAs(carpetaVersion + "/final.xisf"   /* carpetaVersion: la carpeta real de la versión */, false, false, false, false))
    throw new Error("No se pudo guardar el XISF");
 "guardado: sin historial en el XISF, anotar los parámetros en el dossier";
 ```
@@ -35,7 +35,7 @@ if (!w.saveAs("C:/ASTRO/<objeto>/final/IC63_v4.xisf", false, false, false, false
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/exportar.js"));   // en el nivel superior del script
-var r = exportarFinal("Final", { carpeta: "<carpeta de la versión>/final", nombre: "IC63_v4", girar180: false });
+var r = exportarFinal("Final", { carpeta: carpetaVersion + "/final", nombre: nombreObjeto + "_v1", girar180: false });
 JSON.stringify(r);   // ficheros (con tamaño), controles, no_cumple
 ```
 

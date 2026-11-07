@@ -44,10 +44,10 @@ Comprobado con una nebulosa dual band (nov 2026; 3 masters de 300 MB en ~12 s). 
 // Registro en modo fichero: executeOn(view) NO registra.
 var SA = new StarAlignment;
 // targets = [[enabled, isFile, path]]; una sola referencia común para todo el proyecto.
-SA.targets = [[true, true, "C:/ASTRO/<objeto>/LIGHT/Ha_120s_001.xisf"],
-              [true, true, "C:/ASTRO/<objeto>/LIGHT/OIII_120s_001.xisf"]];
-SA.outputDirectory = "C:/ASTRO/<objeto>/registered";   // ruta sin espacios si falla en silencio
-SA.referenceImage = "C:/ASTRO/<objeto>/LIGHT/Ha_120s_ref.xisf";   // referencia común del proyecto
+SA.targets = [[true, true, carpetaProyecto + "/LIGHT/Ha_120s_001.xisf"],
+              [true, true, carpetaProyecto + "/LIGHT/OIII_120s_001.xisf"]];
+SA.outputDirectory = carpetaProyecto + "/registered";   // ruta sin espacios si falla en silencio
+SA.referenceImage = carpetaProyecto + "/LIGHT/Ha_120s_ref.xisf";   // referencia común del proyecto
 SA.referenceIsFile = true;
 SA.distortionCorrection = true;      // con surface splines (rbfType = StarAlignment.DDMThinPlateSpline)
 if (!SA.executeGlobal()) throw new Error("StarAlignment no registró");

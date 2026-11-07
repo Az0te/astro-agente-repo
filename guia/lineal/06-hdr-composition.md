@@ -50,8 +50,8 @@ Si los masters tienen astrometría con splines, reducirlos antes con IntegerResa
 ```javascript
 var HDR = new HDRComposition;
 // De mayor a menor exposición; cada elemento: [enabled, path]
-HDR.images = [[true, "C:/ASTRO/<objeto>/master/M120.xisf"],
-              [true, "C:/ASTRO/<objeto>/master/M030.xisf"]];
+HDR.images = [[true, carpetaMasters + "/M120.xisf"],
+              [true, carpetaMasters + "/M030.xisf"]];
 // Nombres comprobados con describe_process (PixInsight 1.9.6):
 HDR.maskBinarizingThreshold = 0.80;   // por debajo de la meseta medida por canal (0,89-0,96)
 HDR.maskSmoothness      = 7;      // suavizado de la transición

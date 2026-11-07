@@ -56,7 +56,7 @@ JSON.stringify(r);   // filtros, factores_balance_blancos, cielo_antes / cielo_d
 **Cielo descompensado tras SPCC** (`neutralizarCielo`, en `color.js`). Si `calibrarColor` da el cielo por encima de 0,5 sigmas, o el estirado sale con dominante en el cielo (> 5 %), se neutraliza el fondo en lineal: BackgroundNeutralization aditiva, que suma a cada canal lo que le falta para igualar su cielo al del canal más alto (no resta, no recorta sombras y no cambia el balance de SPCC más que ese desplazamiento constante). Mide en las mismas zonas que el control del estirado (el 10 % de celdas de 64 px más oscuras); si esas zonas son polvo o nebulosa oscura con color propio, pasar `rect` con un trozo de cielo limpio. Vale sobre la starless lineal, sin rehacer BXT ni SXT. No es un apaño de color: es la neutralización de fondo que la guía ya admite junto a SPCC.
 
 ```javascript
-var r = neutralizarCielo("LDN1235_v1_starless_dn75", { nuevaVista: "LDN1235_v1_starless_bn" });
+var r = neutralizarCielo("Starless_dn", { nuevaVista: "Starless_bn" });
 JSON.stringify(r);   // cielo_antes / cielo_despues por canal, sumado_por_canal, no_cumple, control
 ```
 

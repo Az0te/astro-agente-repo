@@ -16,7 +16,7 @@
 | Rutas | Carpeta de masters; carpeta de cada versión (`<objeto>/<objeto>_v1/`, nunca sobrescribir) |
 | PixInsight | Instalación si no es la de por defecto; módulos de terceros instalados; filtros y curva QE para SPCC/SPFC (nombres de `filters.xspd`); ruta de la base MARS; ruta del ejecutable de GraXpert; carpeta `guia/` del repo en el PC (para cargar `herramientas/*.js`) |
 | Preferencias estéticas | Nivel de fondo final (p. ej. mediana ≈ 0,17, nunca negro puro); color; estrellas; ruido; referencias; entrega |
-| Preferencias por objeto | Lo elegido en cada procesado (p. ej. "IC 63: prefirió la versión B, con más nebulosidad de fondo y Hα al rojo 1,40") |
+| Preferencias por objeto | Lo elegido en cada procesado (p. ej. "nebulosa de reflexión: prefirió la versión B, con más nebulosidad de fondo y Hα al rojo 1,40") |
 
 Regla: "Cuando el usuario exprese una preferencia nueva (elige una versión frente a otra, pide más o menos saturación…), propón añadirla al perfil."
 

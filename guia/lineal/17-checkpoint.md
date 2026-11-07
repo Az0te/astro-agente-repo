@@ -39,7 +39,8 @@ out.join("\n");
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script
-JSON.stringify(checkpointLineal("MasterLight_v3", { carpeta: "<carpeta de la versión>", objeto: "<objeto>", version: "v3" }));
+// carpetaVersion: ruta real (junto al master); nombreObjeto: de OBJECT, del nombre del master o preguntado al usuario.
+JSON.stringify(checkpointLineal("MasterLight_v3", { carpeta: carpetaVersion, objeto: nombreObjeto, version: "v3" }));
 ```
 
 **Guardado.** "Guardar también capas lineales intermedias (incluida la HDR y sus máscaras) para poder rehacer sin repetir todo". Antes de estirar, `window.purge()` de las vistas temporales: "cada imagen RGB f32 de ~11k×7k ocupa ~1 GB y cada paso añade historial de deshacer. Cerrar vistas temporales y usar `window.purge()` tras pasos pesados".
