@@ -91,6 +91,7 @@ private:
    // completa, el panel ejecuta cada script y pide el siguiente sin esperar; si pide que espere o que le recomiende el
    // siguiente paso, se queda como antes (un script cada vez y el usuario pulsa «Ejecutar script»).
    bool   m_autoChain = false;       // la serie está en marcha
+   bool   m_autoPaused = false;      // la serie paró con «PARO:» (pregunta al usuario): su respuesta la reanuda
    bool   m_autoSingle = false;      // m_autoScript es un solo plan (sin serie): respuesta a un Prompt o enlace de paso
    bool   m_autoRunPending = false;  // ejecutar m_autoScript en el próximo tic (fuera del evento que lo trajo)
    String m_autoScript;

@@ -535,6 +535,7 @@ void PiCopilotInterface::StopAutoChain( const String& why )
 {
    bool was = m_autoChain || m_autoRunPending;
    m_autoChain = m_autoRunPending = false;
+   m_autoPaused = false;
    m_autoScript.Clear();
    if ( was )
       Chat().AppendInfo( Tr( u"Serie de pasos terminada (" ) + why + String().Format( "; %d scripts).", m_autoSteps ) );
@@ -677,6 +678,7 @@ void PiCopilotInterface::LaunchStep( const PiCopilotStep& step )
 {
    UpdateView();
    m_autoChain = m_autoRunPending = false;   // un botón de paso es un solo paso
+   m_autoPaused = false;
    if ( step.needsImage && m_viewId.IsEmpty() )
    {
       MessageBox( Tr( u"Selecciona primero la imagen sobre la que quieres ejecutar \"" ) + step.label + Tr( u"\"." ),
@@ -839,14 +841,24 @@ bool PiCopilotInterface::SubmitChat( const String& text )
    }
    String prompt = PiCopilotPrompts::Free( m_cfg, m_cfg.Current(), text, m_viewId, firstTurn );
    bool series = !m_cfg.Current().IsAgent() && WantsSeries( text );
-   if ( series )
+   // La serie paró para preguntar (el tipo de objeto, 7 nov 2026): la respuesta del usuario la reanuda; antes cada paso
+   // siguiente se quedaba esperando a «Ejecutar script».
+   bool resume = !series && m_autoPaused && !m_cfg.Current().IsAgent() && !m_autoGoal.IsEmpty();
+   m_autoPaused = false;
+   if ( resume )
+   {
+      series = true;
+      prompt << u"\n\n(Es la respuesta del usuario a tu «PARO:». La serie sigue: escribe ahora el script del paso que "
+                u"quedó pendiente, con lo que acaba de decir el usuario.)" << AutoNextText();
+   }
+   else if ( series )
       prompt << u"\n\n(PiCopilot ejecutará tus scripts uno tras otro sin esperar al usuario: escribe ahora sólo el script "
                 u"del PRIMER paso; después de cada resultado te pediré el siguiente.)";
    if ( !StartJob( JobKind::Chat, Tr( u"Prompt" ), prompt, false ) )
       return false;
    m_autoRunPending = false;
    m_autoChain = series;
-   if ( series )
+   if ( series && !resume )
    {
       m_autoSteps = 0;
       m_autoGoal = text;
@@ -877,6 +889,7 @@ void PiCopilotInterface::ResetChat()
 {
    m_scriptFixes = 0;
    m_autoChain = m_autoRunPending = false;
+   m_autoPaused = false;
    m_autoScript.Clear();
    m_queued.pending = false;
    m_claudePhase.Clear();
@@ -1904,8 +1917,16 @@ void PiCopilotInterface::FinishJob( const String& response, bool error )
       else if ( m_autoChain && !m_job.model.IsAgent() && m_autoSteps == 0 && m_job.kind == JobKind::Chat )
          m_autoChain = false;   // una pregunta o una respuesta sin script: no había serie que parar
       else if ( m_autoChain && !m_job.model.IsAgent() )
-         StopAutoChain( response.Contains( u"PARO" ) ? String( Tr( u"el modelo ha parado (mira su motivo arriba)" ) )
-                                                     : String( Tr( u"el modelo no ha propuesto más pasos" ) ) );
+      {
+         bool paro = response.Contains( u"PARO" );
+         StopAutoChain( paro ? String( Tr( u"el modelo ha parado (mira su motivo arriba)" ) )
+                             : String( Tr( u"el modelo no ha propuesto más pasos" ) ) );
+         if ( paro && m_autoSteps < AutoMaxSteps )
+         {
+            m_autoPaused = true;
+            chat.AppendInfo( Tr( u"Contesta a su pregunta en la ventana de Prompt y la serie seguirá sola." ) );
+         }
+      }
       CopilotLog( m_job.title + u" terminado (" + ElapsedText( NowSeconds() - m_job.startTime ) + u")." );
    }
 

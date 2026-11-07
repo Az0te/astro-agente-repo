@@ -218,6 +218,7 @@ static const std::map<String, String>& Table()
         u"Wait for the current work to finish before clicking another step." },
       { u">>> Ejecuto el paso: ", u">>> Running the step: " },
       { u"Haz ahora este paso: ", u"Do this step now: " },
+      { u"Contesta a su pregunta en la ventana de Prompt y la serie seguirá sola.", u"Answer its question in the Prompt window and the series will carry on by itself." },
       { u"Corrijo la carga de ficheros de la guía: ", u"Fixing the guide file loads: " },
       { u"<p>Ejecuta en PixInsight el último bloque <i>```javascript</i> de la respuesta. Revísalo antes: se te pedirá confirmación.</p>",
         u"<p>Runs the last <i>```javascript</i> block of the answer in PixInsight. Review it first: you will be asked to confirm.</p>" },

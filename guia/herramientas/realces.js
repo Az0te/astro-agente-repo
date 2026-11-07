@@ -39,6 +39,25 @@ function rzView(id) {
 
 function rzOpt(o, k, def) { return (o && o[k] !== undefined) ? o[k] : def; }
 
+// nuevaVista: copia de la vista con ese id y se trabaja sobre ella (sin nuevaVista, sobre la propia vista, como antes).
+// Qwen pasó nuevaVista a darkStructureEnhance y pidió el paso siguiente sobre una vista que no existía (7 nov 2026).
+function rzTarget(viewId, o) {
+  var v = rzView(viewId);
+  if (!o || !o.nuevaVista) return v;
+  var w = rzCopy(v, o.nuevaVista);
+  w.keywords = v.window.keywords;
+  if (v.window.hasAstrometricSolution) w.copyAstrometricSolution(v.window);
+  w.show();
+  return w.mainView;
+}
+
+// Opciones que la función no conoce: se devuelven para que el modelo vea que no hicieron nada.
+function rzIgnoradas(o, known) {
+  var r = [];
+  if (o) for (var k in o) if (known.indexOf(k) < 0) r.push(k);
+  return r.length ? r : undefined;
+}
+
 function rzUniqueId(base) {
   var id = base, n = 1;
   while (!ImageWindow.windowById(id).isNull) id = base + (++n);
@@ -177,7 +196,7 @@ function rzATWTv1(view, keep, sf, dering) {
 }
 
 function darkStructureEnhance(viewId, o) {
-  var v = rzView(viewId);
+  var v = rzTarget(viewId, o); viewId = v.id;
   var nL = rzOpt(o, "layers", 8), sf = RZ_SCALING[rzOpt(o, "scalingFunction", "B3")];
   var median = rzOpt(o, "median", 0.7), iters = rzOpt(o, "iterations", 1), keepMask = rzOpt(o, "keepMask", false);
   if (!sf) throw new Error("scalingFunction debe ser \"B3\" o \"linear\"");
@@ -237,7 +256,10 @@ function darkStructureEnhance(viewId, o) {
   }
   var maskId = mv.id;
   if (keepMask) mask.show(); else { mask.forceClose(); maskId = null; }
-  return { view: viewId, layers: nL, scalingFunction: sf.name, median: median, iterations: iters, mask: maskId };
+  var ign = rzIgnoradas(o, ["layers", "scalingFunction", "median", "iterations", "keepMask", "nuevaVista"]);
+  return { view: viewId, layers: nL, scalingFunction: sf.name, median: median, iterations: iters, mask: maskId,
+           opciones_ignoradas: ign, aviso: ign ? "estas opciones no existen y no han hecho nada: " + ign.join(", ") +
+           " (las de darkStructureEnhance son layers, scalingFunction, median, iterations, keepMask, nuevaVista)" : undefined };
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -274,7 +296,7 @@ function rzCurveK(view, points) {
 }
 
 function backgroundEnhance(viewId, o) {
-  var v = rzView(viewId);
+  var v = rzTarget(viewId, o); viewId = v.id;
   var nL = rzOpt(o, "layers", 8), amount = rzOpt(o, "amount", 0.5);
   var ssAmount = rzOpt(o, "ssAmount", 0.9), maskAmount = rzOpt(o, "maskAmount", 0.6), keepMask = rzOpt(o, "keepMask", false);
   var i, keep;
@@ -310,5 +332,8 @@ function backgroundEnhance(viewId, o) {
   ls.forceClose();
   var maskId = mk.mainView.id;
   if (keepMask) mk.show(); else { mk.forceClose(); maskId = null; }
-  return { view: viewId, layers: nL, amount: amount, ssAmount: ssAmount, maskAmount: maskAmount, mask: maskId };
+  var ign = rzIgnoradas(o, ["layers", "amount", "ssAmount", "maskAmount", "keepMask", "nuevaVista"]);
+  return { view: viewId, layers: nL, amount: amount, ssAmount: ssAmount, maskAmount: maskAmount, mask: maskId,
+           opciones_ignoradas: ign, aviso: ign ? "estas opciones no existen y no han hecho nada: " + ign.join(", ") +
+           " (las de backgroundEnhance son layers, amount, ssAmount, maskAmount, keepMask, nuevaVista)" : undefined };
 }

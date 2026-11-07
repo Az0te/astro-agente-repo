@@ -1159,7 +1159,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { median: 0.7 }"
+      "description": "Opcional. { median: 0.7, layers: 8, iterations: 1, keepMask, nuevaVista (copia; sin ella cambia la propia vista) }"
      }
     },
     "required": [
@@ -1182,7 +1182,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { amount: 0.5 }"
+      "description": "Opcional. { amount: 0.5, maskAmount: 0.6, layers: 8, keepMask, nuevaVista (copia; sin ella cambia la propia vista) }"
      }
     },
     "required": [
