@@ -235,7 +235,7 @@ function bxtAplicar(viewId, o) {
   var src = ImageWindow.windowById(viewId);
   if (src.isNull) throw new Error("No existe la vista " + viewId);
   var im = src.mainView.image; im.resetSelections();
-  var base = o.nuevaVista || (viewId + "_bxt"), id = base;
+  var base = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_bxt"), id = base;
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
   var w = new ImageWindow(im.width, im.height, im.numberOfChannels, 32, true, im.isColor, id);
   w.mainView.beginProcess(); w.mainView.image.assign(im); w.mainView.endProcess();

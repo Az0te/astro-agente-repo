@@ -44,7 +44,7 @@ function rzOpt(o, k, def) { return (o && o[k] !== undefined) ? o[k] : def; }
 function rzTarget(viewId, o) {
   var v = rzView(viewId);
   if (!o || !o.nuevaVista) return v;
-  var w = rzCopy(v, o.nuevaVista);
+  var w = rzCopy(v, typeof o.nuevaVista === "string" ? o.nuevaVista : v.id + "_rz");
   w.keywords = v.window.keywords;
   if (v.window.hasAstrometricSolution) w.copyAstrometricSolution(v.window);
   w.show();

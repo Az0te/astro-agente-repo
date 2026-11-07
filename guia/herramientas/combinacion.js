@@ -105,6 +105,8 @@ function cbClase(w, path) {
 // Opciones: tipo ("nebulosa" | "galaxia"), alfa, inyectar (false para no meter el Hα), clases ({ "fichero": "Ha" } si
 // el filtro no se reconoce). Devuelve las clases, lo hecho, las vistas abiertas y no_cumple.
 function combinarMasters(lista, o) {
+  // combinarMasters("RGB", ["Ha", "OIII"], { tipo }) (Qwen, 7 nov 2026): el 2º argumento es parte de la lista.
+  if (o instanceof Array) { lista = (lista instanceof Array ? lista : [lista]).concat(o); o = arguments[2]; }
   o = o || {};
   var files = [];
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
@@ -182,6 +184,8 @@ function combinarMasters(lista, o) {
   // 4. Lo que se deja para la fase no lineal.
   if (por.L) r.control.medido.push("L (" + por.L[0] + "): la combinación LRGB se hace en el Paso 2 no lineal, con las dos ya estiradas.");
   var nb = ["Ha", "OIII", "SII", "Hb"].filter(function (c) { return por[c]; });
+  var nbRGB = ["OIII", "SII", "Hb"].filter(function (c) { return por[c]; }).map(function (c) { return c + " (" + por[c][0] + ")"; });
+  if (por.RGB && nbRGB.length) r.control.medido.push("Con RGB sólo se inyecta el Hα en lineal; " + nbRGB.join(", ") + " siguen abiertas para la paleta o para mezclarlas en el Paso 2 no lineal. Si hay dos vistas de la misma raya (de dos filtros dual band), pásalas las dos y se combinan aquí.");
   if (nb.length && !por.RGB) r.control.medido.push("Banda estrecha sin RGB (" + nb.join(", ") + "): la paleta (HOO, SHO...) se monta en el Paso 2 no lineal; aquí no hay nada que combinar en lineal.");
   if (!r.hecho.length) r.control.medido.push("Nada que combinar en lineal con estos masters.");
   r.vistas = ImageWindow.windows.map(function (w) { return w.mainView.id; });
@@ -201,7 +205,7 @@ function combinarMismoCanal(a, b, o) {
   var nBf = cbNoise(wb.mainView.image);           // ruido de b en la escala de a
   var mejor = nA <= nBf ? "a" : "b";
   var pA = 1 / (nA * nA), pB = 1 / (nBf * nBf), kA = pA / (pA + pB), kB = pB / (pA + pB);
-  var id = cbNewId(o.nuevaVista || (va.id + "_comb"));
+  var id = cbNewId((typeof o.nuevaVista === "string" && o.nuevaVista) || (va.id + "_comb"));
   var PM = new PixelMath;
   PM.expression = kA.toFixed(6) + "*" + wa.mainView.id + " + " + kB.toFixed(6) + "*" + wb.mainView.id;
   PM.useSingleExpression = true; PM.createNewImage = true; PM.showNewImage = true; PM.newImageId = id;
@@ -265,7 +269,7 @@ function inyectarHa(rgb, ha, o) {
   C.executeOn(wM.mainView);
 
   // Mezcla en el R de una copia.
-  var id = cbNewId(o.nuevaVista || (vr.id + "_Ha"));
+  var id = cbNewId((typeof o.nuevaVista === "string" && o.nuevaVista) || (vr.id + "_Ha"));
   wO = cbCopy(vr, id, false);
   var P2 = new PixelMath;
   P2.useSingleExpression = false; P2.symbols = "a, m";

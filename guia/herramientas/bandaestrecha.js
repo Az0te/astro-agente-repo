@@ -228,7 +228,7 @@ function restarContinuo(nbId, contId, o) {
   var nb = beView(nbId), ct = beView(contId), ch = (o.canal !== undefined) ? o.canal : 0;
   var zN = beZones(nb), zC = beZones(ct);
   var c = (o.c !== undefined) ? o.c : 0;   // por defecto sin desplazamiento; se informa del cielo resultante
-  var id = beUnique(o.nuevaVista || (nbId + "_CS"));
+  var id = beUnique((typeof o.nuevaVista === "string" && o.nuevaVista) || (nbId + "_CS"));
   var r = bePM(nb, "$T - " + o.k + "*" + contId + "[" + ch + "] - " + c, id, false);
   var P = new PixelMath; P.useSingleExpression = true; P.expression = "$T"; P.createNewImage = false; P.truncate = false; P.executeOn(r);
   var x = r.image, n = x.width * x.height, b = new Float32Array(n), neg = 0;

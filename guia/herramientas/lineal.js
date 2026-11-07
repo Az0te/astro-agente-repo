@@ -81,7 +81,7 @@ function bxtCorrectOnly(viewId, o) {
   src.image.resetSelections();
   if (src.image.median() > 0.05) throw new Error("La imagen parece estirada: BXT correct only va en lineal");
   var antes = lnFwhmPorCanal(src);
-  var w = lnCopy(viewId, o.nuevaVista || (viewId + "_bxtco")), v = w.mainView, t0 = Date.now();
+  var w = lnCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_bxtco")), v = w.mainView, t0 = Date.now();
   var B = new BlurXTerminator;
   B.correct_only = true;
   B.auto_nonstellar_psf = true;
@@ -204,7 +204,7 @@ function quitarVerde(viewId, o) {
                      (cp[2] > cp[1] && cp[2] > cp[0] ? "; la dominante es AZUL: no se corrige con SCNR, viene de la fase lineal" : "") +
                      ": no aplicar (SCNR no es una corrección de color)", no_cumple: [],
              control: { medido: { cielo_sin_verde: true }, revisar_a_ojo: [], nota: "No aplicar es un resultado válido." } };
-  var w = lnCopy(viewId, o.nuevaVista || (viewId + "_sinverde")), v = w.mainView, amount = (o.amount !== undefined) ? o.amount : 0.85;
+  var w = lnCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_sinverde")), v = w.mainView, amount = (o.amount !== undefined) ? o.amount : 0.85;
   var skyL = (antes.cielo_por_canal[0] + antes.cielo_por_canal[1] + antes.cielo_por_canal[2]) / 3, sg = antes.ruido;
   var mask = "min(max((" + (skyL + 5 * sg) + " - ($T[0]+$T[1]+$T[2])/3) / " + (3.5 * sg) + ", 0), 1)";
   var P = new PixelMath;

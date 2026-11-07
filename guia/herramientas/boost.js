@@ -103,8 +103,8 @@ function saturarAlFallo(viewId, o) {
     res.vista = null;
     res.no_cumple = ["ni la saturación más suave pasa: no saturar (o saturación selectiva con máscara); revisar la dominante del cielo antes"];
   } else {
-    var id = o.nuevaVista || (viewId + "_sat");
-    for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = (o.nuevaVista || (viewId + "_sat")) + "_" + n;
+    var id = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_sat");
+    for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = ((typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_sat")) + "_" + n;
     var fw = bsCopy(src, id);
     if (src.window.hasAstrometricSolution) fw.copyAstrometricSolution(src.window);
     bsSaturate(fw.mainView, gan);

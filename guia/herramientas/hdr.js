@@ -111,7 +111,7 @@ function componerHDR(lista, o) {
   var hdrW = null, masks = [];
   nuevas.forEach(function (w) { if (/mask/i.test(w.mainView.id)) masks.push(w); else hdrW = w; });
   if (!hdrW) throw new Error("HDRComposition no creó la imagen HDR");
-  var id = o.nuevaVista || "HDR";
+  var id = (typeof o.nuevaVista === "string" && o.nuevaVista) || "HDR";
   if (hdrW.mainView.id != id) { var free = id; for (var n = 2; !ImageWindow.windowById(free).isNull; ++n) free = id + "_" + n; hdrW.mainView.id = free; }
   if (ins[0].win.hasAstrometricSolution && !hdrW.hasAstrometricSolution) try { hdrW.copyAstrometricSolution(ins[0].win); } catch (e) { }
   r.vista = hdrW.mainView.id;

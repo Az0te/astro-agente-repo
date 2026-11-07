@@ -115,7 +115,7 @@ function calibrarColor(viewId, o) {
   var med0 = sim.median();
   if (med0 > 0.05) throw new Error("La imagen parece estirada (mediana " + med0.toFixed(4) + "): SPCC sólo sobre datos lineales");
 
-  var base = o.nuevaVista || (viewId + "_spcc"), id = base;
+  var base = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_spcc"), id = base;
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
   var w = new ImageWindow(sim.width, sim.height, 3, 32, true, true, id);
   w.mainView.beginProcess(); w.mainView.image.assign(sim); w.mainView.endProcess();
@@ -214,7 +214,7 @@ function neutralizarCielo(viewId, o) {
   if (sim.numberOfChannels !== 3) throw new Error("neutralizarCielo necesita una imagen RGB");
   sim.resetSelections();
   if (sim.median() > 0.05) throw new Error("La imagen parece estirada: la neutralización del cielo se hace en LINEAL");
-  var base = o.nuevaVista || (viewId + "_bn"), id = base;
+  var base = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_bn"), id = base;
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
   var w = new ImageWindow(sim.width, sim.height, 3, 32, true, true, id);
   w.mainView.beginProcess(); w.mainView.image.assign(sim); w.mainView.endProcess();

@@ -143,7 +143,7 @@ function comprimirNucleo(viewId, o) {
   if (!H2.executeOn(hw.mainView)) { hw.forceClose(); mw.forceClose(); throw new Error("HDRMultiscaleTransform falló"); }
 
   // 3. Mezcla en la copia final: T + mezcla·M·(HDR − T).
-  var w = nuCopy(viewId, o.nuevaVista || (viewId + "_nucleo"), true), v = w.mainView;
+  var w = nuCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_nucleo"), true), v = w.mainView;
   var PM = new PixelMath;
   PM.expression = "$T + " + mezcla + "*" + mid + "*(" + hw.mainView.id + " - $T)";
   PM.useSingleExpression = true; PM.createNewImage = false; PM.truncate = true; PM.truncateLower = 0; PM.truncateUpper = 1;

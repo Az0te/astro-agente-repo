@@ -91,16 +91,16 @@ function crearMascara(viewId, o) {
   var tipo = o.tipo || "luminancia", lum = v.image.numberOfChannels === 3 ? "($T[0]+$T[1]+$T[2])/3" : "$T", w, desc;
   if (tipo === "luminancia") {
     var g = o.gamma || 2.0;
-    w = mkGray(v, "exp(" + g + "*ln(max(" + lum + ", 1e-5)))", mkUnique(o.nuevaVista || ("mask_L_g" + Math.round(g * 10))));
+    w = mkGray(v, "exp(" + g + "*ln(max(" + lum + ", 1e-5)))", mkUnique((typeof o.nuevaVista === "string" && o.nuevaVista) || ("mask_L_g" + Math.round(g * 10))));
     desc = "luminancia con gamma " + g + ": L^γ (γ > 1 baja medios y sombras). Donde la máscara es alta el proceso actúa; " +
            "para que actúe en medios y sombras y proteja lo brillante, aplicarla invertida (maskInverted = true)";
   } else if (tipo === "cielo") {
     var s = mkSky(v), lo = s.cielo + 1.5 * s.sigma, hi = s.cielo + 5 * s.sigma;
-    w = mkGray(v, "1 - min(max((" + lum + " - " + lo + ") / " + (hi - lo) + ", 0), 1)", mkUnique(o.nuevaVista || "mask_cielo"));
+    w = mkGray(v, "1 - min(max((" + lum + " - " + lo + ") / " + (hi - lo) + ", 0), 1)", mkUnique((typeof o.nuevaVista === "string" && o.nuevaVista) || "mask_cielo"));
     mkBlur(w, o.bin || 8);
     desc = "cielo: 1 en el fondo (por debajo de cielo + 1,5σ), 0 en la señal (por encima de 5σ), suavizada";
   } else if (tipo === "fondo_lhe") {
-    w = mkGray(v, lum, mkUnique(o.nuevaVista || "mask_fondo_lhe"));
+    w = mkGray(v, lum, mkUnique((typeof o.nuevaVista === "string" && o.nuevaVista) || "mask_fondo_lhe"));
     mkBlur(w, o.bin || 32);   // L64 ≈ luminancia suavizada a ~64 px
     var P = new PixelMath; P.useSingleExpression = true; P.expression = "1 - min(max(($T - 0.20) / 0.25, 0), 1)";
     P.createNewImage = false; P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1; P.executeOn(w.mainView);

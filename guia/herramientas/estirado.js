@@ -72,7 +72,7 @@ function estirarAFondo(viewId, o) {
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): no repetir la fase 1");
 
-  var w = esCopy(viewId, o.nuevaVista || (viewId + "_st"));
+  var w = esCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"));
   w.show();
   var v = w.mainView, pasadas = [];
 
@@ -252,7 +252,7 @@ function estirarStarless(viewId, o) {
   if (win.isNull) throw new Error("No existe la vista " + viewId);
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): no repetir la fase 1");
-  var w = esCopy(viewId, o.nuevaVista || (viewId + "_st"));
+  var w = esCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"));
   w.show();
   var v = w.mainView, pasadas = [];
   esGHS(v, 2.5, 12, med0, 0, 0.95, canal);
@@ -376,7 +376,7 @@ function estirarEstrellas(viewId, o) {
   var A = (o.amount !== undefined) ? o.amount : 2, K = o.k || 3000, curva = [];
   if (metodo === "starstretch") for (var a = 1; a <= 5.001; a += 1) curva.push({ amount: a, p90: +esStarP90(sample, a).toFixed(3) });
   else [300, 1000, 3000, 10000].forEach(function (kk) { curva.push({ k: kk, p90: +esAsinhP90(sample, kk).toFixed(3) }); });
-  var w = esCopy(viewId, o.nuevaVista || (viewId + "_st"));
+  var w = esCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"));
   w.show();
   if (metodo === "starstretch") starStretch(w.mainView.id, { amount: A, saturation: sat, removeGreen: !!o.quitarVerde });
   else {
@@ -474,7 +474,7 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   var r;
   try {
     esReplay(orig.mainView, rec);
-    r = screenStarsExtract(orig.mainView.id, starlessStId, { newId: o.nuevaVista || (starsLinId + "_st") });
+    r = screenStarsExtract(orig.mainView.id, starlessStId, { newId: (typeof o.nuevaVista === "string" && o.nuevaVista) || (starsLinId + "_st") });
   } finally { orig.forceClose(); }
   var w = ImageWindow.windowById(r.created), v = w.mainView, sat = o.saturacion || 1;
   var slw = ImageWindow.windowById(starlessStId);

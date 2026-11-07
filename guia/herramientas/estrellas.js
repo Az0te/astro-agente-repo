@@ -78,8 +78,8 @@ function prepararEstrellas(viewId, o) {
   var sim = src.mainView.image;
   if (sim.numberOfChannels !== 3) throw new Error("La capa de estrellas debe ser RGB");
 
-  var id = o.nuevaVista || (viewId + "_prep");
-  for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = (o.nuevaVista || (viewId + "_prep")) + "_" + n;
+  var id = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_prep");
+  for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = ((typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_prep")) + "_" + n;
   var w = new ImageWindow(sim.width, sim.height, 3, 32, true, true, id);
   w.mainView.beginProcess(); w.mainView.image.assign(sim); w.mainView.endProcess();
   if (src.hasAstrometricSolution) w.copyAstrometricSolution(src);

@@ -70,7 +70,7 @@ function recombinarEstrellas(starlessId, starsId, o) {
   if (Math.max.apply(null, medSl) < 0.005)
     throw new Error("La starless parece lineal (mediana < 0,005): estirarla antes (Paso 1) o usar la suma en lineal");
 
-  var base = o.nuevaVista || "Final", id = base;
+  var base = (typeof o.nuevaVista === "string" && o.nuevaVista) || "Final", id = base;
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
   var metodo = o.metodo || "auto", k = (o.k !== undefined) ? o.k : 1.0, usado;
 

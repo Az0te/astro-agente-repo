@@ -176,7 +176,7 @@ function reducirRuido(viewId, o) {
     // de 0,25 a 0,63 (nebulosa oscura, 7 nov 2026): 0,50.
     metodo = "nxt"; o.denoise = mono ? 0.95 : 0.50;
   }
-  var w = rdCopy(viewId, o.nuevaVista || (viewId + "_dn")), v = w.mainView;
+  var w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn")), v = w.mainView;
   if (metodo === "nxt") rdNXT(v, o);
   else {
     var W = src.image.width, H = src.image.height, R = new Rect(0, 0, W, H);
@@ -236,7 +236,7 @@ function separarEstrellas(viewId, o) {
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
   src.image.resetSelections();
   var lineal = src.image.median() < 0.05;
-  var w = rdCopy(viewId, o.nuevaVista || (viewId + "_starless")), v = w.mainView, t0 = Date.now();
+  var w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_starless")), v = w.mainView, t0 = Date.now();
   var before = []; ImageWindow.windows.forEach(function (x) { before.push(x.mainView.id); });
   var S = new StarXTerminator;
   S.stars = true; S.output_stars = true;
