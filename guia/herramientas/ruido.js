@@ -163,6 +163,8 @@ function rdBox(a, W, H, r) {
 }
 
 function reducirRuido(viewId, o) {
+  // Qwen pasó r.starless.vista (undefined) tras separarEstrellas (7 nov 2026): starless y estrellas son ids (texto).
+  if (viewId === undefined || viewId === null || viewId === "") throw new Error("Falta la vista (undefined). separarEstrellas devuelve r.starless y r.estrellas como ids de texto: usa reducirRuido(r.starless, ...)");
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var src = View.viewById(viewId);
@@ -246,7 +248,7 @@ function separarEstrellas(viewId, o) {
   var starsId = null;
   ImageWindow.windows.forEach(function (x) { if (before.indexOf(x.mainView.id) < 0) starsId = x.mainView.id; });
   if (!starsId) throw new Error("No se encontró la capa de estrellas que crea StarX");
-  if (o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
+  if (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
     ImageWindow.windowById(starsId).mainView.id = o.nuevasEstrellas; starsId = o.nuevasEstrellas;
   }
   var seg = Math.round((Date.now() - t0) / 1000);

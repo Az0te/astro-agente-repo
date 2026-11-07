@@ -1118,6 +1118,7 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
       if ( out.StartsWith( u"PICOPILOT_ERROR: " ) )
          throw Error( out.Substring( 17 ) );
       m_lastFailedScript.Clear();
+      m_scriptFixes = 0;   // "veces seguidas": un script que funciona reinicia la cuenta (7 nov 2026: tras 3 fallos ya corregidos, el siguiente fallo paraba sin intentar corregirlo)
       // Enseña las vistas nuevas: las muestra (algunas funciones las crean ocultas), pone un STF automático a las
       // lineales que no lo tengan (sólo visual) y deja delante la última. Las ya estiradas se ven tal cual.
       try
