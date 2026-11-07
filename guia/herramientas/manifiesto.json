@@ -405,11 +405,36 @@
    }
   },
   {
+   "nombre": "gradienteVarias",
+   "fichero": "gradiente.js",
+   "nivel": "copias",
+   "timeout_s": 1800,
+   "descripcion": "Paso 9 lineal con VARIAS vistas (RGB + líneas desmezcladas): gradienteCandidatos en cada una, deja la recomendada como <vista>_gc, cierra los demás candidatos y devuelve sólo un resumen corto. Úsala en vez de un bucle de gradienteCandidatos.",
+   "paso": "lineal/09-correccion-gradiente.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "lista": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Ids de las vistas."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. Las de gradienteCandidatos y cerrar: false para dejar abiertos todos los candidatos."
+     }
+    },
+    "required": [
+     "lista"
+    ]
+   }
+  },
+  {
    "nombre": "gradienteCandidatos",
    "fichero": "gradiente.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free, MGC con y sin bordes, polinomio robusto de grado 1 y 2) sobre copias GC_*, mide cuánto se come cada modelo del objeto y cuánto gradiente de cielo deja, y recomienda. No toca la original. Varios minutos: devuelve un trabajo.",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free, MGC con y sin bordes, polinomio robusto de grado 1 y 2) sobre copias GC_*, mide cuánto se come cada modelo del objeto y cuánto gradiente de cielo deja, y recomienda. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
     "type": "object",

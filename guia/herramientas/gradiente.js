@@ -330,3 +330,36 @@ function gradienteCandidatos(viewId, o) {
   }
   return r;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Varias vistas (RGB y líneas desmezcladas) en una llamada. Qwen pasó gradienteCandidatos a 7 vistas en un script
+// (7 nov 2026): 8 min, 56 vistas abiertas (memoria) y ~25 000 caracteres de resultado que llenaron su contexto.
+// Por cada vista: gradienteCandidatos, se queda la recomendada con el nombre <vista>_gc (conserva FILTER) y se
+// cierran los demás candidatos y modelos (salvo cerrar: false). Devuelve sólo un resumen por vista.
+// Uso: JSON.stringify(gradienteVarias(["master_RGB_alin", "Ha_raw", "OIII_raw"]));
+function gradienteVarias(lista, o) {
+  o = o || {};
+  if (!(lista instanceof Array)) lista = [lista];
+  var r = { vistas: {}, corregidas: [], errores: [], control: { revisar_a_ojo: ["el modelo de cada vista recomendada (repetir gradienteCandidatos sólo en esa vista para verlo)"] } };
+  lista.forEach(function (id) {
+    try {
+      var g = gradienteCandidatos(id, o), keep = null;
+      if (g.recomendado) keep = grRename(g.recomendado, id + "_gc");
+      if (o.cerrar !== false)
+        g.candidatos.forEach(function (c) {
+          [c.vista, c.modelo].forEach(function (v) {
+            if (v && v !== g.recomendado) { var w = ImageWindow.windowById(v); if (!w.isNull) w.forceClose(); }
+          });
+        });
+      var best = g.candidatos.filter(function (c) { return c.vista === g.recomendado; })[0];
+      r.vistas[id] = { corregida: keep, metodo: best ? best.metodo + " " + best.parametros : "—",
+                       deja_gradiente_pct: best ? Math.round(100 * best.metricas.fondoResidual) : null,
+                       come_objeto_pct: best ? best.metricas.come_objeto_pct : null, motivo: g.motivo,
+                       errores: g.errores.length ? g.errores : undefined };
+      if (keep) r.corregidas.push(keep);
+    } catch (e) {
+      r.errores.push(id + ": " + e.message);
+    }
+  });
+  return r;
+}
