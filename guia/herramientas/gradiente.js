@@ -164,6 +164,8 @@ function grMeasure(base, modelId, correctedId, range0) {
 }
 
 function gradienteCandidatos(viewId, o) {
+  // Con una lista de vistas (Qwen, 7 nov 2026: fallaba con "windowById(): String expected" y repetía el mismo script).
+  if (viewId instanceof Array) return gradienteVarias(viewId, o);
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   // Por defecto se comparan los tres métodos (no hay uno preferido: se aplica el que mejor mida en cada imagen).
@@ -328,38 +330,87 @@ function gradienteCandidatos(viewId, o) {
       analisis: o.analisis || "", candidatos: r.candidatos, intermedias: r.intermedias,
       recomendado: r.recomendado, motivo: r.motivo, informe: "", errores: r.errores }, null, 2));
   }
+  grPrevios.push(r);
+  if (grPrevios.length > 1 && !o.noCompactar) grPrevios.forEach(function (g) { grCompactar(g, o); });
   return r;
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Varias vistas (RGB y líneas desmezcladas) en una llamada. Qwen pasó gradienteCandidatos a 7 vistas en un script
-// (7 nov 2026): 8 min, 56 vistas abiertas (memoria) y ~25 000 caracteres de resultado que llenaron su contexto.
-// Por cada vista: gradienteCandidatos, se queda la recomendada con el nombre <vista>_gc (conserva FILTER) y se
-// cierran los demás candidatos y modelos (salvo cerrar: false). Devuelve sólo un resumen por vista.
-// Uso: JSON.stringify(gradienteVarias(["master_RGB_alin", "Ha_raw", "OIII_raw"]));
-function gradienteVarias(lista, o) {
+// Varias vistas (RGB y líneas desmezcladas). Qwen pasó gradienteCandidatos a 7 vistas en un script, en bucle
+// (7 nov 2026, dos veces): 8 min, 56 vistas abiertas (memoria) y ~25 000 caracteres de resultado que llenaron su
+// contexto. grCompactar deja la recomendada como <vista>_gc (conserva FILTER), cierra los demás candidatos y modelos
+// y cambia el resultado (el mismo objeto) por un resumen corto.
+function grCompactar(g, o) {
+  if (!g || g.compacto) return g;
   o = o || {};
-  if (!(lista instanceof Array)) lista = [lista];
-  var r = { vistas: {}, corregidas: [], errores: [], control: { revisar_a_ojo: ["el modelo de cada vista recomendada (repetir gradienteCandidatos sólo en esa vista para verlo)"] } };
-  lista.forEach(function (id) {
-    try {
-      var g = gradienteCandidatos(id, o), keep = null;
-      if (g.recomendado) keep = grRename(g.recomendado, id + "_gc");
-      if (o.cerrar !== false)
-        g.candidatos.forEach(function (c) {
-          [c.vista, c.modelo].forEach(function (v) {
-            if (v && v !== g.recomendado) { var w = ImageWindow.windowById(v); if (!w.isNull) w.forceClose(); }
-          });
-        });
-      var best = g.candidatos.filter(function (c) { return c.vista === g.recomendado; })[0];
-      r.vistas[id] = { corregida: keep, metodo: best ? best.metodo + " " + best.parametros : "—",
-                       deja_gradiente_pct: best ? Math.round(100 * best.metricas.fondoResidual) : null,
-                       come_objeto_pct: best ? best.metricas.come_objeto_pct : null, motivo: g.motivo,
-                       errores: g.errores.length ? g.errores : undefined };
-      if (keep) r.corregidas.push(keep);
-    } catch (e) {
-      r.errores.push(id + ": " + e.message);
-    }
-  });
+  var id = g.vista, keep = null;
+  if (g.recomendado) keep = grRename(g.recomendado, id + "_gc");
+  if (o.cerrar !== false)
+    g.candidatos.forEach(function (c) {
+      [c.vista, c.modelo].forEach(function (v) {
+        if (v && v !== g.recomendado) { var w = ImageWindow.windowById(v); if (!w.isNull) w.forceClose(); }
+      });
+    });
+  var best = g.candidatos.filter(function (c) { return c.vista === g.recomendado; })[0];
+  g.compacto = true;
+  g.corregida = keep;
+  g.recomendado = keep;
+  g.metodo = best ? best.metodo + " " + best.parametros : "—";
+  g.deja_gradiente_pct = best ? Math.round(100 * best.metricas.fondoResidual) : null;
+  g.come_objeto_pct = best ? best.metricas.come_objeto_pct : null;
+  delete g.candidatos; delete g.intermedias; delete g.leyenda;
+  if (!g.errores || !g.errores.length) delete g.errores;
+  return g;
+}
+
+// Resultados de gradienteCandidatos en este script: desde la segunda llamada se compactan todos (el bucle de Qwen).
+var grPrevios = [];
+
+// Uso: JSON.stringify(gradienteVarias(["master_RGB_alin", "Ha_raw", "OIII_raw"]));
+// Las corregidas se llaman <vista>_gc y están en r.vista_corregida (original -> corregida).
+// Si ya se compararon y sólo hay que quedarse con un candidato, NO repite la comparación (7 nov: Qwen llamó
+// gradienteVarias(original, candidato) y rehízo los candidatos 8 min): gradienteVarias("Ha_raw", "GC_POLY2_2") o
+// gradienteVarias({"Ha_raw": "GC_POLY2_2", ...}) renombra el candidato a <vista>_gc; si <vista>_gc ya existe, lo reutiliza.
+function grAdoptar(id, cand) {
+  if (!ImageWindow.windowById(id + "_gc").isNull) return id + "_gc";
+  if (!cand || ImageWindow.windowById(cand).isNull)
+    throw new Error("No existe " + id + "_gc ni el candidato " + cand + ": usa gradienteVarias([\"" + id + "\"]) para compararlos");
+  return grRename(cand, id + "_gc");
+}
+
+function gradienteVarias(lista, o) {
+  var mapa = null;
+  if (typeof o === "string") { mapa = {}; mapa[lista] = o; o = {}; }
+  else if (lista && !(lista instanceof Array) && typeof lista === "object") { mapa = lista; }
+  o = o || {};
+  var r = { vistas: {}, vista_corregida: {}, corregidas: [], errores: [],
+            control: { revisar_a_ojo: ["el modelo de cada vista recomendada (repetir gradienteCandidatos sólo en esa vista para verlo)"] } };
+  if (mapa) {
+    Object.keys(mapa).forEach(function (id) {
+      try {
+        var c = grAdoptar(id, mapa[id]);
+        r.vista_corregida[id] = c; r.corregidas.push(c);
+      } catch (e) { r.errores.push(id + ": " + e.message); }
+    });
+  } else {
+    if (!(lista instanceof Array)) lista = [lista];
+    lista.forEach(function (id) {
+      try {
+        if (!ImageWindow.windowById(id + "_gc").isNull && !o.repetir) {
+          r.vista_corregida[id] = id + "_gc"; r.corregidas.push(id + "_gc");
+          r.vistas[id] = { corregida: id + "_gc", nota: "ya estaba corregida (repetir: true para compararla otra vez)" };
+          return;
+        }
+        var g = grCompactar(gradienteCandidatos(id, o), o);
+        r.vistas[id] = g;
+        if (g.corregida) { r.vista_corregida[id] = g.corregida; r.corregidas.push(g.corregida); }
+      } catch (e) {
+        r.errores.push(id + ": " + e.message);
+      }
+    });
+  }
+  if (r.corregidas.length === 1) r.vista = r.corregidas[0];
+  r.siguiente = "Sigue con las vistas de r.corregidas (<vista>_gc).";
+  if (!r.errores.length) delete r.errores;
   return r;
 }

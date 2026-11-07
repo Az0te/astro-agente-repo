@@ -409,15 +409,13 @@
    "fichero": "gradiente.js",
    "nivel": "copias",
    "timeout_s": 1800,
-   "descripcion": "Paso 9 lineal con VARIAS vistas (RGB + líneas desmezcladas): gradienteCandidatos en cada una, deja la recomendada como <vista>_gc, cierra los demás candidatos y devuelve sólo un resumen corto. Úsala en vez de un bucle de gradienteCandidatos.",
+   "descripcion": "Paso 9 lineal con VARIAS vistas (RGB + líneas desmezcladas): gradienteCandidatos en cada una, deja la recomendada como <vista>_gc, cierra los demás candidatos y devuelve sólo un resumen corto. Úsala en vez de un bucle de gradienteCandidatos. Las corregidas vuelven en r.corregidas y r.vista_corregida (original -> <vista>_gc). Si ya comparaste y sólo quieres quedarte con un candidato: gradienteVarias({\"Ha_raw\": \"GC_POLY2_2\"}) (no repite la comparación). Una vista con <vista>_gc ya hecha no se repite.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
     "type": "object",
     "properties": {
      "lista": {
-      "type": "array",
-      "items": {"type": "string"},
-      "description": "Ids de las vistas."
+      "description": "Array de ids de las vistas, o un objeto {original: candidato elegido}."
      },
      "opciones": {
       "type": "object",
