@@ -373,6 +373,17 @@ function plFirma(nombre) {
    return nombre + "(vista, opciones)";
 }
 
+// «Lineal: 1 Análisis del objeto, 2 Inventario, …; No lineal: 1 Estirado, …» a partir de PL_PASOS (mismo orden que el módulo).
+function plOrdenPasos() {
+   var lin = [], nol = [];
+   PL_PASOS.forEach(function (p) {
+      var m = /^(lineal|no-lineal)\/(\d+)-/.exec(p[1]);
+      if (!m) return;
+      (m[1] == "lineal" ? lin : nol).push(parseInt(m[2], 10) + " " + p[0]);
+   });
+   return "- Lineal: " + lin.join(", ") + ".\n- No lineal: " + nol.join(", ") + ".";
+}
+
 function plListaFunciones(guia) {
    var f = guia + "/herramientas/manifiesto.json";
    if (!File.exists(f)) return "(no encuentro " + f + ")";
@@ -382,7 +393,9 @@ function plListaFunciones(guia) {
       var d = String(x.descripcion || "");
       var p = d.indexOf(". ");
       if (p > 0 && p < 220) d = d.substring(0, p + 1);
-      out.push("- " + plFirma(x.nombre) + " [" + x.nivel + "]: " + plRecortar(d, 220));
+      var mp = /^(lineal|no-lineal)\/(\d+)-/.exec(String(x.paso || ""));
+      var paso = mp ? " (Paso " + parseInt(mp[2], 10) + (mp[1] == "lineal" ? " lineal" : " no lineal") + ")" : "";
+      out.push("- " + plFirma(x.nombre) + " [" + x.nivel + "]" + paso + ": " + plRecortar(d, 220));
    });
    return out.join("\n");
 }
@@ -496,6 +509,8 @@ function plPromptSistema(aj) {
    "qué función de la guía>.» con lo que recomiendas según el orden de la guía y lo que ya se ha hecho en esta conversación " +
    "(por ejemplo, si una imagen aún no se ha analizado, lo primero es analizarla). Si hay alternativas razonables, añade " +
    "líneas que empiecen por «Paso N: ...». El chat las muestra como enlaces que el usuario pulsa para que lo hagas.\n\n" +
+   "Orden de los pasos de la guía (no saltes ni cambies el orden al recomendar el siguiente; si uno no aplica, dilo y pasa al siguiente):\n" +
+   plOrdenPasos() + "\n\n" +
    "Funciones disponibles (nombre(argumentos) [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
    (plContratoApi(aj.guia) ? "Contrato de la API PJSR que debes respetar:\n<<<\n" + plContratoApi(aj.guia) + "\n>>>\n\n" : "") +
    "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
@@ -1633,7 +1648,8 @@ function plConstruirDialogo(aj) {
             "\nAhora, sin escribir ningún script, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
             "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +
             "demuestra, con su valor) y «Revisar a ojo» (lo que el resultado no mide); nunca des por bueno algo de la segunda.\n" +
-            "Termina con una línea «Siguiente paso: <qué hacer y con qué función de la guía>.» con el paso que recomiendas, " +
+            "Termina con una línea «Siguiente paso: <qué hacer y con qué función de la guía>.» con el paso siguiente en el ORDEN DE LA GUÍA " +
+            "(lista «Orden de los pasos» del principio) y la función exacta de ese paso según la lista de funciones (cada función dice su paso), " +
             "y si hay alternativas razonables, una lista de líneas que empiecen por «Paso N: ...» (N = número del paso en la guía). " +
             "Cada una es un enlace que el usuario pulsará para que la hagas." });
          this.anotar("Interpretar el resultado", "Pidiendo al modelo que interprete el resultado y recomiende el paso siguiente…");

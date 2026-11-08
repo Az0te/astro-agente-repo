@@ -118,6 +118,10 @@ function grPolyCoef(img, excl, grado) {
     if (v.length > 0.5 * (x1 - x0) * (y1 - y0)) pts.push({ x: (x0 + x1) / 2 / w - 0.5, y: (y0 + y1) / 2 / h - 0.5, z: gcMedian(v), ok: true });
   }
   var nt = grado >= 2 ? 6 : 3;
+  // Si el objeto llena el campo no quedan celdas de cielo y el polinomio salía a cero (no corregía nada y parecía un
+  // candidato más, con fondoResidual 1; IC 63, 8 nov 2026): se dice como error del candidato.
+  if (pts.length < nt + 2)
+    throw new Error("no quedan celdas de cielo fuera del objeto para ajustarlo (" + pts.length + " de " + (gx * gy) + "): el objeto llena el campo");
   function terms(x, y) { return grado >= 2 ? [1, x, y, x * x, x * y, y * y] : [1, x, y]; }
   var c = []; for (var q0 = 0; q0 < nt; q0++) c.push(0);
   for (var it = 0; it < 6; it++) {
