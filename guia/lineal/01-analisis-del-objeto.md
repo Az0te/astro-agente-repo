@@ -52,4 +52,13 @@ out.join("\n");
 eval(File.readTextFile("<ruta de guia>/herramientas/analisis.js"));   // en el nivel superior del script
 JSON.stringify(analizarMaster("MasterLight"));
 ```
+
+**Documentarse en internet** (`herramientas/web.js`): qué es el objeto y qué señal tiene antes de decidir nada. `simbad("IC 63")` da el tipo según SIMBAD (región HII, nebulosa de reflexión, oscura, galaxia...), coordenadas, tamaño e identificadores; `wikipedia("IC 63")` el resumen del artículo (español y, si no hay, inglés), también para cámaras, telescopios y filtros; `leerWeb(url)` el texto de una página concreta (ficha del filtro o de la cámara); `imagenCatalogo("IC 63", { survey: "H-Alpha Comp", campo: 2 })` abre una imagen de catálogo de SkyView (DSS2 Red/Blue/IR, mapa Hα, WISE, 2MASS, GALEX) para saber qué Hα u otras señales esperar y distinguir estructura débil real de gradiente. Con una vista con astrometría, `imagenCatalogo("<vista>")` usa su centro y su campo. Citar siempre la fuente que devuelven. Con Claude Code el modelo tiene además WebSearch y WebFetch.
+
+```javascript
+var s = simbad("IC 63");                     // { tipo: "región HII (nebulosa de emisión)", ra_grados, dec_grados, ... }
+var w = wikipedia("IC 63");                  // { titulo, resumen, url }
+var c = imagenCatalogo("IC 63", { survey: "H-Alpha Comp", campo: 2 });   // abre Cat_H_Alpha_Comp
+JSON.stringify({ simbad: s, wikipedia: w, catalogo: c });
+```
 **Control.** La mediana de un master lineal está en torno a 0,001–0,02 (con pedestal puede pasar de 0,01: el de una nebulosa oscura da 0,0102). Si es mucho mayor (> 0,05), la imagen ya está estirada y no es la entrada correcta. Máximos por canal muy distintos = saturación desigual, no fallo de color.

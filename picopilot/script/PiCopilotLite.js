@@ -112,13 +112,14 @@ function PLAjustes() {
    this.rutaCodex = plRutaCodexPorDefecto();
    this.guia = plPadre(plPadre(PL_RUTA_SCRIPT)) + "/guia";
    this.ejecutarSinPreguntar = false;
+   this.internet = true;                  // Claude: WebSearch y WebFetch; todos: simbad/wikipedia/leerWeb/imagenCatalogo
 
    var CAMPOS = { proveedor: DataType_UCString, modeloOllama: DataType_UCString, modeloClaude: DataType_UCString,
                   modeloCodex: DataType_UCString, ollamaUrl: DataType_UCString, temperatura: DataType_UCString,
                   pensar: DataType_Boolean, rutaClaude: DataType_UCString, rutaCodex: DataType_UCString,
                   guia: DataType_UCString, ejecutarSinPreguntar: DataType_Boolean, umbralN: DataType_Int32,
                   claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
-                  codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString };
+                  codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -250,7 +251,7 @@ function plElegirModelo(aj, paso) {
 
 var PL_ORDEN_GUIA = ["procesos", "gradcompare", "analisis", "alineado", "preproceso", "bandaestrecha", "boost", "color",
                      "combinacion", "deconvolucion", "realces", "estirado", "estrellas", "exportar", "graxpert",
-                     "gradiente", "hdr", "lineal", "mascaras", "nucleo", "recombinacion", "ruido"];
+                     "gradiente", "hdr", "lineal", "mascaras", "nucleo", "recombinacion", "ruido", "web"];
 var plGuiaCargada = null;   // carpeta de la guía cargada
 
 // Los #define de los .jsh de pjsr (UndoFlag_NoSwapFile, DataType_Float...) sólo existen en el preprocesador; el código que
@@ -473,6 +474,12 @@ function plPromptSistema(aj) {
    "- Compara siempre: si la guía tiene una función que prueba varios candidatos y recomienda uno (gradienteCandidatos o " +
    "gradienteVarias, ruidoCandidatos, bxtCandidatos, estirarCandidatos, contrasteCandidatos, nucleoCandidatos...), úsala en vez de aplicar un solo método o valor, y enseña la tabla " +
    "de la comparación (comparados / candidatos) en tu resumen.\n\n" +
+   (aj.internet ?
+   "Información de internet (objeto, filtros, cámaras, telescopios, qué señal tiene la nebulosa, problemas típicos):\n" +
+   (aj.proveedor == "claude" ? "- Tienes WebSearch y WebFetch: úsalos directamente y cita las fuentes.\n" : "") +
+   "- Desde un script: simbad(\"IC 63\") da el tipo de objeto, coordenadas y tamaño; wikipedia(\"texto\", {idioma}) el resumen " +
+   "de un artículo; leerWeb(url) el texto de una página; imagenCatalogo(\"IC 63\" o id de vista con astrometría, {survey: \"H-Alpha Comp\"}) " +
+   "abre una imagen de catálogo (DSS2, Hα, WISE...) para saber qué señal esperar. Cita la fuente que devuelven y no inventes lo que no traigan.\n\n" : "") +
    "Recomendar el paso siguiente:\n" +
    "- Cuando respondas sin script (información, dudas, resúmenes), termina con una línea «Siguiente paso: <qué hacer y con " +
    "qué función de la guía>.» con lo que recomiendas según el orden de la guía y lo que ya se ha hecho en esta conversación " +
@@ -582,8 +589,10 @@ function plClaudeChat(aj, sistema, mensajes, estado, modelo) {
    var dir = plCarpeta(PL_TMP), fs = dir + "/sistema.txt", fe = dir + "/prompt.txt", fo = dir + "/respuesta.txt";
    File.writeTextFile(fs, sistema);
    File.writeTextFile(fe, "Continúa esta conversación respondiendo al último mensaje del usuario.\n\n" + plConversacionTexto(mensajes));
-   // Sin MCP ni herramientas: sólo texto. PixInsight está ocupado con este script y no podría atender al MCP.
-   var args = ["-p", "--output-format", "text", "--strict-mcp-config", "--tools", "", "--system-prompt-file", fs];
+   // Sin MCP: PixInsight está ocupado con este script y no podría atender al MCP. Con «internet», sólo WebSearch y
+   // WebFetch (permitidas sin preguntar: en -p nadie puede contestar un permiso); si no, ninguna herramienta.
+   var herr = aj.internet ? ["--tools", "WebSearch", "WebFetch", "--allowedTools", "WebSearch", "WebFetch"] : ["--tools", ""];
+   var args = ["-p", "--output-format", "text", "--strict-mcp-config"].concat(herr).concat(["--system-prompt-file", fs]);
    if (modelo) args.push("--model", modelo);
    plEjecutarCli(aj.rutaClaude, args, fe, fo, estado);
    return File.readTextFile(fo).trim();
@@ -1138,6 +1147,12 @@ function plConstruirDialogo(aj) {
    this.eClaude = fila("Ejecutable claude:", aj.rutaClaude);
    this.eCodex = fila("Ejecutable codex:", aj.rutaCodex);
    this.eGuia = fila("Carpeta de la guía:", aj.guia, "Carpeta guia/ del repositorio (con herramientas/ y manifiesto.json).");
+   this.cInternet = new CheckBox(pAj);
+   this.cInternet.text = "Permitir búsquedas en internet (Claude: WebSearch/WebFetch; todos: SIMBAD, Wikipedia, catálogos)";
+   this.cInternet.checked = aj.internet;
+   this.cInternet.onCheck = function (c) { aj.internet = c; };
+   var fI = new HorizontalSizer; fI.addSpacing(156); fI.add(this.cInternet); fI.addStretch();
+   pAj.sizer.add(fI);
    this.bGuardar = new PushButton(pAj);
    this.bGuardar.text = "Guardar ajustes";
    this.bGuardar.onClick = function () { self.leerAjustes(); aj.guardar(); self.estadoLbl.text = "Ajustes guardados."; };

@@ -1424,6 +1424,41 @@
    }
   },
   {
+   "nombre": "simbad",
+   "fichero": "web.js",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Internet: tipo de objeto según SIMBAD (región HII, nebulosa de reflexión, galaxia...), coordenadas, tamaño, magnitudes e identificadores de un objeto por su nombre.",
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "params": { "type": "object", "properties": { "objeto": { "type": "string", "description": "Nombre del objeto (IC 63, M31, NGC 7000, Sh2-155...)." }, "opciones": { "type": "object", "description": "Opcional." } }, "required": ["objeto"] }
+  },
+  {
+   "nombre": "wikipedia",
+   "fichero": "web.js",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Internet: busca en Wikipedia (español y, si no hay, inglés) y devuelve el resumen del mejor artículo: objetos, cámaras, telescopios, filtros.",
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "params": { "type": "object", "properties": { "texto": { "type": "string", "description": "Qué buscar." }, "opciones": { "type": "object", "description": "Opcional. { idioma: \"es\" | \"en\" }" } }, "required": ["texto"] }
+  },
+  {
+   "nombre": "leerWeb",
+   "fichero": "web.js",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Internet: texto de una página web dada por su URL (ficha del fabricante del filtro o de la cámara, artículo), sin etiquetas y recortado.",
+   "params": { "type": "object", "properties": { "url": { "type": "string", "description": "URL completa (https:...)." }, "opciones": { "type": "object", "description": "Opcional. { max: 6000 }" } }, "required": ["url"] }
+  },
+  {
+   "nombre": "imagenCatalogo",
+   "fichero": "web.js",
+   "nivel": "copias",
+   "timeout_s": 120,
+   "descripcion": "Internet: abre en PixInsight una imagen de catálogo (SkyView, NASA) de un objeto, unas coordenadas o el campo de una vista con astrometría: DSS2 Red/Blue/IR, H-Alpha Comp (mapa Hα), WISE, 2MASS, GALEX. Para saber qué señal esperar y distinguir estructura real de gradiente; no para combinar.",
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "params": { "type": "object", "properties": { "posicion": { "type": "string", "description": "Nombre del objeto, \"ra, dec\" en grados o id de una vista con astrometría." }, "opciones": { "type": "object", "description": "Opcional. { survey: \"DSS2 Red\", campo: 1 (grados), pixeles: 1000, abrir: true }" } }, "required": ["posicion"] }
+  },
+  {
    "nombre": "run_script",
    "fichero": null,
    "nivel": "libre",
