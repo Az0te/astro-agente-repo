@@ -65,7 +65,10 @@ function plRecortar(s, n) { s = String(s); return s.length > n ? s.substring(0, 
 
 function plEventos() { CoreApplication.processEvents(); }
 
-function plDormir(ms) { if (typeof msleep === "function") msleep(ms); else Thread.msleep(ms); }
+function plDormir(ms) {
+   if (typeof System !== "undefined" && typeof System.msleep === "function") System.msleep(ms);
+   else if (typeof msleep === "function") msleep(ms); else Thread.msleep(ms);
+}
 
 function plGlobal() { return (0, eval)("this"); }
 
@@ -1400,10 +1403,12 @@ function plConstruirDialogo(aj) {
    this.dictar = function () {
       if (!aj.dictadoAntiguo) {   // dictado de Windows 11 (Win + H): escribe en el prompt
          this.pararVoz();
-         this.entrada.focus();
+         // PJSR no tiene focus(): se prueba con las propiedades que existen; si no, basta con hacer clic en el prompt.
+         try { this.childToFocus = this.entrada; } catch (e) {}
+         try { this.entrada.hasFocus = true; } catch (e) {}
          try { plPowerShell({ nombre: "dictado_windows", codigo: PL_PS_WINH }, []); }
          catch (e) { this.estadoLbl.text = "No se pudo abrir el dictado de Windows: " + (e.message || e); return; }
-         this.estadoLbl.text = "Dictado de Windows abierto: habla y se escribe en el prompt. Para cerrarlo, Win + H o Esc; luego revisa y pulsa Enviar.";
+         this.estadoLbl.text = "Dictado de Windows abierto: haz clic en el prompt si el cursor no está ahí y habla. Para cerrarlo, Win + H o Esc.";
          return;
       }
       if (this.pDictado && this.pDictado.isRunning) {   // segunda pulsación: parar y quedarse con lo que haya
@@ -1650,6 +1655,9 @@ function plPrueba(salida, cli) {
             // Enlace de paso: se simula el clic dejando plClick en la página; el temporizador debe recogerlo.
             out.enlaceHtml = plMarkdown("Siguiente paso: gradiente con gradienteCandidatos. Después, color.").indexOf("class=\"step\"") >= 0;
             out.entradasChat = d.entradas.map(function (e) { return e.tipo + ": " + e.titulo; });
+            // El foco del dictado no debe lanzar errores (PJSR no tiene focus()).
+            try { d.childToFocus = d.entrada; } catch (e) { out.foco1 = String(e); }
+            try { d.entrada.hasFocus = true; } catch (e) { out.foco2 = String(e); }
             d.enviarTexto = function (t) { out.clic = t; };
             d.historialBox.evaluateScript("plClick='999|Paso de prueba';");
          } catch (e) { out.error = String(e); }
@@ -1734,7 +1742,8 @@ function plPrueba(salida, cli) {
 }
 
 function plMain() {
-   var args = (typeof jsArguments !== "undefined") ? jsArguments : [];
+   var args = (typeof Runtime !== "undefined" && Runtime.jsArguments) ? Runtime.jsArguments :
+              (typeof jsArguments !== "undefined") ? jsArguments : [];
    if (args.length && String(args[0]) == "--prueba") {
       plPrueba(args.length > 1 && String(args[1]) ? String(args[1]) : plCarpeta(PL_TMP) + "/prueba.json",
                args.length > 2 ? String(args[2]) : null);   // tercer argumento opcional: claude | codex
