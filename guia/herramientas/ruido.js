@@ -13,7 +13,10 @@
 //
 // reducirRuido(vista, opciones), sobre una copia:
 //   metodo      "nxt" (por defecto) | "hibrido" (MLDenoise + NXT 0,95: ML − suave(ML) + suave(NXT), caja de radio 3;
-//               sólo mono y con modelo .xmlm; si no se puede, cae a NXT 0,95 y lo dice)
+//               sólo mono y con modelo .xmlm; si no se puede, cae a NXT 0,95 y lo dice) | "ml" (MLDenoise solo, también
+//               RGB; amount 1,0) | "tgv" (MultiscaleTGVDenoise de PixInsight 1.9.6; strength 0,5)
+//   modelo      .xmlm de MLDenoise; si no se da, la primera ruta .xmlm de perfil.md
+// Para comparar métodos y niveles y quedarse con el mejor: ruidoCandidatos (abajo).
 //   denoise     NXT (0,50 por defecto); detail (0,15); iterations (2)
 //   croma       si se da, separación de color: luminancia = denoise, croma = este valor (p. ej. 0,90 con lum 0,40)
 // Medidas (las de las fichas): ruido del cielo antes/después (debe bajar 50–80 % en el denoise principal, poco en
@@ -162,6 +165,20 @@ function rdBox(a, W, H, r) {
   return o;
 }
 
+// Modelo .xmlm de MLDenoise: el de las opciones o, si no, la primera ruta .xmlm que aparezca en perfil.md (privado).
+function rdModeloML(o) {
+  var m = o && (o.modeloML || o.modelo);
+  if (m && File.exists(m)) return m;
+  try {
+    var g = (typeof PICOPILOT_GUIA === "string") ? PICOPILOT_GUIA : null;
+    if (g && File.exists(g + "/perfil.md")) {
+      var x = /[A-Za-z]:[\\\/][^\s`"'<>|*?]*\.xmlm/.exec(File.readTextFile(g + "/perfil.md"));
+      if (x && File.exists(x[0].replace(/\\/g, "/"))) return x[0].replace(/\\/g, "/");
+    }
+  } catch (e) { }
+  return null;
+}
+
 function reducirRuido(viewId, o) {
   // Qwen pasó r.starless.vista (undefined) tras separarEstrellas (7 nov 2026): starless y estrellas son ids (texto).
   if (viewId === undefined || viewId === null || viewId === "") throw new Error("Falta la vista (undefined). separarEstrellas devuelve r.starless y r.estrellas como ids de texto: usa reducirRuido(r.starless, ...)");
@@ -171,6 +188,7 @@ function reducirRuido(viewId, o) {
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
   var metodo = o.metodo || "nxt", aviso = null, t0 = Date.now();
   var mono = src.image.numberOfChannels === 1;
+  if (metodo === "hibrido" && rdModeloML(o)) o.modelo = rdModeloML(o);
   if (metodo === "hibrido" && (!mono || typeof MLDenoise !== "function" || !o.modelo || !File.exists(o.modelo))) {
     aviso = "híbrido no disponible (" + (!mono ? "imagen RGB: MLDenoise sólo mono" : typeof MLDenoise !== "function" ?
             "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,95" : "0,50");
@@ -178,9 +196,24 @@ function reducirRuido(viewId, o) {
     // de 0,25 a 0,63 (nebulosa oscura, 7 nov 2026): 0,50.
     metodo = "nxt"; o.denoise = mono ? 0.95 : 0.50;
   }
+  if (metodo === "ml" && !rdModeloML(o)) throw new Error("MLDenoise necesita un modelo .xmlm: pásalo en { modelo } o apunta su ruta en perfil.md");
+  if (metodo === "tgv" && typeof MultiscaleTGVDenoise !== "function") throw new Error("MultiscaleTGVDenoise no está disponible (PixInsight 1.9.6 o posterior)");
   var w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn")), v = w.mainView;
   if (metodo === "nxt") rdNXT(v, o);
-  else {
+  else if (metodo === "ml") {
+    // MLDenoise solo (sin NXT): también en RGB. Lento: ~5 min en 22 MP (8 nov 2026).
+    var M1 = new MLDenoise; M1.modelPath = rdModeloML(o); M1.amount = (o.amount !== undefined) ? o.amount : 1.0; M1.useCache = false;
+    if (!M1.executeOn(v)) { w.forceClose(); throw new Error("MLDenoise falló"); }
+  } else if (metodo === "tgv") {
+    // MultiscaleTGVDenoise (PixInsight 1.9.6): modelo de ruido automático, por eso strength no tiene unidades.
+    var T = new MultiscaleTGVDenoise;
+    T.strength = (o.strength !== undefined) ? o.strength : 0.5;
+    if (o.chrominance !== undefined) T.chrominance = o.chrominance;
+    if (o.smoothness !== undefined) T.smoothness = o.smoothness;
+    if (o.scales !== undefined) T.scales = o.scales;
+    T.deepSky = (o.deepSky !== undefined) ? !!o.deepSky : src.image.median() < 0.05;   // modo cielo profundo sólo en lineal
+    if (!T.executeOn(v)) { w.forceClose(); throw new Error("MultiscaleTGVDenoise falló"); }
+  } else {
     var W = src.image.width, H = src.image.height, R = new Rect(0, 0, W, H);
     var ml = rdCopy(viewId, "rdTmpML"), nx = rdCopy(viewId, "rdTmpNX");
     var M = new MLDenoise; M.modelPath = o.modelo; M.amount = 1.0; M.useCache = false;
@@ -223,9 +256,12 @@ function reducirRuido(viewId, o) {
                                "basta con 0,50 o menos (galaxia grande, 7 nov 2026: 0,50 + 0,70 subió el moteado de 0,35 a 0,92)"
                              : "no aplicar este NXT"));
   return {
-    vista: v.id, original: viewId, metodo: metodo === "nxt" ? "NoiseXTerminator" : "híbrido MLDenoise + NXT",
+    vista: v.id, original: viewId,
+    metodo: { nxt: "NoiseXTerminator", ml: "MLDenoise", tgv: "MultiscaleTGVDenoise" }[metodo] || "híbrido MLDenoise + NXT",
     parametros: metodo === "nxt" ? { denoise: (o.denoise !== undefined) ? o.denoise : 0.50, detail: (o.detail !== undefined) ? o.detail : 0.15,
-                                    iterations: o.iterations || 2, croma: (o.croma !== undefined) ? o.croma : null } : { modelo: o.modelo },
+                                    iterations: o.iterations || 2, croma: (o.croma !== undefined) ? o.croma : null } :
+                metodo === "ml" ? { amount: (o.amount !== undefined) ? o.amount : 1.0 } :
+                metodo === "tgv" ? { strength: (o.strength !== undefined) ? o.strength : 0.5 } : { modelo: o.modelo },
     aviso: aviso, segundos: Math.round((Date.now() - t0) / 1000), medidas: q, no_cumple: noCumple,
     control: {
       medido: { contraste_conservado: q.contraste_zona_debil_pct >= -5, residual_solo_ruido: q.residual_estructura <= 2.0,
@@ -240,49 +276,67 @@ function reducirRuido(viewId, o) {
   };
 }
 
-// Compara varios niveles de denoise sobre la MISMA entrada y se queda con el mejor que cumpla los controles
-// (Rafael, 8 nov 2026: «queremos siempre que compare para sacar los mejores resultados»).
-//   ruidoCandidatos(vista, { niveles: [0.3, 0.5, 0.7], detail, iterations, principal: true, nuevaVista, cerrar })
-// Niveles por defecto: lineal 0,30 / 0,50 / 0,70; estirada 0,15 / 0,30 / 0,45. Elección: entre los que cumplen
-// (sin no_cumple), el que más baja el ruido sin pasar del 80 % (con principal: true, preferiblemente en 50–80 %);
-// si ninguno cumple, el de menos avisos y menos denoise. La elegida queda como nuevaVista (<vista>_dn por defecto) y
-// las demás se cierran (cerrar: false para conservarlas). Devuelve la tabla de la comparación en «comparados».
+// Compara varios métodos y niveles de reducción de ruido sobre la MISMA entrada y se queda con el mejor que cumpla los
+// controles (Rafael, 8 nov 2026: «queremos siempre que compare»; como mínimo NXT, MLDenoise y MultiscaleTGVDenoise).
+//   ruidoCandidatos(vista, { metodos: ["nxt", "ml", "tgv"], niveles: [0.3, 0.5, 0.7], tgv: [0.5, 1.0], amount: 1.0,
+//                            modelo: .xmlm, detail, iterations, principal: true, nuevaVista, cerrar })
+// Por defecto: NXT a 0,30 / 0,50 / 0,70 (estirada 0,15 / 0,30 / 0,45), MLDenoise amount 1,0 (modelo de las opciones o
+// de perfil.md; si no hay, se anota y se sigue) y MultiscaleTGVDenoise strength 0,5 y 1,0 (estirada: 0,25 y 0,5).
+// MLDenoise es lento (~5 min en 22 MP): metodos: ["nxt", "tgv"] para no usarlo.
+// Elección: entre los que cumplen (sin no_cumple), el que más baja el ruido sin pasar del 80 % (con principal: true,
+// preferiblemente en 50–80 %); si ninguno cumple, el de menos avisos y, a igualdad, el más suave. La elegida queda como
+// nuevaVista (<vista>_dn por defecto) y las demás se cierran (cerrar: false para conservarlas). La tabla de la
+// comparación va en «comparados».
 function ruidoCandidatos(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
   o = o || {};
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
   var lineal = src.image.median() < 0.05, t0 = Date.now();
-  var niveles = o.niveles || (lineal ? [0.30, 0.50, 0.70] : [0.15, 0.30, 0.45]);
+  var metodos = o.metodos || ["nxt", "ml", "tgv"];
+  var pruebas = [];
+  if (metodos.indexOf("nxt") >= 0)
+    (o.niveles || (lineal ? [0.30, 0.50, 0.70] : [0.15, 0.30, 0.45])).forEach(function (d) {
+      pruebas.push({ etiqueta: "NXT denoise " + d, op: { metodo: "nxt", denoise: d }, sufijo: "_nxt" + Math.round(100 * d) });
+    });
+  if (metodos.indexOf("ml") >= 0) {
+    var a = (o.amount !== undefined) ? o.amount : 1.0;
+    pruebas.push({ etiqueta: "MLDenoise amount " + a, op: { metodo: "ml", amount: a }, sufijo: "_ml" });
+  }
+  if (metodos.indexOf("tgv") >= 0)
+    (o.tgv || (lineal ? [0.5, 1.0] : [0.25, 0.5])).forEach(function (s) {
+      pruebas.push({ etiqueta: "MultiscaleTGVDenoise strength " + s, op: { metodo: "tgv", strength: s }, sufijo: "_tgv" + Math.round(100 * s) });
+    });
   var cands = [];
-  niveles.forEach(function (d) {
+  pruebas.forEach(function (p, n) {
     var op = {};
-    for (var k in o) if (k !== "niveles" && k !== "nuevaVista" && k !== "cerrar" && k !== "principal") op[k] = o[k];
-    op.metodo = "nxt"; op.denoise = d; op.nuevaVista = viewId + "_dn" + Math.round(100 * d);
-    try { cands.push({ denoise: d, r: reducirRuido(viewId, op) }); }
-    catch (e) { cands.push({ denoise: d, error: String(e && e.message ? e.message : e) }); }
+    for (var k in o) if (["metodos", "niveles", "tgv", "nuevaVista", "cerrar", "principal"].indexOf(k) < 0) op[k] = o[k];
+    for (var k2 in p.op) op[k2] = p.op[k2];
+    op.nuevaVista = viewId + p.sufijo;
+    var t1 = Date.now();
+    try { cands.push({ etiqueta: p.etiqueta, orden: n, r: reducirRuido(viewId, op), segundos: Math.round((Date.now() - t1) / 1000) }); }
+    catch (e) { cands.push({ etiqueta: p.etiqueta, orden: n, error: String(e && e.message ? e.message : e) }); }
   });
   var ok = cands.filter(function (c) { return c.r && !c.r.no_cumple.length; }), best = null;
   function baja(c) { return c.r.medidas.ruido_baja_pct; }
-  function mas(l) { return l.reduce(function (a, c) { return a === null || baja(c) > baja(a) ? c : a; }, null); }
-  function menos(l) { return l.reduce(function (a, c) { return a === null || baja(c) < baja(a) ? c : a; }, null); }
+  function mas(l) { return l.reduce(function (x, c) { return x === null || baja(c) > baja(x) ? c : x; }, null); }
+  function menos(l) { return l.reduce(function (x, c) { return x === null || baja(c) < baja(x) ? c : x; }, null); }
   if (ok.length) {
     var enRango = ok.filter(function (c) { return baja(c) <= 80 && (!o.principal || baja(c) >= 50); });
     var hasta80 = ok.filter(function (c) { return baja(c) <= 80; });
     best = enRango.length ? mas(enRango) : hasta80.length ? mas(hasta80) : menos(ok);
   } else {
-    var conR = cands.filter(function (c) { return c.r; });
-    best = conR.reduce(function (a, c) {
-      return a === null || c.r.no_cumple.length < a.r.no_cumple.length ||
-             (c.r.no_cumple.length === a.r.no_cumple.length && c.denoise < a.denoise) ? c : a;
+    best = cands.filter(function (c) { return c.r; }).reduce(function (x, c) {
+      return x === null || c.r.no_cumple.length < x.r.no_cumple.length ||
+             (c.r.no_cumple.length === x.r.no_cumple.length && baja(c) < baja(x)) ? c : x;
     }, null);
   }
   var comparados = cands.map(function (c) {
-    if (!c.r) return { denoise: c.denoise, error: c.error, elegido: false };
+    if (!c.r) return { metodo: c.etiqueta, error: c.error, elegido: false };
     var m = c.r.medidas;
-    return { denoise: c.denoise, ruido_baja_pct: m.ruido_baja_pct, contraste_zona_debil_pct: m.contraste_zona_debil_pct,
+    return { metodo: c.etiqueta, ruido_baja_pct: m.ruido_baja_pct, contraste_zona_debil_pct: m.contraste_zona_debil_pct,
              residual_estructura: m.residual_estructura, moteado_color: m.moteado_color_despues,
-             cumple: !c.r.no_cumple.length, elegido: c === best };
+             cumple: !c.r.no_cumple.length, segundos: c.segundos, elegido: c === best };
   });
   var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn"), vista = null;
   cands.forEach(function (c) {
@@ -298,18 +352,16 @@ function ruidoCandidatos(viewId, o) {
       vista = w.mainView.id;
     } else if (o.cerrar !== false) w.forceClose();
   });
-  var r = {
+  return {
     vista: vista, original: viewId, comparados: comparados,
-    recomendado: best ? "denoise " + best.denoise : null,
-    motivo: !best ? "Ningún nivel se pudo aplicar: ver comparados." :
-            (best.r.no_cumple.length ? "Ningún nivel cumple los controles: se queda el de menos avisos y menos denoise (" + best.denoise + "). " :
-             "Cumple los controles y baja el ruido un " + baja(best) + " % (" + best.denoise + "). ") +
-            "Comparados: " + niveles.join(", ") + ".",
-    medidas: best ? best.r.medidas : null, no_cumple: best ? best.r.no_cumple : ["ningún nivel se pudo aplicar"],
+    recomendado: best ? best.etiqueta : null,
+    motivo: !best ? "Ningún candidato se pudo aplicar: ver comparados." :
+            (best.r.no_cumple.length ? "Ningún candidato cumple los controles: se queda el de menos avisos y más suave (" + best.etiqueta + ")." :
+             best.etiqueta + ": cumple los controles y baja el ruido un " + baja(best) + " %."),
+    medidas: best ? best.r.medidas : null, no_cumple: best ? best.r.no_cumple : ["ningún candidato se pudo aplicar"],
     segundos: Math.round((Date.now() - t0) / 1000),
     control: best ? best.r.control : undefined
   };
-  return r;
 }
 
 // StarXTerminator en lineal sobre una copia: starless + capa de estrellas, con las comprobaciones de la ficha.

@@ -726,7 +726,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodo: \"nxt\" | \"hibrido\", denoise: 0.5, detail: 0.15, iterations: 2, croma, modelo: .xmlm, nuevaVista }"
+      "description": "Opcional. { metodo: \"nxt\" | \"hibrido\" | \"ml\" | \"tgv\", denoise: 0.5, detail: 0.15, iterations: 2, croma, amount (ml), strength (tgv), modelo: .xmlm, nuevaVista }"
      }
     },
     "required": [
@@ -739,7 +739,7 @@
    "fichero": "ruido.js",
    "nivel": "copias",
    "timeout_s": 1800,
-   "descripcion": "Compara varios niveles de NoiseXTerminator sobre la misma entrada (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45) con las medidas de reducirRuido y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
+   "descripcion": "Compara NoiseXTerminator (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45), MLDenoise (amount 1,0, modelo .xmlm del perfil; lento) y MultiscaleTGVDenoise (strength 0,5/1,0) sobre la misma entrada con las medidas de reducirRuido, y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
    "paso": "lineal/14-noisex-suave.md",
    "params": {
     "type": "object",
@@ -750,7 +750,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { niveles: [0.3, 0.5, 0.7], detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
+      "description": "Opcional. { metodos: [\"nxt\", \"ml\", \"tgv\"], niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
      }
     },
     "required": [
@@ -890,6 +890,30 @@
     "required": [
      "starless",
      "estrellas"
+    ]
+   }
+  },
+  {
+   "nombre": "estirarCandidatos",
+   "fichero": "estirado.js",
+   "nivel": "copias",
+   "timeout_s": 1800,
+   "descripcion": "Paso 1 no lineal: compara GHS al fallo, MultiscaleAdaptiveStretch y ArcsinhStretch sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante; devuelve la tabla de la comparación. Preferible a estirarStarless con un solo método.",
+   "paso": "no-lineal/01-estirado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la starless lineal."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { cielo: 0.10, metodos: [\"ghs\", \"mas\", \"arcsinh\"], ruidoMax: 0.15, mas: { parámetros de MAS }, nuevaVista, cerrar: false para conservar los demás }"
+     }
+    },
+    "required": [
+     "vista"
     ]
    }
   },

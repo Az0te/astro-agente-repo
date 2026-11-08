@@ -25,6 +25,13 @@ function esK(C, name) {
   throw new Error("Constante no encontrada: " + name);
 }
 
+// Quita el STF (estirado de pantalla) de una vista: antes de estirar hay que verla sin él (Rafael, 8 nov 2026), y la
+// estirada tampoco debe llevarlo, o se ve estirada dos veces. No toca los píxeles.
+function esQuitarSTF(view) {
+  try { view.stf = [[0.5, 0, 1, 0, 1], [0.5, 0, 1, 0, 1], [0.5, 0, 1, 0, 1], [0.5, 0, 1, 0, 1]]; return true; }
+  catch (e) { return false; }
+}
+
 function esMedian(view) {
   var im = view.image, s = 0;
   for (var c = 0; c < im.numberOfChannels; ++c) { im.selectedChannel = c; s += im.median(); }
@@ -69,6 +76,7 @@ function estirarAFondo(viewId, o) {
   var fondo = o.fondo || 0.20, tol = o.tolerancia || 0.02, canal = o.canal || "RGB";
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
+  esQuitarSTF(win.mainView);
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): no repetir la fase 1");
 
@@ -250,6 +258,7 @@ function estirarStarless(viewId, o) {
   var lim = { ruido: o.ruidoMax || 0.15, cero: o.ceroMax || 0.05, alto: o.altoMax || 0.05 };
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
+  esQuitarSTF(win.mainView);
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): no repetir la fase 1");
   var w = esCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"));
@@ -326,6 +335,150 @@ function estirarStarless(viewId, o) {
   };
 }
 // ---------------------------------------------------------------------------------------------------
+// Comparación de métodos de estirado de la starless (Rafael, 8 nov 2026: «en el estirado mínimo prueba GHS, MAS y
+// ArcsinhStretch»). Los tres acaban con el cielo en el mismo objetivo para que la comparación sea justa:
+//   - GHS «al fallo» (estirarStarless).
+//   - MultiscaleAdaptiveStretch (PixInsight 1.9.6) con targetBackground = cielo y sin su saturación (va después).
+//   - ArcsinhStretch: punto negro bajo el cielo lineal y el factor que lleva el cielo al objetivo (bisección en una
+//     copia reducida).
+// MAS y Arcsinh se ajustan al cielo objetivo con punto negro (si quedan altos) o con una MTF (si quedan bajos).
+// Medidas iguales para todos (esCheck): ruido del cielo, recortes y «señal_débil_en_ruidos» = (p90 − cielo) / ruido
+// del cielo: cuánto se separa la señal débil del fondo en unidades de ruido (mayor = mejor). Gana, entre los que no
+// fallan (ruido, recortes, dominante), el de más señal débil en ruidos.
+//   var r = estirarCandidatos("Starless", { cielo: 0.10, metodos: ["ghs", "mas", "arcsinh"], nuevaVista: "Starless_st" });
+function esMTF(m, x) { return x <= 0 ? 0 : x >= 1 ? 1 : (m - 1) * x / ((2 * m - 1) * x - m); }
+
+// Lleva el cielo medido por esCheck al objetivo: punto negro si está por encima, MTF si está por debajo.
+function esCieloA(view, objetivo) {
+  var c = esCheck(view);
+  if (Math.abs(c.cielo - objetivo) <= 0.005) return "ya en objetivo";
+  if (c.cielo > objetivo) { esBlackPoint(view, c.cielo, objetivo); return "punto negro"; }
+  var x = Math.max(c.cielo, 1e-6), y = objetivo, m = x * (y - 1) / (2 * x * y - y - x);
+  var P = new PixelMath;
+  P.expression = "mtf(" + m + ", $T)"; P.useSingleExpression = true; P.createNewImage = false;
+  P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
+  if (!P.executeOn(view)) throw new Error("MTF del cielo falló");
+  return "MTF " + m.toPrecision(4);
+}
+
+function esArcsinh(view, stretch, bp) {
+  var A = new ArcsinhStretch;
+  A.stretch = stretch; A.blackPoint = bp; A.protectHighlights = true; A.useRGBWS = false;
+  if (!A.executeOn(view)) throw new Error("ArcsinhStretch falló");
+}
+
+function estirarCandidatos(viewId, o) {
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
+  o = o || {};
+  var win = ImageWindow.windowById(viewId);
+  if (win.isNull) throw new Error("No existe la vista " + viewId);
+  esQuitarSTF(win.mainView);
+  var med0 = esMedian(win.mainView);
+  if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): estirarCandidatos es para la starless lineal");
+  var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "mas", "arcsinh"], t0 = Date.now();
+  var lim = { ruido: o.ruidoMax || 0.15, cero: o.ceroMax || 0.05, alto: o.altoMax || 0.05 };
+  var cands = [];
+  function medir(v, etiqueta, extra, t1) {
+    var c = esCheck(v), sd = esSkyDominance(v), f = esFallo(c, lim);
+    if (sd.dominante_pct >= 5) f.push("dominante del cielo " + sd.dominante_pct + " %");
+    var ruidoAbs = Math.max(c.ruido_rel * c.cielo, 1e-6);
+    cands.push({ etiqueta: etiqueta, vista: v.id, medidas: c, dominante_cielo_pct: sd.dominante_pct, fallos: f,
+                 senal_debil_en_ruidos: +((c.p90 - c.cielo) / ruidoAbs).toFixed(2), extra: extra,
+                 segundos: Math.round((Date.now() - t1) / 1000) });
+  }
+  if (metodos.indexOf("ghs") >= 0) {
+    var t1 = Date.now();
+    try {
+      var op = {}; for (var k in o) if (["metodos", "nuevaVista", "cerrar"].indexOf(k) < 0) op[k] = o[k];
+      op.nuevaVista = viewId + "_st_ghs"; op.cielo = cielo;
+      var g = estirarStarless(viewId, op);
+      medir(View.viewById(g.vista), "GHS al fallo (" + g.pasadas.length + " pasadas)", { parada: g.parada }, t1);
+    } catch (e) { cands.push({ etiqueta: "GHS al fallo", error: String(e && e.message ? e.message : e) }); }
+  }
+  if (metodos.indexOf("mas") >= 0) {
+    var t2 = Date.now();
+    try {
+      if (typeof MultiscaleAdaptiveStretch !== "function") throw new Error("MultiscaleAdaptiveStretch no está disponible (PixInsight 1.9.6)");
+      var wm = esCopy(viewId, viewId + "_st_mas"); wm.show();
+      var M = new MultiscaleAdaptiveStretch;
+      M.targetBackground = cielo; M.saturationEnabled = false;
+      if (o.mas) for (var km in o.mas) M[km] = o.mas[km];
+      if (!M.executeOn(wm.mainView)) throw new Error("MultiscaleAdaptiveStretch falló");
+      var ajM = esCieloA(wm.mainView, cielo);
+      medir(wm.mainView, "MAS (fondo " + cielo + ")", { ajuste_cielo: ajM }, t2);
+    } catch (e) { cands.push({ etiqueta: "MAS", error: String(e && e.message ? e.message : e) }); }
+  }
+  if (metodos.indexOf("arcsinh") >= 0) {
+    var t3 = Date.now();
+    try {
+      // Punto negro: un poco por debajo del cielo lineal (para no recortar sombras); factor por bisección logarítmica
+      // en una copia reducida 4× hasta que el cielo quede en el objetivo.
+      // El punto negro es común a los canales: se toma el cielo del canal más bajo (con el de la luminancia, en un
+      // RGB sin calibrar se recortaba casi el 30 % de los píxeles a 0; 8 nov 2026).
+      var c0 = esCheck(win.mainView), sd0 = esSkyDominance(win.mainView);
+      var cieloMin = sd0.canales.length ? Math.min.apply(null, sd0.canales) : c0.cielo;
+      var bp = Math.max(0, cieloMin * (1 - (o.sigmasPuntoNegro || 6) * c0.ruido_rel));   // con 3 σ quedaba un 1,8 % a 0
+      var small = esCopy(viewId, "esTmpAsinh", 4), lo = Math.log(1), hi = Math.log(1000), s = 100;
+      for (var it = 0; it < 14; ++it) {
+        s = Math.exp(0.5 * (lo + hi));
+        var tt = esCopy(small.mainView.id, "esTmpAsinhTry");
+        esArcsinh(tt.mainView, s, bp);
+        var cs = esCheck(tt.mainView).cielo;
+        tt.forceClose();
+        if (Math.abs(cs - cielo) < 0.005) break;
+        if (cs < cielo) lo = Math.log(s); else hi = Math.log(s);
+      }
+      small.forceClose();
+      var wa = esCopy(viewId, viewId + "_st_asinh"); wa.show();
+      esArcsinh(wa.mainView, s, bp);
+      var ajA = esCieloA(wa.mainView, cielo);
+      medir(wa.mainView, "ArcsinhStretch (stretch " + s.toFixed(1) + ")", { stretch: +s.toFixed(1), punto_negro: +bp.toPrecision(4), ajuste_cielo: ajA }, t3);
+    } catch (e) { cands.push({ etiqueta: "ArcsinhStretch", error: String(e && e.message ? e.message : e) }); }
+  }
+  var ok = cands.filter(function (c) { return c.medidas && !c.fallos.length; });
+  var lista = ok.length ? ok : cands.filter(function (c) { return c.medidas; });
+  var best = lista.reduce(function (a, c) {
+    if (a === null) return c;
+    if (!ok.length && c.fallos.length !== a.fallos.length) return c.fallos.length < a.fallos.length ? c : a;
+    return c.senal_debil_en_ruidos > a.senal_debil_en_ruidos ? c : a;
+  }, null);
+  var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"), vista = null;
+  cands.forEach(function (c) {
+    if (!c.vista) return;
+    var w = ImageWindow.windowById(c.vista);
+    if (w.isNull) return;
+    if (c === best) {
+      if (c.vista !== nombre) { var old = ImageWindow.windowById(nombre); if (!old.isNull) old.forceClose(); w.mainView.id = nombre; }
+      vista = w.mainView.id;
+      if (ES_OPS[c.vista] && c.vista !== vista) { ES_OPS[vista] = ES_OPS[c.vista]; }
+    } else if (o.cerrar !== false) w.forceClose();
+  });
+  var comparados = cands.map(function (c) {
+    if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
+    return { metodo: c.etiqueta, cielo: c.medidas.cielo, ruido_cielo_rel: c.medidas.ruido_rel, p90: c.medidas.p90, p99: c.medidas.p99,
+             senal_debil_en_ruidos: c.senal_debil_en_ruidos, sombras_a_0_pct: c.medidas.cero_pct, luces_095_pct: c.medidas.alto_pct,
+             dominante_cielo_pct: c.dominante_cielo_pct, cumple: !c.fallos.length, segundos: c.segundos, elegido: c === best };
+  });
+  return {
+    vista: vista, original: viewId, cielo_objetivo: cielo, comparados: comparados,
+    recomendado: best ? best.etiqueta : null,
+    motivo: !best ? "Ningún método se pudo aplicar: ver comparados." :
+            (best.fallos.length ? "Ninguno cumple: se queda el de menos fallos (" + best.etiqueta + "): " + best.fallos.join("; ") :
+             best.etiqueta + ": con el cielo en " + cielo + ", separa la señal débil " + best.senal_debil_en_ruidos +
+             " ruidos del fondo, más que los demás, sin fallos de ruido, recorte ni dominante."),
+    no_cumple: best ? best.fallos : ["ningún método se pudo aplicar"],
+    detalle: best ? best.extra : null,
+    segundos: Math.round((Date.now() - t0) / 1000),
+    control: {
+      revisar_a_ojo: ["aspecto de la nebulosa débil y del fondo en cada candidato (cerrar: false para conservarlos y mirarlos)",
+                      "posterización o dientes de sierra en el histograma", "halos o anillos alrededor de zonas brillantes (MAS)"],
+      nota: "senal_debil_en_ruidos = (p90 − cielo) / ruido del cielo, con el cielo igual en todos: mayor = la nebulosa débil se " +
+            "separa más del fondo sin subir el ruido. Lo de revisar_a_ojo no lo mide esta función."
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
 // Capa de estrellas LINEAL estirada sobre una copia. Por defecto (metodo "asinh") arcsinh que conserva el color:
 // L = máx(R,G,B), f = asinh(k·L) / (asinh(k)·L), cada canal × f, k = 3000. Lo débil sube mucho y lo brillante casi nada:
 // salen las estrellas débiles sin hinchar las brillantes. En una nebulosa oscura (7 nov 2026) starStretch amount 2 dejó
@@ -365,6 +518,7 @@ function estirarEstrellas(viewId, o) {
   if (metodo === "starstretch" && typeof starStretch !== "function") throw new Error("starStretch no está cargado (herramientas/realces.js)");
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
+  esQuitarSTF(win.mainView);
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La capa de estrellas parece ya estirada (mediana " + med0.toFixed(4) + ")");
 
