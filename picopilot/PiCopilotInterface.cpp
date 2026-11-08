@@ -1073,6 +1073,63 @@ String PiCopilotInterface::MakeComparePreview( const String& viewId, const Strin
    return String();
 }
 
+// Miniaturas que dejan las comparaciones de la guía (campos previa / previa_modelo / jpg; Rafael, 8 nov 2026): estirado,
+// ruido, contraste, núcleo, paletas y gradiente. El modelo va detrás con «(modelo)» para que salga a la derecha.
+static void CollectGuidePreviews( const JsonValue& o, std::vector<std::pair<String, String>>& imgs, StringList& seen )
+{
+   if ( o.type == JsonValue::Array )
+   {
+      for ( const JsonValue& e : o.a )
+         CollectGuidePreviews( e, imgs, seen );
+      return;
+   }
+   if ( o.type != JsonValue::Object )
+      return;
+   String img = o["previa"].type == JsonValue::Str ? o["previa"].s : (o["jpg"].type == JsonValue::Str ? o["jpg"].s : String());
+   if ( !img.IsEmpty() && !seen.Contains( img ) && File::Exists( img ) )
+   {
+      seen << img;
+      String label;
+      if ( o["metodo"].type == JsonValue::Str )
+         label = o["metodo"].s + (o["parametros"].type == JsonValue::Str ? u" " + o["parametros"].s : String());
+      else if ( o["paleta"].type == JsonValue::Str ) label = o["paleta"].s;
+      else if ( o["vista"].type == JsonValue::Str ) label = o["vista"].s;
+      const JsonValue& met = o["metricas"];
+      if ( met.type == JsonValue::Object && met["fondoResidual"].type == JsonValue::Number )
+         label << Tr( u" · cielo " ) << String().Format( "%.0f", 100 * met["fondoResidual"].n ) << u" %";
+      if ( met.type == JsonValue::Object && met["come_objeto_pct"].type == JsonValue::Number )
+         label << Tr( u" · come " ) << met["come_objeto_pct"].ToText() << u" %";
+      if ( o["ruido_baja_pct"].type == JsonValue::Number ) label << Tr( u" · ruido −" ) << o["ruido_baja_pct"].ToText() << u" %";
+      if ( o["contraste_x"].type == JsonValue::Number ) label << Tr( u" · contraste ×" ) << o["contraste_x"].ToText();
+      if ( o["senal_debil_en_ruidos"].type == JsonValue::Number ) label << Tr( u" · señal débil " ) << o["senal_debil_en_ruidos"].ToText();
+      if ( o["elegido"].type == JsonValue::Bool && o["elegido"].b ) label << Tr( u" · RECOMENDADO" );
+      imgs.push_back( { label, img } );
+      String mod = o["previa_modelo"].type == JsonValue::Str ? o["previa_modelo"].s : String();
+      if ( !mod.IsEmpty() && !seen.Contains( mod ) && File::Exists( mod ) )
+      {
+         seen << mod;
+         imgs.push_back( { Tr( u"Gradiente quitado (modelo)" ), mod } );
+      }
+   }
+   for ( const auto& kv : o.o )
+      if ( kv.first != "previa" && kv.first != "previa_modelo" && kv.first != "jpg" )
+         CollectGuidePreviews( kv.second, imgs, seen );
+}
+
+static std::vector<std::pair<String, String>> GuidePreviews( const String& out )
+{
+   std::vector<std::pair<String, String>> imgs;
+   size_type p = out.Find( '{' ), q = out.FindLast( '}' );
+   if ( p == String::notFound || q == String::notFound || q < p )
+      return imgs;
+   JsonValue r; String why;
+   if ( !JsonValue::Parse( out.Substring( p, q - p + 1 ).ToUTF8(), r, why ) )
+      return imgs;
+   StringList seen;
+   CollectGuidePreviews( r, imgs, seen );
+   return imgs;
+}
+
 std::vector<std::pair<String, String>> PiCopilotInterface::CandidatePreviews( const String& out )
 {
    std::vector<std::pair<String, String>> imgs;
@@ -1154,8 +1211,13 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
       // (recombinacion.js carga realces.js si screenStarsCombine no existe).
       String guia = m_cfg.guideDir;
       guia.ReplaceString( u"\\", u"/" );
+      String previas = PiCopilotUtil::JoinPath( m_cfg.TempDir(), "previas_chat" );
+      previas.ReplaceString( u"\\", u"/" );
       String prelude = u"if (typeof console.log !== \"function\") console.log = function (m) { console.writeln(m); };\n"
                        u"var PICOPILOT_GUIA = \"" + guia + u"\";\n"
+                       // Carpeta de miniaturas de las comparaciones (pxPrevia): se vacía con CleanTemp, como las demás previas.
+                       u"var PICOPILOT_PREVIAS = \"" + previas + u"\";\n"
+                       u"if (!File.directoryExists(PICOPILOT_PREVIAS)) File.createDirectory(PICOPILOT_PREVIAS, true);\n"
                        // Qwen se inventó herramientas/checkpoint.js (6 nov 2026) y el script entero abortó: con las funciones
                        // ya cargadas, un fichero de herramientas/ que no existe se avisa y se salta.
                        u"(function () { if (File.__pcLeer) return; var leer = File.readTextFile; try { File.__pcLeer = leer; File.readTextFile = function (p) { var s = String(p);\n"
@@ -1231,7 +1293,9 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
       }
       // Con candidatos (comparativas como la del gradiente), previas de cada uno con el mismo estirado y sus modelos.
       std::vector<std::pair<String, String>> previews;
-      if ( out.Contains( u"\"candidatos\"" ) )
+      if ( out.Contains( u"\"previa\"" ) || out.Contains( u"\"jpg\"" ) )
+         previews = GuidePreviews( out );   // las que ya trae el resultado (comparaciones de la guía)
+      if ( previews.empty() && out.Contains( u"\"candidatos\"" ) )
          previews = CandidatePreviews( out );
       Chat().AppendInfo( Tr( u"Script ejecutado." ) + (out.IsEmpty() ? String( Tr( u" Mira la consola de PixInsight para ver su salida." ) )
                                                                : Tr( u" Resultado:\n" ) + out.Left( 20000 )), previews );

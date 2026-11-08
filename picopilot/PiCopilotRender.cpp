@@ -334,6 +334,8 @@ static String ObjectArrayTable( const JsonValue& arr )
       if ( e.type == JsonValue::Object )
          for ( const auto& kv : e.o )
          {
+            if ( kv.first == "previa" || kv.first == "previa_modelo" || kv.first == "jpg" )   // miniaturas: van en la rejilla
+               continue;
             if ( kv.second.type == JsonValue::Object )
             {
                for ( const auto& kv2 : kv.second.o )
@@ -374,6 +376,7 @@ static void DataRows( const JsonValue& obj, const String& prefix, String& rows, 
    {
       bool sk = false;
       if ( depth == 0 ) for ( int i = 0; skip[i]; ++i ) if ( kv.first == skip[i] ) sk = true;
+      if ( kv.first == "previa" || kv.first == "previa_modelo" || kv.first == "jpg" ) sk = true;   // miniaturas: van en la rejilla
       if ( sk ) continue;
       String name = prefix.IsEmpty() ? Humanize( kv.first ) : prefix + u" · " + kv.first;
       const JsonValue& v = kv.second;

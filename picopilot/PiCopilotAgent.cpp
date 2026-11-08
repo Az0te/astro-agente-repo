@@ -109,6 +109,16 @@ void PiCopilotUtil::CleanTemp( const String& tempDir )
                try { File::Remove( JoinPath( tempDir, info.name ) ); } catch ( ... ) {}
       }
       catch ( ... ) {}
+   // Miniaturas de las comparaciones de la guía (pxPrevia, carpeta previas_chat; 8 nov 2026).
+   try
+   {
+      String dir = JoinPath( tempDir, "previas_chat" );
+      FindFileInfo info;
+      for ( File::Find f( JoinPath( dir, "*.jpg" ) ); f.NextItem( info ); )
+         if ( !info.IsDirectory() )
+            try { File::Remove( JoinPath( dir, info.name ) ); } catch ( ... ) {}
+   }
+   catch ( ... ) {}
    // La página del chat (picopilot_chat.html) no se borra: se reescribe en cada mensaje, y borrarla mientras el
    // visor la carga dejaba "Your file couldn't be accessed" al pulsar Nueva conversación (5 nov 2026).
 }
