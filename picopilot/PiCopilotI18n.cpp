@@ -216,6 +216,12 @@ static const std::map<String, String>& Table()
         u">>> Running the plan without waiting («Run without asking» box in the Prompt window)." },
       { u"Espera a que termine lo que está en marcha antes de pulsar otro paso.",
         u"Wait for the current work to finish before clicking another step." },
+      { u"Espera a que termine lo que está en marcha antes de ejecutar otro script.",
+        u"Wait for the current work to finish before running another script." },
+      { u">>> Serie de pasos reanudada: ejecuto este script y pediré el siguiente sin esperar "
+        u"(pulsa «Cancelar» mientras el modelo piensa para parar).",
+        u">>> Series resumed: running this script and asking for the next one without waiting "
+        u"(press «Cancel» while the model is thinking to stop)." },
       { u">>> Ejecuto el paso: ", u">>> Running the step: " },
       { u"Haz ahora este paso: ", u"Do this step now: " },
       { u"Contesta a su pregunta en la ventana de Prompt y la serie seguirá sola.", u"Answer its question in the Prompt window and the series will carry on by itself." },

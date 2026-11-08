@@ -944,7 +944,7 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
       { "lineal/07-extraccion-canales.md", u"desmezclarDualBand(\"%V\")", u"bandaestrecha.js" },
       { "lineal/16-linearfit-continuo.md", u"medirContinuo(<banda estrecha CON estrellas>, <RGB calibrada CON estrellas>, { canal: 0 }) y restarContinuo(\"%V\", <RGB sin estrellas>, { k: ..., nuevaVista: ... }) en el mismo script", u"bandaestrecha.js" },
       { "no-lineal/04-mascaras.md", u"crearMascara(\"%V\", { tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\" })", u"mascaras.js" },
-      { "no-lineal/02-lrgb-paleta.md", u"previsualizarPaletas(\"%V\", <OIII estirado igual>, { carpeta: ... }) para las previews (la composición final, después y con la paleta que elija el usuario)", u"bandaestrecha.js" },
+      { "no-lineal/02-lrgb-paleta.md", u"previsualizarPaletas(\"%V\", <OIII estirado igual>, { carpeta: ... }) para las previews; la composición final con componerPaleta({ S, H, O }, { paleta: \"SHO\" | \"HOO\" | \"FORAXX\" ..., estrellas }) y la paleta que elija el usuario (paletasDisponibles() da la lista)", u"bandaestrecha.js" },
       { "lineal/11-bxt-correct-only.md", u"bxtCorrectOnly(\"%V\", { nuevaVista: ... })", u"lineal.js" },
       { "lineal/17-checkpoint.md", u"checkpointLineal(\"%V\", { carpeta: ..., objeto: ..., version: ... })", u"lineal.js" },
       { "no-lineal/03-scnr.md", u"quitarVerde(\"%V\", { nuevaVista: ... })", u"lineal.js" },
@@ -1063,7 +1063,8 @@ static String ToolCatalog( const PiCopilotConfig& cfg )
       u"- lineal.js: resolverAstrometria(vista) — Paso 8 (plate solve con blindSolve); bxtCorrectOnly(vista, { nuevaVista }) — Paso 11; "
       u"checkpointLineal(vista, { carpeta, objeto, version }) — Paso 17; quitarVerde(vista, { nuevaVista }) — Paso 3 no lineal (SCNR)\n"
       u"- bandaestrecha.js: desmezclarDualBand(vista) — Paso 7; medirContinuo(nb, rgb, { canal }) y restarContinuo(nb, rgb, { k }) — Paso 16; "
-      u"previsualizarPaletas(ha, oiii, { carpeta }) — Paso 2 no lineal\n"
+      u"previsualizarPaletas(ha, oiii, { carpeta }) — Paso 2 no lineal (previews); componerPaleta({ S, H, O }, { paleta, estrellas }) — composición final "
+      u"con capas starless estiradas (SHO, HOO, FORAXX…; paletasDisponibles() da la lista)\n"
       u"- mascaras.js: crearMascara(vista, { tipo: luminancia | cielo | fondo_lhe }) — Paso 4 no lineal\n"
       u"- gradiente.js: r = gradienteCandidatos(vista, {...}) — Paso 9 lineal (gradiente). NO corrige la vista: compara copias "
       u"GC_* y devuelve r.recomendado (id de la copia recomendada). Los pasos siguientes van sobre r.recomendado, nunca sobre "

@@ -70,6 +70,7 @@ public:
    void ResetChat();
    void CleanTempFiles();   // previas y scripts temporales (también al pulsar Limpiar)
    void RunScript( const String& code, bool ask = true );
+   void RunScriptButton( const String& code );   // botón «Ejecutar script»: con la casilla marcada reanuda la serie
 
    bool IsBusy() const { return m_busy; }
 

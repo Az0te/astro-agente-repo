@@ -797,6 +797,36 @@ void PiCopilotInterface::SetAutoRun( bool on )
    m_cfg.Save();
 }
 
+// Rafael (8 nov 2026): con «Ejecutar sin preguntar» marcado, pulsar «Ejecutar script» sobre un plan suelto (una interpretación
+// fuera de serie) reanuda la serie: se ejecuta sin diálogo y, al acabar, se pide el paso siguiente. Antes había que escribir
+// «sigue hasta el final» después de cada paso.
+void PiCopilotInterface::RunScriptButton( const String& code )
+{
+   if ( !m_cfg.autoRun || m_cfg.Current().IsAgent() || m_history.empty() )
+   {
+      RunScript( code, !m_cfg.autoRun );
+      return;
+   }
+   if ( m_busy || m_scriptRunning || m_autoRunPending )
+   {
+      Chat().AppendInfo( Tr( u"Espera a que termine lo que está en marcha antes de ejecutar otro script." ) );
+      return;
+   }
+   if ( m_autoGoal.IsEmpty() )
+      m_autoGoal = u"Seguir procesando " + m_viewId + u" paso a paso hasta el final, siguiendo la guía.";
+   m_autoChain = true;
+   m_autoPaused = false;
+   m_autoSteps = 0;
+   m_scriptFixes = 0;
+   m_autoScript = code;
+   m_autoSingle = false;
+   m_autoRunPending = true;
+   m_autoRunAt = NowSeconds() + 0.3;
+   m_interpretPending = true;
+   Chat().AppendInfo( Tr( u">>> Serie de pasos reanudada: ejecuto este script y pediré el siguiente sin esperar "
+                          u"(pulsa «Cancelar» mientras el modelo piensa para parar)." ) );
+}
+
 void PiCopilotInterface::StepLinkClicked( const String& text, bool lastMessage, const String& lastScript )
 {
    if ( m_busy || m_scriptRunning || m_autoRunPending )

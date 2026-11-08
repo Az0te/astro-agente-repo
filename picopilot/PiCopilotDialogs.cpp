@@ -187,7 +187,7 @@ void PiCopilotChatDialog::e_Click( Button& sender, bool /*checked*/ )
    else if ( sender == GUI->RunScript_Button )
    {
       if ( !m_lastScript.IsEmpty() && ThePiCopilotInterface != nullptr )
-         ThePiCopilotInterface->RunScript( m_lastScript );
+         ThePiCopilotInterface->RunScriptButton( m_lastScript );
    }
    else if ( sender == GUI->Clear_Button )
    {
