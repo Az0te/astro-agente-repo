@@ -6,7 +6,7 @@ PiCopilot Lite es la forma más sencilla de usar el asistente: un **script** de 
 
 ## Requisitos
 
-- Windows 10/11 y [PixInsight](https://pixinsight.com) 1.9.6 o superior.
+- [PixInsight](https://pixinsight.com) 1.9.6 o superior. Probado en Windows 10/11. En **macOS y Linux** debería funcionar todo salvo partes de la voz (sin probar todavía): en macOS lee con `say` y el dictado se abre a mano (dos veces la tecla Fn); en Linux lee con `spd-say` si está instalado y no hay dictado.
 - Este repositorio descargado (la guía tiene que estar en `guia/`, junto a `picopilot/`).
 - Un modelo, uno de estos:
   - **Ollama** (local, gratis, sin internet): [ollama.com](https://ollama.com) con un modelo descargado, por ejemplo `ollama pull qwen3:32b`. PiCopilot Lite lo busca en `http://localhost:11434`.

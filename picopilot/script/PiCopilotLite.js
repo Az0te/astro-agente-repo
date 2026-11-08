@@ -31,11 +31,8 @@
 #include <pjsr/astrometry/AstrometricMetadata.js>
 #include <pjsr/astrometry/UtilityControls.js>
 #include <pjsr/utility/ScriptErrors.js>
-#ifeq __PI_PLATFORM__ MACOSX
-#include "/Applications/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
-#else
-#include "C:/Program Files/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
-#endif
+// Relativo a la carpeta include de PixInsight: vale en Windows, macOS y Linux y en cualquier carpeta de instalación.
+#include <../src/scripts/BlindSolver/BlindSolverEngine.js>
 
 var PL_VERSION = "0.1.0";
 var PL_CLAVE = "PiCopilotLite";
@@ -58,6 +55,8 @@ function plPadre(ruta) {
 }
 
 function plEsWindows() { return CoreApplication.platform == "MSWindows" || CoreApplication.platform == "Windows"; }
+
+function plEsMac() { return /mac|darwin|osx/i.test(String(CoreApplication.platform)); }
 
 function plCarpeta(d) { if (!File.directoryExists(d)) File.createDirectory(d, true); return d; }
 
@@ -1478,9 +1477,18 @@ function plConstruirDialogo(aj) {
       this.pararVoz();
       var t = plTextoParaVoz(texto);
       if (!t) return;
-      var f = plCarpeta(PL_TMP) + "/voz.txt";
+      var f = plCarpeta(PL_TMP) + "/voz.txt", vel = aj.vozVelocidad || 0;
       File.writeTextFile(f, t);
-      try { this.pVoz = plPowerShell({ nombre: "hablar", codigo: PL_PS_HABLAR }, [f, String(aj.vozVelocidad || 0), "es-ES"]); }
+      try {
+         if (plEsWindows()) this.pVoz = plPowerShell({ nombre: "hablar", codigo: PL_PS_HABLAR }, [f, String(vel), "es-ES"]);
+         else {
+            // macOS: «say» (voz del sistema; palabras por minuto). Linux: «spd-say» de speech-dispatcher, si está instalado.
+            var P = new ExternalProcess;
+            if (plEsMac()) P.start("/usr/bin/say", ["-r", String(Math.round(175 + 15 * vel)), "-f", f]);
+            else P.start("spd-say", ["-w", "-l", "es", "-r", String(10 * vel), t]);
+            this.pVoz = P;
+         }
+      }
       catch (e) { this.estadoLbl.text = "No se pudo lanzar la voz: " + (e.message || e); }
    };
    this.pararVoz = function () { plParar(this.pVoz); this.pVoz = null; };
@@ -1489,6 +1497,11 @@ function plConstruirDialogo(aj) {
          if (this.entradas[i].tipo == "asst") { this.hablar(this.entradas[i].texto); return; }
    };
    this.dictar = function () {
+      if (!plEsWindows()) {   // en macOS se abre a mano; en Linux no hay dictado del sistema
+         this.estadoLbl.text = plEsMac() ? "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar."
+                                         : "Dictado: no hay dictado del sistema en Linux; escribe el prompt.";
+         return;
+      }
       if (!aj.dictadoAntiguo) {   // dictado de Windows 11 (Win + H): escribe en el prompt
          this.pararVoz();
          // PJSR no tiene focus(): se prueba con las propiedades que existen; si no, basta con hacer clic en el prompt.
