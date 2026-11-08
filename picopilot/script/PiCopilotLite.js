@@ -617,6 +617,249 @@ function plEjecutarScript(aj, codigo) {
 // Diálogo
 // ---------------------------------------------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------------------------------------------
+// Chat en HTML (WebView), con el mismo aspecto que el módulo (PiCopilotRender.cpp): Markdown de las respuestas
+// (tablas, negritas, enlaces, código) y fichas con los datos de los resultados de los scripts.
+// ---------------------------------------------------------------------------------------------------------------
+
+var PL_CSS =
+   "body{margin:0;padding:10px 12px;background:#232629;color:#d8dadc;font:13px/1.45 'Segoe UI',Tahoma,sans-serif}" +
+   ".msg{margin:10px 0}" +
+   ".who{font-size:11px;color:#8a9199;margin-bottom:3px}.who b{color:#c8ccd0}" +
+   ".user .bubble{background:#2f4f73;color:#eef4fb;border-radius:10px 10px 2px 10px;padding:7px 11px;margin-left:15%;white-space:pre-wrap}" +
+   ".user .who{text-align:right}" +
+   ".asst .bubble{background:#2b2f33;border:1px solid #3a4046;border-left:3px solid #6aa6e8;border-radius:6px;padding:8px 12px}" +
+   "h2,h3,h4,h5{margin:10px 0 5px;color:#9cc7f5}h2{font-size:16px}h3{font-size:14.5px}h4{font-size:13.5px}h5{font-size:13px}" +
+   "p{margin:5px 0}b{color:#ffffff}i{color:#e8d9a8}a{color:#79b8ff}" +
+   "code{font-family:Consolas,Menlo,monospace;font-size:12px;background:#1b1d1f;color:#e6c07b;padding:1px 4px;border-radius:3px}" +
+   "pre.code{background:#1b1d1f;border:1px solid #33383d;border-radius:5px;padding:6px 9px;overflow-x:auto;white-space:pre}" +
+   "pre.code code{background:none;padding:0;color:#c9d1d9}.lang{font-size:10px;color:#7d8590;margin-bottom:3px}" +
+   "table{border-collapse:collapse;margin:6px 0;font-size:12.5px}" +
+   "th,td{border:1px solid #3d444b;padding:3px 8px;text-align:left;vertical-align:top}" +
+   "th{background:#30363c;color:#cfd6dd;font-weight:600}tr:nth-child(even) td{background:#272b2f}" +
+   "table.kv th{width:1%;white-space:nowrap}" +
+   ".num{color:#7ee0b8;font-family:Consolas,monospace}" +
+   "ul,ol{margin:4px 0 4px 20px;padding:0}li{margin:2px 0}.sub{margin-left:18px;color:#b9bec4}" +
+   "blockquote{border-left:3px solid #556;margin:5px 0;padding:2px 10px;color:#aab}" +
+   "hr{border:none;border-top:1px solid #3a4046;margin:8px 0}" +
+   ".info{font-size:11.5px;color:#8a9199;margin:6px 0}" +
+   ".info.err{color:#ff8f8f}.info.plan{color:#ffd479;font-weight:600}" +
+   ".card{background:#262a2e;border:1px solid #3a4046;border-radius:6px;padding:8px 12px;margin:6px 0}" +
+   ".cardtitle{font-weight:600;margin-bottom:6px;color:#dfe3e7}" +
+   ".badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;margin-right:4px}" +
+   ".badge.ok{background:#1f5134;color:#9ff0c0}.badge.bad{background:#5a2024;color:#ffb1b1}" +
+   "ul.nc,ul.med,ul.ojo{list-style:none;margin:4px 0;padding:0}" +
+   "ul.nc li{color:#ff9a9a}ul.med li{color:#9fe3b7}ul.ojo li{color:#ffd58a}" +
+   ".ico{display:inline-block;width:18px}" +
+   ".ok{color:#7ee0a0}.bad{color:#ff8f8f}.muted{color:#6c737a}" +
+   "details{margin-top:6px}summary{cursor:pointer;color:#7d8590;font-size:11px}";
+
+function plEsc(s) {
+   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Formato en línea: `código`, **negrita**, *cursiva*, [enlace](url). Sobre el texto ya escapado.
+function plInline(raw) {
+   var s = plEsc(raw), out = "", i = 0, n = s.length, bold = false, ital = false;
+   while (i < n) {
+      var c = s.charAt(i);
+      if (c == "`") {
+         var j = s.indexOf("`", i + 1);
+         if (j >= 0) { out += "<code>" + s.substring(i + 1, j) + "</code>"; i = j + 1; continue; }
+      }
+      if (c == "*" && s.charAt(i + 1) == "*") { out += bold ? "</b>" : "<b>"; bold = !bold; i += 2; continue; }
+      if (c == "*" && (ital || (i + 1 < n && s.charAt(i + 1) != " "))) { out += ital ? "</i>" : "<i>"; ital = !ital; ++i; continue; }
+      if (c == "[") {
+         var a = s.indexOf("](", i), b = a >= 0 ? s.indexOf(")", a) : -1;
+         if (a >= 0 && b >= 0) {
+            out += "<a href=\"" + s.substring(a + 2, b) + "\">" + s.substring(i + 1, a) + "</a>";
+            i = b + 1; continue;
+         }
+      }
+      out += c; ++i;
+   }
+   if (ital) out += "</i>";
+   if (bold) out += "</b>";
+   return out;
+}
+
+function plEsFilaTabla(l) { var t = l.trim(); return t.length > 2 && t.charAt(0) == "|" && t.charAt(t.length - 1) == "|"; }
+function plEsSepTabla(l) { return plEsFilaTabla(l) && /^[\s|:\-]+$/.test(l.trim()); }
+function plCeldas(l) { var t = l.trim(); return t.substring(1, t.length - 1).split("|").map(function (c) { return c.trim(); }); }
+
+function plMarkdown(md) {
+   var lineas = String(md).replace(/\r\n/g, "\n").split("\n"), out = "", para = "", enCodigo = false, enUl = false, enOl = false;
+   function vaciarPara() { if (para) { out += "<p>" + para + "</p>"; para = ""; } }
+   function cerrarListas() { if (enUl) { out += "</ul>"; enUl = false; } if (enOl) { out += "</ol>"; enOl = false; } }
+   for (var i = 0; i < lineas.length; ++i) {
+      var linea = lineas[i], t = linea.trim();
+      if (t.indexOf("```") == 0) {
+         vaciarPara(); cerrarListas();
+         if (!enCodigo) {
+            var leng = t.substring(3).trim();
+            out += "<pre class=\"code\"><div class=\"lang\">" + plEsc(leng || "código") + "</div><code>";
+            enCodigo = true;
+         } else { out += "</code></pre>"; enCodigo = false; }
+         continue;
+      }
+      if (enCodigo) { out += plEsc(linea) + "\n"; continue; }
+      if (!t) { vaciarPara(); cerrarListas(); continue; }
+      if (plEsFilaTabla(t) && i + 1 < lineas.length && plEsSepTabla(lineas[i + 1])) {
+         vaciarPara(); cerrarListas();
+         out += "<table><tr>" + plCeldas(t).map(function (c) { return "<th>" + plInline(c) + "</th>"; }).join("") + "</tr>";
+         for (i += 2; i < lineas.length && plEsFilaTabla(lineas[i]); ++i)
+            out += "<tr>" + plCeldas(lineas[i]).map(function (c) { return "<td>" + plInline(c) + "</td>"; }).join("") + "</tr>";
+         --i;
+         out += "</table>";
+         continue;
+      }
+      if (t.charAt(0) == "#") {
+         vaciarPara(); cerrarListas();
+         var nivel = 0;
+         while (nivel < t.length && t.charAt(nivel) == "#") ++nivel;
+         var h = Math.max(1, Math.min(4, nivel)) + 1;
+         out += "<h" + h + ">" + plInline(t.substring(nivel).trim()) + "</h" + h + ">";
+         continue;
+      }
+      if (t == "---" || t == "***") { vaciarPara(); cerrarListas(); out += "<hr>"; continue; }
+      if (/^[-*•] /.test(t)) {
+         vaciarPara();
+         if (enOl) { out += "</ol>"; enOl = false; }
+         if (!enUl) { out += "<ul>"; enUl = true; }
+         out += "<li>" + plInline(t.substring(2).trim()) + "</li>";
+         continue;
+      }
+      var m = /^(\d+)[.)] (.*)$/.exec(t);
+      if (m) {
+         vaciarPara();
+         if (enUl) { out += "</ul>"; enUl = false; }
+         if (!enOl) { out += "<ol>"; enOl = true; }
+         out += "<li>" + plInline(m[2].trim()) + "</li>";
+         continue;
+      }
+      if (t.charAt(0) == ">") { vaciarPara(); cerrarListas(); out += "<blockquote>" + plInline(t.substring(1).trim()) + "</blockquote>"; continue; }
+      if ((enUl || enOl) && /^(  |\t)/.test(linea)) { out += "<div class=\"sub\">" + plInline(t) + "</div>"; continue; }
+      cerrarListas();
+      if (para) para += "<br>";
+      para += plInline(t);
+   }
+   if (enCodigo) out += "</code></pre>";
+   vaciarPara(); cerrarListas();
+   return out;
+}
+
+// --- Fichas de resultados (objetos JSON que devuelven las funciones de la guía) ---
+
+function plHumano(k) { k = String(k).replace(/_/g, " "); return k.charAt(0).toUpperCase() + k.substring(1); }
+function plEsEscalar(v) { return v === null || typeof v !== "object"; }
+
+function plValorHtml(v) {
+   if (v === null || v === undefined) return "<span class=\"muted\">&mdash;</span>";
+   if (typeof v === "boolean") return v ? "<span class=\"ok\">sí</span>" : "<span class=\"bad\">no</span>";
+   if (typeof v === "number") return "<span class=\"num\">" + (Math.abs(v) < 1e6 && v % 1 ? Number(v.toPrecision(6)) : v) + "</span>";
+   return typeof v === "string" ? plEsc(v) : plEsc(JSON.stringify(v));
+}
+
+function plListaHtml(arr, cls, icono) {
+   if (!Array.isArray(arr) || !arr.length) return "";
+   return "<ul class=\"" + cls + "\">" + arr.map(function (e) {
+      return "<li><span class=\"ico\">" + icono + "</span>" + plEsc(plEsEscalar(e) ? e : JSON.stringify(e)) + "</li>";
+   }).join("") + "</ul>";
+}
+
+// Array de objetos → tabla (columnas: claves escalares y las de los objetos anidados, máx. 10; filas máx. 40).
+function plTablaObjetos(arr) {
+   var cols = [];
+   arr.forEach(function (e) {
+      if (!e || typeof e !== "object") return;
+      for (var k in e) {
+         var v = e[k];
+         if (v && typeof v === "object" && !Array.isArray(v)) {
+            for (var k2 in v) if (plEsEscalar(v[k2]) && cols.indexOf(k + "." + k2) < 0 && cols.length < 10) cols.push(k + "." + k2);
+         } else if (cols.indexOf(k) < 0 && cols.length < 10) cols.push(k);
+      }
+   });
+   var h = "<table><tr>" + cols.map(function (c) { return "<th>" + plEsc(plHumano(c.substring(c.indexOf(".") + 1))) + "</th>"; }).join("") + "</tr>";
+   for (var n = 0; n < arr.length; ++n) {
+      if (n >= 40) { h += "<tr><td colspan=\"" + cols.length + "\" class=\"muted\">&hellip; " + (arr.length - 40) + " filas más</td></tr>"; break; }
+      h += "<tr>" + cols.map(function (c) {
+         var p = c.indexOf("."), e = arr[n] || {}, v = p < 0 ? e[c] : (e[c.substring(0, p)] || {})[c.substring(p + 1)];
+         return "<td>" + (plEsEscalar(v) ? plValorHtml(v) : plEsc(JSON.stringify(v))) + "</td>";
+      }).join("") + "</tr>";
+   }
+   return h + "</table>";
+}
+
+function plFilasDatos(obj, prefijo, acc, prof) {
+   for (var k in obj) {
+      if (prof == 0 && (k == "no_cumple" || k == "control")) continue;
+      var nombre = prefijo ? prefijo + " · " + k : plHumano(k), v = obj[k];
+      if (plEsEscalar(v)) acc.filas += "<tr><th>" + plEsc(nombre) + "</th><td>" + plValorHtml(v) + "</td></tr>";
+      else if (!Array.isArray(v) && prof < 2) plFilasDatos(v, nombre, acc, prof + 1);
+      else if (Array.isArray(v) && v.length && v[0] && typeof v[0] === "object") acc.extra += "<h4>" + plEsc(nombre) + "</h4>" + plTablaObjetos(v);
+      else if (Array.isArray(v)) {
+         var l = v.slice(0, 30).map(function (x) { return plEsEscalar(x) ? plValorHtml(x) : plEsc(JSON.stringify(x)); }).join(", ");
+         acc.filas += "<tr><th>" + plEsc(nombre) + "</th><td>" + (v.length ? l + (v.length > 30 ? " &hellip;" : "") : "<span class=\"muted\">&mdash;</span>") + "</td></tr>";
+      } else acc.filas += "<tr><th>" + plEsc(nombre) + "</th><td>" + plEsc(JSON.stringify(v)) + "</td></tr>";
+   }
+}
+
+function plFicha(r, json) {
+   var h = "<div class=\"card\"><div class=\"cardtitle\">";
+   var nc = r && r.no_cumple, ctl = (r && r.control) || {};
+   if (Array.isArray(nc)) h += nc.length ? "<span class=\"badge bad\">No cumple</span> " : "<span class=\"badge ok\">Cumple</span> ";
+   h += "Resultado del script</div>";
+   h += plListaHtml(nc, "nc", "&#10007;") + plListaHtml(ctl.medido, "med", "&#10003;") + plListaHtml(ctl.revisar_a_ojo, "ojo", "&#128065;");
+   var acc = { filas: "", extra: "" };
+   if (Array.isArray(r)) acc.extra = r.length && r[0] && typeof r[0] === "object" ? plTablaObjetos(r) :
+                                     "<p>" + r.map(function (x) { return plValorHtml(x); }).join(", ") + "</p>";
+   else plFilasDatos(r, "", acc, 0);
+   if (acc.filas) h += "<table class=\"kv\">" + acc.filas + "</table>";
+   h += acc.extra;
+   h += "<details><summary>JSON</summary><pre class=\"code\"><code>" + plEsc(json) + "</code></pre></details>";
+   return h + "</div>";
+}
+
+// Primer JSON (objeto o array) que empieza al principio de una línea o tras «Valor devuelto: ».
+function plBuscarJson(texto) {
+   var re = /(^|\n|Valor devuelto: )([{\[])/g, m;
+   while ((m = re.exec(texto)) !== null) {
+      var ini = m.index + m[1].length, cierre = m[2] == "{" ? "}" : "]", fin = texto.lastIndexOf(cierre);
+      while (fin > ini) {
+         try {
+            var v = JSON.parse(texto.substring(ini, fin + 1));
+            if (v && typeof v === "object") return { ini: ini, fin: fin + 1, valor: v };
+         } catch (e) {}
+         fin = texto.lastIndexOf(cierre, fin - 1);
+      }
+   }
+   return null;
+}
+
+function plInfo(texto, error) {
+   var j = plBuscarJson(texto);
+   if (j) {
+      var json = texto.substring(j.ini, j.fin), antes = texto.substring(0, j.ini).replace(/Valor devuelto: $/, "").trim();
+      var despues = texto.substring(j.fin).trim();
+      // El valor devuelto suele repetir lo que ya se mandó con chat(): no se pinta dos veces.
+      var rep = /^Valor devuelto: /.test(despues) ? plBuscarJson(despues) : null;
+      if (rep && JSON.stringify(rep.valor) == JSON.stringify(j.valor) && !despues.substring(rep.fin).trim()) despues = "";
+      return (antes ? plInfo(antes, error) : "") + plFicha(j.valor, json) + (despues ? plInfo(despues, error) : "");
+   }
+   return "<div class=\"info" + (error ? " err" : "") + "\">" + plEsc(texto).replace(/\n/g, "<br>") + "</div>";
+}
+
+function plPagina(entradas) {
+   var h = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" + PL_CSS + "</style></head><body>";
+   entradas.forEach(function (e) {
+      var quien = "<div class=\"who\">" + plEsc(e.hora) + " &middot; <b>" + plEsc(e.titulo) + "</b></div>";
+      if (e.tipo == "user") h += "<div class=\"msg user\">" + quien + "<div class=\"bubble\">" + plEsc(e.texto) + "</div></div>";
+      else if (e.tipo == "asst") h += "<div class=\"msg asst\">" + quien + "<div class=\"bubble\">" + plMarkdown(e.texto) + "</div></div>";
+      else h += "<div class=\"msg\">" + quien + plInfo(e.texto, e.tipo == "err") + "</div>";
+   });
+   return h + "<div id=\"fin\"></div><script>window.scrollTo(0, document.body.scrollHeight);</script></body></html>";
+}
+
 // Con #engine v8, Dialog es una clase: hay que heredar con «class ... extends» y super().
 class PLDialogo extends Dialog {
    constructor(aj) {
@@ -629,8 +872,9 @@ function plConstruirDialogo(aj) {
    var self = this;
    this.aj = aj;
    this.mensajes = [];            // { role: "user" | "assistant", content }
-   this.registro = "";
-   this.pendiente = null;         // script de la última respuesta, sin ejecutar
+   this.registro = "";            // copia en texto plano del chat (pruebas)
+   this.entradas = [];            // { tipo: user | asst | info | err, titulo, texto, hora } para el HTML
+   this.pendiente = null;        // script de la última respuesta, sin ejecutar
    this.ultimoError = null;
    this.correcciones = 0;
    this.estado = null;            // { cancelado } mientras se espera al modelo
@@ -640,8 +884,7 @@ function plConstruirDialogo(aj) {
 
    // --- Pestaña Prompt ---
    var pPrompt = new Control(this);
-   this.historialBox = new TextBox(pPrompt);
-   this.historialBox.readOnly = true;
+   this.historialBox = new WebView(pPrompt);
    this.historialBox.setScaledMinSize(640, 360);
    this.entrada = new TextBox(pPrompt);
    this.entrada.setScaledMinHeight(70);
@@ -670,11 +913,13 @@ function plConstruirDialogo(aj) {
    this.bVer = new PushButton(pPrompt);
    this.bVer.text = "Ver script";
    this.bVer.enabled = false;
-   this.bVer.onClick = function () { self.anotar("Script pendiente", self.pendiente || "(ninguno)"); };
+   this.bVer.onClick = function () {
+      self.anotar("Script pendiente", self.pendiente ? "```javascript\n" + self.pendiente + "\n```" : "(ninguno)", "asst");
+   };
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
-      self.mensajes = []; self.registro = ""; self.historialBox.text = ""; self.ponerPendiente(null);
+      self.mensajes = []; self.registro = ""; self.entradas = []; self.historialBox.setHTML(plPagina([])); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0; self.bCorregir.enabled = false;
    };
    this.estadoLbl = new Label(pPrompt);
@@ -909,12 +1154,12 @@ function plConstruirDialogo(aj) {
       this.rellenarPesos();
    };
 
-   this.anotar = function (quien, texto) {
+   // tipo: user (tu mensaje), asst (respuesta del modelo, en Markdown), err (error) o info (resultados y avisos).
+   this.anotar = function (quien, texto, tipo) {
       this.registro += "── " + quien + " ──\n" + texto + "\n\n";
-      // El TextBox interpreta etiquetas HTML: sin escapar, «i < n» del código desaparecía al mostrarlo.
-      var html = this.registro.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      this.historialBox.text = html;
-      try { this.historialBox.caretPosition = html.length; } catch (e) {}
+      var d = new Date(), hora = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+      this.entradas.push({ tipo: tipo || "info", titulo: quien, texto: String(texto), hora: hora });
+      this.historialBox.setHTML(plPagina(this.entradas));
       plEventos();
    };
 
@@ -942,7 +1187,7 @@ function plConstruirDialogo(aj) {
          resp = plPreguntar(aj, this.mensajes, this.estado, this.pasoEnviado || "");
          resp = resp.texto;
       } catch (e) {
-         this.anotar("Error", String(e.message || e));
+         this.anotar("Error", String(e.message || e), "err");
       }
       var cancelado = this.estado.cancelado;
       this.estado = null;
@@ -950,13 +1195,13 @@ function plConstruirDialogo(aj) {
       this.estadoLbl.text = resp !== null ? "Respuesta en " + ((Date.now() - t0) / 1000).toFixed(1) + " s." : (cancelado ? "Cancelado." : "");
       if (resp === null) { this.mensajes.pop(); return; }   // la pregunta no obtuvo respuesta: no queda en el historial
       this.mensajes.push({ role: "assistant", content: resp });
-      this.anotar("PiCopilot (" + nombre + ")", resp);
+      this.anotar("PiCopilot (" + nombre + ")", resp, "asst");
       var s = plExtraerScript(resp);
       // Si la corrección trae el mismo script que ya falló, no se ejecuta otra vez: se pide uno distinto.
       if (s && this.scriptFallido && s.replace(/\s+/g, "") == this.scriptFallido.replace(/\s+/g, "")) {
          this.ponerPendiente(null);
          this.repetido = true;
-         this.anotar("Aviso", "El modelo ha devuelto el mismo script que ya falló; no lo ejecuto.");
+         this.anotar("Aviso", "El modelo ha devuelto el mismo script que ya falló; no lo ejecuto.", "err");
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
          this.estadoLbl.text = quedan ? "Script repetido. Puedes pedir otra corrección." : "Script repetido; revisa la petición.";
@@ -977,7 +1222,7 @@ function plConstruirDialogo(aj) {
       this.scriptFallido = null; this.repetido = false;
       this.pasoEnviado = this.pasoActual();   // las correcciones siguientes usan el mismo paso
       this.mensajes.push({ role: "user", content: t });
-      this.anotar("Tú", t);
+      this.anotar("Tú", t, "user");
       this.consultar();
    };
 
@@ -988,7 +1233,7 @@ function plConstruirDialogo(aj) {
       this.estadoLbl.text = "Ejecutando script…";
       plEventos();
       var r = plEjecutarScript(aj, s);
-      this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto);
+      this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
       // El resultado entra en la conversación para que el modelo lo tenga en cuenta en el siguiente turno.
       this.mensajes.push({ role: "user", content: (r.ok ? "Resultado de ejecutar tu script:\n" : "Tu script ha fallado:\n") + r.texto });
       this.mensajes.push({ role: "assistant", content: r.ok ? "Visto." : "Entendido, lo reviso si me lo pides." });
@@ -1023,7 +1268,7 @@ function plConstruirDialogo(aj) {
 
    this.rellenarModelos(false);
    this.anotar("PiCopilot Lite", "Hola. Pregúntame por tus imágenes o pídeme un paso de procesado. Cuando proponga un " +
-               "script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»).\nGuía: " + aj.guia);
+               "script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»).\nGuía: " + aj.guia, "asst");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
