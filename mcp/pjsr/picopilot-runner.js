@@ -356,6 +356,7 @@ var LISTA = {
    contrasteCandidatos:  function (a) { return contrasteCandidatos(a.vista, a.opciones || {}); },
    nucleoCandidatos:     function (a) { return nucleoCandidatos(a.vista, a.opciones || {}); },
    simbad:               function (a) { return simbad(a.objeto, a.opciones || {}); },
+   documentarObjeto:     function (a) { return documentarObjeto(a.vista, a.opciones || {}); },
    wikipedia:            function (a) { return wikipedia(a.texto, a.opciones || {}); },
    leerWeb:              function (a) { return leerWeb(a.url, a.opciones || {}); },
    imagenCatalogo:       function (a) { return imagenCatalogo(a.posicion, a.opciones || {}); },

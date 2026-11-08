@@ -486,7 +486,12 @@ function plPromptSistema(aj) {
    (aj.proveedor == "claude" ? "- Tienes WebSearch y WebFetch: úsalos directamente y cita las fuentes.\n" : "") +
    "- Desde un script: simbad(\"IC 63\") da el tipo de objeto, coordenadas y tamaño; wikipedia(\"texto\", {idioma}) el resumen " +
    "de un artículo; leerWeb(url) el texto de una página; imagenCatalogo(\"IC 63\" o id de vista con astrometría, {survey: \"H-Alpha Comp\"}) " +
-   "abre una imagen de catálogo (DSS2, Hα, WISE...) para saber qué señal esperar. Cita la fuente que devuelven y no inventes lo que no traigan.\n\n" : "") +
+   "abre una imagen de catálogo (DSS2, Hα, WISE...) para saber qué señal esperar. Cita la fuente que devuelven y no inventes lo que no traigan.\n" +
+   "- Cuando el usuario pida analizar la imagen, en el mismo script llama a analizarMaster(\"id\") y a documentarObjeto(\"id\") " +
+   "(identifica el objeto por OBJECT o por la astrometría y da su tipo, un resumen, la emisión esperada, las estrellas brillantes del campo " +
+   "y los problemas que pueden dar). En tu resumen junta las medidas de la imagen con esa información: qué objeto es, qué tipo, qué emite " +
+   "(y si el filtro usado lo capta), qué estrellas pueden dar halos o reflejos y qué pasos de la guía conviene vigilar.\n\n" :
+   "- Las búsquedas en internet están desactivadas: al analizar la imagen usa sólo analizarMaster.\n\n") +
    "Recomendar el paso siguiente:\n" +
    "- Cuando respondas sin script (información, dudas, resúmenes), termina con una línea «Siguiente paso: <qué hacer y con " +
    "qué función de la guía>.» con lo que recomiendas según el orden de la guía y lo que ya se ha hecho en esta conversación " +

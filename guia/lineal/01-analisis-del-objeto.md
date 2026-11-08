@@ -53,6 +53,12 @@ eval(File.readTextFile("<ruta de guia>/herramientas/analisis.js"));   // en el n
 JSON.stringify(analizarMaster("MasterLight"));
 ```
 
+**Ficha del objeto en una llamada** (`documentarObjeto(vista)`, `herramientas/web.js`): junto a `analizarMaster`, siempre que haya internet. Identifica el objeto por `OBJECT` (aunque lleve texto de más, como «IC 1396 sin filtro») o, si no, por la astrometría o el RA/DEC de la cabecera, y devuelve su tipo (SIMBAD), un resumen (Wikipedia en español o inglés), la emisión esperada (rayas y filtros según el tipo, completada con el resumen: IC 1396 sale en SIMBAD como cúmulo abierto pero el resumen dice nebulosa de emisión), las estrellas de V < 6 del campo y alrededores, y los problemas que pueden dar (γ Cas, V 2,4 a 20' de IC 63: halo, reflejos, gradiente, HDR). El análisis junta las medidas con esa ficha.
+
+```javascript
+JSON.stringify({ medidas: analizarMaster("MasterLight"), objeto: documentarObjeto("MasterLight") });
+```
+
 **Documentarse en internet** (`herramientas/web.js`): qué es el objeto y qué señal tiene antes de decidir nada. `simbad("IC 63")` da el tipo según SIMBAD (región HII, nebulosa de reflexión, oscura, galaxia...), coordenadas, tamaño e identificadores; `wikipedia("IC 63")` el resumen del artículo (español y, si no hay, inglés), también para cámaras, telescopios y filtros; `leerWeb(url)` el texto de una página concreta (ficha del filtro o de la cámara); `imagenCatalogo("IC 63", { survey: "H-Alpha Comp", campo: 2 })` abre una imagen de catálogo de SkyView (DSS2 Red/Blue/IR, mapa Hα, WISE, 2MASS, GALEX) para saber qué Hα u otras señales esperar y distinguir estructura débil real de gradiente. Con una vista con astrometría, `imagenCatalogo("<vista>")` usa su centro y su campo. Citar siempre la fuente que devuelven. Con Claude Code el modelo tiene además WebSearch y WebFetch.
 
 ```javascript

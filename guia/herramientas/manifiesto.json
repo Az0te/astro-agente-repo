@@ -1424,6 +1424,14 @@
    }
   },
   {
+   "nombre": "documentarObjeto",
+   "fichero": "web.js",
+   "nivel": "lectura",
+   "timeout_s": 120,
+   "descripcion": "Internet, Paso 1: identifica el objeto de una vista (OBJECT, astrometría o RA/DEC) o por su nombre y da su tipo (SIMBAD), un resumen (Wikipedia), la emisión esperada (rayas y filtros según el tipo), las estrellas brillantes del campo (V < 6) y los problemas que pueden dar (halos, reflejos, HDR). Usar junto a analizarMaster al analizar la imagen.",
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "params": { "type": "object", "properties": { "vista": { "type": "string", "description": "Id de la vista abierta o nombre del objeto (IC 63, M31...)." }, "opciones": { "type": "object", "description": "Opcional. { radio: grados del campo, magMax: 6, idioma: \"es\" }" } }, "required": ["vista"] }
+  },  {
    "nombre": "simbad",
    "fichero": "web.js",
    "nivel": "lectura",
