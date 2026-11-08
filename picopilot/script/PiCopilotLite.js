@@ -470,6 +470,11 @@ function plPromptSistema(aj) {
    "ScreenTransferFunction.SeparateChannels), no Clase.prototype.CONSTANTE.\n" +
    "- Antes de usar un proceso o una propiedad de PJSR que no esté en la guía ni en el contrato de abajo, no la inventes.\n" +
    "- Si un script falla, cambia el código que causó el error: no repitas el mismo script.\n\n" +
+   "Recomendar el paso siguiente:\n" +
+   "- Cuando respondas sin script (información, dudas, resúmenes), termina con una línea «Siguiente paso: <qué hacer y con " +
+   "qué función de la guía>.» con lo que recomiendas según el orden de la guía y lo que ya se ha hecho en esta conversación " +
+   "(por ejemplo, si una imagen aún no se ha analizado, lo primero es analizarla). Si hay alternativas razonables, añade " +
+   "líneas que empiecen por «Paso N: ...». El chat las muestra como enlaces que el usuario pulsa para que lo hagas.\n\n" +
    "Funciones disponibles (nombre(argumentos) [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
    (plContratoApi(aj.guia) ? "Contrato de la API PJSR que debes respetar:\n<<<\n" + plContratoApi(aj.guia) + "\n>>>\n\n" : "") +
    "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
