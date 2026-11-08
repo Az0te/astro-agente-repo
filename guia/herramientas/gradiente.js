@@ -159,8 +159,14 @@ function grPolyExpr(c) {
 function grMeasure(base, modelId, correctedId, range0) {
   var m = gcStructCopy(base, modelId), s = gcMetrics(base, correctedId);
   if (base.flat0 === undefined) base.flat0 = gcScore(base, base.O.a, "original").flat;
-  return { gcStructCopy: +m.corr.toFixed(3), copia: m.copy, fondoResidual: +(s.flat / base.flat0).toFixed(3),
-           come_objeto_pct: +(100 * s.eat).toFixed(1) };
+  var fr = s.flat / base.flat0, fuente = "cielo fuera del objeto (rejilla 8x8)";
+  // Si el objeto llena el campo no quedan celdas de cielo y la medida sale NaN (8 nov 2026, nebulosa que ocupa todo):
+  // entonces se usa la rejilla 4x3 de toda la imagen frente al original (range0), que al menos compara los candidatos.
+  if (!isFinite(fr) && range0 > 0) {
+    try { fr = grGridRange(correctedId) / range0; fuente = "rejilla 4x3 de toda la imagen (el objeto llena el campo)"; } catch (e) { }
+  }
+  return { gcStructCopy: +m.corr.toFixed(3), copia: m.copy, fondoResidual: isFinite(fr) ? +fr.toFixed(3) : NaN,
+           fondo_medido_en: fuente, come_objeto_pct: +(100 * s.eat).toFixed(1) };
 }
 
 // 8 nov 2026: con dos masters abiertos, Qwen desmezcló y corrigió el gradiente sin pasar por alinearMasters (Paso 5).
@@ -324,8 +330,10 @@ function gradienteCandidatos(viewId, o) {
     for (var i = 0; i < list.length; ++i) if (b === null || key(list[i]) < key(b)) b = list[i];
     return b;
   }
-  function absCorr(x) { return Math.abs(x.metricas.gcStructCopy); }
-  function resid(x) { return x.metricas.fondoResidual; }
+  // Una medida que no se pudo calcular (NaN) cuenta como la peor: con NaN, pick() se quedaba con el primero de la
+  // lista (8 nov 2026, IC 63: ganó GraXpert 10 con «deja NaN %» sin comparar de verdad).
+  function absCorr(x) { var c = Math.abs(x.metricas.gcStructCopy); return isFinite(c) ? c : Infinity; }
+  function resid(x) { var f = x.metricas.fondoResidual; return isFinite(f) ? f : Infinity; }
   function eat(x) { var e = x.metricas.come_objeto_pct; return isFinite(e) ? Math.abs(e) : 100; }
   // Primero, no comerse el objeto (≤ 3 % de su señal y modelo limpio); entre esos, el que deja el cielo más plano.
   var safe = r.candidatos.filter(function (x) { return eat(x) <= 3 && absCorr(x) < 0.3; });
@@ -334,8 +342,9 @@ function gradienteCandidatos(viewId, o) {
   if (best) {
     var bc = best.metricas.gcStructCopy;
     r.recomendado = best.vista;
-    r.motivo = best.metodo + " " + best.parametros + ": deja " + Math.round(100 * best.metricas.fondoResidual) +
-               " % del gradiente del cielo, se lleva el " + best.metricas.come_objeto_pct + " % del objeto, corr " + bc.toFixed(3) + " (" +
+    r.motivo = best.metodo + " " + best.parametros + ": deja " +
+               (isFinite(best.metricas.fondoResidual) ? Math.round(100 * best.metricas.fondoResidual) + " %" : "(sin medir)") +
+               " del gradiente del cielo, se lleva el " + best.metricas.come_objeto_pct + " % del objeto, corr " + bc.toFixed(3) + " (" +
                (Math.abs(bc) < 0.15 ? "modelo limpio" : Math.abs(bc) > 0.5 ? "copia el objeto: revisar o probar plano robusto"
                                                                    : "intermedio: revisar el modelo a la vista") + ").";
   } else {
@@ -371,11 +380,18 @@ function grCompactar(g, o) {
       });
     });
   var best = g.candidatos.filter(function (c) { return c.vista === g.recomendado; })[0];
+  // Tabla corta de la comparación (una fila por candidato): sin ella no se veía qué se había comparado (8 nov 2026).
+  g.comparados = g.candidatos.map(function (c) {
+    var m = c.metricas || {}, f = m.fondoResidual;
+    return { metodo: c.metodo + " " + c.parametros, deja_gradiente_pct: isFinite(f) ? Math.round(100 * f) : null,
+             come_objeto_pct: isFinite(m.come_objeto_pct) ? m.come_objeto_pct : null,
+             corr: isFinite(m.gcStructCopy) ? m.gcStructCopy : null, elegido: c === best };
+  });
   g.compacto = true;
   g.corregida = keep;
   g.recomendado = keep;
   g.metodo = best ? best.metodo + " " + best.parametros : "—";
-  g.deja_gradiente_pct = best ? Math.round(100 * best.metricas.fondoResidual) : null;
+  g.deja_gradiente_pct = best && isFinite(best.metricas.fondoResidual) ? Math.round(100 * best.metricas.fondoResidual) : null;
   g.come_objeto_pct = best ? best.metricas.come_objeto_pct : null;
   delete g.candidatos; delete g.intermedias; delete g.leyenda;
   if (!g.errores || !g.errores.length) delete g.errores;

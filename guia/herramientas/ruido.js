@@ -240,6 +240,78 @@ function reducirRuido(viewId, o) {
   };
 }
 
+// Compara varios niveles de denoise sobre la MISMA entrada y se queda con el mejor que cumpla los controles
+// (Rafael, 8 nov 2026: «queremos siempre que compare para sacar los mejores resultados»).
+//   ruidoCandidatos(vista, { niveles: [0.3, 0.5, 0.7], detail, iterations, principal: true, nuevaVista, cerrar })
+// Niveles por defecto: lineal 0,30 / 0,50 / 0,70; estirada 0,15 / 0,30 / 0,45. Elección: entre los que cumplen
+// (sin no_cumple), el que más baja el ruido sin pasar del 80 % (con principal: true, preferiblemente en 50–80 %);
+// si ninguno cumple, el de menos avisos y menos denoise. La elegida queda como nuevaVista (<vista>_dn por defecto) y
+// las demás se cierran (cerrar: false para conservarlas). Devuelve la tabla de la comparación en «comparados».
+function ruidoCandidatos(viewId, o) {
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
+  o = o || {};
+  var src = View.viewById(viewId);
+  if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
+  var lineal = src.image.median() < 0.05, t0 = Date.now();
+  var niveles = o.niveles || (lineal ? [0.30, 0.50, 0.70] : [0.15, 0.30, 0.45]);
+  var cands = [];
+  niveles.forEach(function (d) {
+    var op = {};
+    for (var k in o) if (k !== "niveles" && k !== "nuevaVista" && k !== "cerrar" && k !== "principal") op[k] = o[k];
+    op.metodo = "nxt"; op.denoise = d; op.nuevaVista = viewId + "_dn" + Math.round(100 * d);
+    try { cands.push({ denoise: d, r: reducirRuido(viewId, op) }); }
+    catch (e) { cands.push({ denoise: d, error: String(e && e.message ? e.message : e) }); }
+  });
+  var ok = cands.filter(function (c) { return c.r && !c.r.no_cumple.length; }), best = null;
+  function baja(c) { return c.r.medidas.ruido_baja_pct; }
+  function mas(l) { return l.reduce(function (a, c) { return a === null || baja(c) > baja(a) ? c : a; }, null); }
+  function menos(l) { return l.reduce(function (a, c) { return a === null || baja(c) < baja(a) ? c : a; }, null); }
+  if (ok.length) {
+    var enRango = ok.filter(function (c) { return baja(c) <= 80 && (!o.principal || baja(c) >= 50); });
+    var hasta80 = ok.filter(function (c) { return baja(c) <= 80; });
+    best = enRango.length ? mas(enRango) : hasta80.length ? mas(hasta80) : menos(ok);
+  } else {
+    var conR = cands.filter(function (c) { return c.r; });
+    best = conR.reduce(function (a, c) {
+      return a === null || c.r.no_cumple.length < a.r.no_cumple.length ||
+             (c.r.no_cumple.length === a.r.no_cumple.length && c.denoise < a.denoise) ? c : a;
+    }, null);
+  }
+  var comparados = cands.map(function (c) {
+    if (!c.r) return { denoise: c.denoise, error: c.error, elegido: false };
+    var m = c.r.medidas;
+    return { denoise: c.denoise, ruido_baja_pct: m.ruido_baja_pct, contraste_zona_debil_pct: m.contraste_zona_debil_pct,
+             residual_estructura: m.residual_estructura, moteado_color: m.moteado_color_despues,
+             cumple: !c.r.no_cumple.length, elegido: c === best };
+  });
+  var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn"), vista = null;
+  cands.forEach(function (c) {
+    if (!c.r) return;
+    var w = ImageWindow.windowById(c.r.vista);
+    if (w.isNull) return;
+    if (c === best) {
+      if (c.r.vista !== nombre) {
+        var old = ImageWindow.windowById(nombre);
+        if (!old.isNull) old.forceClose();
+        w.mainView.id = nombre;
+      }
+      vista = w.mainView.id;
+    } else if (o.cerrar !== false) w.forceClose();
+  });
+  var r = {
+    vista: vista, original: viewId, comparados: comparados,
+    recomendado: best ? "denoise " + best.denoise : null,
+    motivo: !best ? "Ningún nivel se pudo aplicar: ver comparados." :
+            (best.r.no_cumple.length ? "Ningún nivel cumple los controles: se queda el de menos avisos y menos denoise (" + best.denoise + "). " :
+             "Cumple los controles y baja el ruido un " + baja(best) + " % (" + best.denoise + "). ") +
+            "Comparados: " + niveles.join(", ") + ".",
+    medidas: best ? best.r.medidas : null, no_cumple: best ? best.r.no_cumple : ["ningún nivel se pudo aplicar"],
+    segundos: Math.round((Date.now() - t0) / 1000),
+    control: best ? best.r.control : undefined
+  };
+  return r;
+}
+
 // StarXTerminator en lineal sobre una copia: starless + capa de estrellas, con las comprobaciones de la ficha.
 function separarEstrellas(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })

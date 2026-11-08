@@ -350,6 +350,7 @@ var LISTA = {
    bxtCandidatos:        function (a) { return bxtCandidatos(a.vista, a.opciones || {}); },
    bxtAplicar:           function (a) { return bxtAplicar(a.vista, a.opciones || {}); },
    reducirRuido:         function (a) { return reducirRuido(a.vista, a.opciones || {}); },
+   ruidoCandidatos:      function (a) { return ruidoCandidatos(a.vista, a.opciones || {}); },
    separarEstrellas:     function (a) { return separarEstrellas(a.vista, a.opciones || {}); },
    medirContinuo:        function (a) { return medirContinuo(a.nb, a.continuo, a.opciones || {}); },
    restarContinuo:       function (a) { return restarContinuo(a.nb, a.continuo, a.opciones || {}); },

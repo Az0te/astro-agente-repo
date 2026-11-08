@@ -735,6 +735,30 @@
    }
   },
   {
+   "nombre": "ruidoCandidatos",
+   "fichero": "ruido.js",
+   "nivel": "copias",
+   "timeout_s": 1800,
+   "descripcion": "Compara varios niveles de NoiseXTerminator sobre la misma entrada (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45) con las medidas de reducirRuido y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
+   "paso": "lineal/14-noisex-suave.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { niveles: [0.3, 0.5, 0.7], detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
    "nombre": "separarEstrellas",
    "fichero": "ruido.js",
    "nivel": "copias",
