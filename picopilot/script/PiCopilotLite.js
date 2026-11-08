@@ -296,6 +296,7 @@ function plCargarGuia(guia) {
       g.guardarImagen = function (vista, fichero, sobrescribir) { return g.pprGuardar(vista, fichero, sobrescribir === true); };
       g.cerrarVista = function (vista, descartar) { return g.pprCerrar(vista, descartar === true); };
    }
+   plEnvolverFunciones(g, guia);
    plGuiaCargada = guia;
    return avisos;
 }
@@ -353,6 +354,49 @@ function plListaVentanas() {
    return out.length ? out.join("\n") : "(no hay imágenes abiertas)";
 }
 
+// Ids exactos de las vistas abiertas, en una línea (barato: sin estadísticas). Se añade a cada petición y a los errores
+// para que el modelo no invente ids.
+function plResumenVistas() {
+   var ws = ImageWindow.windows, act = ImageWindow.activeWindow, out = [];
+   for (var i = 0; i < ws.length; ++i) {
+      var id = ws[i].mainView.id, pv = [];
+      try { pv = ws[i].previews.map(function (p) { return p.id; }); } catch (e) {}
+      out.push("\"" + id + "\"" + (!act.isNull && act.mainView.id == id ? " (activa)" : "") +
+               (pv.length ? " [previas: " + pv.join(", ") + "]" : ""));
+   }
+   return out.length ? out.join(", ") : "ninguna";
+}
+
+// Las funciones de la guía reciben el id de la vista como texto. Si el modelo pasa una ventana (ImageWindow) o una
+// vista (View), se cambia por su id; si la ventana no existe (isNull) se avisa con las vistas que sí hay.
+function plIdDe(x) {
+   if (!x || typeof x !== "object") return x;
+   var esVentana = false, esVista = false;
+   try { esVentana = typeof x.isNull === "boolean" && x.mainView !== undefined; } catch (e) {}
+   try { esVista = !esVentana && typeof x.id === "string" && x.image !== undefined; } catch (e) {}
+   if (esVentana) {
+      if (x.isNull) throw new Error("Has pasado una ventana que no existe (ImageWindow.windowById devuelve una ventana " +
+                                    "con isNull == true cuando el id no existe). Vistas abiertas: " + plResumenVistas() + ".");
+      return x.mainView.id;
+   }
+   return esVista ? x.id : x;
+}
+
+function plEnvolverFunciones(g, guia) {
+   var nombres = Object.keys(PL_FIRMAS_RUNNER);
+   try {
+      var man = JSON.parse(File.readTextFile(guia + "/herramientas/manifiesto.json"));
+      (man.funciones || []).forEach(function (x) { nombres.push(x.nombre); });
+   } catch (e) {}
+   nombres.forEach(function (n) {
+      var f = g[n];
+      if (typeof f !== "function" || f.plOriginal) return;
+      var e = function () { return f.apply(this, Array.prototype.slice.call(arguments).map(plIdDe)); };
+      e.plOriginal = f;
+      g[n] = e;
+   });
+}
+
 function plPromptSistema(aj) {
    return "Eres PiCopilot Lite, un asistente experto en procesado de astrofotografía que trabaja dentro de PixInsight. " +
    "Respondes siempre en español, de forma clara y concisa. Eres fiel a los datos: no inventas parámetros ni " +
@@ -367,10 +411,21 @@ function plPromptSistema(aj) {
    "- No supongas qué objeto es por el nombre del fichero ni nombres objetos concretos que no te haya dicho el usuario.\n" +
    "- Antes de estirar, pregunta al usuario el tipo de objeto (galaxia, nebulosa de emisión, cúmulo...) si no lo sabes.\n" +
    "- Mide antes y después (estadisticas) y no borres ni sobrescribas ficheros del usuario.\n" +
-   "- Usa los ids exactos de la lista de ventanas; las funciones devuelven objetos: pásalos por chat(JSON.stringify(r, null, 1)).\n" +
-   "- PJSR: console.writeln (console.log no existe); ImageWindow.windows es un array; ImageWindow.windowById(id).\n\n" +
+   "- Las funciones devuelven objetos: pásalos por chat(JSON.stringify(r, null, 1)).\n\n" +
+   "Vistas e ids (lo más importante):\n" +
+   "- Usa sólo los ids de la lista «Vistas abiertas», escritos exactamente igual (mayúsculas y guiones bajos incluidos). " +
+   "Nunca inventes ni completes un id. Los ejemplos de la guía usan ids genéricos (MasterLight y parecidos): sustitúyelos " +
+   "siempre por un id real de la lista.\n" +
+   "- Si el usuario nombra una vista, búscala en la lista; si habla de «la imagen en pantalla» o no dice cuál, usa la marcada " +
+   "como (activa). Si no está en la lista o hay dudas, pregunta sin escribir script.\n" +
+   "- Las funciones de la guía reciben el id como texto, por ejemplo analizarMaster(\"id_real\"), no una ventana ni una vista.\n" +
+   "- ImageWindow.windowById(id) nunca devuelve null: si el id no existe devuelve una ventana con isNull == true, así que " +
+   "comprueba w.isNull (no !w). View.viewById(id) devuelve null si no existe. El id de una ventana es w.mainView.id " +
+   "(no existe w.name). ImageWindow.windows es un array e ImageWindow.activeWindow es la ventana activa.\n" +
+   "- PJSR: console.writeln para la consola (console.log no existe).\n" +
+   "- Si un script falla, cambia el código que causó el error: no repitas el mismo script.\n\n" +
    "Funciones disponibles (nombre(argumentos) [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
-   "Ventanas abiertas ahora en PixInsight:\n" + plListaVentanas();
+   "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -508,6 +563,12 @@ function plRecortarHistorial(mensajes) {
 // Devuelve { texto, modelo, porque }.
 function plPreguntar(aj, mensajes, estado, paso) {
    var sistema = plPromptSistema(aj), m = plRecortarHistorial(mensajes), e = plElegirModelo(aj, paso || ""), t;
+   // Recordatorio al final de la última petición (los modelos locales atienden más a lo último que leen); no se guarda.
+   if (m.length && m[m.length - 1].role == "user") {
+      m = m.slice();
+      m[m.length - 1] = { role: "user", content: m[m.length - 1].content +
+                          "\n\n[Vistas abiertas ahora, ids exactos: " + plResumenVistas() + "]" };
+   }
    if (aj.proveedor == "claude") t = plClaudeChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "codex") t = plCodexChat(aj, sistema, m, estado, e.modelo);
    else t = plOllamaChat(aj, sistema, m, estado);
@@ -545,8 +606,10 @@ function plEjecutarScript(aj, codigo) {
       return { ok: true, texto: plRecortar(txt || "(sin salida)", 6000), segundos: (Date.now() - t0) / 1000 };
    } catch (e) {
       var linea = e && e.lineNumber ? " (línea " + e.lineNumber + ")" : "";
+      var vistas = "";
+      try { if (String(e).indexOf("Vistas abiertas") < 0) vistas = "\nVistas abiertas (ids exactos): " + plResumenVistas(); } catch (x) {}
       return { ok: false, texto: plRecortar((salida.length ? salida.join("\n") + "\n" : "") + "ERROR: " +
-               (e && e.message ? e.message : String(e)) + linea, 6000), segundos: (Date.now() - t0) / 1000 };
+               (e && e.message ? e.message : String(e)) + linea + vistas, 6000), segundos: (Date.now() - t0) / 1000 };
    }
 }
 
@@ -616,17 +679,10 @@ function plConstruirDialogo(aj) {
    };
    this.estadoLbl = new Label(pPrompt);
    this.estadoLbl.text = "";
-   // Paso de la guía (como los botones del módulo): con modelo «auto (pesos N)» decide entre inferior y superior.
-   this.cPaso = new ComboBox(pPrompt);
-   this.cPaso.addItem("Prompt libre");
-   PL_PASOS.forEach(function (p) { self.cPaso.addItem(p[0]); });
-   this.cPaso.toolTip = "Paso de la guía al que se refiere la petición. Con Claude/Codex en «" + PL_AUTO + "» elige el " +
-                        "modelo: puntuación > N → inferior; <= N → superior. Prompt libre → superior.";
-   this.cPaso.onItemSelected = function () { self.actualizarEleccion(); };
+   // Modelo que se usará. Como en el módulo, el prompt libre no tiene paso: con «auto (pesos N)» va al modelo superior.
    this.eleccionLbl = new Label(pPrompt);
    var filaP = new HorizontalSizer; filaP.spacing = 6;
-   var lP = new Label(pPrompt); lP.text = "Paso:"; lP.textAlignment = TextAlign_Right | TextAlign_VertCenter;
-   filaP.add(lP); filaP.add(this.cPaso); filaP.addSpacing(8); filaP.add(this.eleccionLbl, 100);
+   filaP.add(this.eleccionLbl, 100);
 
    var filaB = new HorizontalSizer;
    filaB.spacing = 6;
@@ -650,8 +706,8 @@ function plConstruirDialogo(aj) {
    this.cModelo = new ComboBox(pModelo);
    this.cModelo.editEnabled = true;
    this.cModelo.setScaledMinWidth(280);
-   this.cModelo.onEditTextUpdated = function () { aj.ponerModelo(self.cModelo.editText.trim()); };
-   this.cModelo.onItemSelected = function (i) { aj.ponerModelo(self.cModelo.itemText(i)); };
+   this.cModelo.onEditTextUpdated = function () { aj.ponerModelo(self.cModelo.editText.trim()); if (self.eleccionLbl) self.actualizarEleccion(); };
+   this.cModelo.onItemSelected = function (i) { aj.ponerModelo(self.cModelo.itemText(i)); if (self.eleccionLbl) self.rellenarPesos(); };
    this.bTags = new PushButton(pModelo);
    this.bTags.text = "Leer modelos de Ollama";
    this.bTags.onClick = function () { self.rellenarModelos(true); };
@@ -726,6 +782,8 @@ function plConstruirDialogo(aj) {
    gPesos.sizer.margin = 6; gPesos.sizer.spacing = 6;
    gPesos.sizer.add(fN); gPesos.sizer.add(this.tPesos, 100); gPesos.sizer.add(fA); gPesos.sizer.add(this.fuentePesos);
    pModelo.sizer.add(gPesos, 100);
+   pModelo.sizer.addStretch();
+   this.gPesos = gPesos;
 
    // --- Pestaña Ajustes ---
    var pAj = new Control(this);
@@ -784,15 +842,13 @@ function plConstruirDialogo(aj) {
       }
    };
 
-   this.pasoActual = function () {
-      var i = this.cPaso.currentItem;
-      return i > 0 ? PL_PASOS[i - 1][1] : "";
-   };
+   // Lite no tiene botones de paso: todo es prompt libre (en el módulo, StartJob de Prompt sin clave de paso).
+   this.pasoActual = function () { return ""; };
 
    // Línea bajo el chat con el modelo que se usará para el paso elegido y por qué.
    this.actualizarEleccion = function () {
       var e = plElegirModelo(aj, this.pasoActual());
-      this.eleccionLbl.text = aj.proveedor == "ollama" ? "Ollama · " + aj.modeloOllama :
+      this.eleccionLbl.text = aj.proveedor == "ollama" ? "Ollama · " + aj.modeloOllama + "  (los pesos N no se aplican)" :
          "Modelo: " + (e.modelo || "(por defecto de la CLI)") + (e.porque ? "  —  " + e.porque : "");
    };
 
@@ -804,6 +860,7 @@ function plConstruirDialogo(aj) {
       this.eInf.text = bajo; this.eSup.text = alto;
       var activos = aj.proveedor != "ollama";
       this.eInf.enabled = this.eSup.enabled = activos;
+      this.gPesos.visible = activos;   // con Ollama no se aplican: se oculta la tabla
       this.tPesos.clear();
       var sel = null;
       PL_PASOS.forEach(function (p) {
@@ -822,7 +879,7 @@ function plConstruirDialogo(aj) {
       });
       for (var c = 0; c < 5; ++c) this.tPesos.adjustColumnWidthToContents(c);
       if (sel) this.tPesos.currentNode = sel; else this.sAjuste.enabled = false;
-      this.fuentePesos.text = "Base: " + pb.fuente + ". Prompt libre → modelo superior." +
+      this.fuentePesos.text = "Base: " + pb.fuente + ". Como en el módulo, el Prompt libre usa el modelo superior; la tabla decide en los pasos." +
                               (aj.modelo() == PL_AUTO || !activos ? "" : "  (Ahora el modelo está fijado a mano: la tabla no se aplica.)");
       this.actualizarEleccion();
    };
@@ -854,8 +911,10 @@ function plConstruirDialogo(aj) {
 
    this.anotar = function (quien, texto) {
       this.registro += "── " + quien + " ──\n" + texto + "\n\n";
-      this.historialBox.text = this.registro;
-      try { this.historialBox.caretPosition = this.registro.length; } catch (e) {}
+      // El TextBox interpreta etiquetas HTML: sin escapar, «i < n» del código desaparecía al mostrarlo.
+      var html = this.registro.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      this.historialBox.text = html;
+      try { this.historialBox.caretPosition = html.length; } catch (e) {}
       plEventos();
    };
 
@@ -893,6 +952,17 @@ function plConstruirDialogo(aj) {
       this.mensajes.push({ role: "assistant", content: resp });
       this.anotar("PiCopilot (" + nombre + ")", resp);
       var s = plExtraerScript(resp);
+      // Si la corrección trae el mismo script que ya falló, no se ejecuta otra vez: se pide uno distinto.
+      if (s && this.scriptFallido && s.replace(/\s+/g, "") == this.scriptFallido.replace(/\s+/g, "")) {
+         this.ponerPendiente(null);
+         this.repetido = true;
+         this.anotar("Aviso", "El modelo ha devuelto el mismo script que ya falló; no lo ejecuto.");
+         var quedan = this.correcciones < PL_MAX_CORRECCIONES;
+         this.bCorregir.enabled = quedan;
+         this.estadoLbl.text = quedan ? "Script repetido. Puedes pedir otra corrección." : "Script repetido; revisa la petición.";
+         if (quedan && this.cAuto.checked) this.pedirCorreccion();
+         return;
+      }
       this.ponerPendiente(s);
       if (s && this.cAuto.checked) this.ejecutarPendiente();
    };
@@ -904,11 +974,10 @@ function plConstruirDialogo(aj) {
       this.entrada.text = "";
       this.correcciones = 0;
       this.ultimoError = null;
+      this.scriptFallido = null; this.repetido = false;
       this.pasoEnviado = this.pasoActual();   // las correcciones siguientes usan el mismo paso
-      var pi = this.cPaso.currentItem;
-      var contenido = pi > 0 ? "[Paso de la guía: " + PL_PASOS[pi - 1][0] + " (" + PL_PASOS[pi - 1][1] + ")]\n" + t : t;
-      this.mensajes.push({ role: "user", content: contenido });
-      this.anotar("Tú", contenido);
+      this.mensajes.push({ role: "user", content: t });
+      this.anotar("Tú", t);
       this.consultar();
    };
 
@@ -924,9 +993,10 @@ function plConstruirDialogo(aj) {
       this.mensajes.push({ role: "user", content: (r.ok ? "Resultado de ejecutar tu script:\n" : "Tu script ha fallado:\n") + r.texto });
       this.mensajes.push({ role: "assistant", content: r.ok ? "Visto." : "Entendido, lo reviso si me lo pides." });
       if (r.ok) {
-         this.correcciones = 0; this.ultimoError = null; this.estadoLbl.text = "Script ejecutado.";
+         this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null; this.estadoLbl.text = "Script ejecutado.";
       } else {
          this.ultimoError = r.texto;
+         this.scriptFallido = s;
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
          this.estadoLbl.text = quedan ? "El script ha fallado. Puedes pedir una corrección al modelo." :
@@ -938,9 +1008,14 @@ function plConstruirDialogo(aj) {
    this.pedirCorreccion = function () {
       if (!this.ultimoError || this.estado || this.correcciones >= PL_MAX_CORRECCIONES) return;
       ++this.correcciones;
-      this.mensajes.pop(); this.mensajes.pop();   // sustituye el par «ha fallado / entendido» por la petición de corrección
+      // Sustituye el par «ha fallado / entendido» (o «corrección / script repetido») por la petición de corrección.
+      this.mensajes.pop(); this.mensajes.pop();
       var t = "El script ha fallado con este error:\n" + this.ultimoError +
-              "\nCorrígelo y devuelve el script completo en un único bloque ```javascript.";
+              (this.repetido ? "\nTu última respuesta repetía exactamente ese mismo script. Escribe uno distinto que " +
+                               "quite la causa del error." : "") +
+              "\nRevisa los ids (sólo los de la lista de vistas abiertas, tal cual) y los tipos de los argumentos. " +
+              "Corrígelo y devuelve el script completo en un único bloque ```javascript.";
+      this.repetido = false;
       this.mensajes.push({ role: "user", content: t });
       this.anotar("Corrección " + this.correcciones + "/" + PL_MAX_CORRECCIONES, "Reenviando el error al modelo…");
       this.consultar();
@@ -992,13 +1067,13 @@ function plPrueba(salida, cli) {
             var prov = aj.proveedor, mod = aj.modeloClaude;
             d.cProv.currentItem = 1; d.cProv.onItemSelected(1);
             d.cModelo.editText = PL_AUTO; d.leerAjustes(); d.rellenarPesos();
-            d.cPaso.currentItem = 2; d.cPaso.onItemSelected(2);   // Inventario
-            out.pesos = { filas: d.tPesos.numberOfChildren, fuente: d.fuentePesos.text, eleccionInventario: d.eleccionLbl.text };
-            d.cPaso.currentItem = 0; d.cPaso.onItemSelected(0);
-            out.pesos.eleccionLibre = d.eleccionLbl.text;
+            out.pesos = { filas: d.tPesos.numberOfChildren, fuente: d.fuentePesos.text, eleccionClaude: d.eleccionLbl.text };
+            out.pesos.visibleClaude = d.gPesos.visible;
             aj.modeloClaude = mod;
             var ip = ["ollama", "claude", "codex"].indexOf(prov);
             d.cProv.currentItem = ip; d.cProv.onItemSelected(ip);
+            out.pesos.visibleTrasVolver = d.gPesos.visible;
+            out.pesos.eleccionOllama = d.eleccionLbl.text;
          } catch (e) { out.error = String(e); }
          d.ok();
       };
@@ -1012,7 +1087,7 @@ function plPrueba(salida, cli) {
       return { avisos: avisos, funciones: ["vistas", "estadisticas", "analizarMaster", "gradienteCandidatos", "estirarStarless", "reducirRuido"]
                .map(function (n) { return n + ":" + typeof g[n]; }) };
    });
-   paso("prompt", function () { var s = plPromptSistema(aj); return { caracteres: s.length, inicioVentanas: s.substring(s.indexOf("Ventanas abiertas")) }; });
+   paso("prompt", function () { var s = plPromptSistema(aj); return { caracteres: s.length, inicioVentanas: s.substring(s.indexOf("Vistas abiertas ahora")) }; });
    paso("ollamaModelos", function () { return plOllamaModelos(aj); });
    var respuesta = null;
    paso("ollamaChat", function () {
