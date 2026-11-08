@@ -352,6 +352,8 @@ var LISTA = {
    reducirRuido:         function (a) { return reducirRuido(a.vista, a.opciones || {}); },
    ruidoCandidatos:      function (a) { return ruidoCandidatos(a.vista, a.opciones || {}); },
    estirarCandidatos:    function (a) { return estirarCandidatos(a.vista, a.opciones || {}); },
+   contrasteCandidatos:  function (a) { return contrasteCandidatos(a.vista, a.opciones || {}); },
+   nucleoCandidatos:     function (a) { return nucleoCandidatos(a.vista, a.opciones || {}); },
    separarEstrellas:     function (a) { return separarEstrellas(a.vista, a.opciones || {}); },
    medirContinuo:        function (a) { return medirContinuo(a.nb, a.continuo, a.opciones || {}); },
    restarContinuo:       function (a) { return restarContinuo(a.nb, a.continuo, a.opciones || {}); },

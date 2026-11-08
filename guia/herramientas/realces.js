@@ -337,3 +337,126 @@ function backgroundEnhance(viewId, o) {
            opciones_ignoradas: ign, aviso: ign ? "estas opciones no existen y no han hecho nada: " + ign.join(", ") +
            " (las de backgroundEnhance son layers, amount, ssAmount, maskAmount, keepMask, nuevaVista)" : undefined };
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Contraste local: comparación de métodos sobre copias (Rafael, 8 nov 2026: comparar siempre). Imagen NO lineal
+// (starless estirada). Candidatos por defecto:
+//   - LocalHistogramEqualization radio 64 (slopeLimit 1,5, amount 0,35) y radio 128 (slopeLimit 2, amount 0,35).
+//   - HDRMultiscaleTransform 6 capas sobre la luminosidad, con máscara de luminancia, mezclado al 50 % con la entrada.
+//   - darkStructureEnhance (median 0,7).
+// Medidas iguales para todos (rzMedidasContraste): contraste local = mediana del rango p10–p90 en celdas de 64 px con
+// señal (la mitad más brillante), ruido del cielo (celdas más oscuras), nivel del cielo y píxeles quemados.
+// Gana el que más sube el contraste local sin subir el ruido del cielo más de un 25 % (ruidoMax), sin mover el cielo
+// más de 0,03 ni quemar más de un 0,05 % de píxeles. Si ninguno cumple, se recomienda dejar la imagen como está.
+//   var r = contrasteCandidatos("Starless_st", { nuevaVista: "Starless_lc" });
+function rzMedidasContraste(view) {
+  var im = view.image, W = im.width, H = im.height, nc = im.numberOfChannels, R = new Rect(0, 0, W, H), n = W * H;
+  var L = new Float32Array(n), buf = new Float32Array(n), alto = 0, total = 0;
+  for (var c = 0; c < nc; ++c) {
+    im.getSamples(buf, R, c);
+    for (var i = 0; i < n; ++i) { L[i] += buf[i] / nc; if ((i & 3) === 0) { ++total; if (buf[i] >= 0.98) ++alto; } }
+  }
+  var S = 64, cells = [];
+  for (var y0 = 0; y0 + S <= H; y0 += S)
+    for (var x0 = 0; x0 + S <= W; x0 += S) {
+      var v = [];
+      for (var y = y0; y < y0 + S; y += 2) for (var x = x0; x < x0 + S; x += 2) v.push(L[y * W + x]);
+      v.sort(function (a, b) { return a - b; });
+      cells.push({ x: x0, y: y0, m: v[v.length >> 1], rango: v[Math.floor(0.9 * (v.length - 1))] - v[Math.floor(0.1 * (v.length - 1))] });
+    }
+  cells = cells.filter(function (c0) { return c0.m > 1e-6; });
+  cells.sort(function (a, b) { return a.m - b.m; });
+  var k = Math.max(5, Math.floor(cells.length * 0.10)), dif = [], sk = [];
+  for (var j = 0; j < k; ++j) {
+    var cc = cells[j];
+    sk.push(cc.m);
+    for (var yy = cc.y; yy < cc.y + S; yy += 2) for (var xx = cc.x; xx < cc.x + S - 1; xx += 2) dif.push(Math.abs(L[yy * W + xx + 1] - L[yy * W + xx]));
+  }
+  sk.sort(function (a, b) { return a - b; }); dif.sort(function (a, b) { return a - b; });
+  var brillantes = cells.slice(cells.length >> 1).map(function (c1) { return c1.rango; }).sort(function (a, b) { return a - b; });
+  return { contraste_local: +brillantes[brillantes.length >> 1].toFixed(5), cielo: +sk[sk.length >> 1].toFixed(4),
+           ruido_cielo: +(dif[dif.length >> 1] / (0.6745 * Math.SQRT2)).toFixed(6), quemados_pct: +(100 * alto / total).toFixed(4) };
+}
+
+function contrasteCandidatos(viewId, o) {
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
+  o = o || {};
+  var src = rzView(viewId), t0 = Date.now();
+  if (rzMedian(src) < 0.05) throw new Error("La imagen parece lineal (mediana " + rzMedian(src).toFixed(4) + "): el contraste local va después del estirado");
+  var base = rzMedidasContraste(src), ruidoMax = o.ruidoMax || 1.25, cands = [];
+  function copia(suf) { var w = rzCopy(src, viewId + suf); w.keywords = src.window.keywords; w.show(); return w; }
+  function medir(etiqueta, w, t1) {
+    var m = rzMedidasContraste(w.mainView), f = [];
+    var gc = m.contraste_local / Math.max(base.contraste_local, 1e-9), gr = m.ruido_cielo / Math.max(base.ruido_cielo, 1e-9);
+    if (gr > ruidoMax) f.push("sube el ruido del cielo ×" + gr.toFixed(2) + " (máx. ×" + ruidoMax + ")");
+    if (Math.abs(m.cielo - base.cielo) > 0.03) f.push("mueve el cielo de " + base.cielo + " a " + m.cielo);
+    if (m.quemados_pct - base.quemados_pct > 0.05) f.push("quema " + (m.quemados_pct - base.quemados_pct).toFixed(3) + " % más de píxeles");
+    cands.push({ etiqueta: etiqueta, vista: w.mainView.id, medidas: m, contraste_x: +gc.toFixed(3), ruido_x: +gr.toFixed(3), fallos: f,
+                 segundos: Math.round((Date.now() - t1) / 1000) });
+  }
+  (o.lhe || [{ radius: 64, slopeLimit: 1.5, amount: 0.35 }, { radius: 128, slopeLimit: 2.0, amount: 0.35 }]).forEach(function (p, i) {
+    var t1 = Date.now();
+    try {
+      var w = copia("_lhe" + p.radius);
+      var P = new LocalHistogramEqualization;
+      P.radius = p.radius; P.slopeLimit = p.slopeLimit; P.amount = p.amount; P.circularKernel = true;
+      rzMust(P.executeOn(w.mainView), "LocalHistogramEqualization");
+      medir("LHE radio " + p.radius + ", pendiente " + p.slopeLimit + ", amount " + p.amount, w, t1);
+    } catch (e) { cands.push({ etiqueta: "LHE radio " + p.radius, error: String(e && e.message ? e.message : e) }); }
+  });
+  if (o.hdrmt !== false) {
+    var t2 = Date.now();
+    try {
+      var hm = o.hdrmt || {}, capas = hm.capas || 6, mezcla = (hm.mezcla !== undefined) ? hm.mezcla : 0.5;
+      var wh = copia("_hdrmt");
+      var aux = rzCopy(src, "rzTmpHDRMT");
+      var Hd = new HDRMultiscaleTransform;
+      Hd.numberOfLayers = capas; Hd.numberOfIterations = 1; Hd.toLightness = true; Hd.luminanceMask = true; Hd.deringing = true;
+      rzMust(Hd.executeOn(aux.mainView, false), "HDRMultiscaleTransform");
+      var PM = new PixelMath;
+      PM.expression = "$T*" + (1 - mezcla) + " + " + aux.mainView.id + "*" + mezcla; PM.useSingleExpression = true;
+      PM.truncate = true; PM.truncateLower = 0; PM.truncateUpper = 1; PM.createNewImage = false;
+      rzMust(PM.executeOn(wh.mainView), "PixelMath (mezcla HDRMT)");
+      aux.forceClose();
+      medir("HDRMT " + capas + " capas, luminosidad, mezcla " + mezcla, wh, t2);
+    } catch (e) { cands.push({ etiqueta: "HDRMT", error: String(e && e.message ? e.message : e) }); }
+  }
+  if (o.dse !== false) {
+    var t3 = Date.now();
+    try {
+      var d = darkStructureEnhance(viewId, { median: (o.dse && o.dse.median) || 0.7, nuevaVista: viewId + "_dse" });
+      medir("DarkStructureEnhance median " + d.median, ImageWindow.windowById(d.view), t3);
+    } catch (e) { cands.push({ etiqueta: "DarkStructureEnhance", error: String(e && e.message ? e.message : e) }); }
+  }
+  var ok = cands.filter(function (c) { return c.medidas && !c.fallos.length && c.contraste_x > 1.0; });
+  var best = ok.reduce(function (a, c) { return a === null || c.contraste_x > a.contraste_x ? c : a; }, null);
+  var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_lc"), vista = null;
+  cands.forEach(function (c) {
+    if (!c.vista) return;
+    var w = ImageWindow.windowById(c.vista);
+    if (w.isNull) return;
+    if (c === best) {
+      if (c.vista !== nombre) { var old = ImageWindow.windowById(nombre); if (!old.isNull) old.forceClose(); w.mainView.id = nombre; }
+      vista = w.mainView.id;
+    } else if (o.cerrar !== false) w.forceClose();
+  });
+  return {
+    vista: vista, original: viewId, entrada: base,
+    comparados: cands.map(function (c) {
+      if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
+      return { metodo: c.etiqueta, contraste_x: c.contraste_x, ruido_cielo_x: c.ruido_x, cielo: c.medidas.cielo,
+               quemados_pct: c.medidas.quemados_pct, cumple: !c.fallos.length, fallos: c.fallos.join("; ") || undefined,
+               segundos: c.segundos, elegido: c === best };
+    }),
+    recomendado: best ? best.etiqueta : "ninguno: dejar la imagen como está",
+    motivo: best ? best.etiqueta + ": sube el contraste local ×" + best.contraste_x + " con el ruido del cielo ×" + best.ruido_x + "." :
+                   "Ningún método sube el contraste local sin pasarse de ruido, cielo o quemados: la imagen se queda como está.",
+    segundos: Math.round((Date.now() - t0) / 1000),
+    control: {
+      revisar_a_ojo: ["halos oscuros alrededor de zonas brillantes (LHE con radio pequeño)", "aspecto artificial o «HDR» de la nebulosa",
+                      "estructuras oscuras exageradas (DarkStructureEnhance)"],
+      nota: "contraste_x = contraste local (rango p10–p90 en celdas de 64 px con señal) frente a la entrada; ruido_cielo_x = ruido del " +
+            "cielo frente a la entrada. Lo de revisar_a_ojo no lo mide esta función."
+    }
+  };
+}

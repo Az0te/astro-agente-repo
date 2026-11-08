@@ -133,14 +133,25 @@ function comprimirNucleo(viewId, o) {
              control: { medido: { mascara_con_bulbo: false }, revisar_a_ojo: [], nota: "No aplicar es un resultado válido." } };
   }
 
-  // 2. HDRMT a pleno sobre una copia oculta.
-  var hw = nuCopy(viewId, "nuTmpHDR", false), H2 = new HDRMultiscaleTransform;
-  if (!("numberOfLayers" in H2) || !("numberOfIterations" in H2))
-    { hw.forceClose(); mw.forceClose(); throw new Error("HDRMultiscaleTransform sin numberOfLayers/numberOfIterations en esta versión"); }
-  H2.numberOfLayers = capas; H2.numberOfIterations = iter;
-  if ("toLightness" in H2) H2.toLightness = true;
-  if ("preserveHue" in H2) H2.preserveHue = true;
-  if (!H2.executeOn(hw.mainView)) { hw.forceClose(); mw.forceClose(); throw new Error("HDRMultiscaleTransform falló"); }
+  // 2. Compresión a pleno sobre una copia oculta: HDRMT (por defecto) o GradientHDRCompression (metodo "ghc";
+  //    exponente del gradiente o.exponente, 0,6 por defecto: < 1 comprime).
+  var metodo = o.metodo === "ghc" ? "ghc" : "hdrmt", hw = nuCopy(viewId, "nuTmpHDR", false);
+  if (metodo === "ghc") {
+    if (typeof GradientHDRCompression !== "function") { hw.forceClose(); mw.forceClose(); throw new Error("GradientHDRCompression no está disponible"); }
+    var G2 = new GradientHDRCompression;
+    G2.expGradient = (o.exponente !== undefined) ? o.exponente : 0.6;
+    G2.logMaxGradient = (o.logMax !== undefined) ? o.logMax : 0; G2.logMinGradient = (o.logMin !== undefined) ? o.logMin : -7;
+    G2.bRescale01 = true; G2.bPreserveColor = true;
+    if (!G2.executeOn(hw.mainView)) { hw.forceClose(); mw.forceClose(); throw new Error("GradientHDRCompression falló"); }
+  } else {
+    var H2 = new HDRMultiscaleTransform;
+    if (!("numberOfLayers" in H2) || !("numberOfIterations" in H2))
+      { hw.forceClose(); mw.forceClose(); throw new Error("HDRMultiscaleTransform sin numberOfLayers/numberOfIterations en esta versión"); }
+    H2.numberOfLayers = capas; H2.numberOfIterations = iter;
+    if ("toLightness" in H2) H2.toLightness = true;
+    if ("preserveHue" in H2) H2.preserveHue = true;
+    if (!H2.executeOn(hw.mainView)) { hw.forceClose(); mw.forceClose(); throw new Error("HDRMultiscaleTransform falló"); }
+  }
 
   // 3. Mezcla en la copia final: T + mezcla·M·(HDR − T).
   var w = nuCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_nucleo"), true), v = w.mainView;
@@ -169,7 +180,9 @@ function comprimirNucleo(viewId, o) {
     "si es una galaxia, repetir sobre la original con mascaraDesde 0,25 para que la máscara la incluya; si es una estrella, ignorar");
   if (baja > 30) noCumple.push("el bulbo pierde un " + baja.toFixed(0) + " % de brillo medio (> 30 %): queda plano; repetir con mezcla menor");
   return {
-    vista: v.id, original: viewId, aplicado: true, capas: capas, iteraciones: iter, mezcla: mezcla,
+    vista: v.id, original: viewId, aplicado: true,
+    metodo: metodo === "ghc" ? "GradientHDRCompression (exponente " + ((o.exponente !== undefined) ? o.exponente : 0.6) + ")" : "HDRMultiscaleTransform",
+    capas: capas, iteraciones: iter, mezcla: mezcla,
     mascara: { desde: desde, ancho: ancho, bin: bin, radio_bulbo_px: Math.round(rBulbo), vista: maskId },
     meseta_antes: antes, meseta_despues: despues, otra_meseta: otra,
     brillo_bulbo: { antes: +bm0.toFixed(3), despues: +bm1.toFixed(3), baja_pct: +baja.toFixed(1) },
@@ -183,5 +196,61 @@ function comprimirNucleo(viewId, o) {
             "Después, saturación con saturarAlFallo; el LHE del disco, si se usa, con máscara que excluya el bulbo. " +
             "Lo de revisar_a_ojo no lo mide esta función."
     }
+  };
+}
+
+// Compara HDRMultiscaleTransform y GradientHDRCompression con la misma máscara de bulbo y la misma mezcla (Rafael,
+// 8 nov 2026: comparar siempre). Gana, entre los que cumplen, el que deja menos meseta y, a igualdad, el que menos
+// aplana el bulbo. La elegida queda como nuevaVista (<vista>_nucleo); la otra se cierra (cerrar: false para conservarla).
+//   var r = nucleoCandidatos("Starless_st", { exponentes: [0.6, 0.4], nuevaVista: "Starless_hdr" });
+function nucleoCandidatos(viewId, o) {
+  viewId = nuId(viewId); o = o || {};
+  var t0 = Date.now(), cands = [], pruebas = [{ etiqueta: "HDRMT " + (o.capas || 7) + " capas", op: { metodo: "hdrmt" }, suf: "_nuc_hdrmt" }];
+  (o.exponentes || [0.6]).forEach(function (e) {
+    pruebas.push({ etiqueta: "GradientHDRCompression exponente " + e, op: { metodo: "ghc", exponente: e }, suf: "_nuc_ghc" + Math.round(100 * e) });
+  });
+  pruebas.forEach(function (p) {
+    var op = {};
+    for (var k in o) if (["exponentes", "nuevaVista", "cerrar"].indexOf(k) < 0) op[k] = o[k];
+    for (var k2 in p.op) op[k2] = p.op[k2];
+    op.nuevaVista = viewId + p.suf;
+    try { cands.push({ etiqueta: p.etiqueta, r: comprimirNucleo(viewId, op) }); }
+    catch (e) { cands.push({ etiqueta: p.etiqueta, error: String(e && e.message ? e.message : e) }); }
+  });
+  var conVista = cands.filter(function (c) { return c.r && c.r.aplicado; });
+  if (!conVista.length) {
+    var r0 = cands.filter(function (c) { return c.r; })[0];
+    return { vista: null, original: viewId, aplicado: false, comparados: cands.map(function (c) { return { metodo: c.etiqueta, error: c.error, no_cumple: c.r ? c.r.no_cumple : undefined }; }),
+             no_cumple: r0 ? r0.no_cumple : ["ningún método se pudo aplicar"] };
+  }
+  var ok = conVista.filter(function (c) { return !c.r.no_cumple.length; }), lista = ok.length ? ok : conVista;
+  var best = lista.reduce(function (a, c) {
+    if (a === null) return c;
+    if (!ok.length && c.r.no_cumple.length !== a.r.no_cumple.length) return c.r.no_cumple.length < a.r.no_cumple.length ? c : a;
+    var ma = a.r.meseta_despues.radio_px, mc = c.r.meseta_despues.radio_px;
+    if (mc !== ma) return mc < ma ? c : a;
+    return c.r.brillo_bulbo.baja_pct < a.r.brillo_bulbo.baja_pct ? c : a;
+  }, null);
+  var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_nucleo"), vista = null;
+  conVista.forEach(function (c) {
+    var w = ImageWindow.windowById(c.r.vista);
+    if (w.isNull) return;
+    if (c === best) {
+      if (c.r.vista !== nombre) { var old = ImageWindow.windowById(nombre); if (!old.isNull) old.forceClose(); w.mainView.id = nombre; }
+      vista = w.mainView.id;
+    } else if (o.cerrar !== false) w.forceClose();
+  });
+  return {
+    vista: vista, original: viewId, aplicado: true,
+    comparados: cands.map(function (c) {
+      if (!c.r) return { metodo: c.etiqueta, error: c.error, elegido: false };
+      return { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null,
+               bulbo_baja_pct: c.r.brillo_bulbo ? c.r.brillo_bulbo.baja_pct : null, anillos_nuevos: c.r.anillos_nuevos_px ? c.r.anillos_nuevos_px.length : null,
+               cumple: !c.r.no_cumple.length, elegido: c === best };
+    }),
+    recomendado: best.etiqueta, meseta_antes: best.r.meseta_antes, meseta_despues: best.r.meseta_despues,
+    motivo: best.etiqueta + (best.r.no_cumple.length ? ": ninguno cumple; es el de menos avisos." :
+            ": deja la meseta en " + best.r.meseta_despues.radio_px + " px y el bulbo baja un " + best.r.brillo_bulbo.baja_pct + " %."),
+    no_cumple: best.r.no_cumple, segundos: Math.round((Date.now() - t0) / 1000), control: best.r.control
   };
 }

@@ -432,7 +432,7 @@
    "fichero": "gradiente.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free, MGC con y sin bordes, polinomio robusto de grado 1 y 2) sobre copias GC_*, mide cuánto se come cada modelo del objeto y cuánto gradiente de cielo deja, y recomienda. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias.",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free y con IA, GradientCorrection de PixInsight, MGC con y sin bordes, polinomio robusto de grado 1 y 2) sobre copias GC_*, mide cuánto se come cada modelo del objeto y cuánto gradiente de cielo deja, y recomienda. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
     "type": "object",
@@ -443,7 +443,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { graxpert: [10, 8], mgc: [1024, 2048], mgcBorde: true, mgcOpts, polinomio: [1, 2] (lista de grados; false = sin polinomio), spfc: { qe, gray } del perfil, mars: ruta .xmars, dossier: ruta .json }"
+      "description": "Opcional. { graxpert: [10, 8], graxpertIA: true, gradientCorrection: true, gcOpts: { scale, smoothness, protection... }, mgc: [1024, 2048], mgcBorde: true, mgcOpts, polinomio: [1, 2] (lista de grados; false = sin polinomio), spfc: { qe, gray } del perfil, mars: ruta .xmars, dossier: ruta .json }"
      }
     },
     "required": [
@@ -1094,7 +1094,31 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { capas: 7, mezcla: 0.6, iteraciones: 1, mascaraDesde: 0.35, mascaraAncho: 0.25, nuevaVista, conservarMascara }"
+      "description": "Opcional. { metodo: \"hdrmt\" | \"ghc\" (GradientHDRCompression), exponente: 0.6 (ghc), capas: 7, mezcla: 0.6, iteraciones: 1, mascaraDesde: 0.35, mascaraAncho: 0.25, nuevaVista, conservarMascara }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "nucleoCandidatos",
+   "fichero": "nucleo.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 5 no lineal, galaxias: compara HDRMultiscaleTransform y GradientHDRCompression con la misma máscara de bulbo y mezcla (comprimirNucleo) y se queda con el que deja menos meseta sin anillos ni bulbo plano; devuelve la tabla de la comparación. Preferible a comprimirNucleo con un solo método.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la starless estirada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { exponentes: [0.6] (GradientHDRCompression), capas: 7, mezcla: 0.6, mascaraDesde: 0.35, nuevaVista, cerrar: false para conservar la otra }"
      }
     },
     "required": [
@@ -1244,6 +1268,30 @@
      "opciones": {
       "type": "object",
       "description": "Opcional. { amount: 2 }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "contrasteCandidatos",
+   "fichero": "realces.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Contraste local de la starless estirada: compara LocalHistogramEqualization (radio 64 y 128), HDRMultiscaleTransform (6 capas, mezcla 50 %) y DarkStructureEnhance sobre copias, y se queda con el que más sube el contraste local sin subir el ruido del cielo más de un 25 %, sin mover el cielo ni quemar; si ninguno cumple, recomienda no tocarla. Devuelve la tabla de la comparación.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la starless estirada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { lhe: [{ radius, slopeLimit, amount }], hdrmt: { capas, mezcla } | false, dse: { median } | false, ruidoMax: 1.25, nuevaVista, cerrar: false para conservar los demás }"
      }
     },
     "required": [

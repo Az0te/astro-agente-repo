@@ -471,7 +471,7 @@ function plPromptSistema(aj) {
    "- Antes de usar un proceso o una propiedad de PJSR que no esté en la guía ni en el contrato de abajo, no la inventes.\n" +
    "- Si un script falla, cambia el código que causó el error: no repitas el mismo script.\n" +
    "- Compara siempre: si la guía tiene una función que prueba varios candidatos y recomienda uno (gradienteCandidatos o " +
-   "gradienteVarias, ruidoCandidatos, bxtCandidatos...), úsala en vez de aplicar un solo método o valor, y enseña la tabla " +
+   "gradienteVarias, ruidoCandidatos, bxtCandidatos, estirarCandidatos, contrasteCandidatos, nucleoCandidatos...), úsala en vez de aplicar un solo método o valor, y enseña la tabla " +
    "de la comparación (comparados / candidatos) en tu resumen.\n\n" +
    "Recomendar el paso siguiente:\n" +
    "- Cuando respondas sin script (información, dudas, resúmenes), termina con una línea «Siguiente paso: <qué hacer y con " +

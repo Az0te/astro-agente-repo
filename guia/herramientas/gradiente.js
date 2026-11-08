@@ -251,6 +251,57 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
+  // GraXpert con su modelo de IA (no sample_free), sobre la original sin modificarla (8 nov 2026). graxpertIA: false
+  // para no probarlo.
+  if (o.graxpertIA !== false) {
+    try {
+      before = grIds();
+      var GI = new GraXpert;
+      GI.backgroundExtraction = true;
+      GI.backgroundExtractionSampleFree = false;
+      GI.correction = "Subtraction";
+      GI.createBackground = true;
+      GI.replaceImage = false;
+      if (!GI.executeOn(win.mainView)) throw new Error("GraXpert IA devolvió false");
+      var nuevasI = grNew(before), corrI = null, modI = null;
+      for (var ki = 0; ki < nuevasI.length; ++ki) {
+        if (nuevasI[ki].indexOf("background_extraction") >= 0) corrI = nuevasI[ki];
+        else if (nuevasI[ki].indexOf("background") >= 0) modI = nuevasI[ki];
+      }
+      if (!corrI || !modI) throw new Error("no encuentro las salidas de GraXpert IA (nuevas: " + nuevasI.join(", ") + ")");
+      corrI = grRename(corrI, "GC_GXIA");
+      try { ImageWindow.windowById(corrI).keywords = win.keywords; } catch (e) { }
+      modI = grRename(modI, "GC_GXIA_modelo");
+      r.candidatos.push({ vista: corrI, modelo: modI, metodo: "GraXpert", parametros: "modelo de IA, sustracción",
+                          metricas: grMeasure(base, modI, corrI, range0),
+                          notas: ImageWindow.windowById(corrI).hasAstrometricSolution ? "Conserva la astrometría." : "Sin astrometría: repetir blindSolve." });
+    } catch (e) {
+      r.errores.push("GraXpert IA: " + e);
+    }
+  }
+
+  // GradientCorrection (proceso nativo de PixInsight): automático, sin astrometría ni MARS, con protección de las
+  // estructuras. Sobre una copia; genera el modelo de gradiente. gradientCorrection: false para no probarlo; gcOpts
+  // para cambiar sus parámetros (scale, smoothness, protection...).
+  if (o.gradientCorrection !== false) {
+    try {
+      var gid = grDuplicate(viewId, "GC_GCORR");
+      before = grIds();
+      var GCP = new GradientCorrection;
+      GCP.generateGradientModel = true;
+      if (o.gcOpts) for (var kg in o.gcOpts) GCP[kg] = o.gcOpts[kg];
+      if (!GCP.executeOn(View.viewById(gid))) throw new Error("GradientCorrection devolvió false");
+      var ng = grNew(before), gmod = null;
+      for (var qg = 0; qg < ng.length; ++qg) if (ng[qg].indexOf("model") >= 0) gmod = ng[qg];
+      if (!gmod) throw new Error("GradientCorrection no creó el modelo de gradiente");
+      gmod = grRename(gmod, gid + "_modelo");
+      r.candidatos.push({ vista: gid, modelo: gmod, metodo: "GradientCorrection", parametros: "scale " + GCP.scale + ", protección " + (GCP.protection ? "sí" : "no"),
+                          metricas: grMeasure(base, gmod, gid, range0), notas: "Proceso nativo de PixInsight; no necesita astrometría." });
+    } catch (e) {
+      r.errores.push("GradientCorrection: " + e);
+    }
+  }
+
   // MGC (SPFC previo) sobre copias. Necesita WCS y la base MARS. Con PixInsight 1.9.6+ cada escala se prueba
   // también con corrección de bordes (edgeCorrection), salvo mgcBorde: false.
   var conBorde = o.mgcBorde !== false && (new MultiscaleGradientCorrection).edgeCorrection !== undefined;
