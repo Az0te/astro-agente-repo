@@ -163,11 +163,30 @@ function grMeasure(base, modelId, correctedId, range0) {
            come_objeto_pct: +(100 * s.eat).toFixed(1) };
 }
 
+// 8 nov 2026: con dos masters abiertos, Qwen desmezcló y corrigió el gradiente sin pasar por alinearMasters (Paso 5).
+// Si la vista es un master abierto desde disco (tiene fichero y no es un _alin) y hay otro master así abierto, se para.
+function grExigirAlineado(id, o) {
+  if (o && (o.sinAlinear || o.alineados)) return;
+  var w = ImageWindow.windowById(id);
+  if (w.isNull || !w.filePath || /_alin/i.test(id + " " + w.filePath)) return;
+  var otros = [], ws = ImageWindow.windows;
+  for (var i = 0; i < ws.length; ++i) {
+    var x = ws[i];
+    if (x.mainView.id === id || !x.filePath || /_alin/i.test(x.mainView.id + " " + x.filePath)) continue;
+    if (/\.(xisf|fits?|fts)$/i.test(x.filePath) && x.mainView.image.width > 1000) otros.push(x.mainView.id);
+  }
+  if (otros.length)
+    throw new Error("Hay " + (otros.length + 1) + " masters abiertos sin alinear (" + [id].concat(otros).join(", ") + "). Primero el Paso 5: " +
+                    "alinearMasters([\"" + [id].concat(otros).join("\", \"") + "\"]) y después todo sobre las vistas _alin que devuelve (r.vistas). " +
+                    "Si ya salieron alineados y recortados del mismo WBPP y el usuario lo confirma, repetir con { sinAlinear: true }.");
+}
+
 function gradienteCandidatos(viewId, o) {
   // Con una lista de vistas (Qwen, 7 nov 2026: fallaba con "windowById(): String expected" y repetía el mismo script).
   if (viewId instanceof Array) return gradienteVarias(viewId, o);
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
+  grExigirAlineado(viewId, o);
   // Por defecto se comparan los tres métodos (no hay uno preferido: se aplica el que mejor mida en cada imagen).
   var scalesGX = o.graxpert || [10, 8];
   var scalesMGC = o.mgc || [1024, 2048];

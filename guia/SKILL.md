@@ -1,11 +1,11 @@
 ---
 name: "astro-procesado-pixinsight"
-description: "Procesado de astrofotografía de cielo profundo en PixInsight controlado por un agente de IA a través del watcher MCP, paso a paso desde el análisis del objeto hasta la entrega: OSC + dual band, HDR con tomas cortas, gradientes, BXT/NXT/SXT, SPCC, estrellas y halos, paletas de banda estrecha y controles objetivos de calidad. Fiel a los datos."
+description: "Procesado de astrofotografía de cielo profundo en PixInsight controlado por un agente de IA a través del MCP picopilot (las funciones de la guía como herramientas), paso a paso desde el análisis del objeto hasta la entrega: OSC + dual band, HDR con tomas cortas, gradientes, BXT/NXT/SXT, SPCC, estrellas y halos, paletas de banda estrecha y controles objetivos de calidad. Fiel a los datos."
 ---
 
 # Procesado de astrofotografía en PixInsight
 
-Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) que procese en PixInsight a través del watcher MCP de este repositorio (PixInsight 1.9.6+ con el watcher v8). Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carga **sólo cuando hace falta**: el fichero del paso que se va a ejecutar, y nada más.
+Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) que procese en PixInsight a través del servidor MCP `picopilot` de este repositorio (`mcp/`, PixInsight 1.9.6+) o desde el panel PiCopilot. Con el MCP, cada función de `herramientas/` es una herramienta con su nombre (`mcp__picopilot__analizarMaster`, `mcp__picopilot__gradienteCandidatos`…; lista y parámetros en `herramientas/manifiesto.json`). **El MCP antiguo `pixinsight` (watcher, `run_script`, `watcher_status`, `describe_process`, `list_open_images`) está retirado: no usarlo aunque aparezca.** Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carga **sólo cuando hace falta**: el fichero del paso que se va a ejecutar, y nada más.
 
 ## Principio
 
@@ -18,8 +18,8 @@ Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) qu
 3. **Estirar con MAS, GHS o HistogramTransformation**; `starStretch` sólo para la capa de estrellas lineal. Nunca fórmulas de PixelMath inventadas.
 4. **Comprobar cada paso**: estadísticas por canal antes y después e historial `view.processing`. Un paso que no cambió nada no se ha hecho. Ningún canal puede acabar recortado.
 5. **Copias con nombre de versión** (v1, v2…): nunca trabajar sobre el master ni sobrescribir. Nunca borrar subs ni masters: los descartes van a `_rechazados` y el usuario confirma.
-6. **No inventar nombres**: procesos y parámetros con `describe_process`, IDs con `list_open_images`. Se aplica con `P.executeOn(ventana.mainView)`; la imagen está en `ventana.mainView.image`.
-7. **Todo desde el watcher**, sin iconos ni scripts del menú (no se pueden lanzar desde el watcher). Si `typeof Proceso !== "function"`, su módulo no está cargado: avisar, no sustituirlo.
+6. **No inventar nombres**: IDs con la herramienta `vistas`; parámetros de cada función en su ficha y en `manifiesto.json`. Se aplica con `P.executeOn(ventana.mainView)`; la imagen está en `ventana.mainView.image`.
+7. **Todo con las funciones de la guía** (herramientas MCP `picopilot` o scripts del panel), sin iconos ni scripts del menú. Si una función dice que falta un proceso (`typeof Proceso !== "function"`), su módulo no está cargado: avisar, no sustituirlo.
 8. **El dossier cuenta lo que dice el historial**, no lo que se pretendía.
 
 **Orden lineal:** gradiente → BXT Correct Only → SPCC → BXT completo → SXT → denoise principal sobre la starless en lineal (por defecto, híbrido MLDenoise + NXT; Paso 15). Nunca reducir ruido antes de BXT.
@@ -33,24 +33,24 @@ Para no arrastrar contexto, cada fase va en su propia sesión:
 
 Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en el checkpoint, no se corrige en no lineal.
 
-## Funciones del watcher v8
+## Funciones de la guía
 
-Disponibles en `run_script` sin cargar nada:
+Con el MCP `picopilot` son herramientas con el mismo nombre (no hay que cargar nada). En un script del panel PiCopilot se cargan con `eval(File.readTextFile(...))`. Las de realces y astrometría:
 
 | Función | Para qué | Paso |
 |---|---|---|
-| `blindSolve("vista")` | Astrometría para SPCC, SPFC y MGC; repetir tras BXT o GraXpert si `hasAstrometricSolution` es falso (recortar y rotar la conservan desde 1.9.6) | 8 lineal |
+| `resolverAstrometria("vista")` | Astrometría para SPCC, SPFC y MGC (usa el motor de BlindSolver); repetir tras BXT o GraXpert si `hasAstrometricSolution` es falso (recortar y rotar la conservan desde 1.9.6) | 8 lineal |
 | `starStretch("Stars", {amount})` | Estirar la capa de estrellas lineal | 1 no lineal |
 | `screenStarsCombine("Starless", "Stars", {newId})` | Recombinar estrellas (por defecto) | 9 no lineal |
 | `screenStarsExtract("Original", "Starless")` | Sacar la capa de estrellas sin repetir SXT | 8 no lineal |
 | `backgroundEnhance("Starless", {amount})` | Levantar nebulosidad débil extensa | 5 no lineal |
 | `darkStructureEnhance("Starless", {median})` | Oscurecer polvo y estructuras oscuras | 5 no lineal |
 
-Con `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))`: `procesos.js` (`pxSPCC`, `pxSPFC`, `pxMGC` con los valores del perfil), `graxpert.js` (GraXpert externo: RBF, Kriging, Splines, denoise), `gradcompare.js` (medir modelos de gradiente) `gradiente.js` (`gradienteCandidatos(vista, opciones)`: comparativa de GraXpert y MGC en una llamada, con medida y dossier), `analisis.js` (`analizarMaster(vista)`: datos de la checklist del Paso 1), `combinacion.js` (`combinarMismoCanal`: dos masters del mismo canal pesados por 1/σ²; `inyectarHa`: Hα en el R bajo máscara referida al cielo, Paso 10), `hdr.js` (`componerHDR`: HDRComposition con umbral medido por canal y controles de escalón, Paso 6), `alineado.js` (`astrometriaLineal`: antes de recortar o reescalar una imagen con astrometría con splines; `alinearMasters`: registro sobre una referencia común, reescalado si hace falta y recorte a la zona común, Paso 5), `preproceso.js` (`inventario`: cabeceras de toda la carpeta del objeto, Paso 2; `seleccionarSubs`: ImageAnalysis por grupo, Paso 3; `revisarCalibracion`, `lanzarWBPP` y `estadoWBPP`: cabeceras y flats, WBPP en otra instancia sin ventana y resumen del log, Paso 4), `color.js` (`calibrarColor(vista, {spcc})`: SPCC con comprobaciones y cielo medido), `deconvolucion.js` (`bxtCandidatos` / `bxtAplicar`: rejilla de BXT completo con FWHM, ringing y gusanos), `ruido.js` (`reducirRuido`: NXT o híbrido con σ del cielo, contraste y residual; `separarEstrellas`: SXT comprobado), `boost.js` (`saturarAlFallo`: saturación 0,58 → 0,78 hasta el fallo), `nucleo.js` (`comprimirNucleo`: HDRMT al 60 % con máscara de bulbo en galaxias, antes de saturar; `medirMeseta`), `lineal.js` (`resolverAstrometria`, `bxtCorrectOnly`, `checkpointLineal`, `quitarVerde`), `bandaestrecha.js` (`desmezclarDualBand`, `medirContinuo`, `restarContinuo`, `previsualizarPaletas`), `mascaras.js` (`crearMascara`), `exportar.js` (`exportarFinal`: XISF, TIFF 16 bits y JPG sRGB), `estirado.js` (`estirarCapas(starless, estrellas)`: starless al fallo con pasadas cortas de GHS y estrellas con `starStretch` o, con `estrellas: "extraer"` y en galaxias, con el mismo estirado), `estrellas.js` (`prepararEstrellas(vista)`: preparación de la capa de estrellas del Paso 8) y `recombinacion.js` (`recombinarEstrellas(starless, estrellas)`: Paso 9 con sus controles). Constantes de proceso en v8: `Clase.CONSTANTE` (`PixelMath.RGB`); con `.prototype` dan `undefined` sin error. `View.viewById` de una vista que no existe devuelve `null`: comprobar `!v || v.isNull`.
+El resto, por fichero (en scripts: `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))`): `procesos.js` (`pxSPCC`, `pxSPFC`, `pxMGC` con los valores del perfil), `graxpert.js` (GraXpert externo: RBF, Kriging, Splines, denoise), `gradcompare.js` (medir modelos de gradiente) `gradiente.js` (`gradienteCandidatos(vista, opciones)`: comparativa de GraXpert y MGC en una llamada, con medida y dossier), `analisis.js` (`analizarMaster(vista)`: datos de la checklist del Paso 1), `combinacion.js` (`combinarMismoCanal`: dos masters del mismo canal pesados por 1/σ²; `inyectarHa`: Hα en el R bajo máscara referida al cielo, Paso 10), `hdr.js` (`componerHDR`: HDRComposition con umbral medido por canal y controles de escalón, Paso 6), `alineado.js` (`astrometriaLineal`: antes de recortar o reescalar una imagen con astrometría con splines; `alinearMasters`: registro sobre una referencia común, reescalado si hace falta y recorte a la zona común, Paso 5), `preproceso.js` (`inventario`: cabeceras de toda la carpeta del objeto, Paso 2; `seleccionarSubs`: ImageAnalysis por grupo, Paso 3; `revisarCalibracion`, `lanzarWBPP` y `estadoWBPP`: cabeceras y flats, WBPP en otra instancia sin ventana y resumen del log, Paso 4), `color.js` (`calibrarColor(vista, {spcc})`: SPCC con comprobaciones y cielo medido), `deconvolucion.js` (`bxtCandidatos` / `bxtAplicar`: rejilla de BXT completo con FWHM, ringing y gusanos), `ruido.js` (`reducirRuido`: NXT o híbrido con σ del cielo, contraste y residual; `separarEstrellas`: SXT comprobado), `boost.js` (`saturarAlFallo`: saturación 0,58 → 0,78 hasta el fallo), `nucleo.js` (`comprimirNucleo`: HDRMT al 60 % con máscara de bulbo en galaxias, antes de saturar; `medirMeseta`), `lineal.js` (`resolverAstrometria`, `bxtCorrectOnly`, `checkpointLineal`, `quitarVerde`), `bandaestrecha.js` (`desmezclarDualBand`, `medirContinuo`, `restarContinuo`, `previsualizarPaletas`), `mascaras.js` (`crearMascara`), `exportar.js` (`exportarFinal`: XISF, TIFF 16 bits y JPG sRGB), `estirado.js` (`estirarCapas(starless, estrellas)`: starless al fallo con pasadas cortas de GHS y estrellas con `starStretch` o, con `estrellas: "extraer"` y en galaxias, con el mismo estirado), `estrellas.js` (`prepararEstrellas(vista)`: preparación de la capa de estrellas del Paso 8) y `recombinacion.js` (`recombinarEstrellas(starless, estrellas)`: Paso 9 con sus controles). Constantes de proceso en PixInsight 1.9.6: `Clase.CONSTANTE` (`PixelMath.RGB`); con `.prototype` dan `undefined` sin error. `View.viewById` de una vista que no existe devuelve `null`: comprobar `!v || v.isNull`.
 
 ## Entorno
 
-- Una llamada de más de ~60 s da timeout pero **sigue ejecutándose**: comprobar con `watcher_status` y la lista de ventanas antes de relanzar.
+- Una herramienta que tarda más de ~45 s devuelve un **id de trabajo** y sigue ejecutándose: recoger el resultado con `estado(trabajo)`, nunca relanzarla. Si PixInsight está ocupado, la petición espera en cola.
 - Devolver resultados cortos (números redondeados, listas breves); para ver la imagen, JPG reducidos o recortes al 100 % en `<versión>/prev/`, no capturas de pantalla.
 - `beginProcess()` sin `endProcess()` bloquea la vista: clonarla a una ventana nueva y cerrar la vieja.
 - Bucles largos: tramos de ~50 s que guardan en un CSV y devuelven el índice siguiente.
@@ -61,7 +61,7 @@ Con `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))`: `proc
 | No hacer | En su lugar |
 |---|---|
 | Fiarse del "success" de un proceso | Estadísticas e historial |
-| SPCC sobre imagen estirada, sin astrometría o sin las curvas del perfil | Master lineal, `blindSolve`, `pxSPCC()` |
+| SPCC sobre imagen estirada, sin astrometría o sin las curvas del perfil | Master lineal, `resolverAstrometria`, `calibrarColor` |
 | MGC o IA de GraXpert en nebulosas oscuras, IFN o polvo extenso | Plano robusto o muestras manuales (Paso 9 lineal) |
 | Dar por bueno un modelo de gradiente sin mirarlo | Liso, sin objeto, sin anillo; `gcStructCopy` |
 | Recombinar estrellas lineales con una starless estirada | Estirar las dos o extraer en no lineal |

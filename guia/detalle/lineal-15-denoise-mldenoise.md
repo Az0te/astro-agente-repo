@@ -83,6 +83,6 @@ Variante sólo ML (Hα, sin NXT): en lugar de `nx`, MLDenoise sobre una copia re
 **Trampas**
 
 - NoiseXTerminator ejecutado varias veces sobre ventanas con el **mismo id** devolvió el mismo resultado aunque cambiara `denoise`: usar un id nuevo por prueba y fijar también `denoise_intensity`.
-- Las pruebas largas (varios MLDenoise seguidos, 8+ min en un `run_script`) acabaron con "Invalid task termination intent" en la consola y el watcher sin recoger comandos: lanzar tandas de menos de 1 min y guardar resultados en disco entre medias.
+- Las pruebas largas (varios MLDenoise seguidos, 8+ min en un mismo script) acabaron con "Invalid task termination intent" en la consola y PixInsight sin responder: lanzar tandas de menos de 1 min y guardar resultados en disco entre medias.
 
 Banco de pruebas reutilizable (scripts `dn_ref.js`, `dn_paso.js`, resultados JSON) en `<objeto>/_proc/denoise_cmp/` del equipo de prueba.

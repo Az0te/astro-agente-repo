@@ -1083,7 +1083,7 @@
    "fichero": "boost.js",
    "nivel": "copias",
    "timeout_s": 600,
-   "descripcion": "Paso 5 no lineal: curva S de saturación empujando hasta que algo falla (canales > 0,98, fondo teñido, ruido de croma) y se queda la anterior, en una copia.",
+   "descripcion": "Paso 5 no lineal: curva S de saturación empujando hasta que algo falla (canales > 0,98, fondo teñido, ruido de croma) y se queda la anterior, en una copia. Con { mascara: true } satura a través de una máscara de luminancia: protege el cielo y da más color a la nebulosa (para cuando el usuario pide más color).",
    "paso": "no-lineal/05-boost.md",
    "params": {
     "type": "object",
@@ -1094,7 +1094,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", pasos, nuevaVista }"
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", mascara (true = máscara de luminancia, más color sin teñir el cielo), pasos, nuevaVista }"
      }
     },
     "required": [

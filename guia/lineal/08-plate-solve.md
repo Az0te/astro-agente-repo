@@ -10,7 +10,7 @@
 
 Tras alinear, todos comparten la rejilla: basta resolver la referencia y copiar la solución a las demás. `alinearMasters` ya lo hace (`r.astrometria`). Este paso queda para un master suelto o para volver a resolver si BXT o GraXpert quitan la solución.
 
-**Método único: `blindSolve` del watcher v8** (BlindSolver portado al watcher, PixInsight 1.9.6+). La astrometría se resuelve siempre así, desde `run_script`; no se usan ImageSolver, el script BlindSolver ni copias de otras ventanas.
+**Método único: `resolverAstrometria` / `blindSolve`** (motor de BlindSolver portado a la guía, PixInsight 1.9.6+). Con el MCP, la herramienta `resolverAstrometria`; en un script del panel, `blindSolve` o `resolverAstrometria`; no se usan ImageSolver, el script BlindSolver ni copias de otras ventanas.
 
 ```javascript
 var r = blindSolve("MasterLight");                                  // a ciegas
@@ -28,9 +28,9 @@ JSON.stringify(r);   // ra, dec (grados), scale (″/px), rotation, flipped, mat
 **Si falla**
 
 - Repetir `blindSolve` con la pista de escala del perfil (`minScale`/`maxScale`) y, si se conoce el centro (cabecera `RA`/`DEC` o el objeto), con `regionRA`/`regionDec`/`regionRadius`.
-- Si da `blindSolve is not defined`, el watcher cargado no es el v8: parar y decírselo al usuario para que cargue `watcher/pixinsight-mcp-watcher-v8.js`. No sustituirlo por ImageSolver, por copias de solución ni por traslados manuales.
+- Si da `blindSolve is not defined` en un script, usar `resolverAstrometria` (carga `lineal.js`) o la herramienta MCP; si tampoco va, parar y avisar. No sustituirlo por ImageSolver, por copias de solución ni por traslados manuales.
 
-**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Desde PiCopilot, los scripts que usan `blindSolve` se ejecutan sobre el watcher, así que también funciona con modelos sin herramientas.
+**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Funciona igual desde el MCP `picopilot` y desde los scripts del panel PiCopilot.
 
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script

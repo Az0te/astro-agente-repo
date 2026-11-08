@@ -8,7 +8,7 @@ Material de apoyo de la ficha: el porqué, las fuentes y los ajustes que sólo h
 
 **Otros métodos.** HMS / VeraLux: color vectorial guiado. MaskedStretch: clásico para no hinchar estrellas (los centros saturados salen mal si no se reparan antes).
 
-**HT + STF.** `HistogramTransformation` equivale en GHS a B = 1. El STF es una visualización: con watchers anteriores a v0.4.9, `stretch_image` con "stf" sólo cambiaba la visualización y la imagen seguía lineal. No confundir ver la imagen con haberla estirado.
+**HT + STF.** `HistogramTransformation` equivale en GHS a B = 1. El STF es sólo una visualización: la imagen sigue lineal hasta aplicar el estirado (HT, GHS o MAS). No confundir ver la imagen con haberla estirado.
 
 **GHS en detalle**
 
@@ -51,6 +51,6 @@ Documentación citada por el PDF: `ghsastro.co.uk/doc/tools/GeneralizedHyperboli
 - Objetivo de NOVA: "p90 de la capa en ~0,25 (factor de Star Stretch 1–3, más suave que el 5 por defecto), probando la fuerza con saturación y SCNR fijos."
 - Alternativa arcsinh que conserva color: `f = asinh(k·L)/asinh(k)/L` con `L = max(RGB)` (k ≈ 5000 para muchas estrellas), saturación ×1,6 alrededor de la media, núcleos saturados neutros; o ArcsinhStretch "hasta que se vean claramente sin hincharse (GHS opcional después)".
 
-**Código.** Un master lineal con pedestal puede pasar de 0,01 de mediana (nebulosa oscura: 0,0102); uno estirado suele estar por encima de 0,1, de ahí el umbral 0,05 de la ficha. En el watcher clásico las constantes de GHS van con `.prototype`.
+**Código.** Un master lineal con pedestal puede pasar de 0,01 de mediana (nebulosa oscura: 0,0102); uno estirado suele estar por encima de 0,1, de ahí el umbral 0,05 de la ficha. En PixInsight anterior a 1.9.6 las constantes de GHS van con `.prototype`.
 
 **Control.** "El estirado revela todo: la limpieza se hace en lineal, y varias curvas pequeñas son mejores que una grande." Si el fondo se aplasta, bajar el punto negro o subir el fondo objetivo. Con dientes de sierra, menos pasadas destructivas y revisar el paso anterior.

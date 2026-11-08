@@ -96,8 +96,27 @@ function beUnmixRows(a, b, wG) {
   return [r1, r2];
 }
 
+// 8 nov 2026: con dos masters abiertos, Qwen desmezcló y corrigió el gradiente sin pasar por alinearMasters (Paso 5).
+// Si la vista es un master abierto desde disco (tiene fichero y no es un _alin) y hay otro master así abierto, se para.
+function beExigirAlineado(id, o) {
+  if (o && (o.sinAlinear || o.alineados)) return;
+  var w = ImageWindow.windowById(id);
+  if (w.isNull || !w.filePath || /_alin/i.test(id + " " + w.filePath)) return;
+  var otros = [], ws = ImageWindow.windows;
+  for (var i = 0; i < ws.length; ++i) {
+    var x = ws[i];
+    if (x.mainView.id === id || !x.filePath || /_alin/i.test(x.mainView.id + " " + x.filePath)) continue;
+    if (/\.(xisf|fits?|fts)$/i.test(x.filePath) && x.mainView.image.width > 1000) otros.push(x.mainView.id);
+  }
+  if (otros.length)
+    throw new Error("Hay " + (otros.length + 1) + " masters abiertos sin alinear (" + [id].concat(otros).join(", ") + "). Primero el Paso 5: " +
+                    "alinearMasters([\"" + [id].concat(otros).join("\", \"") + "\"]) y después todo sobre las vistas _alin que devuelve (r.vistas). " +
+                    "Si ya salieron alineados y recortados del mismo WBPP y el usuario lo confirma, repetir con { sinAlinear: true }.");
+}
+
 function desmezclarDualBand(viewId, o) {
   viewId = beId(viewId); o = o || {};
+  beExigirAlineado(viewId, o);
   var v = beView(viewId), im = v.image;
   if (im.numberOfChannels !== 3) throw new Error("Hace falta el master RGB del dual band");
   im.resetSelections();
@@ -469,6 +488,12 @@ function componerPaleta(capas, o) {
     var st = beView(estrellasId);
     if (st.image.width !== W || st.image.height !== Hh) throw new Error("La capa de estrellas no tiene el tamaño de las rayas");
     st.image.resetSelections();
+    var stMx = 0; for (var c1 = 0; c1 < 3; ++c1) { st.image.selectedChannel = c1; stMx = Math.max(stMx, st.image.median()); } st.image.resetSelections();
+    if (stMx < 2e-5) {
+      var alt = ["_estiradas", "_estirada"].map(function (x) { return st.id + x; }).filter(function (x) { return !ImageWindow.windowById(x).isNull; });
+      if (alt.length) { hecho.push("estrellas: " + st.id + " es la capa lineal; uso la estirada " + alt[0]); estrellasId = alt[0]; st = beView(alt[0]); }
+      else noCumple.push("la capa de estrellas " + st.id + " está sin estirar (lineal): estírala con estirarCapas antes de prepararEstrellas");
+    }
     if (st.image.median() > 0.05) noCumple.push("la capa de estrellas tiene mediana " + st.image.median().toFixed(3) + ": parece una imagen con nebulosa, no sólo estrellas");
     if (o.sumarEstrellas) {
       var Q = new PixelMath;

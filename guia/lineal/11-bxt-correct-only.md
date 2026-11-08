@@ -40,7 +40,7 @@ if (!BXT.executeOn(v)) throw new Error("BXT Correct Only falló");
 // Comprobar/restaurar la astrometría antes de SPCC
 var w = ImageWindow.windowById("MasterLight");
 if (!w.hasAstrometricSolution) {
-   var r = blindSolve("MasterLight");      // watcher v8 (Paso 8)
+   var r = blindSolve("MasterLight");      // motor de BlindSolver (Paso 8; con el MCP: resolverAstrometria)
    if (!r) throw new Error("Sin WCS tras BXT: no seguir a SPCC");
 }
 "BXT CO + WCS OK";

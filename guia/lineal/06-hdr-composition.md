@@ -25,7 +25,7 @@
 | Gradientes | Los aditivos deben ser parecidos entre tomas o corregirse antes (DBE/MGC en cada master lineal); si son similares, se corrigen después sobre la HDR |
 | Máscara | Conservar la primera máscara (zonas sustituidas): sirve para proteger o tratar núcleos |
 
-**Caso medido (nebulosa de emisión y reflexión).** Se lanza desde el watcher con `P.images = [[true, ruta120],[true, ruta30]]` y `executeGlobal()` (crea las ventanas `HDR` y `HDR_mask01`; tarda > 60 s). **Con LocalNormalization los masters no saturan a 1**: el verde de 120 s se quedaba en 0,89–0,92 y R/B en 0,93–0,96; medir la meseta por canal y poner el umbral por debajo (**se usó 0,80, suavizado 7, crecimiento 1**). La salida queda reescalada (HDR ≈ 0,275 × M120, sin pedestal): normal, es lineal. La razón 120/30 en estrellas fue 3,66–3,93, pero en las alas de la estrella brillante ≈ 4,1, lo que dejó un escalón del −6 % a 28 px dentro del núcleo saturado: invisible tras estirar, pero comprobarlo con el perfil HDR/M120 y HDR/M30.
+**Caso medido (nebulosa de emisión y reflexión).** Se lanza desde un script con `P.images = [[true, ruta120],[true, ruta30]]` y `executeGlobal()` (crea las ventanas `HDR` y `HDR_mask01`; tarda > 60 s). **Con LocalNormalization los masters no saturan a 1**: el verde de 120 s se quedaba en 0,89–0,92 y R/B en 0,93–0,96; medir la meseta por canal y poner el umbral por debajo (**se usó 0,80, suavizado 7, crecimiento 1**). La salida queda reescalada (HDR ≈ 0,275 × M120, sin pedestal): normal, es lineal. La razón 120/30 en estrellas fue 3,66–3,93, pero en las alas de la estrella brillante ≈ 4,1, lo que dejó un escalón del −6 % a 28 px dentro del núcleo saturado: invisible tras estirar, pero comprobarlo con el perfil HDR/M120 y HDR/M30.
 
 **En una llamada** (`herramientas/hdr.js`): `componerHDR([larga, corta] o carpeta, { nuevaVista })` trabaja con los masters ya alineados (Paso 5, `alinearMasters`) y hace esto:
 - Los ordena por exposición (`EXPTIME`, o el número del nombre: "L120", "S30").
@@ -52,7 +52,7 @@ var HDR = new HDRComposition;
 // De mayor a menor exposición; cada elemento: [enabled, path]
 HDR.images = [[true, carpetaMasters + "/M120.xisf"],
               [true, carpetaMasters + "/M030.xisf"]];
-// Nombres comprobados con describe_process (PixInsight 1.9.6):
+// Nombres comprobados en PixInsight 1.9.6:
 HDR.maskBinarizingThreshold = 0.80;   // por debajo de la meseta medida por canal (0,89-0,96)
 HDR.maskSmoothness      = 7;      // suavizado de la transición
 HDR.maskGrowth          = 1;      // crecimiento de la máscara

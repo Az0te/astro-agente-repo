@@ -22,13 +22,15 @@ JSON.stringify(r);   // meseta_antes, meseta_despues, brillo_bulbo, anillos_nuev
 
 **Saturación al fallo en una llamada** (`herramientas/boost.js`): `saturarAlFallo("Starless_st", { tipo: "nebulosa" })` prueba 0,58 → 0,78 sobre copias y se queda la última sin fallo medido (canales > 0,98, fondo teñido: dominante del cielo > 8 % o +4 puntos, ruido de color del cielo × 1,5). Si ni la primera pasa, no satura. Pruebas de nov 2026: galaxia grande → 0,63 (para por ruido de color); nebulosa dual band → no satura (dominante azul del cielo sin resolver). Los umbrales de tinte son provisionales.
 
+**Más color en la nebulosa sin teñir el cielo:** `saturarAlFallo(vista, { tipo: "nebulosa", mascara: true })` satura a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante) y prueba 0,63 → 0,88. Úsalo cuando el usuario pida más color o cuando la versión sin máscara pare por «fondo teñido»; siempre sobre la misma entrada, no sobre la ya saturada.
+
 ```javascript
 eval(File.readTextFile("<ruta de guia>/herramientas/boost.js"));   // en el nivel superior del script
 var r = saturarAlFallo("Starless_st", { tipo: "nebulosa", nuevaVista: "Starless_sat" });   // "galaxia": 0,63–0,70
 JSON.stringify(r);   // pruebas, punto_medio_elegido, parada, no_cumple, control
 ```
 
-**Realces de los scripts BackgroundEnhance y DarkStructureEnhance** (integrados en el watcher, `herramientas/realces.js`; mismo resultado que los scripts)
+**Realces de los scripts BackgroundEnhance y DarkStructureEnhance** (`herramientas/realces.js`, también como herramientas del MCP; mismo resultado que los scripts)
 
 - **`backgroundEnhance`** (BackgroundEnhance). Cuándo: sobre la starless, antes de LHE y del NXT final, con nebulosidad débil extensa, IFN, polvo o colas de nebulosa apagadas **y señal confirmada** (Paso 1 lineal, Anexo D). Por qué: suma la gran escala de la imagen a través de una máscara invertida de luminancia; levanta lo débil y extenso sin quemar lo brillante ni realzar el ruido fino. Cómo: `backgroundEnhance("SL_v2", { amount: 0.3 })` en una copia; subir `amount` (0,5 en el script) mientras sólo suba la nebulosidad; `maskAmount` (0,6) más alto protege más lo brillante. No usar si el fondo es sólo ruido o queda gradiente residual: lo amplifica.
 - **`darkStructureEnhance`** (DarkStructureEnhance). Cuándo: sobre la starless (con estrellas crea anillos oscuros), en nebulosas oscuras, bandas de polvo de galaxias o filamentos oscuros sobre emisión, con buena SNR. Por qué: oscurece sólo lo que es más oscuro que su entorno de gran escala, sin tocar el resto. Cómo: primero `darkStructureEnhance("SL_v3", { keepMask: true })` y mirar la máscara: si sigue estructuras reales, vale; si es ruido moteado o rodea bordes brillantes (lo que pasó en una nebulosa de emisión y reflexión, ver abajo), deshacer y usar LHE con máscara. `median` 0,6–0,7 (0,5 no cambia nada; más alto oscurece más), `iterations` 1, `layers` 8 (6 para estructuras menores).

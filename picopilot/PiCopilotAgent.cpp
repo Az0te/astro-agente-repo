@@ -253,24 +253,12 @@ String PiCopilotConfig::PicopilotRunner() const
    return File::Exists( s ) ? s : String();
 }
 
-String PiCopilotConfig::ClassicMcpServer()
-{
-   // Servidor MCP antiguo (derivado de pixinsight-mcp), que necesita el watcher.
-   String s = PiCopilotUtil::JoinPath( File::HomeDirectory(), "astro-agente-repo/servidor-mcp/build/index.js" );
-   if ( !File::Exists( s ) )
-      return String();
-   s.ReplaceString( u"\\", u"/" );
-   return s;
-}
-
 String PiCopilotConfig::DefaultClaudeArgs()
 {
    // Herramientas permitidas sin preguntar en modo no interactivo: el MCP de
    // PixInsight y lectura/escritura de archivos (guía y carpeta de trabajo).
    return "--allowedTools mcp__picopilot,Read,Glob,Grep,Write";
 }
-
-static String ClassicWatcherSource();
 
 void PiCopilotConfig::Load()
 {
@@ -317,20 +305,6 @@ void PiCopilotConfig::Load()
       claudeArgs.ReplaceString( "mcp__picopilot,mcp__pixinsight", "mcp__picopilot" );
       claudeArgs.ReplaceString( "mcp__pixinsight", "mcp__picopilot" );
    }
-   if ( !Settings::Read( "WatcherEnabled", watcherEnabled ) )
-      watcherEnabled = false;
-   // Build 78: el watcher del MCP antiguo se apaga una vez (se puede volver a encender a mano).
-   bool watcherOff78 = false;
-   if ( !Settings::Read( "WatcherOff78", watcherOff78 ) || !watcherOff78 )
-   {
-      watcherEnabled = false;
-      Settings::Write( "WatcherOff78", true );
-   }
-   // Las versiones anteriores guardaban el watcher clásico por defecto: se
-   // migra al v8 salvo que el usuario haya elegido otra ruta.
-   if ( !Settings::Read( "WatcherSource", watcherSource ) || watcherSource.IsEmpty() ||
-        File::FullPath( watcherSource ) == File::FullPath( ClassicWatcherSource() ) )
-      watcherSource = DefaultWatcherSource();
    if ( !Settings::Read( "DataDirs", dataDirs ) )
       dataDirs = String();   // la elige el usuario en Configuración (carpetas de datos)
 
@@ -441,8 +415,6 @@ void PiCopilotConfig::Save() const
    Settings::Write( "WorkDir", workDir );
    Settings::Write( "ClaudePath", claudePath );
    Settings::Write( "ClaudeArgs", claudeArgs );
-   Settings::Write( "WatcherEnabled", watcherEnabled );
-   Settings::Write( "WatcherSource", watcherSource );
    Settings::Write( "UILanguage", uiLanguage );
    Settings::Write( "AutoRun", autoRun );
    Settings::Write( "DataDirs", dataDirs );
@@ -584,31 +556,6 @@ int PiCopilotConfig::BuiltinScore( const String& stepKey )
       if ( stepKey == t.first )
          return t.second;
    return -1;
-}
-
-String PiCopilotConfig::BridgeDir()
-{
-   return PiCopilotUtil::JoinPath( File::HomeDirectory(), ".pixinsight-mcp/bridge" );
-}
-
-static String ClassicWatcherSource()
-{
-   return PiCopilotUtil::JoinPath( File::HomeDirectory(), "pixinsight-mcp/pjsr/pixinsight-mcp-watcher.js" );
-}
-
-String PiCopilotConfig::DefaultWatcherSource()
-{
-   // El watcher v8 (PixInsight 1.9.6+) trae BlindSolver integrado (blindSolve),
-   // realces.js y procesos.js; el clásico queda como respaldo.
-   String v8 = PiCopilotUtil::JoinPath( File::HomeDirectory(), "astro-agente-repo/watcher/pixinsight-mcp-watcher-v8.js" );
-   if ( File::Exists( v8 ) )
-      return v8;
-   return ClassicWatcherSource();
-}
-
-String PiCopilotConfig::McpRunnerPath() const
-{
-   return PiCopilotUtil::JoinPath( workDir, "mcp/picopilot-mcp-runner.js" );
 }
 
 const PiCopilotModel& PiCopilotConfig::Current() const

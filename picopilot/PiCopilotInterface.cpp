@@ -23,6 +23,7 @@
 #include <pcl/View.h>
 
 #include <chrono>
+#include <ctime>
 #include <regex>
 #include <set>
 
@@ -50,6 +51,48 @@ static String ElapsedText( double seconds )
 static void CopilotLog( const String& text )
 {
    Console().WriteLn( u"<end><cbr>[PiCopilot] " + text );
+}
+
+// Rafael (8 nov 2026): los errores de los scripts se guardan también en <repo>/tmp_logs/picopilot-errores.log (las
+// carpetas tmp_* no van a git), para revisarlos después sin copiar la consola. Fecha, vista, error y el script.
+static void LogScriptError( const String& guideDir, const String& viewId, const String& message, const String& code )
+{
+   try
+   {
+      String g = guideDir;
+      g.ReplaceString( u"\\", u"/" );
+      while ( g.EndsWith( '/' ) )
+         g.DeleteRight( g.Length() - 1 );
+      size_type p = g.FindLast( '/' );
+      if ( g.IsEmpty() || p == String::notFound )
+         return;
+      String dir = g.Left( p ) + u"/tmp_logs";
+      if ( !File::DirectoryExists( dir ) )
+         File::CreateDirectory( dir, true );
+      String path = dir + u"/picopilot-errores.log";
+      std::time_t t = std::time( nullptr );
+      std::tm tmv = {};
+#ifdef _WIN32
+      localtime_s( &tmv, &t );
+#else
+      localtime_r( &t, &tmv );
+#endif
+      char when[ 32 ];
+      std::strftime( when, sizeof( when ), "%Y-%m-%d %H:%M:%S", &tmv );
+      IsoString old;
+      if ( File::Exists( path ) )
+      {
+         old = File::ReadTextFile( path );
+         if ( old.Length() > 2000000 )
+            old = old.Right( 1000000 );
+      }
+      String entry = u"=== " + String( when ) + u" · vista " + (viewId.IsEmpty() ? String( u"—" ) : viewId) + u"\n"
+                   + u"Error: " + message + u"\n--- script ---\n" + code.Left( 6000 ) + u"\n\n";
+      File::WriteTextFile( path, old + entry.ToUTF8() );
+   }
+   catch ( ... )
+   {
+   }
 }
 
 // ----------------------------------------------------------------------------
@@ -402,12 +445,9 @@ void PiCopilotInterface::UpdateControls()
    GUI->Work_Edit.SetText( m_cfg.workDir );
    GUI->Claude_Edit.SetText( m_cfg.claudePath );
    GUI->ClaudeArgs_Edit.SetText( m_cfg.claudeArgs );
-   GUI->Watcher_Edit.SetText( m_cfg.watcherSource );
    GUI->Data_Edit.SetText( m_cfg.dataDirs );
-   GUI->Mcp_CheckBox.SetChecked( m_cfg.watcherEnabled );
 
    UpdateStatus();
-   UpdateMcpStatus();
 
    if ( m_chat )
    {
@@ -1134,11 +1174,12 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
       // blindSolve, también a través de las funciones de lineal.js que lo usan.
       // alinearMasters también resuelve la astrometría (6 nov 2026: sin esto la dejaba sin resolver en silencio).
       // Build 80: con el runner de picopilot, todos los scripts corren sobre él (todas las funciones de la guía ya
-      // cargadas por #include). Sin runner, sólo los que necesitan blindSolve van por el watcher, como antes.
+      // cargadas por #include). Build 100: el watcher antiguo ya no existe; sin runner, los que necesitan blindSolve
+      // devuelven un error que dice dónde falta.
       if ( !m_cfg.PicopilotRunner().IsEmpty() ||
            code.Contains( u"blindSolve" ) || code.Contains( u"resolverAstrometria" ) || code.Contains( u"bxtCorrectOnly" ) ||
            code.Contains( u"alinearMasters" ) )
-         out = RunWithWatcher( code, prelude ).Trimmed();   // necesita el motor de BlindSolver (#include)
+         out = RunWithRunner( code, prelude ).Trimmed();   // necesita el motor de BlindSolver (#include)
       else
       {
          Variant result = Module->EvaluateScript( wrapped, "JavaScript" );
@@ -1231,6 +1272,7 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
    catch ( const Error& e )
    {
       CopilotLog( u"Error en el script: " + e.Message() );
+      LogScriptError( m_cfg.guideDir, m_viewId, e.Message(), code );
 
       // Bucle de errores para modelos sin herramientas: se le devuelve el error para que corrija el script
       // (Claude no lo necesita: ve los errores por el MCP). En la prueba del Paso 9 (4 nov 2026) Qwen
@@ -1411,11 +1453,10 @@ bool PiCopilotInterface::StartClaude( const String& prompt )
 
    // Configuración MCP propia de PiCopilot: así Claude Code ve los servidores
    // aunque no estén registrados en su configuración de usuario. Se reescribe en
-   // cada uso con el servidor nuevo (picopilot); el antiguo sólo si falta el nuevo.
+   // cada uso con el servidor picopilot (el antiguo, pixinsight, se retiró en la build 100).
    String mcpConfig = PiCopilotUtil::JoinPath( m_cfg.workDir, "mcp/picopilot-mcp.json" );
    {
       String nuevo = m_cfg.PicopilotMcpServer();
-      String viejo = nuevo.IsEmpty() ? PiCopilotConfig::ClassicMcpServer() : String();   // respaldo si falta el nuevo
       String json = u"{\n  \"mcpServers\": {";
       bool first = true;
       if ( !nuevo.IsEmpty() )
@@ -1423,8 +1464,6 @@ bool PiCopilotInterface::StartClaude( const String& prompt )
          json << u"\n    \"picopilot\": {\n      \"command\": \"node\",\n      \"args\": [" << JsonValue::Quote( nuevo ) << u"]\n    }";
          first = false;
       }
-      if ( !viejo.IsEmpty() )
-         json << (first ? u"" : u",") << u"\n    \"pixinsight\": {\n      \"command\": \"node\",\n      \"args\": [" << JsonValue::Quote( viejo ) << u"]\n    }";
       json << u"\n  }\n}\n";
       if ( EnsureDir( File::ExtractDirectory( mcpConfig ) ) )
          PiCopilotUtil::WriteText( mcpConfig, json );
@@ -1482,7 +1521,6 @@ bool PiCopilotInterface::StartCodex( const String& prompt )
    m_job.tempFiles << m_job.codexLastMessage;
 
    String nuevo = m_cfg.PicopilotMcpServer();
-   String viejo = nuevo.IsEmpty() ? PiCopilotConfig::ClassicMcpServer() : String();   // respaldo si falta el nuevo
 
    args << "exec" << "--json" << "--skip-git-repo-check" << "--full-auto"
         << "-C" << m_cfg.workDir
@@ -1496,11 +1534,6 @@ bool PiCopilotInterface::StartCodex( const String& prompt )
            << "-c" << (u"mcp_servers.picopilot.args=[\"" + nuevo + u"\"]")
            << "-c" << "mcp_servers.picopilot.startup_timeout_sec=30"
            << "-c" << "mcp_servers.picopilot.tool_timeout_sec=900";
-   if ( !viejo.IsEmpty() )
-      args << "-c" << "mcp_servers.pixinsight.command=\"node\""
-           << "-c" << (u"mcp_servers.pixinsight.args=[\"" + viejo + u"\"]")
-           << "-c" << "mcp_servers.pixinsight.startup_timeout_sec=30"
-           << "-c" << "mcp_servers.pixinsight.tool_timeout_sec=900";
    args << "-";   // el prompt llega por la entrada estándar
 
    m_job.stdinData = (PiCopilotPrompts::System() + u"\n\n" + prompt).ToUTF8();
@@ -2129,106 +2162,8 @@ void PiCopilotInterface::e_ProcessError( ExternalProcess& sender, ExternalProces
 // Eventos de la interfaz
 // ----------------------------------------------------------------------------
 
-// ----------------------------------------------------------------------------
-// Watcher MCP integrado
-//
-// El servidor MCP (Node) deja cada comando como JSON en
-// ~/.pixinsight-mcp/bridge/commands. Antes lo recogía el script
-// pixinsight-mcp-watcher.js, que se quedaba en un bucle y ocupaba el motor de
-// scripts. Ahora el temporizador del panel mira la carpeta y, sólo cuando hay
-// comandos, ejecuta una versión "de una pasada" del mismo watcher (mismos
-// manejadores y mismo protocolo: results/, current.json, pause, shutdown) y
-// devuelve el control a PixInsight en cuanto termina.
-// ----------------------------------------------------------------------------
-
-static const char16_t* s_mcpRunnerTail =
-u"\n"
-u"// ---------------------------------------------------------------------------\n"
-u"// Generado por PiCopilot: atiende los comandos pendientes y termina.\n"
-u"// ---------------------------------------------------------------------------\n"
-u"function picopilotRunPending() {\n"
-u"   ensureDirectory(BRIDGE_DIR);\n"
-u"   ensureDirectory(COMMANDS_DIR);\n"
-u"   ensureDirectory(RESULTS_DIR);\n"
-u"   ensureDirectory(LOGS_DIR);\n"
-u"   var n = 0;\n"
-u"   while (n < 5 && !File.exists(BRIDGE_DIR + \"/pause\") && processNextCommand())\n"
-u"      ++n;\n"
-u"}\n"
-u"picopilotRunPending();\n";
-
-bool PiCopilotInterface::PrepareMcpRunner( String& whyNot )
-{
-   String lib;
-   if ( !WatcherLibrary( lib, whyNot ) )
-      return false;
-   String path = m_cfg.McpRunnerPath();
-   if ( !EnsureDir( File::ExtractDirectory( path ) ) || !PiCopilotUtil::WriteText( path, lib + s_mcpRunnerTail ) )
-   {
-      whyNot = u"No se pudo escribir " + path;
-      return false;
-   }
-   return true;
-}
-
-// El watcher como biblioteca: su código con la llamada de arranque desactivada y los #include relativos pasados a
-// rutas absolutas. Lo usan el runner del MCP y los scripts de los modelos que necesitan blindSolve (que depende del
-// motor de BlindSolver por #include y no se puede cargar con eval).
-bool PiCopilotInterface::WatcherLibrary( String& lib, String& whyNot )
-{
-   // Se regenera en cada pasada a partir del watcher original, así cualquier
-   // cambio en pixinsight-mcp-watcher.js se aplica sin recompilar el módulo.
-   String source = PiCopilotUtil::ReadText( m_cfg.watcherSource );
-   if ( source.IsEmpty() )
-   {
-      whyNot = u"No se encuentra el watcher en " + m_cfg.watcherSource;
-      return false;
-   }
-
-   // Quitar la llamada de arranque del bucle (la última línea "runWatcher();").
-   StringList lines;
-   source.Break( lines, '\n' );
-   bool found = false;
-   for ( size_type i = lines.Length(); i > 0; --i )
-      if ( lines[i-1].Trimmed() == "runWatcher();" )
-      {
-         lines[i-1] = "// runWatcher();  (desactivado por PiCopilot)";
-         found = true;
-         break;
-      }
-   if ( !found )
-   {
-      whyNot = u"El watcher no termina con runWatcher(); no sé cómo adaptarlo.";
-      return false;
-   }
-
-   // El runner se escribe en otra carpeta: los #include "relativos" (por ejemplo
-   // "../guia/herramientas/realces.js" del watcher v8) se pasan a rutas absolutas
-   // respecto a la carpeta del watcher original.
-   String watcherDir = File::ExtractDirectory( File::FullPath( m_cfg.watcherSource ) );
-   for ( String& l : lines )
-   {
-      String t = l.Trimmed();
-      if ( !t.StartsWith( "#include \"" ) )
-         continue;
-      size_type q1 = t.Find( '\"' );
-      size_type q2 = t.Find( '\"', q1+1 );
-      if ( q2 == String::notFound )
-         continue;
-      String inc = t.Substring( q1+1, q2-q1-1 );
-      bool absolute = inc.StartsWith( '/' ) || (inc.Length() > 1 && inc[1] == ':');
-      if ( !absolute )
-         l = u"#include \"" + File::FullPath( PiCopilotUtil::JoinPath( watcherDir, inc ) ) + u"\"";
-   }
-
-   lib.Clear();
-   for ( const String& l : lines )
-      lib << l << '\n';
-   return true;
-}
-
-// Ejecuta un script de modelo como fichero (con preprocesador) sobre la biblioteca del watcher, para que tenga
-// blindSolve y realces.js. El valor final se escribe en un fichero y se devuelve (o "PICOPILOT_ERROR: ...").
+// Ejecuta un script de modelo como fichero (con preprocesador) sobre la biblioteca del runner de picopilot, para que
+// tenga blindSolve y todas las funciones de la guía. El valor final se escribe en un fichero y se devuelve (o "PICOPILOT_ERROR: ...").
 // El runner del MCP picopilot como biblioteca: trae el motor de BlindSolver, blindSolve y todas las funciones de
 // la guía por #include. Se quita la llamada final pprMain() y los #include relativos pasan a rutas absolutas.
 static bool RunnerLibrary( const String& runner, String& lib, String& whyNot )
@@ -2276,12 +2211,15 @@ static bool RunnerLibrary( const String& runner, String& lib, String& whyNot )
    return true;
 }
 
-String PiCopilotInterface::RunWithWatcher( const String& code, const String& prelude )
+String PiCopilotInterface::RunWithRunner( const String& code, const String& prelude )
 {
-   // Desde la build 78 la biblioteca es el runner de picopilot; el watcher antiguo sólo si falta.
+   // La biblioteca es el runner de picopilot (mcp/pjsr/picopilot-runner.js, junto a la guía).
    String lib, whyNot;
    String runner = m_cfg.PicopilotRunner();
-   if ( runner.IsEmpty() ? !WatcherLibrary( lib, whyNot ) : !RunnerLibrary( runner, lib, whyNot ) )
+   if ( runner.IsEmpty() )
+      return u"PICOPILOT_ERROR: no se encuentra el runner de picopilot (mcp/pjsr/picopilot-runner.js en el repo de la guía); "
+             u"sin él no hay blindSolve ni alinearMasters";
+   if ( !RunnerLibrary( runner, lib, whyNot ) )
       return u"PICOPILOT_ERROR: " + whyNot;
    String id = PiCopilotUtil::NewId();
    String scriptPath = PiCopilotUtil::JoinPath( m_cfg.TempDir(), u"run_" + id + u".js" );
@@ -2315,128 +2253,11 @@ String PiCopilotInterface::RunWithWatcher( const String& code, const String& pre
    }
    catch ( ... )
    {
-      out = u"PICOPILOT_ERROR: error al ejecutar el script con el watcher";
+      out = u"PICOPILOT_ERROR: error al ejecutar el script con el runner";
    }
    try { File::Remove( scriptPath ); } catch ( ... ) {}
    try { if ( File::Exists( outPath ) ) File::Remove( outPath ); } catch ( ... ) {}
    return out;
-}
-
-static int PendingCommands( const String& commandsDir )
-{
-   int n = 0;
-   try
-   {
-      if ( !File::DirectoryExists( commandsDir ) )
-         return 0;
-      File::Find f;
-      f.Begin( commandsDir + "/*.json" );
-      FindFileInfo info;
-      while ( f.NextItem( info ) )
-         if ( !info.IsDirectory() )
-            ++n;
-   }
-   catch ( ... )
-   {
-   }
-   return n;
-}
-
-void PiCopilotInterface::PollMcp()
-{
-   if ( m_mcpRunning )
-      return;
-
-   String bridge = PiCopilotConfig::BridgeDir();
-
-   // Compatibilidad con mcp-stop.bat: el archivo "shutdown" apaga el watcher.
-   String shutdownFile = bridge + "/shutdown";
-   if ( File::Exists( shutdownFile ) )
-   {
-      try
-      {
-         File::Remove( shutdownFile );
-      }
-      catch ( ... )
-      {
-      }
-      if ( m_cfg.watcherEnabled )
-      {
-         m_cfg.watcherEnabled = false;
-         m_cfg.Save();
-         CopilotLog( u"Watcher MCP detenido (archivo shutdown)." );
-         if ( GUI != nullptr )
-            GUI->Mcp_CheckBox.SetChecked( false );
-      }
-   }
-
-   if ( !m_cfg.watcherEnabled )
-      return;
-   if ( File::Exists( bridge + "/pause" ) )
-      return;
-   if ( NowSeconds() < m_mcpRetryAt )
-      return;
-   int pending = PendingCommands( bridge + "/commands" );
-   if ( pending == 0 )
-      return;
-
-   String whyNot;
-   if ( !PrepareMcpRunner( whyNot ) )
-   {
-      if ( whyNot != m_mcpLastError )
-         CopilotLog( u"Watcher MCP: " + whyNot );
-      m_mcpLastError = whyNot;
-      m_mcpRetryAt = NowSeconds() + 10;
-      UpdateMcpStatus();
-      return;
-   }
-
-   m_mcpRunning = true;
-   UpdateMcpStatus();
-   try
-   {
-      Console console;
-      console.ExecuteScript( m_cfg.McpRunnerPath() );
-      // Cada pasada atiende como mucho 5 comandos (ver s_mcpRunnerTail).
-      m_mcpCount += Min( pending, 5 );
-      m_mcpLastError.Clear();
-   }
-   catch ( const Error& e )
-   {
-      // Por ejemplo, si el usuario tiene otro script en marcha: se reintenta luego.
-      if ( e.Message() != m_mcpLastError )
-         CopilotLog( u"Watcher MCP: no se pudo ejecutar (" + e.Message() + u"). Reintento en 5 s." );
-      m_mcpLastError = e.Message();
-      m_mcpRetryAt = NowSeconds() + 5;
-   }
-   catch ( ... )
-   {
-      m_mcpLastError = u"error desconocido";
-      m_mcpRetryAt = NowSeconds() + 5;
-   }
-   m_mcpRunning = false;
-   UpdateMcpStatus();
-}
-
-void PiCopilotInterface::UpdateMcpStatus()
-{
-   if ( GUI == nullptr )
-      return;
-   String s;
-   if ( !m_cfg.watcherEnabled )
-      s = Tr( u"apagado" );
-   else if ( m_mcpRunning )
-      s = Tr( u"ejecutando comando..." );
-   else if ( File::Exists( PiCopilotConfig::BridgeDir() + "/pause" ) )
-      s = Tr( u"en pausa" );
-   else if ( !m_mcpLastError.IsEmpty() )
-      s = Tr( u"error (ver consola)" );
-   else
-      s = Tr( u"escuchando" );
-   if ( m_mcpCount > 0 )
-      s << u" · " << String().Format( "%d", m_mcpCount ) << u" cmd";
-   GUI->Mcp_Label.SetText( s );
-   GUI->Mcp_Label.SetToolTip( m_mcpLastError.IsEmpty() ? String() : m_mcpLastError );
 }
 
 // ----------------------------------------------------------------------------
@@ -2484,9 +2305,6 @@ void PiCopilotInterface::e_Timer( Timer& )
          RunScript( code, false );
       }
    }
-
-   PollMcp();
-   UpdateMcpStatus();
 
    // Dossiers pendientes: se abren en cuanto el modelo (o el script) los escribe.
    double now = NowSeconds();
@@ -2597,33 +2415,6 @@ void PiCopilotInterface::e_Click( Button& sender, bool /*checked*/ )
       return;
    }
 
-   if ( sender == GUI->Mcp_CheckBox )
-   {
-      m_cfg.watcherEnabled = GUI->Mcp_CheckBox.IsChecked();
-      m_cfg.Save();
-      m_mcpRetryAt = 0;
-      m_mcpLastError.Clear();
-      CopilotLog( m_cfg.watcherEnabled ? String( u"Watcher MCP activado." ) : String( u"Watcher MCP apagado." ) );
-      UpdateMcpStatus();
-      return;
-   }
-
-   if ( sender == GUI->Watcher_ToolButton )
-   {
-      OpenFileDialog d;
-      d.SetCaption( Tr( u"Script del watcher MCP (pixinsight-mcp-watcher.js)" ) );
-      d.SetFilter( FileFilter( "JavaScript", ".js" ) );
-      d.SetInitialPath( m_cfg.watcherSource );
-      if ( d.Execute() )
-      {
-         m_cfg.watcherSource = d.FileName();
-         m_cfg.Save();
-         m_mcpLastError.Clear();
-         UpdateControls();
-      }
-      return;
-   }
-
    if ( sender == GUI->Guide_ToolButton || sender == GUI->Work_ToolButton )
    {
       bool guide = sender == GUI->Guide_ToolButton;
@@ -2696,11 +2487,6 @@ void PiCopilotInterface::e_EditCompleted( Edit& sender )
       m_cfg.claudeArgs = t;
    else if ( sender == GUI->Data_Edit )
       m_cfg.dataDirs = t;
-   else if ( sender == GUI->Watcher_Edit )
-   {
-      m_cfg.watcherSource = t.IsEmpty() ? PiCopilotConfig::DefaultWatcherSource() : t;
-      m_mcpLastError.Clear();
-   }
    else
       return;
    m_cfg.Save();
@@ -2915,30 +2701,6 @@ PiCopilotInterface::GUIData::GUIData( PiCopilotInterface& w )
    Data_Sizer.Add( Data_Label );
    Data_Sizer.Add( Data_Edit, 100 );
 
-   Mcp_CheckBox.SetText( Tr( u"Watcher MCP" ) );
-   Mcp_CheckBox.SetToolTip( Tr( u"<p>Atiende los comandos del MCP de PixInsight (los que usa Claude) desde el propio "
-                            u"módulo, sin tener abierto el script del watcher. No lances a la vez el script antiguo.</p>"
-                            u"<p>mcp-pause.bat / mcp-resume.bat siguen funcionando; mcp-stop.bat lo apaga.</p>" ) );
-   Mcp_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotInterface::e_Click, w );
-   Mcp_Label.SetTextAlignment( TextAlign::Left|TextAlign::VertCenter );
-   Mcp_Sizer.SetSpacing( 6 );
-   Mcp_Sizer.Add( Mcp_CheckBox );
-   Mcp_Sizer.Add( Mcp_Label, 100 );
-
-   Watcher_Label.SetText( Tr( u"Watcher MCP:" ) );
-   Watcher_Label.SetFixedWidth( labelWidth );
-   Watcher_Label.SetTextAlignment( TextAlign::Right|TextAlign::VertCenter );
-   Watcher_Edit.SetToolTip( Tr( u"<p>Script pixinsight-mcp-watcher.js del que PiCopilot toma los comandos del MCP. "
-                            u"Se relee en cada comando: si lo cambias, no hace falta recompilar el módulo.</p>" ) );
-   Watcher_Edit.OnEditCompleted( (Edit::edit_event_handler)&PiCopilotInterface::e_EditCompleted, w );
-   Watcher_ToolButton.SetIcon( w.ScaledResource( ":/icons/select-file.png" ) );
-   Watcher_ToolButton.SetScaledFixedSize( 20, 20 );
-   Watcher_ToolButton.OnClick( (Button::click_event_handler)&PiCopilotInterface::e_Click, w );
-   Watcher_Sizer.SetSpacing( 4 );
-   Watcher_Sizer.Add( Watcher_Label );
-   Watcher_Sizer.Add( Watcher_Edit, 100 );
-   Watcher_Sizer.Add( Watcher_ToolButton );
-
    // Idioma de la interfaz (se aplica al volver a abrir el panel).
    Language_Label.SetText( Tr( u"Idioma:" ) );
    Language_Label.SetFixedWidth( labelWidth );
@@ -2960,7 +2722,6 @@ PiCopilotInterface::GUIData::GUIData( PiCopilotInterface& w )
    Config_Sizer.Add( Claude_Sizer );
    Config_Sizer.Add( ClaudeArgs_Sizer );
    Config_Sizer.Add( Data_Sizer );
-   Config_Sizer.Add( Watcher_Sizer );
    Config_Control.SetSizer( Config_Sizer );
 
    Config_SectionBar.SetTitle( Tr( u"Configuración" ) );
@@ -2987,7 +2748,6 @@ PiCopilotInterface::GUIData::GUIData( PiCopilotInterface& w )
    Global_Sizer.AddSpacing( 4 );
    Global_Sizer.Add( Separator2_Control );
    Global_Sizer.Add( Status_Sizer );
-   Global_Sizer.Add( Mcp_Sizer );
    Global_Sizer.Add( Config_SectionBar );
    Global_Sizer.Add( Config_Control );
 

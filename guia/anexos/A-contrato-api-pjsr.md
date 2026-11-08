@@ -9,11 +9,10 @@ Contrato mínimo para que un agente ejecute los pasos de esta guía sin inventar
 | Necesidad | Llamada correcta | Trampa |
 |---|---|---|
 | Ventana por id | `ImageWindow.windowById("MasterLight")` | Nunca devuelve `null`: si no existe, un objeto con `.isNull = true` |
-| Vista por id | `View.viewById("MasterLight")` | En el watcher v8 devuelve **`null`** si no existe (comprobado en 1.9.6); en el clásico, un objeto con `.isNull`. Comprobar siempre `!v || v.isNull` |
+| Vista por id | `View.viewById("MasterLight")` | En PixInsight 1.9.6 (v8) devuelve **`null`** si no existe; en versiones anteriores, un objeto con `.isNull`. Comprobar siempre `!v || v.isNull` |
 | Vista principal | `w.mainView` | — |
 | Imagen | `v.image` | **`w.image` no existe** |
 | Id de la vista | `w.mainView.id` | **`w.id` no existe** |
-| Dentro de `run_script` | `findViewById(id)`, `findWindowByViewId(id)` | Devuelven `null` (no `.isNull`) |
 
 ```javascript
 var w = ImageWindow.windowById("MasterLight");
@@ -22,7 +21,7 @@ var v = w.mainView;          // la vista
 var img = v.image;           // la imagen está en la vista, NO en la ventana
 ```
 
-**Devolver resultados:** la última expresión del script (o un `return`) es la respuesta de `run_script`; no hace falta escribir un fichero y leerlo después.
+**Devolver resultados:** la última expresión del script (o un `return`) es el resultado del script (en el panel PiCopilot, lo que se muestra en el chat); no hace falta escribir un fichero y leerlo después.
 
 ### A.2 Ejecución de procesos
 
@@ -31,7 +30,7 @@ var img = v.image;           // la imagen está en la vista, NO en la ventana
 | Aplicar sobre una vista | `P.executeOn(v)` → `false` si falló | `P.process()`, `P.execute()`, `P.run()`, `P.apply()` |
 | Proceso que crea imágenes | `P.executeGlobal()` | — |
 | Proceso con los ajustes del equipo | `pxSPCC()`, `pxSPFC()`, `pxMGC()` de `herramientas/procesos.js`, o `new Proceso` con los valores del perfil | `ProcessInstance.fromIcon`: la guía no usa iconos |
-| Proceso desde cero | `new BlurXTerminator` (etc.) | Nombres mal escritos → `describe_process` |
+| Proceso desde cero | `new BlurXTerminator` (etc.) | Nombres mal escritos → `(new Proceso).toSource()` |
 
 ```javascript
 var P = new HistogramTransformation;
@@ -46,7 +45,7 @@ Regla: **cada `executeOn` se comprueba**. Un proceso que devuelve `false` no ha 
 | Necesidad | Llamada | Notas |
 |---|---|---|
 | ¿Tiene WCS? | `w.hasAstrometricSolution` | Comprobar tras BXT y GraXpert (y tras crop o rotación antes de 1.9.6) |
-| Resolver a ciegas (v8) | `blindSolve("<vista>", opciones)` | Devuelve `{ra, dec, scale, rotation, flipped, matches, solution, …}`; `null` si falla |
+| Resolver a ciegas (1.9.6+) | `blindSolve("<vista>", opciones)` | Devuelve `{ra, dec, scale, rotation, flipped, matches, solution, …}`; `null` si falla |
 | Copiar WCS entre ventanas | `destino.copyAstrometricSolution(origen)` | Método de la **ventana** |
 | Regenerar tras mover la solución | `regenerateAstrometricSolution()` | Residuos 0,2–0,3 px en el traslado manual |
 
@@ -112,28 +111,27 @@ h.at(i).toSource();          // código del paso i
 | `img.getChannelData()` | `getSamples(Float32Array, Rect, canal)` |
 | `h[i]` | `h.at(i)` |
 | `P.starmask`, `P.linear` (SXT) | No existen |
-| `Math.hypot` en el watcher clásico | No existe (ES5) |
+| `Math.hypot` en PixInsight anterior a 1.9.6 | No existe (ES5) |
 | `pow()` en PixelMath | `^` o `exp(e*ln(b))` |
 | `if` en PixelMath | `iif(cond, a, b)` |
 | Variables sin declarar en PixelMath | `P.symbols = "s, B, SP"` (si no: "Expected lvalue (variable) operand") |
 | PixelMath por canal | `P.useSingleExpression = false`, `P.expression` (R), `P.expression1` (G), `P.expression2` (B); dentro de cada una el canal es `$T` |
 | Otra imagen en PixelMath | Se usa por su id en la expresión (`Ha`, `RGB_starless[0]`) |
-| `new Script` desde el watcher | "Attempt to execute a Script instance recursively" |
-| `Clase.prototype.CONSTANTE` en el watcher v8 | `Clase.CONSTANTE` (`PixelMath.RGB`, `SCNR.Green`): con `.prototype` sale `undefined` sin error. En el clásico era `.prototype` |
-| Proceso que "no existe" | Casi siempre el nombre está mal (es `GeneralizedHyperbolicStretch`, no `GreenHyperbolicStretch`): `describe_process` sugiere el real |
-| Guardar en una carpeta que no existe | `save_image` la crea desde el watcher v0.4.5; antes fallaba en silencio |
+| `new Script` desde un script | "Attempt to execute a Script instance recursively" |
+| `Clase.prototype.CONSTANTE` en PixInsight 1.9.6 | `Clase.CONSTANTE` (`PixelMath.RGB`, `SCNR.Green`): con `.prototype` sale `undefined` sin error. En versiones anteriores era `.prototype` |
+| Proceso que "no existe" | Casi siempre el nombre está mal (es `GeneralizedHyperbolicStretch`, no `GreenHyperbolicStretch`): `typeof Proceso` y `(new Proceso).toSource()` lo confirman |
+| Guardar en una carpeta que no existe | `guardarImagen` / `exportarFinal` la crean; `saveAs` a mano falla en silencio |
 
-### A.9 Watcher clásico (ES5) frente a v8
+### A.9 Motor JavaScript, procesos y scripts
 
-- **v8** (PixInsight 1.9.6+): `let`/`const`, flechas, clases, `for…of`, `Promise`, `blindSolve` y las funciones de `realces.js`.
-- **Clásico**: sólo `var`, `function(){}`, concatenación de cadenas. Nada de `let`, flechas, plantillas, clases, `for…of`, `Promise`.
-- Si no sabes cuál corre: la consola muestra `v0.5.x-v8` al arrancar, o `typeof blindSolve === "function"` sólo en v8.
-- **Procesos** (se lanzan desde el watcher): BlurXTerminator, NoiseXTerminator, StarXTerminator, SpectrophotometricColorCalibration, SpectrophotometricFluxCalibration, MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, GeneralizedHyperbolicStretch, HistogramTransformation, CurvesTransformation, PixelMath, LocalHistogramEqualization, HDRMultiscaleTransform, HDRComposition, NarrowbandNormalization, AutomaticBackgroundExtractor, DynamicBackgroundExtraction, SCNR.
-- **Scripts:** la guía no los usa. Desde el watcher no se pueden lanzar ("Script instance recursively"), así que cada uno tiene su equivalente:
+- **PixInsight 1.9.6+ (v8)**: `let`/`const`, flechas, clases, `for…of`, `Promise`. La guía usa ES5 (`var`, `function`) para que sirva en todos.
+- **Anteriores (ES5)**: sólo `var`, `function(){}`, concatenación de cadenas. Nada de `let`, flechas, plantillas, clases, `for…of`, `Promise`.
+- **Procesos** (se lanzan desde las funciones y scripts): BlurXTerminator, NoiseXTerminator, StarXTerminator, SpectrophotometricColorCalibration, SpectrophotometricFluxCalibration, MultiscaleGradientCorrection, MultiscaleAdaptiveStretch, GeneralizedHyperbolicStretch, HistogramTransformation, CurvesTransformation, PixelMath, LocalHistogramEqualization, HDRMultiscaleTransform, HDRComposition, NarrowbandNormalization, AutomaticBackgroundExtractor, DynamicBackgroundExtraction, SCNR.
+- **Scripts:** la guía no los usa. No se pueden lanzar desde otro script ("Script instance recursively"), así que cada uno tiene su equivalente:
 
-| Script | Equivalente desde el watcher |
+| Script | Equivalente en la guía |
 |---|---|
-| ImageSolver / BlindSolver | `blindSolve` (Paso 8 lineal) |
+| ImageSolver / BlindSolver | `resolverAstrometria` / `blindSolve` (Paso 8 lineal) |
 | WBPP | Cadena de procesos de calibración, registro e integración (Paso 4 lineal) |
 | DBXtract / NBExtractPI | Emulación con PixelMath (Paso 7 lineal) |
 | GraXpert (script) / AutoDBE | Proceso GraXpert (sample_free 10), `herramientas/graxpert.js`, MGC con `pxMGC` o plano robusto (Paso 9 lineal) |
@@ -147,7 +145,7 @@ h.at(i).toSource();          // código del paso i
 | Halo-B-Gon / Star Reduction / RepairStarCores / Repaired HSV Separation | Recetas de halos y relleno con ley de potencias (Paso 8 no lineal); HDR con tomas cortas |
 | DarkStructureEnhance | `darkStructureEnhance` (Paso 5 no lineal) |
 | BackgroundEnhance | `backgroundEnhance` (Paso 5 no lineal) |
-- **Integrados en el watcher v8**: `blindSolve` (motor de BlindSolver) y los realces de `herramientas/realces.js` (`starStretch`, `screenStarsCombine`, `screenStarsExtract`, `darkStructureEnhance`, `backgroundEnhance`), que reproducen los scripts originales píxel a píxel. Con el watcher clásico, `realces.js` se carga con `eval`.
+- **En la guía y en el MCP picopilot**: `resolverAstrometria` (motor de BlindSolver) y los realces de `herramientas/realces.js` (`starStretch`, `screenStarsCombine`, `screenStarsExtract`, `darkStructureEnhance`, `backgroundEnhance`), que reproducen los scripts originales píxel a píxel. En un script, `realces.js` se carga con `eval`.
 - **GraXpert**: el proceso de PixInsight (`new GraXpert`) para el fondo por defecto; `herramientas/graxpert.js` llama al programa externo para el resto.
 
 ---

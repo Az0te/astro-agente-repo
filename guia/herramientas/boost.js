@@ -65,11 +65,34 @@ function bsCopy(view, id) {
   return w;
 }
 
-function bsSaturate(view, mid) {
+// Máscara de luminancia (8 nov 2026: «enfatiza el color de la nebulosa»): protege el cielo para que la saturación se
+// lleve a la nebulosa sin teñir el fondo. 0 en el cielo (mediana − 1,5·σ de la luminancia), 1 en lo más brillante, raíz
+// para suavizar la transición.
+function bsMascara(view) {
+  var id = "bsMascaraLum";
+  var old = ImageWindow.windowById(id); if (!old.isNull) old.forceClose();
+  var P = new PixelMath;
+  P.expression = "CIEL($T)"; P.useSingleExpression = true; P.createNewImage = true; P.newImageId = id;
+  P.newImageColorSpace = (PixelMath.Gray !== undefined) ? PixelMath.Gray : PixelMath.prototype.Gray;
+  P.newImageSampleFormat = (PixelMath.f32 !== undefined) ? PixelMath.f32 : PixelMath.prototype.f32;
+  P.truncate = true;
+  if (!P.executeOn(view)) throw new Error("Máscara de luminancia falló");
+  var mw = ImageWindow.windowById(id), mi = mw.mainView.image;
+  var med = mi.median(), sig = 1.4826 * mi.MAD(), a = Math.max(0, med - 1.5 * sig), b = Math.max(a + 1e-3, mi.maximum());
+  var Q = new PixelMath;
+  Q.expression = "pow(max(0, min(1, ($T - " + a + ") / " + (b - a) + ")), 0.5)"; Q.useSingleExpression = true; Q.createNewImage = false; Q.truncate = true;
+  if (!Q.executeOn(mw.mainView)) throw new Error("Máscara de luminancia (reescalado) falló");
+  return mw;
+}
+
+function bsSaturate(view, mid, mascara) {
+  if (mascara) { view.window.mask = mascara; view.window.maskVisible = false; view.window.maskInverted = false; view.window.maskEnabled = true; }
   var C = new CurvesTransformation;
   C.S = [[0, 0], [0.5, mid], [1, 1]];
   C.St = bsK(CurvesTransformation, "AkimaSubsplines");
-  if (!C.executeOn(view)) throw new Error("Curva de saturación falló (" + mid + ")");
+  var ok = C.executeOn(view);
+  if (mascara) view.window.removeMask();
+  if (!ok) throw new Error("Curva de saturación falló (" + mid + ")");
 }
 
 function saturarAlFallo(viewId, o) {
@@ -80,11 +103,12 @@ function saturarAlFallo(viewId, o) {
   if (src.image.numberOfChannels !== 3) throw new Error("La saturación necesita una imagen RGB");
   src.image.resetSelections();
   if (src.image.median() < 0.02) throw new Error("La imagen parece lineal: el boost va después del estirado");
-  var pasos = o.pasos || [0.58, 0.63, 0.68, 0.73, 0.78], t0 = Date.now();
+  var mascara = o.mascara ? bsMascara(src) : null;
+  var pasos = o.pasos || (mascara ? [0.63, 0.68, 0.73, 0.78, 0.83, 0.88] : [0.58, 0.63, 0.68, 0.73, 0.78]), t0 = Date.now();
   var base = bsSky(src), pruebas = [], gan = null, motivo = "llegó al último paso sin fallo";
   for (var i = 0; i < pasos.length; ++i) {
     var w = bsCopy(src, "bsTmp");
-    bsSaturate(w.mainView, pasos[i]);
+    bsSaturate(w.mainView, pasos[i], mascara);
     var m = bsSky(w.mainView), f = [];
     if (m.sobre_098_pct - base.sobre_098_pct > 0.01) f.push("canales > 0,98: +" + (m.sobre_098_pct - base.sobre_098_pct).toFixed(3) + " % de píxeles");
     if (m.dominante_pct > Math.max(8, base.dominante_pct + 4)) f.push("fondo teñido: dominante del cielo " + m.dominante_pct + " %");
@@ -98,7 +122,8 @@ function saturarAlFallo(viewId, o) {
   }
   var res = { original: viewId, pruebas: pruebas, punto_medio_elegido: gan, parada: motivo,
               cielo_partida: { dominante_pct: base.dominante_pct, sobre_098_pct: +base.sobre_098_pct.toFixed(4) },
-              segundos: Math.round((Date.now() - t0) / 1000) };
+              segundos: Math.round((Date.now() - t0) / 1000), mascara_luminancia: !!mascara };
+  if (mascara) mascara.forceClose();
   if (gan === null) {
     res.vista = null;
     res.no_cumple = ["ni la saturación más suave pasa: no saturar (o saturación selectiva con máscara); revisar la dominante del cielo antes"];
@@ -107,7 +132,7 @@ function saturarAlFallo(viewId, o) {
     for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = ((typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_sat")) + "_" + n;
     var fw = bsCopy(src, id);
     if (src.window.hasAstrometricSolution) fw.copyAstrometricSolution(src.window);
-    bsSaturate(fw.mainView, gan);
+    bsSaturate(fw.mainView, gan, mascara);
     fw.show();
     res.vista = id;
     res.no_cumple = [];
@@ -118,7 +143,10 @@ function saturarAlFallo(viewId, o) {
     revisar_a_ojo: ["bandas de color y tonos antinaturales al 100 %", "anillos alrededor de estrellas y bordes de máscara",
                     "aspecto 'diseñado' en vez de 'observado' (si se ve, un paso menos)"],
     nota: "Rango típico para " + tipo + ": " + rango.join("–") + ". Si para antes, suele ser por ruido de color o dominante " +
-          "del cielo sin resolver (la saturación la amplifica). Lo de revisar_a_ojo no lo mide esta función."
+          "del cielo sin resolver (la saturación la amplifica). " +
+          (mascara ? "Con máscara de luminancia: el cielo queda protegido y la nebulosa se satura más. "
+                   : "Para más color en la nebulosa sin teñir el cielo: repetir sobre la MISMA entrada con { mascara: true } (máscara de luminancia). ") +
+          "Lo de revisar_a_ojo no lo mide esta función."
   };
   return res;
 }

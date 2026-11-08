@@ -83,6 +83,13 @@ function prepararEstrellas(viewId, o) {
   if (!o.forzar && sim.median() > 0.05)
     throw new Error(viewId + " no es una capa de estrellas (mediana " + sim.median().toFixed(3) + "; una capa de estrellas estirada tiene el fondo casi a 0): " +
                     "pasa la capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas), nunca la starless, la paleta ni la imagen saturada");
+  // Capa LINEAL (sin estirar): fondo ~1e-6 (una estirada lo tiene ~1e-3). Qwen pasó la «_stars» en vez de la «_stars_estiradas».
+  var stMedMax = 0; for (var c0 = 0; c0 < 3; ++c0) { sim.selectedChannel = c0; stMedMax = Math.max(stMedMax, sim.median()); } sim.resetSelections();
+  if (!o.forzar && stMedMax < 2e-5) {
+    var cands = []; ["_estiradas", "_estirada", "_st", "_stretched"].forEach(function (suf) { if (!ImageWindow.windowById(viewId + suf).isNull) cands.push(viewId + suf); });
+    throw new Error(viewId + " es la capa de estrellas LINEAL (sin estirar: mediana " + stMedMax.toExponential(1) + "). Pasa la estirada (r.estrellas.vista de estirarCapas)" +
+                    (cands.length ? ": " + cands.join(" o ") : "; si no existe, estirarCapas(starless, estrellas) del Paso 1 no lineal"));
+  }
 
   var id = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_prep");
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = ((typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_prep")) + "_" + n;

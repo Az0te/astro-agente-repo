@@ -2,7 +2,7 @@
 
 Servidor MCP de PiCopilot. Ofrece a Claude Code, Codex o cualquier cliente MCP **las funciones de la guía** (`guia/herramientas/`) como herramientas, en vez de procesos genéricos. Desarrollado por **Rafael Vidal** (2026). Licencia MIT.
 
-> Estado: **0.2.0, versión paralela en pruebas.** Convive con `servidor-mcp/` + `watcher/` (MCP `pixinsight`) hasta que lo sustituya.
+> Estado: **0.2.0.** Desde noviembre de 2026 es el único puente: el antiguo `servidor-mcp/` + `watcher/` (MCP `pixinsight`) se retiró.
 
 ## Cómo funciona
 

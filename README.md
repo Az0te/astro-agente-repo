@@ -1,13 +1,13 @@
 # Agente de astrofotografía para PixInsight (Windows)
 
-> **English summary.** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The watcher and MCP server are derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT). Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
+> **English summary.** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The first bridge (a file watcher plus MCP server, retired in November 2026) was derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT); the current bridge is the `picopilot` MCP server (`mcp/`), which runs the guide's functions in PixInsight through IPC. Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
 
 Este proyecto permite que un asistente de IA (Claude, a través del protocolo MCP) controle PixInsight para procesar astrofotografías de cielo profundo, **trabajando contigo**: tú decides y supervisas, la IA ejecuta, mide y propone.
 
 Incluye tres partes:
 
 0. **[PiCopilot](picopilot/README.md)** (`picopilot/`): módulo nativo de PixInsight que acopla un asistente de IA al panel lateral sin bloquear PixInsight. Tiene un botón por paso de la guía, chat con tablas y vistas previas, y funciona con Claude Code, Codex o un modelo local (Ollama). Va con la guía de este repositorio; por ahora hay que compilarlo y firmarlo con claves de desarrollador propias.
-1. **Watcher + servidor MCP** (`watcher/`, `servidor-mcp/`): el puente entre la IA y PixInsight, adaptado y probado en Windows.
+1. **Servidor MCP picopilot** (`mcp/`): el puente entre la IA y PixInsight. Ofrece las funciones de la guía como herramientas y las ejecuta en la instancia de PixInsight que tienes abierta (IPC `PixInsight.exe -x=`), sin carpeta vigilada ni `eval`. Detalles en [`mcp/README.md`](mcp/README.md).
 2. **Guía de procesado** (`guia/`): un manual detallado, en español, que Claude carga como *skill*. El asistente responde en el idioma en que se le pregunte (inglés o cualquier otro), aunque la guía esté en español. Está ordenada como el flujo de trabajo: 17 pasos de la fase lineal, 11 de la no lineal y anexos (API de PJSR, controles de calidad, anti-patrones, flujos por tipo de objeto, glosario); cada paso es un fichero con el porqué, los parámetros, el código y el control para comprobarlo. Es la parte principal: recoge técnicas, trampas, valores de partida y controles de calidad aprendidos en sesiones reales de procesado.
 
 ## Principio
@@ -18,10 +18,10 @@ Incluye tres partes:
 
 El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para macOS y datos mono LRGB/HaLRGB. Este proyecto parte de su puente y añade:
 
-- **Soporte de Windows**: rutas de Windows, scripts `.bat` para pausar, reanudar y parar el watcher.
-- **Watcher v8 (v0.5.1-v8, PixInsight 1.9.6+)**: motor JavaScript v8 y **BlindSolver integrado**: `blindSolve("<vista>")` resuelve la astrometría a ciegas desde el watcher, sin pararlo y en un segundo, para SPCC, SPFC y MGC. También incluye **Star Stretch, ScreenStars, DarkStructureEnhance y BackgroundEnhance** (`guia/herramientas/realces.js`), reimplementados con resultado idéntico al de los scripts.
-- **Watcher clásico v0.4.14** (PixInsight anterior a 1.9.6): pausa y parada por fichero, botón Pause/Abort de la consola activo, corrección de un fallo que impedía detenerlo, aviso de cuelgues (`current.json`), verificación de que PixelMath cambió la imagen y herramienta `describe_process`.
-- **Servidor MCP** con `watcher_status` y detección de comandos bloqueados.
+- **Soporte de Windows**: rutas, PowerShell y compilación del módulo para Windows.
+- **Funciones de la guía en vez de procesos sueltos** (`guia/herramientas/`): análisis, gradiente con candidatos, estirado «al fallo», estrellas, saturación, paletas… cada una con su control de calidad. El servidor MCP solo ejecuta las que están en su lista blanca.
+- **BlindSolver integrado**: `resolverAstrometria` resuelve la astrometría a ciegas para SPCC, SPFC y MGC sin lanzar el script. También incluye **Star Stretch, ScreenStars, DarkStructureEnhance y BackgroundEnhance** (`guia/herramientas/realces.js`), reimplementados con resultado idéntico al de los scripts.
+- **Trabajos largos sin bloquear**: las llamadas de más de 45 s devuelven un id y el resultado se recoge con `estado(trabajo)`.
 - **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC.
 
 ## Ejemplo: IC 63
@@ -31,35 +31,22 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
 ## Requisitos
 
 - Windows 10/11 (probado en Windows 11).
-- [PixInsight](https://pixinsight.com) 1.9.6 o superior para el watcher v8 (con BlindSolver); con 1.9 a 1.9.5, el watcher clásico (licencia propia).
+- [PixInsight](https://pixinsight.com) 1.9.6 o superior.
 - Para `blindSolve`: un índice astrométrico de Gaia configurado en las preferencias del proceso Gaia (es el mismo que usa el script BlindSolver).
-- [Node.js](https://nodejs.org) 22 o superior.
+- [Node.js](https://nodejs.org) 18 o superior.
 - Un cliente de IA compatible con MCP, por ejemplo la app de escritorio de Claude o Claude Code.
 - Opcional, pero la guía los usa mucho: BlurXTerminator, NoiseXTerminator y StarXTerminator (RC-Astro, de pago), GraXpert, scripts de SetiAstro y Toolbox. **No se incluyen**: cada uno debe instalarlos con su licencia.
 
 ## Instalación
 
 1. Descarga o clona este repositorio, por ejemplo en `C:\Users\<tu_usuario>\astro-agente`.
-2. Compila el servidor MCP:
+2. Registra el servidor MCP picopilot en tu cliente (no hace falta `npm install`: `mcp/dist/picopilot-mcp.mjs` lleva todo dentro). Con Claude Code:
    ```
-   cd servidor-mcp
-   npm install
-   npm run build
+   claude mcp add picopilot -- node C:/Users/<tu_usuario>/astro-agente/mcp/dist/picopilot-mcp.mjs
    ```
-3. Registra el servidor en tu cliente MCP. Ejemplo de configuración:
-   ```json
-   {
-     "mcpServers": {
-       "pixinsight": {
-         "command": "node",
-         "args": ["C:\\Users\\<tu_usuario>\\astro-agente\\servidor-mcp\\build\\index.js"]
-       }
-     }
-   }
-   ```
-4. En PixInsight: **Script → Execute Script File… → `watcher/pixinsight-mcp-watcher-v8.js`**. En la consola debe aparecer `PixInsight MCP Watcher v0.5.1-v8`.
-   Con PixInsight anterior a 1.9.6, usa `watcher/pixinsight-mcp-watcher.js` (v0.4.14, sin BlindSolver).
-   Si PixInsight no está en `C:/Program Files/PixInsight`, cambia esa ruta en el bloque `#else` del principio del watcher.
+   Con Codex u otro cliente, ver [`mcp/README.md`](mcp/README.md#instalar).
+3. Si PixInsight no está en `C:/Program Files/PixInsight`, define la variable `PIXINSIGHT_EXE` con la ruta de `PixInsight.exe`.
+4. Abre PixInsight. No hay que lanzar ningún script: cada llamada llega a la instancia abierta y, si está ocupada, espera en cola.
 5. Carga la guía en tu agente. El punto de entrada es `guia/SKILL.md` (núcleo de reglas e índice, ~2.300 tokens); el resto se lee paso a paso.
    - Claude: la carpeta `guia/` como *skill*.
    - ChatGPT u otro cliente con MCP: [`guia/envolturas/chatgpt.md`](guia/envolturas/chatgpt.md).
@@ -68,29 +55,20 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
 
 ## Uso diario
 
-| Acción | Cómo |
-|---|---|
-| Arrancar | Script → Execute Script File… → `pixinsight-mcp-watcher-v8.js` |
-| Pausar (deja de atender comandos) | `watcher/mcp-pause.bat` |
-| Reanudar | `watcher/mcp-resume.bat` |
-| Parar y liberar PixInsight | Botón **Pause/Abort** de la consola, o `watcher/mcp-stop.bat` |
-| Lanzar tú un script del menú | Para el watcher, lanza el script y vuelve a arrancarlo: mientras el watcher corre, aunque esté en pausa, PixInsight bloquea el menú Script |
-
-Ctrl+F11 puede no llegar al watcher en Windows: usa el botón o el `.bat`.
+Con PixInsight abierto, pide al asistente el paso que quieras (o usa los botones de [PiCopilot](picopilot/README.md)). Puedes seguir usando PixInsight con normalidad: mientras lanzas tú un script del menú, las peticiones del asistente esperan en cola.
 
 ## Limitaciones conocidas
 
-- Los **scripts** de PixInsight (WBPP, DBXtract, AutoDBE…) no se pueden lanzar desde el watcher ("Script instance recursively"): los lanzas tú con el watcher parado. Los **procesos** sí funcionan. La excepción es **BlindSolver**, cuyo motor va incluido en el watcher v8 (`blindSolve`).
-- Las llamadas de más de ~60 s devuelven un aviso de tiempo agotado, pero el proceso sigue en PixInsight; `watcher_status` informa de su estado.
-- La comprobación de que PixInsight responde usa PowerShell: en macOS o Linux esa parte no funciona sin adaptarla.
+- Los **scripts** de PixInsight con interfaz (DBXtract, AutoDBE…) no se pueden lanzar desde una función de la guía; WBPP sí, con `lanzarWBPP` (en una segunda instancia), y BlindSolver va integrado (`resolverAstrometria`).
+- PiCopilot y la ruta por defecto de PixInsight están pensados para Windows: en macOS o Linux hay que adaptarlos.
 - La guía se ha probado sobre todo con una cámara OSC (IMX571) y varios filtros: sin filtro, tribanda y dual band Hα/OIII, SII/OIII y SII/Hβ. Para otros equipos, sus valores son puntos de partida.
 
 ## ⚠️ Seguridad
 
-El watcher ejecuta como código de PixInsight cualquier orden que aparezca en la carpeta `%USERPROFILE%\.pixinsight-mcp\bridge\commands` (la herramienta `run_script` usa `eval`). Es adecuado para uso local en tu propio ordenador, pero:
+El servidor MCP picopilot no ejecuta código arbitrario: cada petición lleva solo el nombre de una función y sus parámetros, y el runner comprueba un token (`~/.picopilot/token`) y una lista blanca antes de ejecutarla. La herramienta libre `run_script` solo aparece si creas tú el fichero `~/.picopilot/permitir_libre`. Aun así:
 
-- no compartas ni sincronices esa carpeta con servicios en la nube;
-- no dejes el watcher en marcha si otras personas o programas pueden escribir en tu carpeta de usuario;
+- no compartas ni sincronices la carpeta `~/.picopilot` con servicios en la nube;
+- no crees `permitir_libre` si otras personas o programas pueden usar tu cliente MCP;
 - revisa lo que hace la IA, sobre todo antes de guardar o sobrescribir ficheros.
 
 ## Cómo contribuir
@@ -109,14 +87,14 @@ Abre una [*issue*](https://github.com/Az0te/astro-agente-repo/issues/new/choose)
 
 ## Créditos
 
-- **Alain Escaffre**, [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) (MIT): diseño original del puente por ficheros, el watcher y el servidor MCP, además de muchas ideas de la guía (barreras de calidad, taxonomía de objetos, trampas de PJSR).
+- **Alain Escaffre**, [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) (MIT): diseño original del primer puente (watcher por ficheros y servidor MCP, retirado en noviembre de 2026), además de muchas ideas de la guía (barreras de calidad, taxonomía de objetos, trampas de PJSR).
 - **Jeff Henry**, [NOVA](https://github.com/measurethepixels/nova) (MIT): artículos con evidencia medida que se citan en la guía.
 - Las demás fuentes están en [`guia/FUENTES.md`](guia/FUENTES.md).
 - Proyecto desarrollado en colaboración con Claude (Anthropic) a partir de sesiones reales de procesado, revisado y probado por el autor.
 
 ## Licencias
 
-- Código (`watcher/`, `servidor-mcp/`): **MIT**. Copyright (c) 2026 Alain Escaffre (original) y Copyright (c) 2026 Rafael Vidal (modificaciones). Ver [`LICENSE`](LICENSE).
+- Código (`mcp/`, `picopilot/`): **MIT**. Copyright (c) 2026 Rafael Vidal. Ver [`LICENSE`](LICENSE). El puente anterior (`watcher/`, `servidor-mcp/`, en el historial de Git) era MIT, Copyright (c) 2026 Alain Escaffre (original) y Rafael Vidal (modificaciones).
 - Guía (`guia/`): **CC BY-SA 4.0**. Ver [`guia/LICENSE.md`](guia/LICENSE.md).
 
 PixInsight es una marca de Pleiades Astrophoto S.L. Claude es una marca de Anthropic. Este es un proyecto independiente, sin relación ni respaldo de ninguna de las dos empresas.

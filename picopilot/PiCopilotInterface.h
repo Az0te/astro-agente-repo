@@ -169,12 +169,6 @@ private:
    PiCopilotChatDialog*    m_chat = nullptr;     // ventanas no modales (ProcessInterface)
    PiCopilotDossierDialog* m_dossier = nullptr;
 
-   // Watcher MCP integrado: sustituye al script pixinsight-mcp-watcher.js.
-   bool   m_mcpRunning = false;  // ejecutando comandos ahora mismo
-   double m_mcpRetryAt = 0;      // tras un error, no reintentar antes de este instante
-   int    m_mcpCount = 0;        // comandos atendidos en esta sesión
-   String m_mcpLastError;
-
    String m_viewId;              // vista activa
    bool   m_fullVisible = true;  // botón "Resolución Completa" visible
    bool   m_aiVisible = true;    // botón "Configurar IA" visible
@@ -206,9 +200,6 @@ private:
          HorizontalSizer   Status_Sizer;
             Label             Status_Label;
             PushButton        Cancel_Button;
-         HorizontalSizer   Mcp_Sizer;
-            CheckBox          Mcp_CheckBox;
-            Label             Mcp_Label;
          SectionBar        Config_SectionBar;
          Control           Config_Control;
             VerticalSizer     Config_Sizer;
@@ -229,10 +220,6 @@ private:
                HorizontalSizer   Data_Sizer;
                   Label             Data_Label;
                   Edit              Data_Edit;
-               HorizontalSizer   Watcher_Sizer;
-                  Label             Watcher_Label;
-                  Edit              Watcher_Edit;
-                  ToolButton        Watcher_ToolButton;
                HorizontalSizer   Language_Sizer;
                   Label             Language_Label;
                   ComboBox          Language_ComboBox;
@@ -250,12 +237,8 @@ private:
    void UpdateModelList();
    void UpdateStatus();
    void UpdateView();
-   void UpdateMcpStatus();
 
-   void PollMcp();
-   bool PrepareMcpRunner( String& whyNot );
-   bool WatcherLibrary( String& lib, String& whyNot );
-   String RunWithWatcher( const String& code, const String& prelude );
+   String RunWithRunner( const String& code, const String& prelude );
 
    PiCopilotChatDialog& Chat();
    void ShowDossier( const String& path );

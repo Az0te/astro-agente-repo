@@ -18,7 +18,7 @@ Rodilla sobre el máximo, para que la suma no sature el rojo: "`m = max(r,g,b)`;
 
 **Dominante verde en las esquinas tras SPCC+MGC**. "G/R hasta 1,67 en una nebulosa de emisión y reflexión: la corrección de NOVA (sección Blue bloat) con máscara de cielo `clip((med + 5σ − L_s)/(3,5σ))` sobre los canales suavizados a ~48 px y amount 0,85 funcionó sin tocar la nebulosa."
 
-**Flujos de referencia LRGB** (los nombres de scripts son los de los flujos originales; en esta guía cada uno se hace con su equivalente desde el watcher, Anexo A.9)
+**Flujos de referencia LRGB** (los nombres de scripts son los de los flujos originales; en esta guía cada uno se hace con su equivalente en la guía, Anexo A.9)
 
 | Flujo | Secuencia |
 |---|---|
@@ -54,9 +54,9 @@ Ajustes BXT como diagnóstico: "anillos negros = fuerza estelar/PSF/halos excesi
 **Trampas menores de PJSR**, además de las del Anexo A:
 
 - "`ImageWindow.windowById` con un id inexistente no falla: un `w.mask` así aplica el proceso **sin máscara**." Comprobar `.isNull` antes de asignar la máscara.
-- Procesos largos (MGC sobre 12k × 8k ≈ 3 min, LHE ≈ 35 s, NXT ≈ 30 s) superan el corte de 60 s del MCP: esperar con `watcher_status`. La memoria llegó a 15 GB: cerrar ventanas grandes.
+- Procesos largos (MGC sobre 12k × 8k ≈ 3 min, LHE ≈ 35 s, NXT ≈ 30 s) pasan de 45 s: el MCP devuelve un id de trabajo; esperar con `estado(trabajo)`. La memoria llegó a 15 GB: cerrar ventanas grandes.
 - `new ImageWindow(w, h, …)` puede fallar con dimensiones leídas de `Image.width`: redondear o pasar números; para máscaras, `floatSample = true`.
-- Tras crear una composición con PixelMath, resolverla con `blindSolve` (Paso 8): SPCC necesita WCS.
+- Tras crear una composición con PixelMath, resolverla con `resolverAstrometria` (Paso 8): SPCC necesita WCS.
 
 - "Abrir un XISF de WBPP puede crear ventanas `crop_mask` extra: cerrarlas (`id.indexOf('crop_mask')>=0`)."
 - "StarDetector puede colgarse en algunos campos: para medir estrellas en imágenes procesadas, buscar máximos locales por encima de mediana + 5·MAD en una rejilla, deduplicar a < 20 px y medir semiancho a media altura en 4 direcciones."
@@ -64,8 +64,8 @@ Ajustes BXT como diagnóstico: "anillos negros = fuerza estelar/PSF/halos excesi
 - "`SampleFormatConversion.format` no acepta la constante: para 16 bits crear `new ImageWindow(w, h, 3, 16, false, true, id)` y `image.assign(src)`."
 - "Añadir a un fichero = `f.openOrCreate(p); f.seekEnd()` (no hay `openForAppending`)."
 - "`IntegerResample` sobre un FITS de 16 bits deja la imagen en enteros: binar a mano en JS (Float32Array) para medir anillos de halo."
-- **Constantes de los procesos:** en el watcher v8 están en el constructor (`PixelMath.RGB`, `IntegerResample.Average`, `SCNR.Green`); con `.prototype` dan `undefined` **sin error** y el parámetro queda vacío (comprobado en PixInsight 1.9.6). En el watcher clásico era al revés: `IntegerResample.prototype.Average`. Para código que deba valer en los dos: `C[k] !== undefined ? C[k] : C.prototype[k]`. "El proceso de curvas es `CurvesTransformation` (no `CurvesTransform`)."
-- (Watcher clásico) "Desde el watcher, constantes como `SubframeSelector.MeasureSubframes` o `IntegerResample.Average` pueden dar 'invalid argument type': dejar el valor por defecto o mirar `describe_process`."
+- **Constantes de los procesos:** en PixInsight 1.9.6 están en el constructor (`PixelMath.RGB`, `IntegerResample.Average`, `SCNR.Green`); con `.prototype` dan `undefined` **sin error** y el parámetro queda vacío (comprobado en PixInsight 1.9.6). En PixInsight anterior a 1.9.6 era al revés: `IntegerResample.prototype.Average`. Para código que deba valer en los dos: `C[k] !== undefined ? C[k] : C.prototype[k]`. "El proceso de curvas es `CurvesTransformation` (no `CurvesTransform`)."
+- (PixInsight anterior a 1.9.6) "Constantes como `SubframeSelector.MeasureSubframes` o `IntegerResample.Average` pueden dar 'invalid argument type': dejar el valor por defecto o mirar `(new Proceso).toSource()`."
 
 **Dosieres de IA sobre BXT/NXT**. "De cuatro dosieres sobre BXT/NXT generados con IA que circularon en oct 2026, dos (BXT 'exhaustivo' y NXT 'dosier exhaustivo') coinciden con RC-Astro y se han usado. Los otros dos tienen errores: uno pone SPCC antes de la extracción de gradiente (choca con MGC, cuya cadena es SPFC → MGC → SPCC) y otro inventa un parámetro 'Linear/Non-linear' de NXT, cifras de rendimiento sin fuente y la regla de 'sólo en lineal'. No usarlos como referencia."
 

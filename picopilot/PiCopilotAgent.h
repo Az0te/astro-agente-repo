@@ -70,8 +70,6 @@ public:
    String claudePath;   // claude.exe
    String claudeArgs;   // Argumentos extra para claude -p
    String dataDirs;               // Carpetas de datos para Claude, separadas por ';'
-   bool   watcherEnabled = true;  // Watcher MCP integrado
-   String watcherSource;          // pixinsight-mcp-watcher.js (fuente de los comandos)
    String uiLanguage = "es";      // idioma de la interfaz: "es" | "en"
    bool   autoRun = true;         // ejecutar sin preguntar el script de la respuesta a un Prompt (Rafael, 7 nov 2026)
 
@@ -121,13 +119,8 @@ public:
    String DossierDir() const;
    String TempDir() const;
    String CurlPath() const;
-   String McpRunnerPath() const;
-
-   // Carpeta del puente del MCP de PixInsight (~/.pixinsight-mcp/bridge).
-   static String BridgeDir();
 
    // Valores por defecto de las rutas.
-   static String DefaultWatcherSource();
    static String DefaultGuideDir();
    static String DefaultWorkDir();
    static String DefaultClaudePath();
@@ -135,7 +128,6 @@ public:
    // Rutas (con /) de los servidores MCP; vacías si no existen.
    String PicopilotMcpServer() const;
    String PicopilotRunner() const;   // mcp/pjsr/picopilot-runner.js, o vacío
-   static String ClassicMcpServer();
 };
 
 // ----------------------------------------------------------------------------

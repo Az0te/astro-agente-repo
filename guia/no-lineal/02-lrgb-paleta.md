@@ -59,7 +59,7 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 - Con la elegida: aplicar la misma fórmula con PixelMath a resolución completa. **En una llamada** (`herramientas/bandaestrecha.js`): `componerPaleta({ S, H, O }, { paleta: "SHO", estrellas })`. Devuelve la paleta **sin estrellas** (la `estrellas` sólo se anota para el final): después `saturarAlFallo(paleta)`, `prepararEstrellas(capa de estrellas RGB estirada)` (nunca sobre la paleta: da error) y `recombinarEstrellas(paleta saturada, estrellas preparadas)`. Si G domina (la raya del verde, casi siempre Hα, manda) aplica SCNR Average Neutral 0,8 y da G/max(R,B) antes y después; `verde: 1` lo apura, `verde: false` lo deja. Paletas: SHO, HSO, OHS, HOS, SOH, OSH, HOO (Soft/Neutral/Hard), HOO_NOVA, FORAXX, FORAXX_BICOLOR, las siete familias Foraxx de AutoPalette Studio (FORAXX_SHO, _HOS, _OHS, _HOO, _HSO, _OSH, _SOH) y sus 42 variantes FORAXX_<familia>_<variante>, copiadas del script instalado (`paletasDisponibles()`); sin SII real las de S usan el SII sintético y salen marcadas pseudo. Antes, para cada raya desmezclada (mono): `separarEstrellas` y `estirarStarless(starless, { cielo: 0.10 })`; la RGB, con SPCC, da las estrellas (`estirarCapas(starless RGB, estrellas RGB)` y su `r.estrellas.vista`). Si el usuario ya ha dicho la paleta, no hacen falta previas.
 - Avisos: no hay fórmula Foraxx oficial única (la ficha C10-34 de astro-photographie no coincide con AutoPalette Studio: usar la de AutoPalette); en SHO sin equilibrar sale verde entero porque domina Hα (IC 1396, 8 nov 2026: G/max(R,B) ≈ 1,36); `quitarVerde` no lo corrige porque mira sólo el cielo, por eso lo hace `componerPaleta`.
 
-**NarrowbandNormalization 1.0** (proceso, sí se ejecuta desde el watcher)
+**NarrowbandNormalization 1.0** (proceso, sí se ejecuta desde un script)
 
 - Equilibra la intensidad de los canales con **Hα siempre como referencia**: aplica a cada cana una MTF para que su desviación positiva media sobre la mediana iguale la del Hα, sólo por encima del punto de sombra (**shadowpoint 1 = desde la mediana; 0 = toda la imagen**). "Es un ajuste estético: cambia las proporciones entre rayas (documentarlo)."
 - "Vale en lineal o no lineal, pero con **Lightness = Off en lineal**."
@@ -89,7 +89,7 @@ PM.expression1 = "0.6*Ha + 0.4*OIII";
 PM.expression2 = "OIII";
 PM.createNewImage = true;
 PM.newImageId = "HOO";
-PM.newImageColorSpace = PixelMath.RGB;   // watcher v8; en el clásico, PixelMath.prototype.RGB
+PM.newImageColorSpace = PixelMath.RGB;   // PixInsight 1.9.6 (v8); en versiones anteriores, PixelMath.prototype.RGB
 if (!PM.executeGlobal()) throw new Error("HOO falló");   // executeGlobal exige además newImageWidth/Height
 
 // Variante con NarrowbandNormalization sobre la HOO:

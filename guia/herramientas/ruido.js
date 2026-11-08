@@ -195,7 +195,17 @@ function reducirRuido(viewId, o) {
   }
   var q = rdQuality(src, v), noCumple = [];
   if (q.contraste_zona_debil_pct < -5) noCumple.push("el contraste de la zona débil baja " + (-q.contraste_zona_debil_pct) + " % (> 5 %): se ha llevado señal; bajar denoise");
-  if (q.residual_estructura > 2.0) noCumple.push("la residual tiene estructura (" + q.residual_estructura + "): se ha llevado filamentos o bordes; bajar denoise o detail");
+  // residual_estructura es una proporción (bloques frente a ruido de la propia residual): NO baja al bajar denoise
+  // (8 nov 2026, nebulosa que llena el campo: 2,59 con 0,50 y con 0,30) y Qwen se atascaba repitiendo. Sólo es fallo si
+  // además se pierde contraste en la zona débil (> 3 %); si no, queda como aviso para mirarlo a ojo.
+  if (q.residual_estructura > 2.0) {
+    if (q.contraste_zona_debil_pct < -3)
+      noCumple.push("la residual tiene estructura (" + q.residual_estructura + ") y el contraste de la zona débil baja " + (-q.contraste_zona_debil_pct) +
+                    " %: se ha llevado filamentos o bordes; bajar denoise");
+    else
+      aviso = (aviso ? aviso + "; " : "") + "residual con algo de estructura (" + q.residual_estructura + ") pero el contraste se conserva (" +
+              q.contraste_zona_debil_pct + " %): mirar a ojo la residual; NO repetir sólo por esta medida (es una proporción y no baja al bajar denoise)";
+  }
   if (q.ruido_baja_pct > 95) noCumple.push("el ruido del cielo baja " + q.ruido_baja_pct + " %: fondo muerto, bajar denoise");
   var linealSrc = src.image.median() < 0.05;   // (src sin selección: rdQuality no la cambia)
   if (q.moteado_color_despues !== null && q.moteado_color_despues > 1.5) {

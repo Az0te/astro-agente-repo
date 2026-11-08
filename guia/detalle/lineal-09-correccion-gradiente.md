@@ -54,7 +54,7 @@ var r = graxpertBGE("<vista>");      // sample_free, escala 10 por defecto
 
 
 - Denoise: `graxpertDenoise("<vista>", {strength: 0.5})`; "es una alternativa a comparar con NXT, no un sustituto".
-- Si cambia la versión de GraXpert, confirmar las opciones de `graxpert.js` con `GraXpert -cli -cmd background-extraction -h` y las del proceso con `describe_process GraXpert`.
+- Si cambia la versión de GraXpert, confirmar las opciones de `graxpert.js` con `GraXpert -cli -cmd background-extraction -h` y las del proceso con `(new GraXpert).toSource()`.
 
 **Ajustes de partida (medidos el 29 oct 2026 en galaxia grande, nebulosa oscura, nebulosa dual band y nebulosa de emisión y reflexión)**
 
@@ -83,7 +83,7 @@ Masters lineales sin tocar (nebulosa dual band, nebulosa oscura y una nebulosa d
 
 Resultados anteriores, sin GraXpert: nebulosa oscura → ganó el plano de grado 1, MGC 2048/4096 se comió el 75 % del contraste del polvo; nebulosa de emisión y reflexión (emisión + reflexión) → MGC, sin comparar con otros métodos.
 
-En imágenes grandes GraXpert puede pasar del corte de 60 s del MCP: esperar con `watcher_status` y comprobar las ventanas `GC_GraXpert_*`.
+En imágenes grandes GraXpert puede pasar de 45 s: el MCP devuelve un id de trabajo; esperar con `estado(trabajo)` y comprobar las ventanas `GC_GraXpert_*`.
 
 **MGC / MARS**
 

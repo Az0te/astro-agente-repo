@@ -14,11 +14,11 @@ Un módulo nativo de PixInsight (no un script): se acopla al panel lateral y las
 
   | Modelo | Cómo | Qué hace |
   |---|---|---|
-  | Claude | Claude Code (`claude -p`) con el MCP de PixInsight | Trabaja sobre la imagen él mismo |
+  | Claude | Claude Code (`claude -p`) con el MCP picopilot | Trabaja sobre la imagen él mismo |
   | Codex | Codex CLI (`codex exec`) con el MCP | Igual que Claude |
   | Local (Ollama, LM Studio…) o cualquier endpoint OpenAI-compatible | HTTP con `curl.exe` | Propone un script PJSR con las funciones de la guía; tú lo ejecutas con «Ejecutar script» |
 
-- **Watcher MCP integrado**: atiende los comandos del servidor MCP de `../servidor-mcp` sin lanzar el script del watcher aparte.
+- **Errores de script a fichero**: cada script que falla queda en `tmp_logs/picopilot-errores.log` del repositorio (hora, vista, error y script).
 - **Configurar IA**: elige el modelo inferior o el superior de cada paso según su dificultad (`guia/porcentajes_skill.json`).
 - Interfaz en español o inglés.
 
@@ -31,7 +31,7 @@ Un módulo nativo de PixInsight (no un script): se acopla al panel lateral y las
   - Claude: [Claude Code](https://docs.anthropic.com/claude-code) con sesión iniciada (`claude`, luego `/login`).
   - Codex: `npm install -g @openai/codex` y `codex login`.
   - Local: [Ollama](https://ollama.com) u otro servidor OpenAI-compatible.
-- La guía (`../guia`) y, para Claude y Codex, el servidor MCP (`../servidor-mcp`) de este repositorio.
+- La guía (`../guia`) y, para Claude y Codex, el servidor MCP picopilot (`../mcp`) de este repositorio.
 
 ## Compilar (Windows)
 
@@ -66,7 +66,7 @@ Trabaja sobre copias, ten copia de tus masters y revisa lo que hace la IA. Los m
 
 | Fichero | Qué contiene |
 |---|---|
-| `PiCopilotInterface.*` | Panel, tareas asíncronas, ejecución de scripts, vistas previas, watcher integrado |
+| `PiCopilotInterface.*` | Panel, tareas asíncronas, ejecución de scripts, vistas previas, registro de errores |
 | `PiCopilotDialogs.*` | Prompt, Añadir modelo, Configurar IA y Dossier |
 | `PiCopilotRender.*` | Página HTML del chat (Markdown, tablas, tarjetas, previas) |
 | `PiCopilotAgent.*` | Modelos, configuración, pasos de la guía, funciones por paso y prompts |
