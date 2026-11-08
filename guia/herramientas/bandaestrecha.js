@@ -310,6 +310,7 @@ function previsualizarPaletas(haId, oiiiId, o) {
     if (!P.executeOn(wH.mainView)) throw new Error("Paleta " + p.n + " falló");
     var w = ImageWindow.windowById(id), e = { paleta: p.n, vista: id, formula: "R = " + p.r + "; G = " + p.g + "; B = " + p.b };
     if (dir) { var path = dir + "/" + p.n + ".jpg"; w.saveAs(path, false, false, false, false); e.jpg = path; }
+    else if (typeof pxPrevia === "function") { var pv = pxPrevia(id, "pal_" + p.n, { estirar: false }); if (pv) e.previa = pv; }   // miniatura para el chat
     w.show(); out.push(e);
   }
   wH.forceClose(); wO.forceClose();
@@ -511,7 +512,8 @@ function componerPaleta(capas, o) {
     : "Paleta SIN estrellas: 1) saturarAlFallo(\"" + id + "\", { tipo: \"nebulosa\" }); 2) prepararEstrellas(" + (estrellasId ? "\"" + estrellasId + "\"" : "capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas)") +
       ") — sobre la CAPA DE ESTRELLAS, nunca sobre la paleta; 3) recombinarEstrellas(paleta saturada, estrellas preparadas); 4) exportarFinal.";
   return {
-    vista: id, paleta: etiqueta, capas: ids, medianas_capas: med, mediana_por_canal: porCanal, hecho: hecho, no_cumple: noCumple,
+    vista: id, paleta: etiqueta, previa: (typeof pxPrevia === "function" ? pxPrevia(id, "pal_" + id, { estirar: false }) : null) || undefined,
+    capas: ids, medianas_capas: med, mediana_por_canal: porCanal, hecho: hecho, no_cumple: noCumple,
     formula: { R: e[0], G: e[1], B: e[2] },
     estrellas_sumadas: sumadas, estrellas_para_recombinar: sumadas ? null : estrellasId,
     siguiente: siguiente,

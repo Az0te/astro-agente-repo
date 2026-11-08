@@ -214,7 +214,10 @@ function nucleoCandidatos(viewId, o) {
     for (var k in o) if (["exponentes", "nuevaVista", "cerrar"].indexOf(k) < 0) op[k] = o[k];
     for (var k2 in p.op) op[k2] = p.op[k2];
     op.nuevaVista = viewId + p.suf;
-    try { cands.push({ etiqueta: p.etiqueta, r: comprimirNucleo(viewId, op) }); }
+    try {
+      var rn = comprimirNucleo(viewId, op);
+      cands.push({ etiqueta: p.etiqueta, r: rn, previa: rn.vista && typeof pxPrevia === "function" ? pxPrevia(rn.vista, "nuc_" + rn.vista, { estirar: false }) : null });
+    }
     catch (e) { cands.push({ etiqueta: p.etiqueta, error: String(e && e.message ? e.message : e) }); }
   });
   var conVista = cands.filter(function (c) { return c.r && c.r.aplicado; });
@@ -246,7 +249,7 @@ function nucleoCandidatos(viewId, o) {
       if (!c.r) return { metodo: c.etiqueta, error: c.error, elegido: false };
       return { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null,
                bulbo_baja_pct: c.r.brillo_bulbo ? c.r.brillo_bulbo.baja_pct : null, anillos_nuevos: c.r.anillos_nuevos_px ? c.r.anillos_nuevos_px.length : null,
-               cumple: !c.r.no_cumple.length, elegido: c === best };
+               cumple: !c.r.no_cumple.length, elegido: c === best, previa: c.previa || undefined };
     }),
     recomendado: best.etiqueta, meseta_antes: best.r.meseta_antes, meseta_despues: best.r.meseta_despues,
     motivo: best.etiqueta + (best.r.no_cumple.length ? ": ninguno cumple; es el de menos avisos." :

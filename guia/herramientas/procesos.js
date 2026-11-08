@@ -52,6 +52,29 @@ function pxFilter(name) {
 
 function pxDefault(o, k, v) { return (o && o[k] !== undefined) ? o[k] : v; }
 
+// Miniatura JPG de una vista para el chat (Rafael, 8 nov 2026: ver cada candidato de una comparación). Sólo si el panel
+// ha definido la carpeta PICOPILOT_PREVIAS (PiCopilot Lite) y está la función de previas del runner (pprPrevia, STF
+// automático enlazado si la vista es lineal). Devuelve la ruta o null; nunca falla la comparación por una miniatura.
+function pxPrevia(viewId, nombre, o) {
+  if (typeof PICOPILOT_PREVIAS !== "string" || !PICOPILOT_PREVIAS || typeof pprPrevia !== "function") return null;
+  try {
+    o = o || {};
+    var f = PICOPILOT_PREVIAS + "/" + String(nombre || viewId).replace(/[^A-Za-z0-9_.-]+/g, "_") + ".jpg";
+    // STF enlazado si los canales están equilibrados (máx/mín de medianas < 1,25); si no, por canal (como el módulo,
+    // build61): con un master sin calibrar, el enlazado lo dejaba todo verde y no se veía nada.
+    var enl = o.enlazado;
+    if (enl === undefined) {
+      var im = View.viewById(viewId).image, m = [];
+      if (im.numberOfChannels >= 3) {
+        for (var c = 0; c < 3; ++c) { im.selectedChannel = c; m.push(Math.max(im.median(), 1e-7)); }
+        im.resetSelections();
+        enl = Math.max.apply(null, m) / Math.min.apply(null, m) < 1.25;
+      } else enl = true;
+    }
+    return pprPrevia(viewId, { fichero: f, lado: o.lado || 640, estirar: o.estirar, enlazado: enl }).fichero;
+  } catch (e) { return null; }
+}
+
 // Asigna filtros RGB (y gris, en SPFC) y QE por nombre; o modo banda estrecha con [longitud de onda, ancho].
 function pxSetFilters(P, o, withGray) {
   var r = pxDefault(o, "r", "Sony Color Sensor R-UVIRcut");

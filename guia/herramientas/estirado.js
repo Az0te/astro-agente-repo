@@ -384,7 +384,7 @@ function estirarCandidatos(viewId, o) {
     var ruidoAbs = Math.max(c.ruido_rel * c.cielo, 1e-6);
     cands.push({ etiqueta: etiqueta, vista: v.id, medidas: c, dominante_cielo_pct: sd.dominante_pct, fallos: f,
                  senal_debil_en_ruidos: +((c.p90 - c.cielo) / ruidoAbs).toFixed(2), extra: extra,
-                 segundos: Math.round((Date.now() - t1) / 1000) });
+                 segundos: Math.round((Date.now() - t1) / 1000), previa: pxPrevia(v.id, "est_" + v.id, { estirar: false }) });
   }
   if (metodos.indexOf("ghs") >= 0) {
     var t1 = Date.now();
@@ -457,7 +457,8 @@ function estirarCandidatos(viewId, o) {
     if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
     return { metodo: c.etiqueta, cielo: c.medidas.cielo, ruido_cielo_rel: c.medidas.ruido_rel, p90: c.medidas.p90, p99: c.medidas.p99,
              senal_debil_en_ruidos: c.senal_debil_en_ruidos, sombras_a_0_pct: c.medidas.cero_pct, luces_095_pct: c.medidas.alto_pct,
-             dominante_cielo_pct: c.dominante_cielo_pct, cumple: !c.fallos.length, segundos: c.segundos, elegido: c === best };
+             dominante_cielo_pct: c.dominante_cielo_pct, cumple: !c.fallos.length, segundos: c.segundos, elegido: c === best,
+             previa: c.previa || undefined };
   });
   return {
     vista: vista, original: viewId, cielo_objetivo: cielo, comparados: comparados,

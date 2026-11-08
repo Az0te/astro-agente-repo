@@ -662,7 +662,8 @@ function plExtraerScript(texto) {
 
 function plEjecutarScript(aj, codigo) {
    var avisos = plCargarGuia(aj.guia), g = plGlobal(), salida = [];
-   g.PICOPILOT_INTERNET = !!aj.internet;   // web.js lo respeta: sin la casilla, simbad/wikipedia/... no salen a internet
+   g.PICOPILOT_INTERNET = !!aj.internet;
+   g.PICOPILOT_PREVIAS = plCarpetaPrevias();   // las comparaciones de la guía dejan aquí una miniatura por candidato   // web.js lo respeta: sin la casilla, simbad/wikipedia/... no salen a internet
    avisos.forEach(function (a) { console.warningln("[PiCopilotLite] " + a); });
    g.chat = function () {
       var t = Array.prototype.slice.call(arguments).map(function (x) {
@@ -733,7 +734,12 @@ var PL_CSS =
    "ul.nc li{color:#ff9a9a}ul.med li{color:#9fe3b7}ul.ojo li{color:#ffd58a}" +
    ".ico{display:inline-block;width:18px}" +
    ".ok{color:#7ee0a0}.bad{color:#ff8f8f}.muted{color:#6c737a}" +
-   "details{margin-top:6px}summary{cursor:pointer;color:#7d8590;font-size:11px}";
+   "details{margin-top:6px}summary{cursor:pointer;color:#7d8590;font-size:11px}" +
+   ".grid{margin:6px 0;font-size:0}.row{white-space:nowrap}" +
+   "figure{display:inline-block;vertical-align:top;margin:0 1% 8px 0;width:48.5%;font-size:12px;background:#1b1d1f;border:1px solid #33383d;" +
+   "border-radius:5px;overflow:hidden;box-sizing:border-box;white-space:normal}" +
+   "figure img{display:block;width:100%;height:auto}figcaption{font-size:11px;color:#c8ccd0;padding:3px 6px}" +
+   "figure.rec{border:2px solid #4fbf7a}";
 
 function plEsc(s) {
    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -882,11 +888,51 @@ function plListaHtml(arr, cls, icono) {
 }
 
 // Array de objetos → tabla (columnas: claves escalares y las de los objetos anidados, máx. 10; filas máx. 40).
+// Campos con rutas de miniaturas: se pintan como imágenes (plMiniaturas), no como columnas de texto.
+function plEsCampoPrevia(k) { return /^(previa|previa_modelo|jpg)$/.test(k); }
+
+function plRutaFichero(p) { return "file:" + "/" + "/" + "/" + String(p).replace(/\\/g, "/"); }
+
+// Rejilla de miniaturas de un resultado: cada objeto con «previa» (y «previa_modelo» al lado, como el gradiente quitado)
+// es una fila; el elegido va con borde verde. Sin repetir ficheros (candidatos y comparados llevan las mismas).
+function plMiniaturas(r) {
+   var vistos = {}, filas = [];
+   (function recorrer(o) {
+      if (!o || typeof o !== "object") return;
+      if (Array.isArray(o)) { o.forEach(recorrer); return; }
+      var img = o.previa || o.jpg;
+      if (typeof img === "string" && !vistos[img] && File.exists(img)) {
+         vistos[img] = true;
+         var rotulo = o.metodo ? o.metodo + (o.parametros ? " " + o.parametros : "") : (o.paleta || o.etiqueta || o.vista || "");
+         var extra = [];
+         if (o.metricas && isFinite(o.metricas.fondoResidual)) extra.push("deja " + Math.round(100 * o.metricas.fondoResidual) + " % del gradiente");
+         if (o.metricas && isFinite(o.metricas.come_objeto_pct)) extra.push("se lleva " + o.metricas.come_objeto_pct + " % del objeto");
+         if (o.deja_gradiente_pct !== undefined && o.deja_gradiente_pct !== null) extra.push("deja " + o.deja_gradiente_pct + " % del gradiente");
+         if (o.ruido_baja_pct !== undefined) extra.push("ruido −" + o.ruido_baja_pct + " %");
+         if (o.contraste_x !== undefined) extra.push("contraste ×" + o.contraste_x);
+         if (o.senal_debil_en_ruidos !== undefined) extra.push("señal débil " + o.senal_debil_en_ruidos + " ruidos");
+         var mod = typeof o.previa_modelo === "string" && File.exists(o.previa_modelo) ? o.previa_modelo : null;
+         if (mod) vistos[mod] = true;
+         filas.push({ img: img, mod: mod, rotulo: rotulo + (extra.length ? " · " + extra.join(", ") : ""), elegido: !!o.elegido });
+      }
+      for (var k in o) if (!plEsCampoPrevia(k)) recorrer(o[k]);
+   })(r);
+   if (!filas.length) return "";
+   function fig(src, txt, rec) {
+      return "<figure" + (rec ? " class=\"rec\"" : "") + "><img src=\"" + plEsc(plRutaFichero(src)) + "\"><figcaption>" + plEsc(txt) + "</figcaption></figure>";
+   }
+   return "<div class=\"grid\">" + filas.map(function (f) {
+      return "<div class=\"row\">" + fig(f.img, (f.elegido ? "★ ELEGIDO · " : "") + f.rotulo, f.elegido) +
+             (f.mod ? fig(f.mod, "Gradiente quitado (modelo)", false) : "") + "</div>";
+   }).join("") + "</div>";
+}
+
 function plTablaObjetos(arr) {
    var cols = [];
    arr.forEach(function (e) {
       if (!e || typeof e !== "object") return;
       for (var k in e) {
+         if (plEsCampoPrevia(k)) continue;
          var v = e[k];
          if (v && typeof v === "object" && !Array.isArray(v)) {
             for (var k2 in v) if (plEsEscalar(v[k2]) && cols.indexOf(k + "." + k2) < 0 && cols.length < 10) cols.push(k + "." + k2);
@@ -907,6 +953,7 @@ function plTablaObjetos(arr) {
 function plFilasDatos(obj, prefijo, acc, prof) {
    for (var k in obj) {
       if (prof == 0 && (k == "no_cumple" || k == "control")) continue;
+      if (plEsCampoPrevia(k)) continue;
       var nombre = prefijo ? prefijo + " · " + k : plHumano(k), v = obj[k];
       if (plEsEscalar(v)) acc.filas += "<tr><th>" + plEsc(nombre) + "</th><td>" + plValorHtml(v) + "</td></tr>";
       else if (!Array.isArray(v) && prof < 2) plFilasDatos(v, nombre, acc, prof + 1);
@@ -924,6 +971,7 @@ function plFicha(r, json) {
    if (Array.isArray(nc)) h += nc.length ? "<span class=\"badge bad\">No cumple</span> " : "<span class=\"badge ok\">Cumple</span> ";
    h += "Resultado del script</div>";
    h += plListaHtml(nc, "nc", "&#10007;") + plListaHtml(ctl.medido, "med", "&#10003;") + plListaHtml(ctl.revisar_a_ojo, "ojo", "&#128065;");
+   h += plMiniaturas(r);
    var acc = { filas: "", extra: "" };
    if (Array.isArray(r)) acc.extra = r.length && r[0] && typeof r[0] === "object" ? plTablaObjetos(r) :
                                      "<p>" + r.map(function (x) { return plValorHtml(x); }).join(", ") + "</p>";
@@ -1050,6 +1098,25 @@ function plParar(P) {
    try { if (P.isRunning) P.kill(); } catch (e) {}
 }
 
+// Carpeta de miniaturas y página del chat. Se vacía al abrir el script, con «Limpiar» y con «Nueva conversación»
+// (como el módulo). La página se carga desde un fichero: así las miniaturas (file:) se ven y no hay límite de tamaño.
+function plCarpetaPrevias() { return plCarpeta(plCarpeta(PL_TMP) + "/previas"); }
+
+function plBorrarTemporales() {
+   try {
+      var d = plCarpetaPrevias();
+      searchDirectory(d + "/*.jpg", false).forEach(function (f) { try { File.remove(f); } catch (e) {} });
+      var html = PL_TMP + "/chat.html";
+      if (File.exists(html)) File.remove(html);
+   } catch (e) {}
+}
+
+function plMostrarPagina(wv, html) {
+   var f = plCarpeta(PL_TMP) + "/chat.html";
+   File.writeTextFile(f, html);
+   wv.loadContent(f);
+}
+
 // Con #engine v8, Dialog es una clase: hay que heredar con «class ... extends» y super().
 class PLDialogo extends Dialog {
    constructor(aj) {
@@ -1115,8 +1182,16 @@ function plConstruirDialogo(aj) {
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
-      self.mensajes = []; self.registro = ""; self.entradas = []; self.historialBox.setHTML(plPagina([])); self.ponerPendiente(null);
+      self.mensajes = []; self.registro = ""; self.entradas = []; plBorrarTemporales();
+      plMostrarPagina(self.historialBox, plPagina([])); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0; self.bCorregir.enabled = false;
+   };
+   this.bVaciar = new PushButton(pPrompt);
+   this.bVaciar.text = "Limpiar";
+   this.bVaciar.toolTip = "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.";
+   this.bVaciar.onClick = function () {
+      self.registro = ""; self.entradas = []; plBorrarTemporales();
+      plMostrarPagina(self.historialBox, plPagina([]));
    };
    this.estadoLbl = new Label(pPrompt);
    this.estadoLbl.text = "";
@@ -1129,7 +1204,7 @@ function plConstruirDialogo(aj) {
    filaB.spacing = 6;
    filaB.add(this.bEnviar); filaB.add(this.bCancelar); filaB.addSpacing(12);
    filaB.add(this.cAuto); filaB.add(this.cInternet); filaB.add(this.bEjecutar); filaB.add(this.bVer); filaB.add(this.bCorregir);
-   filaB.addStretch(); filaB.add(this.bLimpiar);
+   filaB.addStretch(); filaB.add(this.bVaciar); filaB.add(this.bLimpiar);
    pPrompt.sizer = new VerticalSizer;
    pPrompt.sizer.margin = 6; pPrompt.sizer.spacing = 6;
    pPrompt.sizer.add(this.historialBox, 100);
@@ -1388,7 +1463,7 @@ function plConstruirDialogo(aj) {
       this.registro += "── " + quien + " ──\n" + texto + "\n\n";
       var d = new Date(), hora = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
       this.entradas.push({ tipo: tipo || "info", titulo: quien, texto: String(texto), hora: hora });
-      this.historialBox.setHTML(plPagina(this.entradas));
+      plMostrarPagina(this.historialBox, plPagina(this.entradas));
       plEventos();
    };
 
@@ -1606,6 +1681,7 @@ function plConstruirDialogo(aj) {
    };
    this.tEnlaces.start();
 
+   plBorrarTemporales();   // al abrir: miniaturas de sesiones anteriores fuera
    this.rellenarModelos(false);
    this.anotar("PiCopilot Lite", "Hola. Pregúntame por tus imágenes o pídeme un paso de procesado. Cuando proponga un " +
                "script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»). Los enlaces «Siguiente paso» " +

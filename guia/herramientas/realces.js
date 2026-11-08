@@ -392,7 +392,8 @@ function contrasteCandidatos(viewId, o) {
     if (Math.abs(m.cielo - base.cielo) > 0.03) f.push("mueve el cielo de " + base.cielo + " a " + m.cielo);
     if (m.quemados_pct - base.quemados_pct > 0.05) f.push("quema " + (m.quemados_pct - base.quemados_pct).toFixed(3) + " % más de píxeles");
     cands.push({ etiqueta: etiqueta, vista: w.mainView.id, medidas: m, contraste_x: +gc.toFixed(3), ruido_x: +gr.toFixed(3), fallos: f,
-                 segundos: Math.round((Date.now() - t1) / 1000) });
+                 segundos: Math.round((Date.now() - t1) / 1000),
+                 previa: typeof pxPrevia === "function" ? pxPrevia(w.mainView.id, "lc_" + w.mainView.id, { estirar: false }) : null });
   }
   (o.lhe || [{ radius: 64, slopeLimit: 1.5, amount: 0.35 }, { radius: 128, slopeLimit: 2.0, amount: 0.35 }]).forEach(function (p, i) {
     var t1 = Date.now();
@@ -446,7 +447,7 @@ function contrasteCandidatos(viewId, o) {
       if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
       return { metodo: c.etiqueta, contraste_x: c.contraste_x, ruido_cielo_x: c.ruido_x, cielo: c.medidas.cielo,
                quemados_pct: c.medidas.quemados_pct, cumple: !c.fallos.length, fallos: c.fallos.join("; ") || undefined,
-               segundos: c.segundos, elegido: c === best };
+               segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
     }),
     recomendado: best ? best.etiqueta : "ninguno: dejar la imagen como está",
     motivo: best ? best.etiqueta + ": sube el contraste local ×" + best.contraste_x + " con el ruido del cielo ×" + best.ruido_x + "." :

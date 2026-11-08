@@ -401,6 +401,13 @@ function gradienteCandidatos(viewId, o) {
   } else {
     r.motivo = "Ningún candidato se pudo medir: ver errores.";
   }
+  // Miniaturas para el chat: la corregida (con STF) y, al lado, el modelo de gradiente quitado.
+  r.candidatos.forEach(function (c) {
+    var p = pxPrevia(c.vista, "grad_" + c.vista), pm = pxPrevia(c.modelo, "grad_" + c.modelo);
+    if (p) c.previa = p;
+    if (pm) c.previa_modelo = pm;
+    if (c.vista === r.recomendado) c.elegido = true;
+  });
   if (o.dossier) {
     var dir = File.extractDrive(o.dossier) + File.extractDirectory(o.dossier);
     if (!File.directoryExists(dir)) File.createDirectory(dir, true);
@@ -436,7 +443,8 @@ function grCompactar(g, o) {
     var m = c.metricas || {}, f = m.fondoResidual;
     return { metodo: c.metodo + " " + c.parametros, deja_gradiente_pct: isFinite(f) ? Math.round(100 * f) : null,
              come_objeto_pct: isFinite(m.come_objeto_pct) ? m.come_objeto_pct : null,
-             corr: isFinite(m.gcStructCopy) ? m.gcStructCopy : null, elegido: c === best };
+             corr: isFinite(m.gcStructCopy) ? m.gcStructCopy : null, elegido: c === best,
+             previa: c.previa, previa_modelo: c.previa_modelo };
   });
   g.compacto = true;
   g.corregida = keep;

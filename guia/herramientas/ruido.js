@@ -314,7 +314,10 @@ function ruidoCandidatos(viewId, o) {
     for (var k2 in p.op) op[k2] = p.op[k2];
     op.nuevaVista = viewId + p.sufijo;
     var t1 = Date.now();
-    try { cands.push({ etiqueta: p.etiqueta, orden: n, r: reducirRuido(viewId, op), segundos: Math.round((Date.now() - t1) / 1000) }); }
+    try {
+      var rr = reducirRuido(viewId, op);
+      cands.push({ etiqueta: p.etiqueta, orden: n, r: rr, segundos: Math.round((Date.now() - t1) / 1000), previa: pxPrevia(rr.vista, "ruido_" + rr.vista) });
+    }
     catch (e) { cands.push({ etiqueta: p.etiqueta, orden: n, error: String(e && e.message ? e.message : e) }); }
   });
   var ok = cands.filter(function (c) { return c.r && !c.r.no_cumple.length; }), best = null;
@@ -336,7 +339,7 @@ function ruidoCandidatos(viewId, o) {
     var m = c.r.medidas;
     return { metodo: c.etiqueta, ruido_baja_pct: m.ruido_baja_pct, contraste_zona_debil_pct: m.contraste_zona_debil_pct,
              residual_estructura: m.residual_estructura, moteado_color: m.moteado_color_despues,
-             cumple: !c.r.no_cumple.length, segundos: c.segundos, elegido: c === best };
+             cumple: !c.r.no_cumple.length, segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
   });
   var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn"), vista = null;
   cands.forEach(function (c) {
