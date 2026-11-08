@@ -951,7 +951,7 @@
    "fichero": "bandaestrecha.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, FORAXX, FORAXX_BICOLOR, FORAXX_HOS; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); suma en screen la capa de estrellas RGB estirada si se da. Es la que se usa cuando el usuario pide una paleta.",
+   "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, FORAXX, FORAXX_BICOLOR y las familias Foraxx de AutoPalette Studio: FORAXX_SHO/HOS/OHS/HOO/HSO/OSH/SOH y sus 42 variantes FORAXX_<familia>_<variante>; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); suma en screen la capa de estrellas RGB estirada si se da. Es la que se usa cuando el usuario pide una paleta.",
    "paso": "no-lineal/02-lrgb-paleta.md",
    "params": {
     "type": "object",

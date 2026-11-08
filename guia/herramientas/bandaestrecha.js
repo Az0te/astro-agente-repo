@@ -330,12 +330,69 @@ var BE_PALETAS = (function () {
     HOO_NOVA: { usaS: false, f: function (c) { var o = "min(" + c.O + ",0.85*" + c.H + ")"; return [c.H, "0.15*" + c.H + "+0.90*" + o, o]; }, d: "HOO con límite al OIII (NOVA): O' = min(O, 0,85·H)" },
     FORAXX: { usaS: true, sint: "foraxx", f: function (c) { var ho = p(c.H + "*" + c.O), oo = p(c.O); return [oo + "*" + c.S + "+" + inv(oo) + "*" + c.H, ho + "*" + c.H + "+" + inv(ho) + "*" + c.O, c.O]; }, d: "Foraxx Classic: R = o·S + ~o·H, G = ho·H + ~ho·O, B = O" },
     FORAXX_BICOLOR: { usaS: false, f: function (c) { var ho = p(c.H + "*" + c.O); return [c.H, ho + "*" + c.H + "+" + inv(ho) + "*" + c.O, c.O]; }, d: "Foraxx Classic bicolor (sin SII): R = H, G = ho·H + ~ho·O, B = O" },
-    FORAXX_HOS: { usaS: false, pseudo: true, f: function (c) {
-        var ho = p(c.H + "*" + c.O), oo = p(c.O), g = ho + "*" + c.H + "+" + inv(ho) + "*" + c.O;
+    FORAXX_HOS: { usaS: false, f: function (c) {
+        var ho = p(c.H + "*" + c.O), oo = p(c.O);
+        if (c.real) return [c.H, c.O, oo + "*" + c.S + "+" + inv(oo) + "*" + c.O];   // con SII real (AutoPalette Studio)
+        var g = ho + "*" + c.H + "+" + inv(ho) + "*" + c.O;
         var s1 = "0.78*" + c.O + "+0.22*(" + ho + "*" + c.H + "+" + inv(ho) + "*max(0," + c.H + "-0.22*" + c.O + "))";
         return [c.H, "0.88*(" + g + ")+0.12*" + c.O, oo + "*(" + s1 + ")+" + inv(oo) + "*" + c.O]; },
-      d: "Foraxx HOS sin SII (subtle, pseudo): R = H, G = 0,88·(ho·H + ~ho·O) + 0,12·O, B = o·S' + ~o·O" }
+      sinS: "pseudo", d: "Foraxx HOS: con SII R = H, G = O, B = o·S + ~o·O; sin SII, la versión subtle (pseudo)" }
   };
+  // Familias Foraxx de AutoPalette Studio v1.2.0 (Raúl Hussein, GPL-3), sacadas de su script instalado (8 nov 2026):
+  // FORAXX_<familia> = la que genera Studio para esa familia (generateSelectedForaxxPaletteOnly); FORAXX_<familia>_<variante> =
+  // las 6 variantes de cada familia (foraxSHO … foraxSOH). o = O^~O, ho = (H·O)^~(H·O) (pipStrength 1). Exigen SII; sin él, SII sintético (pseudo).
+  var FX = {"FORAXX_SHO": ["{o}*{S}+~{o}*{H}", "{ho}*{H}+~{ho}*{O}", "{O}"],
+    "FORAXX_OHS": ["{o}*{O}+~{o}*{H}", "{ho}*{H}+~{ho}*{O}", "{o}*{S}+~{o}*{O}"],
+    "FORAXX_HOO": ["{H}", "{O}", "{o}*{O}+~{o}*{S}"],
+    "FORAXX_HSO": ["{H}", "{ho}*{S}+~{ho}*{O}", "{O}"],
+    "FORAXX_OSH": ["{o}*{O}+~{o}*{H}", "{ho}*{S}+~{ho}*{O}", "{o}*{H}+~{o}*{O}"],
+    "FORAXX_SOH": ["{o}*{S}+~{o}*{H}", "{O}", "{o}*{H}+~{o}*{S}"],
+    "FORAXX_HOO_HOS": ["{o}*{H}+~{o}*{H}", "{ho}*{O}+~{ho}*{O}", "{o}*{O}+~{o}*{S}"],
+    "FORAXX_HOO_HSO": ["{o}*{H}+~{o}*{H}", "{ho}*{O}+~{ho}*{S}", "{o}*{O}+~{o}*{O}"],
+    "FORAXX_HOO_OHS": ["{o}*{H}+~{o}*{O}", "{ho}*{O}+~{ho}*{H}", "{o}*{O}+~{o}*{S}"],
+    "FORAXX_HOO_OSH": ["{o}*{H}+~{o}*{O}", "{ho}*{O}+~{ho}*{S}", "{o}*{O}+~{o}*{H}"],
+    "FORAXX_HOO_SHO": ["{o}*{H}+~{o}*{S}", "{ho}*{O}+~{ho}*{H}", "{o}*{O}+~{o}*{O}"],
+    "FORAXX_HOO_SOH": ["{o}*{H}+~{o}*{S}", "{ho}*{O}+~{ho}*{O}", "{o}*{O}+~{o}*{H}"],
+    "FORAXX_HOS_HOO": ["{o}*{H}+~{o}*{H}", "{ho}*{O}+~{ho}*{O}", "{o}*{S}+~{o}*{O}"],
+    "FORAXX_HOS_HSO": ["{o}*{H}+~{o}*{H}", "{ho}*{O}+~{ho}*{S}", "{o}*{S}+~{o}*{O}"],
+    "FORAXX_HOS_OHS": ["{o}*{H}+~{o}*{O}", "{ho}*{O}+~{ho}*{H}", "{o}*{S}+~{o}*{S}"],
+    "FORAXX_HOS_OSH": ["{o}*{H}+~{o}*{O}", "{ho}*{O}+~{ho}*{S}", "{o}*{S}+~{o}*{H}"],
+    "FORAXX_HOS_SHO": ["{o}*{H}+~{o}*{S}", "{ho}*{O}+~{ho}*{H}", "{o}*{S}+~{o}*{O}"],
+    "FORAXX_HOS_SOH": ["{o}*{H}+~{o}*{S}", "{ho}*{O}+~{ho}*{O}", "{o}*{S}+~{o}*{H}"],
+    "FORAXX_HSO_HOO": ["{o}*{H}+~{o}*{H}", "{ho}*{S}+~{ho}*{O}", "{o}*{O}+~{o}*{O}"],
+    "FORAXX_HSO_HOS": ["{o}*{H}+~{o}*{H}", "{ho}*{S}+~{ho}*{O}", "{o}*{O}+~{o}*{S}"],
+    "FORAXX_HSO_OHS": ["{o}*{H}+~{o}*{O}", "{ho}*{S}+~{ho}*{H}", "{o}*{O}+~{o}*{S}"],
+    "FORAXX_HSO_OSH": ["{o}*{H}+~{o}*{O}", "{ho}*{S}+~{ho}*{S}", "{o}*{O}+~{o}*{H}"],
+    "FORAXX_HSO_SHO": ["{o}*{H}+~{o}*{S}", "{ho}*{S}+~{ho}*{H}", "{o}*{O}+~{o}*{O}"],
+    "FORAXX_HSO_SOH": ["{o}*{H}+~{o}*{S}", "{ho}*{S}+~{ho}*{O}", "{o}*{O}+~{o}*{H}"],
+    "FORAXX_OHS_HOO": ["{o}*{O}+~{o}*{H}", "{ho}*{H}+~{ho}*{O}", "{o}*{S}+~{o}*{O}"],
+    "FORAXX_OHS_HOS": ["{o}*{O}+~{o}*{H}", "{ho}*{H}+~{ho}*{O}", "{o}*{S}+~{o}*{S}"],
+    "FORAXX_OHS_HSO": ["{o}*{O}+~{o}*{H}", "{ho}*{H}+~{ho}*{S}", "{o}*{S}+~{o}*{O}"],
+    "FORAXX_OHS_OSH": ["{o}*{O}+~{o}*{O}", "{ho}*{H}+~{ho}*{S}", "{o}*{S}+~{o}*{H}"],
+    "FORAXX_OHS_SHO": ["{o}*{O}+~{o}*{S}", "{ho}*{H}+~{ho}*{H}", "{o}*{S}+~{o}*{O}"],
+    "FORAXX_OHS_SOH": ["{o}*{O}+~{o}*{S}", "{ho}*{H}+~{ho}*{O}", "{o}*{S}+~{o}*{H}"],
+    "FORAXX_OSH_HOO": ["{o}*{O}+~{o}*{H}", "{ho}*{S}+~{ho}*{O}", "{o}*{H}+~{o}*{O}"],
+    "FORAXX_OSH_HOS": ["{o}*{O}+~{o}*{H}", "{ho}*{S}+~{ho}*{O}", "{o}*{H}+~{o}*{S}"],
+    "FORAXX_OSH_HSO": ["{o}*{O}+~{o}*{H}", "{ho}*{S}+~{ho}*{S}", "{o}*{H}+~{o}*{O}"],
+    "FORAXX_OSH_OSH": ["{o}*{O}+~{o}*{O}", "{ho}*{S}+~{ho}*{S}", "{o}*{H}+~{o}*{H}"],
+    "FORAXX_OSH_SHO": ["{o}*{O}+~{o}*{S}", "{ho}*{S}+~{ho}*{H}", "{o}*{H}+~{o}*{O}"],
+    "FORAXX_OSH_SOH": ["{o}*{O}+~{o}*{S}", "{ho}*{S}+~{ho}*{O}", "{o}*{H}+~{o}*{H}"],
+    "FORAXX_SHO_HOO": ["{o}*{S}+~{o}*{H}", "{ho}*{H}+~{ho}*{O}", "{O}"],
+    "FORAXX_SHO_HOS": ["{o}*{S}+~{o}*{H}", "{ho}*{H}+~{ho}*{O}", "{o}*{O}+~{o}*{S}"],
+    "FORAXX_SHO_HSO": ["{o}*{S}+~{o}*{H}", "{ho}*{H}+~{ho}*{S}", "{O}"],
+    "FORAXX_SHO_OHS": ["{o}*{S}+~{o}*{O}", "{H}", "{o}*{O}+~{o}*{S}"],
+    "FORAXX_SHO_OSH": ["{o}*{S}+~{o}*{O}", "{ho}*{H}+~{ho}*{S}", "{o}*{O}+~{o}*{H}"],
+    "FORAXX_SHO_SOH": ["{S}", "{ho}*{O}+~{ho}*{H}", "{o}*{O}+~{o}*{H}"],
+    "FORAXX_SOH_HOO": ["{o}*{S}+~{o}*{H}", "{ho}*{O}+~{ho}*{O}", "{o}*{H}+~{o}*{O}"],
+    "FORAXX_SOH_HOS": ["{o}*{S}+~{o}*{H}", "{ho}*{O}+~{ho}*{O}", "{o}*{H}+~{o}*{S}"],
+    "FORAXX_SOH_HSO": ["{o}*{S}+~{o}*{H}", "{ho}*{O}+~{ho}*{S}", "{o}*{H}+~{o}*{O}"],
+    "FORAXX_SOH_OHS": ["{o}*{S}+~{o}*{O}", "{ho}*{O}+~{ho}*{H}", "{o}*{H}+~{o}*{S}"],
+    "FORAXX_SOH_OSH": ["{o}*{S}+~{o}*{O}", "{ho}*{O}+~{ho}*{S}", "{o}*{H}+~{o}*{H}"],
+    "FORAXX_SOH_SHO": ["{o}*{S}+~{o}*{S}", "{ho}*{O}+~{ho}*{H}", "{o}*{H}+~{o}*{O}"]};
+  var fx = function (tpl) { return function (c) {
+    var oo = p(c.O), ho = p(c.H + "*" + c.O);
+    return tpl.map(function (x) { return x.replace(/\{ho\}/g, ho).replace(/\{o\}/g, oo).replace(/\{S\}/g, c.S).replace(/\{H\}/g, c.H).replace(/\{O\}/g, c.O); }); }; };
+  for (var nombre in FX) if (!T[nombre]) T[nombre] = { usaS: true, sint: "foraxx", f: fx(FX[nombre]), d: "AutoPalette " + nombre + ": R = " + FX[nombre][0] + "; G = " + FX[nombre][1] + "; B = " + FX[nombre][2] };
   T.HUBBLE = T.SHO; T.FORAXX_CLASSIC = T.FORAXX;
   return T;
 })();
@@ -343,7 +400,7 @@ var BE_PALETAS = (function () {
 function paletasDisponibles() {
   var r = {};
   for (var k in BE_PALETAS) r[k] = (BE_PALETAS[k].usaS ? "[con SII] " : "") + BE_PALETAS[k].d;
-  return { paletas: r, nota: "Las 42 variantes Foraxx de AutoPalette Studio (familias SHO, HOS, OHS, HOO, HSO, OSH, SOH) todavía no están." };
+  return { paletas: r, nota: "Foraxx: FORAXX_<familia> es la de AutoPalette Studio para esa familia; FORAXX_<familia>_<variante> sus 6 variantes (42). Las marcadas [con SII] usan SII sintético si no hay SII real (pseudo)." };
 }
 
 function componerPaleta(capas, o) {
@@ -369,7 +426,7 @@ function componerPaleta(capas, o) {
     if (med[k] < 0.02) throw new Error(k + " (" + ids[k] + ") parece lineal (mediana " + med[k] + "): sepárale las estrellas (separarEstrellas) y estira cada " +
                                       "raya starless con el mismo cielo, estirarStarless(id, { cielo: 0.10 }), antes de componer la paleta");
   }
-  var c = { S: ids.S, H: ids.H, O: ids.O }, pseudo = !!def.pseudo;
+  var c = { S: ids.S, H: ids.H, O: ids.O, real: tieneS }, pseudo = !!def.pseudo || (def.sinS === "pseudo" && !tieneS);
   if (def.usaS && !tieneS) {
     c.S = def.sint === "foraxx" ? "(0.85*" + ids.H + "+0.15*" + ids.O + ")" : "(0.6*" + ids.H + "+0.4*" + ids.O + ")";
     pseudo = true;
