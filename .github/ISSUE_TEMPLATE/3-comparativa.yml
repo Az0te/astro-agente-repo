@@ -1,0 +1,75 @@
+name: "⚖️ Comparativa manual vs PiCopilot / Manual vs PiCopilot"
+description: "Tu procesado manual al lado del de PiCopilot con los mismos datos. / Your manual processing next to PiCopilot's on the same data."
+title: "[Comparativa] <tipo de objeto> – <paso o procesado completo>"
+labels: ["comparativa"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Las comparativas sirven para calibrar umbrales (nivel de cielo, ruido, moteado de color, aporte de estrellas…).
+        Lo ideal: misma imagen de partida, mismo recorte y misma escala en las dos versiones.
+        / Ideally same starting data, same crop and same scale for both versions.
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: "Tipo de objeto / Object type"
+      options:
+        - "Galaxia / Galaxy"
+        - "Nebulosa de emisión / Emission nebula"
+        - "Nebulosa oscura / Dark nebula"
+        - "Nebulosa de reflexión / Reflection nebula"
+        - "Nebulosa planetaria / Planetary nebula"
+        - "Remanente de supernova / Supernova remnant"
+        - "Cúmulo globular / Globular cluster"
+        - "Cúmulo abierto / Open cluster"
+        - "Campo mixto / Mixed field"
+        - "Otro / Other"
+    validations:
+      required: true
+  - type: input
+    id: alcance
+    attributes:
+      label: "Qué se compara / What is compared"
+      placeholder: "Procesado completo, o un paso: Lineal 7 – Gradiente, No lineal 1 – Estirado…"
+    validations:
+      required: true
+  - type: textarea
+    id: equipo
+    attributes:
+      label: "Equipo, filtros e integración / Rig, filters and integration"
+    validations:
+      required: true
+  - type: textarea
+    id: imagenes
+    attributes:
+      label: "Imágenes / Images"
+      description: "Manual y PiCopilot, a ser posible lado a lado y un recorte al 100 %. / Side by side plus a 100% crop."
+    validations:
+      required: true
+  - type: textarea
+    id: manual
+    attributes:
+      label: "Cómo hiciste el manual / How you did the manual version"
+      description: "Procesos y parámetros clave. / Key processes and parameters."
+  - type: textarea
+    id: medidas
+    attributes:
+      label: "Medidas (si las tienes) / Measurements (if any)"
+      description: "Lo que midieron los controles del panel en cada versión: cielo, ruido, moteado, aporte de estrellas, FWHM… / Panel check values for each version."
+      render: text
+  - type: textarea
+    id: conclusion
+    attributes:
+      label: "Qué sale mejor y qué peor / What is better and what is worse"
+      description: "Si propones cambiar un umbral, di para qué tipo de objeto. / If you propose a threshold change, say for which object type."
+    validations:
+      required: true
+  - type: input
+    id: modelo
+    attributes:
+      label: "Modelo usado en PiCopilot / Model used in PiCopilot"
+      placeholder: "Claude Opus, Qwen3 27B local…"
+  - type: input
+    id: enlace
+    attributes:
+      label: "Enlace a los datos (opcional) / Data link (optional)"

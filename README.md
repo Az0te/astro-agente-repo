@@ -93,6 +93,20 @@ El watcher ejecuta como código de PixInsight cualquier orden que aparezca en la
 - no dejes el watcher en marcha si otras personas o programas pueden escribir en tu carpeta de usuario;
 - revisa lo que hace la IA, sobre todo antes de guardar o sobrescribir ficheros.
 
+## Cómo contribuir
+
+Lo que más ayuda ahora son **datos y resultados de otros equipos, cielos y tipos de objeto**; no hace falta programar:
+
+- **Casos de prueba**: masters o recortes de tipos de objeto poco probados, con equipo, filtro y cámara.
+- **Fallos** con el registro del panel o de la consola.
+- **Comparativas** de tu procesado manual frente al de PiCopilot, para calibrar umbrales.
+- **Pruebas** con otros modelos de IA, GPU, sistemas o telescopios inteligentes.
+- **Mejoras de la guía** por *pull request*: siempre reglas por **tipo de objeto**, nunca para un objeto concreto.
+
+Abre una [*issue*](https://github.com/Az0te/astro-agente-repo/issues/new/choose) con la plantilla que corresponda, o comenta ideas y resultados en [*Discussions*](https://github.com/Az0te/astro-agente-repo/discussions). Los ficheros grandes, mejor con un enlace a Drive o WeTransfer. Todos los detalles (también en inglés) están en [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+*Contributions are welcome in English too: see [`CONTRIBUTING.md`](CONTRIBUTING.md#how-to-contribute).*
+
 ## Créditos
 
 - **Alain Escaffre**, [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) (MIT): diseño original del puente por ficheros, el watcher y el servidor MCP, además de muchas ideas de la guía (barreras de calidad, taxonomía de objetos, trampas de PJSR).

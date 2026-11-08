@@ -1,0 +1,57 @@
+name: "🧪 Prueba con otro modelo o equipo / Other model or hardware"
+description: "Resultado de probar PiCopilot o la guía con otro modelo de IA, otra GPU, otro sistema o versión de PixInsight. / Results with another AI model, GPU, OS or PixInsight version."
+title: "[Prueba] <modelo o equipo>"
+labels: ["prueba"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Nos interesa tanto lo que funciona como lo que no. / We want to hear what works as much as what doesn't.
+  - type: dropdown
+    id: que
+    attributes:
+      label: "Qué has probado / What you tested"
+      multiple: true
+      options:
+        - "Otro modelo de IA / Another AI model"
+        - "Otra GPU o equipo para modelos locales / Other GPU or hardware for local models"
+        - "Otro sistema operativo / Another OS"
+        - "Otra versión de PixInsight / Another PixInsight version"
+        - "DLL firmada en otro PC / Signed DLL on another PC"
+        - "Telescopio inteligente (Seestar, Dwarf…) / Smart telescope"
+        - "Cámara mono / Mono camera"
+    validations:
+      required: true
+  - type: textarea
+    id: entorno
+    attributes:
+      label: "Entorno / Environment"
+      description: "Modelo exacto (y cuantización, contexto, temperatura), cliente (Claude Code, Codex, Ollama, LM Studio…), GPU y RAM, sistema operativo, PixInsight, build de PiCopilot."
+      placeholder: |
+        Modelo: …
+        Cliente: …
+        GPU / RAM: …
+        SO: …
+        PixInsight: …
+        PiCopilot: build…
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: "Qué pasos ejecutaste / Which steps you ran"
+      placeholder: "Procesado completo, o lista de pasos"
+    validations:
+      required: true
+  - type: textarea
+    id: resultado
+    attributes:
+      label: "Resultado / Result"
+      description: "Qué funcionó, qué falló, cuántas correcciones necesitó, tiempos. Añade imágenes si puedes. / What worked, what failed, how many fixes, timing."
+    validations:
+      required: true
+  - type: textarea
+    id: registro
+    attributes:
+      label: "Registro (si algo falló) / Log (if something failed)"
+      render: text

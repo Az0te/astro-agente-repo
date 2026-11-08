@@ -1,0 +1,95 @@
+name: "🔭 Caso de prueba / Test case"
+description: "Comparte un master (o recorte) de un tipo de objeto o un equipo poco probado. / Share a master of an untested object type or rig."
+title: "[Caso] <tipo de objeto> – <equipo>"
+labels: ["caso de prueba"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        La guía mejora **por tipo de objeto**: cada caso nuevo sirve para comprobar sus valores de partida.
+        Sube los ficheros a Drive, OneDrive, Dropbox o WeTransfer y pega el enlace. Revisa antes las cabeceras FITS/XISF (coordenadas, rutas).
+        / The guide improves per object type. Upload files elsewhere and paste the link. Check headers for private data first.
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: "Tipo de objeto / Object type"
+      options:
+        - "Galaxia / Galaxy"
+        - "Nebulosa de emisión / Emission nebula"
+        - "Nebulosa oscura / Dark nebula"
+        - "Nebulosa de reflexión / Reflection nebula"
+        - "Nebulosa planetaria / Planetary nebula"
+        - "Remanente de supernova / Supernova remnant"
+        - "Cúmulo globular / Globular cluster"
+        - "Cúmulo abierto / Open cluster"
+        - "Campo mixto / Mixed field"
+        - "Otro / Other"
+    validations:
+      required: true
+  - type: input
+    id: objeto
+    attributes:
+      label: "Objeto (solo como referencia) / Object (reference only)"
+      description: "Las reglas de la guía son por tipo, nunca por objeto concreto. / Guide rules are per type, never per object."
+      placeholder: "p. ej. NGC 7000"
+  - type: textarea
+    id: equipo
+    attributes:
+      label: "Equipo / Rig"
+      description: "Telescopio (focal, f/), cámara (OSC o mono, sensor), montura, guiado. / Telescope, camera, mount."
+      placeholder: |
+        Telescopio: refractor 80 mm f/6
+        Cámara: OSC, IMX571, -10 °C
+    validations:
+      required: true
+  - type: textarea
+    id: filtros
+    attributes:
+      label: "Filtros e integración / Filters and integration"
+      description: "Filtro, nº de subs × exposición, ganancia, fechas. / Filter, subs × exposure, gain."
+      placeholder: "Dual band Hα/OIII 7 nm, 60 × 300 s, gain 100"
+    validations:
+      required: true
+  - type: dropdown
+    id: cielo
+    attributes:
+      label: "Cielo / Sky"
+      options:
+        - "Urbano / Urban (Bortle 7-9)"
+        - "Suburbano / Suburban (Bortle 5-6)"
+        - "Rural / Rural (Bortle 3-4)"
+        - "Oscuro / Dark (Bortle 1-2)"
+        - "No lo sé / Not sure"
+  - type: dropdown
+    id: estado
+    attributes:
+      label: "Qué compartes / What you share"
+      multiple: true
+      options:
+        - "Master integrado lineal / Linear integrated master"
+        - "Recorte del master / Master crop"
+        - "Subs calibrados / Calibrated subs"
+        - "Subs en bruto con calibración / Raw subs with calibration frames"
+    validations:
+      required: true
+  - type: input
+    id: enlace
+    attributes:
+      label: "Enlace a los datos / Data link"
+      placeholder: "https://drive.google.com/…"
+    validations:
+      required: true
+  - type: textarea
+    id: notas
+    attributes:
+      label: "Qué te interesa o qué dificultades tiene / What is interesting or hard about it"
+      description: "Gradiente fuerte, estrellas brillantes, señal débil, filtro mal nombrado en cabecera… / Strong gradient, bright stars, faint signal…"
+  - type: dropdown
+    id: uso
+    attributes:
+      label: "Uso permitido de los datos / Allowed use of the data"
+      options:
+        - "Solo para probar la guía / Only to test the guide"
+        - "También como ejemplo en la documentación (citando autor) / Also as a documented example (credited)"
+    validations:
+      required: true

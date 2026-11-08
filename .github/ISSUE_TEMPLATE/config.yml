@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "💬 Ideas, preguntas y resultados / Ideas, questions and results"
+    url: https://github.com/Az0te/astro-agente-repo/discussions
+    about: "Para lo que no es un fallo ni un caso de prueba. / For anything that is not a bug or a test case."
+  - name: "📖 Cómo contribuir / How to contribute"
+    url: https://github.com/Az0te/astro-agente-repo/blob/main/CONTRIBUTING.md
+    about: "Qué aportar, por dónde y con qué reglas. / What to contribute, where and how."

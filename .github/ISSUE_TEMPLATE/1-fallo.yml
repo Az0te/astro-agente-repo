@@ -1,0 +1,75 @@
+name: "🐞 Fallo / Bug"
+description: "Un paso de PiCopilot, de la guía o del puente MCP falla o da un resultado raro. / A step fails or gives an odd result."
+title: "[Fallo] "
+labels: ["fallo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por avisar. Lo más útil es el **registro del panel** (o de la consola de PixInsight) y una captura.
+        Puedes escribir en español o en inglés. / Thanks! The panel log and a screenshot help most. Spanish or English is fine.
+  - type: dropdown
+    id: parte
+    attributes:
+      label: "Parte del proyecto / Component"
+      options:
+        - "PiCopilot (módulo / module)"
+        - "Guía / Guide (guia/)"
+        - "Funciones de la guía / Guide functions (guia/herramientas)"
+        - "Servidor MCP / watcher"
+        - "No lo sé / Not sure"
+    validations:
+      required: true
+  - type: input
+    id: paso
+    attributes:
+      label: "Paso de la guía / Guide step"
+      placeholder: "p. ej. Lineal 7 – Gradiente, No lineal 1 – Estirado"
+  - type: textarea
+    id: que-paso
+    attributes:
+      label: "Qué hiciste y qué pasó / What you did and what happened"
+      description: "Qué esperabas y qué obtuviste. / What you expected and what you got."
+    validations:
+      required: true
+  - type: textarea
+    id: registro
+    attributes:
+      label: "Registro del panel o de la consola / Panel or console log"
+      description: "Pega el texto completo. / Paste the full text."
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: capturas
+    attributes:
+      label: "Capturas / Screenshots"
+      description: "Arrastra aquí las imágenes (antes y después si aplica). / Drag images here."
+  - type: dropdown
+    id: modelo
+    attributes:
+      label: "Modelo de IA / AI model"
+      multiple: true
+      options:
+        - "Claude (Claude Code)"
+        - "Codex"
+        - "Local (Ollama / LM Studio / otro)"
+        - "Ninguno / None"
+  - type: input
+    id: modelo-detalle
+    attributes:
+      label: "Modelo concreto / Exact model"
+      placeholder: "p. ej. qwen3 27B Q4_K_M, ctx 32k"
+  - type: input
+    id: version
+    attributes:
+      label: "Versiones / Versions"
+      description: "PixInsight, sistema operativo, build de PiCopilot o commit de la guía."
+      placeholder: "PixInsight 1.9.6, Windows 11, build99"
+    validations:
+      required: true
+  - type: input
+    id: datos
+    attributes:
+      label: "Enlace a los datos (opcional) / Data link (optional)"
+      description: "Drive, OneDrive, Dropbox o WeTransfer. No adjuntes ficheros grandes aquí."
