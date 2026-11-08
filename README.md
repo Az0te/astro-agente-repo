@@ -1,14 +1,15 @@
 # Agente de astrofotografía para PixInsight (Windows)
 
-> **English summary.** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The first bridge (a file watcher plus MCP server, retired in November 2026) was derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT); the current bridge is the `picopilot` MCP server (`mcp/`), which runs the guide's functions in PixInsight through IPC. Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
+> **English summary.** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The first bridge (a file watcher plus MCP server, retired in November 2026) was derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT); the current bridge is the `picopilot` MCP server (`mcp/`), which runs the guide's functions in PixInsight through IPC. **Easiest start: [PiCopilot Lite](picopilot/script/README.md)**, a plain PixInsight script (no build, no signing) that chats with Ollama, Claude Code or Codex and runs the guide's functions. Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
 
 Este proyecto permite que un asistente de IA (Claude, a través del protocolo MCP) controle PixInsight para procesar astrofotografías de cielo profundo, **trabajando contigo**: tú decides y supervisas, la IA ejecuta, mide y propone.
 
-Incluye tres partes:
+Incluye estas partes:
 
-0. **[PiCopilot](picopilot/README.md)** (`picopilot/`): módulo nativo de PixInsight que acopla un asistente de IA al panel lateral sin bloquear PixInsight. Tiene un botón por paso de la guía, chat con tablas y vistas previas, y funciona con Claude Code, Codex o un modelo local (Ollama). Va con la guía de este repositorio; por ahora hay que compilarlo y firmarlo con claves de desarrollador propias.
-1. **Servidor MCP picopilot** (`mcp/`): el puente entre la IA y PixInsight. Ofrece las funciones de la guía como herramientas y las ejecuta en la instancia de PixInsight que tienes abierta (IPC `PixInsight.exe -x=`), sin carpeta vigilada ni `eval`. Detalles en [`mcp/README.md`](mcp/README.md).
-2. **Guía de procesado** (`guia/`): un manual detallado, en español, que Claude carga como *skill*. El asistente responde en el idioma en que se le pregunte (inglés o cualquier otro), aunque la guía esté en español. Está ordenada como el flujo de trabajo: 17 pasos de la fase lineal, 11 de la no lineal y anexos (API de PJSR, controles de calidad, anti-patrones, flujos por tipo de objeto, glosario); cada paso es un fichero con el porqué, los parámetros, el código y el control para comprobarlo. Es la parte principal: recoge técnicas, trampas, valores de partida y controles de calidad aprendidos en sesiones reales de procesado.
+- **[PiCopilot Lite](picopilot/script/README.md)** (`picopilot/script/PiCopilotLite.js`): **la forma más sencilla de empezar**. Es un script de PixInsight, sin compilar ni firmar nada: chat con el asistente (Ollama local, Claude Code o Codex), funciones de la guía ya cargadas, comparación de métodos, información del objeto desde internet y voz. Ver [Empezar con PiCopilot Lite](#empezar-con-picopilot-lite).
+- **[PiCopilot](picopilot/README.md)** (`picopilot/`): módulo nativo de PixInsight que acopla un asistente de IA al panel lateral sin bloquear PixInsight. Tiene un botón por paso de la guía, chat con tablas y vistas previas, y funciona con Claude Code, Codex o un modelo local (Ollama). Va con la guía de este repositorio; por ahora hay que compilarlo y firmarlo con claves de desarrollador propias.
+- **Servidor MCP picopilot** (`mcp/`): el puente entre la IA y PixInsight. Ofrece las funciones de la guía como herramientas y las ejecuta en la instancia de PixInsight que tienes abierta (IPC `PixInsight.exe -x=`), sin carpeta vigilada ni `eval`. Detalles en [`mcp/README.md`](mcp/README.md).
+- **Guía de procesado** (`guia/`): un manual detallado, en español, que Claude carga como *skill*. El asistente responde en el idioma en que se le pregunte (inglés o cualquier otro), aunque la guía esté en español. Está ordenada como el flujo de trabajo: 17 pasos de la fase lineal, 11 de la no lineal y anexos (API de PJSR, controles de calidad, anti-patrones, flujos por tipo de objeto, glosario); cada paso es un fichero con el porqué, los parámetros, el código y el control para comprobarlo. Es la parte principal: recoge técnicas, trampas, valores de partida y controles de calidad aprendidos en sesiones reales de procesado.
 
 ## Principio
 
@@ -28,7 +29,18 @@ El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para
 
 El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) muestra el proceso completo con imágenes: selección de subs con índice de halo, HDR con tomas cortas para γ Cas, gradiente urbano, Hα de un dual band con sustracción de continuo y acabado.
 
-## Requisitos
+## Empezar con PiCopilot Lite
+
+Es lo que usará la mayoría: no necesita Node.js, servidor MCP ni compilar nada.
+
+1. Descarga el repositorio (**Code > Download ZIP** en GitHub) y descomprímelo, por ejemplo en `C:\Users\<tu_usuario>\astro-agente-repo`.
+2. Ten un modelo: [Ollama](https://ollama.com) con un modelo descargado (local y gratis, p. ej. `ollama pull qwen3:32b`), o Claude Code / Codex instalados y con sesión iniciada.
+3. En PixInsight 1.9.6 o superior: **Script > Feature Scripts… > Add**, elige la carpeta `picopilot\script` y pulsa **Done**.
+4. Abre tu imagen y lanza **Script > PiCopilot > PiCopilotLite**. Elige el modelo en la pestaña **Modelo** y escribe en **Prompt**, por ejemplo «hazme un análisis de la imagen».
+
+Detalles, opciones y problemas frecuentes en [`picopilot/script/README.md`](picopilot/script/README.md). Lo de abajo es para el servidor MCP y el módulo.
+
+## Requisitos (servidor MCP y módulo)
 
 - Windows 10/11 (probado en Windows 11).
 - [PixInsight](https://pixinsight.com) 1.9.6 o superior.
@@ -37,7 +49,7 @@ El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) 
 - Un cliente de IA compatible con MCP, por ejemplo la app de escritorio de Claude o Claude Code.
 - Opcional, pero la guía los usa mucho: BlurXTerminator, NoiseXTerminator y StarXTerminator (RC-Astro, de pago), GraXpert, scripts de SetiAstro y Toolbox. **No se incluyen**: cada uno debe instalarlos con su licencia.
 
-## Instalación
+## Instalación (servidor MCP)
 
 1. Descarga o clona este repositorio, por ejemplo en `C:\Users\<tu_usuario>\astro-agente`.
 2. Registra el servidor MCP picopilot en tu cliente (no hace falta `npm install`: `mcp/dist/picopilot-mcp.mjs` lleva todo dentro). Con Claude Code:

@@ -1,47 +1,61 @@
-# PiCopilot Lite (script PJSR)
+# PiCopilot Lite (script de PixInsight)
 
-Versión mínima de PiCopilot como **script** de PixInsight: no es un módulo ni una DLL, así que no necesita firma.
+PiCopilot Lite es la forma más sencilla de usar el asistente: un **script** de PixInsight. No es un módulo ni una DLL, así que **no hay que compilar ni firmar nada**. Abre una ventana con el chat, el modelo propone scripts que usan las funciones de la guía y tú decides si se ejecutan.
 
-## Lanzarlo
+*English: PiCopilot Lite is a plain PixInsight script (no build, no signing). Run `picopilot/script/PiCopilotLite.js` from Script > Execute Script File. It works with Ollama (local), Claude Code or Codex.*
 
-`Script > Execute Script File…` y elegir `picopilot/script/PiCopilotLite.js`.
+## Requisitos
+
+- Windows 10/11 y [PixInsight](https://pixinsight.com) 1.9.6 o superior.
+- Este repositorio descargado (la guía tiene que estar en `guia/`, junto a `picopilot/`).
+- Un modelo, uno de estos:
+  - **Ollama** (local, gratis, sin internet): [ollama.com](https://ollama.com) con un modelo descargado, por ejemplo `ollama pull qwen3:32b`. PiCopilot Lite lo busca en `http://localhost:11434`.
+  - **Claude Code** (de pago, el que mejor resultado da): [instalado](https://docs.anthropic.com/es/docs/claude-code) y con sesión iniciada (`claude` en una terminal).
+  - **Codex** (OpenAI): `npm install -g @openai/codex` y `codex login`.
+- Para la astrometría (`resolverAstrometria`): un índice de Gaia configurado en las preferencias del proceso Gaia.
+- Opcionales, pero la guía los usa mucho: BlurXTerminator, NoiseXTerminator, StarXTerminator y GraXpert (cada uno con su licencia).
+
+No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio PixInsight.
+
+## Instalar
+
+1. Descarga el repositorio (botón **Code > Download ZIP** en GitHub, o `git clone`) y descomprímelo, por ejemplo en `C:\Users\<tu_usuario>\astro-agente-repo`.
+2. Opcional, para tenerlo en el menú: en PixInsight, **Script > Feature Scripts…**, botón **Add**, elige la carpeta `picopilot\script` y pulsa **Done**. Desde entonces está en **Script > PiCopilot > PiCopilotLite**.
+3. Opcional: copia `guia/perfil-ejemplo.md` como `guia/perfil.md` y rellénalo con tu equipo, cielo y rutas (por ejemplo, el modelo `.xmlm` de MLDenoise). No se sube a GitHub.
+
+## Usar
+
+1. Abre tu imagen en PixInsight.
+2. Lanza **Script > PiCopilot > PiCopilotLite** (o **Script > Execute Script File…** y elige `picopilot/script/PiCopilotLite.js`).
+3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code o Codex) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola).
+4. En **Prompt** escribe lo que quieres, por ejemplo «hazme un análisis de la imagen». Cuando el modelo proponga un script, pulsa **Ejecutar script** (o marca **Ejecutar sin preguntar**). Las líneas «Siguiente paso» del chat son enlaces: púlsalos para hacer ese paso.
 
 ## Qué hace
 
-- **Prompt**: chat con el modelo. Cuando el modelo quiere actuar, responde con un bloque ```javascript; se ejecuta
-  con «Ejecutar script» (o solo, si está marcada «Ejecutar sin preguntar»). El resultado (lo que el script manda con
-  `chat(...)` y el valor de su última expresión) vuelve al chat y a la conversación. Si falla, «Pedir corrección»
-  reenvía el error al modelo (máximo 3 veces seguidas; con «Ejecutar sin preguntar» se reenvía solo).
-- **Modelo**: Ollama (HTTP, `/api/chat`, lista de modelos leída de `/api/tags`), Claude Code (`claude -p` sin
-  herramientas ni MCP) o Codex (`codex exec` en solo lectura). Las CLI reciben el prompt por un fichero temporal.
-- **Pesos N** (como «Configurar IA» del módulo): con Claude o Codex en el modelo «auto (pesos N)» (por defecto), el
-  modelo se elige según el **Paso** que marques en la pestaña Prompt. La puntuación del paso es la de
-  `guia/porcentajes_skill.json` (se lee en cada uso) más tu ajuste. Si es mayor que N, se usa el modelo inferior
-  (sonnet); si es igual o menor, el superior (opus). El prompt libre y los pasos sin valor van al superior. N
-  (por defecto 95), los modelos inferior y superior y los ajustes por paso están en la pestaña Modelo y se guardan
-  con Settings, no en el json. En el chat se ve qué modelo se ha usado y por qué (p. ej. «sonnet — 97 > 95»).
-- **Ajustes**: URL de Ollama, temperatura, rutas de `claude` y `codex`, carpeta de la guía. Se guardan con `Settings`
-  de PixInsight (claves `PiCopilotLite/...`).
+- **Chat en HTML** con tablas, colores y enlaces, como el módulo. Los resultados de los scripts salen como fichas («Cumple / No cumple», medidas, JSON plegado) y el modelo los interpreta y recomienda el paso siguiente.
+- **Funciones de la guía** ya cargadas: análisis, astrometría (motor de BlindSolver), gradiente, ruido, estirado, contraste local, núcleos, saturación, estrellas, exportación… Donde hay varios métodos, **compara candidatos** y se queda con el mejor medido (gradiente: GraXpert, GradientCorrection, MGC, polinomio; ruido: NXT, MLDenoise, MultiscaleTGVDenoise; estirado: GHS, MAS, Arcsinh).
+- **Internet** (casilla «Internet»): ficha del objeto (tipo, emisión esperada, estrellas brillantes que darán problemas) con SIMBAD y Wikipedia, e imágenes de catálogo. Con Claude, además, búsqueda web. Desmarcada, nada sale a internet.
+- **Voz**: «Dictar» abre el dictado de Windows (Win + H) en el prompt y «Leer en voz alta» lee las respuestas con la voz de Windows.
+- **Pesos N**: con Claude o Codex en «auto (pesos N)», elige un modelo más barato (sonnet) o más capaz (opus), como el módulo.
+- Ajustes guardados en PixInsight (claves `PiCopilotLite/...`).
 
-El modelo recibe un prompt corto con las reglas de la guía, la lista de funciones de
-`guia/herramientas/manifiesto.json` y las ventanas abiertas (id, tamaño, canales y si parecen lineales por la mediana).
-El script carga en el propio PixInsight las herramientas de la guía y las funciones del runner del MCP
-(`vistas`, `estadisticas`, `previa`, `abrirImagen`…). `resolverAstrometria` no está disponible en esta versión.
+Mientras espera al modelo la ventana no se congela y se puede cancelar. Es una ventana modal: mientras está abierta no se puede usar el resto de PixInsight (el módulo PiCopilot sí lo permite).
 
-Mientras espera al modelo, el diálogo no se congela (Ollama en un hilo aparte; las CLI con un bucle de eventos) y se
-puede cancelar. El diálogo es modal: mientras está abierto no se puede trabajar en el resto de PixInsight.
+## Problemas frecuentes
 
-## Pruebas automáticas
+- **«No encuentro … guia»**: en Ajustes, pon la carpeta `guia` del repositorio.
+- **Ollama no responde**: abre Ollama (o `ollama serve`) y pulsa «Leer modelos de Ollama» en la pestaña Modelo.
+- **Astrometría: «No astrometric index file is available»**: configura el índice de Gaia en las preferencias del proceso Gaia.
+- **Errores**: copia lo que sale en la consola de PixInsight y ábrelo como [*issue*](https://github.com/Az0te/astro-agente-repo/issues/new/choose).
+
+## Para desarrolladores
+
+Prueba automática (abre otra instancia de PixInsight sin tocar la tuya):
 
 ```
-PixInsight.exe -x=<ruta>/PiCopilotLite.js,--prueba[,<salida.json>[,claude|codex]]
+PixInsight.exe -n --automation-mode --no-focus-stealing -r=<ruta>/PiCopilotLite.js,--prueba,<salida.json>[,claude|codex] --force-exit
 ```
 
-Abre y cierra el diálogo simulando una pregunta, guarda ajustes, pregunta a Ollama, ejecuta scripts de prueba y escribe
-el resultado en `<salida.json>` (por defecto en la carpeta temporal `PiCopilotLite`).
+Abre y cierra el diálogo simulando una pregunta y un clic en un enlace, carga la guía, comprueba el motor de BlindSolver, la voz y el bloqueo de internet, pregunta a Ollama y ejecuta scripts de prueba. El resultado va a `<salida.json>`.
 
-## Trampas del preprocesador de PJSR
-
-- No escribir barra-asterisco ni asterisco-barra seguidos en ningún sitio (ni en comentarios `//`, cadenas o regex):
-  el preprocesador abre o cierra un comentario de bloque y el script no compila.
-- Con `#engine v8` no incluir `<pjsr/Sizer.jsh>` (los sizers ya existen) y heredar de `Dialog` con `class … extends`.
+Trampas del preprocesador de PJSR: no escribir barra-asterisco, asterisco-barra ni doble barra seguidas dentro de cadenas o regex (se toman como comentarios); con `#engine v8` no incluir `<pjsr/Sizer.jsh>` y heredar de `Dialog` con `class … extends`; los `.js` sin BOM.
