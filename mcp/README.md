@@ -21,7 +21,7 @@ Las fichas de la guía (`*.md`, salvo `perfil.md`) se ofrecen como recursos MCP 
 | Nivel | Qué hace | Herramientas |
 |---|---|---|
 | lectura | No cambia nada | `ping`, `vistas`, `estadisticas`, `previa` (JPG en `~/.picopilot/previas`), `analizarMaster`, `bordesSinDatos`, `inventario`, `revisarCalibracion`, `seleccionarSubs`, `estadoWBPP`, `medirContinuo` |
-| copias | Crea vistas nuevas; no toca las de entrada | `desmezclarDualBand`, `gradienteCandidatos`, `graxpertBGE`, `graxpertDenoise`, `combinarMasters`, `combinarMismoCanal`, `inyectarHa`, `bxtCorrectOnly`, `calibrarColor`, `bxtCandidatos`, `bxtAplicar`, `reducirRuido`, `separarEstrellas`, `restarContinuo`, `estirarCapas`, `estirarStarless`, `estirarEstrellas`, `quitarVerde`, `crearMascara`, `saturarAlFallo`, `prepararEstrellas`, `recombinarEstrellas` |
+| copias | Crea vistas nuevas; no toca las de entrada | `desmezclarDualBand`, `gradienteCandidatos`, `gradienteVarias`, `screenStarsCombine`, `screenStarsExtract`, `graxpertBGE`, `graxpertDenoise`, `combinarMasters`, `combinarMismoCanal`, `inyectarHa`, `bxtCorrectOnly`, `calibrarColor`, `bxtCandidatos`, `bxtAplicar`, `reducirRuido`, `separarEstrellas`, `restarContinuo`, `estirarCapas`, `estirarStarless`, `estirarEstrellas`, `quitarVerde`, `crearMascara`, `saturarAlFallo`, `prepararEstrellas`, `recombinarEstrellas` |
 | vista | Cambia la vista indicada, con historial | `resolverAstrometria`, `starStretch`, `darkStructureEnhance`, `backgroundEnhance` |
 | disco | Lee o escribe ficheros | `abrirImagen`, `guardarImagen` (no sobrescribe), `cerrarVista` (no cierra con cambios), `alinearMasters`, `componerHDR`, `lanzarWBPP`, `checkpointLineal`, `previsualizarPaletas`, `exportarFinal` |
 | libre | PJSR arbitrario | `run_script`: solo aparece si existe `~/.picopilot/permitir_libre` |
@@ -45,6 +45,13 @@ args = ["C:/ruta/al/repo/mcp/dist/picopilot-mcp.mjs"]
 ```
 
 Variables opcionales: `PIXINSIGHT_EXE` (por defecto `C:/Program Files/PixInsight/bin/PixInsight.exe`), `PICOPILOT_GUIA`, `PICOPILOT_RUNNER`, `PICOPILOT_ESPERA_S`.
+
+Para clientes con poco contexto (un modelo local a 32K):
+
+- `PICOPILOT_COMPACTO=1`: descripciones cortas (campo `resumen` del manifiesto) en vez de las largas.
+- `PICOPILOT_FASE=lineal` o `no-lineal`: sólo las herramientas de esa fase, más las generales (`vistas`, `estadisticas`, `previa`, abrir y guardar…).
+
+Medido con 0.3.0: la lista completa ocupa ~10.900 tokens; con las dos variables, ~6.600 en la fase lineal y ~4.700 en la no lineal.
 
 ## Desarrollo
 
