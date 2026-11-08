@@ -678,6 +678,7 @@ var PL_CSS =
    ".asst .bubble{background:#2b2f33;border:1px solid #3a4046;border-left:3px solid #6aa6e8;border-radius:6px;padding:8px 12px}" +
    "h2,h3,h4,h5{margin:10px 0 5px;color:#9cc7f5}h2{font-size:16px}h3{font-size:14.5px}h4{font-size:13.5px}h5{font-size:13px}" +
    "p{margin:5px 0}b{color:#ffffff}i{color:#e8d9a8}a{color:#79b8ff}" +
+   "a.step{text-decoration:underline;cursor:pointer;color:#7fd0ff;font-weight:600}a.step.done{color:#8a9199}" +
    "code{font-family:Consolas,Menlo,monospace;font-size:12px;background:#1b1d1f;color:#e6c07b;padding:1px 4px;border-radius:3px}" +
    "pre.code{background:#1b1d1f;border:1px solid #33383d;border-radius:5px;padding:6px 9px;overflow-x:auto;white-space:pre}" +
    "pre.code code{background:none;padding:0;color:#c9d1d9}.lang{font-size:10px;color:#7d8590;margin-bottom:3px}" +
@@ -730,6 +731,39 @@ function plInline(raw) {
    return out;
 }
 
+// Enlaces de paso (como el módulo): «Siguiente paso: ...», «Paso siguiente: ...», «Next step: ...» y las líneas que
+// empiezan por «Paso N ...» se pintan como enlace. Al pulsarlo, la página deja «mensaje|texto» en window.plClick y el
+// diálogo lo recoge con su temporizador: ejecuta el script pendiente de ese mensaje o le pide el paso al modelo.
+function plAncla(objetivo, despues) {
+   var plano = objetivo.split("**").join("").split("`").join("").trim();
+   if (!plano) return "";
+   return "<a class=\"step\" href=\"#\" data-m=\"@M@\" data-paso=\"" + plEsc(plano) + "\" onclick=\"return plPaso(this)\">" +
+          plInline(objetivo) + "</a>" + plInline(despues);
+}
+
+function plInlinePaso(raw) {
+   var bajo = raw.toLowerCase(), claves = ["siguiente paso:", "paso siguiente:", "siguiente paso (", "next step:"];
+   for (var k = 0; k < claves.length; ++k) {
+      var p = bajo.indexOf(claves[k]);
+      if (p < 0) continue;
+      var e = p + claves[k].length;
+      if (claves[k].charAt(claves[k].length - 1) == "(") --e;   // «Siguiente paso (Paso 11): ...»
+      var antes = raw.substring(0, e), resto = raw.substring(e);
+      if (resto.indexOf("**") == 0) { antes += "**"; resto = resto.substring(2); }   // el rótulo en negrita queda fuera
+      var punto = resto.indexOf(". ");
+      var a = plAncla(punto >= 0 ? resto.substring(0, punto + 1) : resto, punto >= 0 ? resto.substring(punto + 1) : "");
+      if (a) return plInline(antes) + a;
+   }
+   var t = raw.trim(), s = 0;
+   while (t.charAt(s) == "*") ++s;
+   if (/^Paso \d/.test(t.substring(s))) {
+      var d = t.indexOf(". ");
+      var b = plAncla(d >= 0 ? t.substring(0, d + 1) : t, d >= 0 ? t.substring(d + 1) : "");
+      if (b) return b;
+   }
+   return plInline(raw);
+}
+
 function plEsFilaTabla(l) { var t = l.trim(); return t.length > 2 && t.charAt(0) == "|" && t.charAt(t.length - 1) == "|"; }
 function plEsSepTabla(l) { return plEsFilaTabla(l) && /^[\s|:\-]+$/.test(l.trim()); }
 function plCeldas(l) { var t = l.trim(); return t.substring(1, t.length - 1).split("|").map(function (c) { return c.trim(); }); }
@@ -753,9 +787,9 @@ function plMarkdown(md) {
       if (!t) { vaciarPara(); cerrarListas(); continue; }
       if (plEsFilaTabla(t) && i + 1 < lineas.length && plEsSepTabla(lineas[i + 1])) {
          vaciarPara(); cerrarListas();
-         out += "<table><tr>" + plCeldas(t).map(function (c) { return "<th>" + plInline(c) + "</th>"; }).join("") + "</tr>";
+         out += "<table><tr>" + plCeldas(t).map(function (c) { return "<th>" + plInlinePaso(c) + "</th>"; }).join("") + "</tr>";
          for (i += 2; i < lineas.length && plEsFilaTabla(lineas[i]); ++i)
-            out += "<tr>" + plCeldas(lineas[i]).map(function (c) { return "<td>" + plInline(c) + "</td>"; }).join("") + "</tr>";
+            out += "<tr>" + plCeldas(lineas[i]).map(function (c) { return "<td>" + plInlinePaso(c) + "</td>"; }).join("") + "</tr>";
          --i;
          out += "</table>";
          continue;
@@ -765,7 +799,7 @@ function plMarkdown(md) {
          var nivel = 0;
          while (nivel < t.length && t.charAt(nivel) == "#") ++nivel;
          var h = Math.max(1, Math.min(4, nivel)) + 1;
-         out += "<h" + h + ">" + plInline(t.substring(nivel).trim()) + "</h" + h + ">";
+         out += "<h" + h + ">" + plInlinePaso(t.substring(nivel).trim()) + "</h" + h + ">";
          continue;
       }
       if (t == "---" || t == "***") { vaciarPara(); cerrarListas(); out += "<hr>"; continue; }
@@ -773,7 +807,7 @@ function plMarkdown(md) {
          vaciarPara();
          if (enOl) { out += "</ol>"; enOl = false; }
          if (!enUl) { out += "<ul>"; enUl = true; }
-         out += "<li>" + plInline(t.substring(2).trim()) + "</li>";
+         out += "<li>" + plInlinePaso(t.substring(2).trim()) + "</li>";
          continue;
       }
       var m = /^(\d+)[.)] (.*)$/.exec(t);
@@ -781,14 +815,14 @@ function plMarkdown(md) {
          vaciarPara();
          if (enUl) { out += "</ul>"; enUl = false; }
          if (!enOl) { out += "<ol>"; enOl = true; }
-         out += "<li>" + plInline(m[2].trim()) + "</li>";
+         out += "<li>" + plInlinePaso(m[2].trim()) + "</li>";
          continue;
       }
-      if (t.charAt(0) == ">") { vaciarPara(); cerrarListas(); out += "<blockquote>" + plInline(t.substring(1).trim()) + "</blockquote>"; continue; }
-      if ((enUl || enOl) && /^(  |\t)/.test(linea)) { out += "<div class=\"sub\">" + plInline(t) + "</div>"; continue; }
+      if (t.charAt(0) == ">") { vaciarPara(); cerrarListas(); out += "<blockquote>" + plInlinePaso(t.substring(1).trim()) + "</blockquote>"; continue; }
+      if ((enUl || enOl) && /^(  |\t)/.test(linea)) { out += "<div class=\"sub\">" + plInlinePaso(t) + "</div>"; continue; }
       cerrarListas();
       if (para) para += "<br>";
-      para += plInline(t);
+      para += plInlinePaso(t);
    }
    if (enCodigo) out += "</code></pre>";
    vaciarPara(); cerrarListas();
@@ -897,11 +931,14 @@ function plInfo(texto, error) {
 }
 
 function plPagina(entradas) {
-   var h = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" + PL_CSS + "</style></head><body>";
-   entradas.forEach(function (e) {
+   var h = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" + PL_CSS + "</style><script>var plClick='';" +
+           "function plPaso(a){plClick=a.getAttribute('data-m')+'|'+a.getAttribute('data-paso');a.className='step done';return false;}" +
+           "</script></head><body>";
+   entradas.forEach(function (e, indice) {
       var quien = "<div class=\"who\">" + plEsc(e.hora) + " &middot; <b>" + plEsc(e.titulo) + "</b></div>";
       if (e.tipo == "user") h += "<div class=\"msg user\">" + quien + "<div class=\"bubble\">" + plEsc(e.texto) + "</div></div>";
-      else if (e.tipo == "asst") h += "<div class=\"msg asst\">" + quien + "<div class=\"bubble\">" + plMarkdown(e.texto) + "</div></div>";
+      else if (e.tipo == "asst") h += "<div class=\"msg asst\">" + quien + "<div class=\"bubble\">" +
+                                      plMarkdown(e.texto).split("data-m=\"@M@\"").join("data-m=\"" + indice + "\"") + "</div></div>";
       else h += "<div class=\"msg\">" + quien + plInfo(e.texto, e.tipo == "err") + "</div>";
    });
    return h + "<div id=\"fin\"></div><script>window.scrollTo(0, document.body.scrollHeight);</script></body></html>";
@@ -1113,7 +1150,7 @@ function plConstruirDialogo(aj) {
    this.sizer.margin = 8; this.sizer.spacing = 8;
    this.sizer.add(this.tabs, 100);
    this.sizer.add(fC);
-   this.onHide = function () { self.leerAjustes(); aj.guardar(); };
+   this.onHide = function () { if (self.tEnlaces) self.tEnlaces.stop(); self.leerAjustes(); aj.guardar(); };
    this.adjustToContents();
 
    // --- Lógica ---
@@ -1222,6 +1259,8 @@ function plConstruirDialogo(aj) {
    };
 
    this.consultar = function () {
+      var interpretando = this.interpretando;   // interpretación de un resultado: su script no se ejecuta solo
+      this.interpretando = false;
       this.leerAjustes();
       this.estado = { cancelado: false };
       this.ocupado(true);
@@ -1240,7 +1279,12 @@ function plConstruirDialogo(aj) {
       this.estado = null;
       this.ocupado(false);
       this.estadoLbl.text = resp !== null ? "Respuesta en " + ((Date.now() - t0) / 1000).toFixed(1) + " s." : (cancelado ? "Cancelado." : "");
-      if (resp === null) { this.mensajes.pop(); return; }   // la pregunta no obtuvo respuesta: no queda en el historial
+      if (resp === null) {   // la pregunta no obtuvo respuesta: no queda en el historial
+         var q = this.mensajes.pop();
+         // Si era la interpretación, el resultado del script sí se queda para el turno siguiente.
+         if (interpretando && q) this.mensajes.push({ role: "user", content: q.content }, { role: "assistant", content: "Visto." });
+         return;
+      }
       this.mensajes.push({ role: "assistant", content: resp });
       this.anotar("PiCopilot (" + nombre + ")", resp, "asst");
       var s = plExtraerScript(resp);
@@ -1256,7 +1300,7 @@ function plConstruirDialogo(aj) {
          return;
       }
       this.ponerPendiente(s);
-      if (s && this.cAuto.checked) this.ejecutarPendiente();
+      if (s && this.cAuto.checked && !interpretando) this.ejecutarPendiente();
    };
 
    this.enviar = function () {
@@ -1264,6 +1308,10 @@ function plConstruirDialogo(aj) {
       var t = this.entrada.text.trim();
       if (!t) return;
       this.entrada.text = "";
+      this.enviarTexto(t);
+   };
+
+   this.enviarTexto = function (t) {
       this.correcciones = 0;
       this.ultimoError = null;
       this.scriptFallido = null; this.repetido = false;
@@ -1281,6 +1329,22 @@ function plConstruirDialogo(aj) {
       plEventos();
       var r = plEjecutarScript(aj, s);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
+      // Como en el módulo: un resultado con datos se manda al modelo para que lo interprete y recomiende el paso
+      // siguiente, con las líneas «Siguiente paso: ...» que el chat pinta como enlaces.
+      if (r.ok && r.texto != "(sin salida)") {
+         this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null;
+         this.mensajes.push({ role: "user", content: "El script ha terminado sin errores. Resultado:\n" + r.texto +
+            "\nAhora, sin escribir ningún script, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
+            "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +
+            "demuestra, con su valor) y «Revisar a ojo» (lo que el resultado no mide); nunca des por bueno algo de la segunda.\n" +
+            "Termina con una línea «Siguiente paso: <qué hacer y con qué función de la guía>.» con el paso que recomiendas, " +
+            "y si hay alternativas razonables, una lista de líneas que empiecen por «Paso N: ...» (N = número del paso en la guía). " +
+            "Cada una es un enlace que el usuario pulsará para que la hagas." });
+         this.anotar("Interpretar el resultado", "Pidiendo al modelo que interprete el resultado y recomiende el paso siguiente…");
+         this.interpretando = true;
+         this.consultar();
+         return;
+      }
       // El resultado entra en la conversación para que el modelo lo tenga en cuenta en el siguiente turno.
       this.mensajes.push({ role: "user", content: (r.ok ? "Resultado de ejecutar tu script:\n" : "Tu script ha fallado:\n") + r.texto });
       this.mensajes.push({ role: "assistant", content: r.ok ? "Visto." : "Entendido, lo reviso si me lo pides." });
@@ -1313,9 +1377,36 @@ function plConstruirDialogo(aj) {
       this.consultar();
    };
 
+   // Enlaces de paso: un temporizador lee window.plClick de la página («mensaje|texto»).
+   this.pasoPulsado = function (v) {
+      var barra = String(v || "").indexOf("|");
+      if (barra < 0) return;
+      var texto = String(v).substring(barra + 1).trim(), indice = parseInt(String(v).substring(0, barra), 10);
+      if (!texto) return;
+      if (this.estado) { this.anotar("Aviso", "Espera a que termine lo que está en marcha antes de pulsar otro paso."); return; }
+      var ultimo = -1;
+      for (var i = 0; i < this.entradas.length; ++i) if (this.entradas[i].tipo == "asst") ultimo = i;
+      // El enlace del último mensaje con un script sin ejecutar es ese script: se ejecuta tal cual.
+      if (indice === ultimo && this.pendiente) { this.anotar("Paso", ">>> Ejecuto el paso: " + texto); this.ejecutarPendiente(); return; }
+      this.enviarTexto("Haz ahora este paso: " + texto);
+   };
+   this.historialBox.onScriptResultAvailable = function (r) {
+      var v = r === undefined || r === null ? "" : String(r);
+      if (v && v.indexOf("|") > 0) self.pasoPulsado(v);
+   };
+   this.tEnlaces = new Timer;
+   this.tEnlaces.interval = 0.3;
+   this.tEnlaces.periodic = true;
+   this.tEnlaces.onTimeout = function () {
+      if (self.estado) return;
+      try { self.historialBox.evaluateScript("(function(){var x=(typeof plClick==='string')?plClick:'';plClick='';return x;})();"); } catch (e) {}
+   };
+   this.tEnlaces.start();
+
    this.rellenarModelos(false);
    this.anotar("PiCopilot Lite", "Hola. Pregúntame por tus imágenes o pídeme un paso de procesado. Cuando proponga un " +
-               "script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»).\nGuía: " + aj.guia, "asst");
+               "script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»). Los enlaces «Siguiente paso» " +
+               "ejecutan ese paso con un clic.\nGuía: " + aj.guia, "asst");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1366,8 +1457,15 @@ function plPrueba(salida, cli) {
             d.cProv.currentItem = ip; d.cProv.onItemSelected(ip);
             out.pesos.visibleTrasVolver = d.gPesos.visible;
             out.pesos.eleccionOllama = d.eleccionLbl.text;
+            // Enlace de paso: se simula el clic dejando plClick en la página; el temporizador debe recogerlo.
+            out.enlaceHtml = plMarkdown("Siguiente paso: gradiente con gradienteCandidatos. Después, color.").indexOf("class=\"step\"") >= 0;
+            out.entradasChat = d.entradas.map(function (e) { return e.tipo + ": " + e.titulo; });
+            d.enviarTexto = function (t) { out.clic = t; };
+            d.historialBox.evaluateScript("plClick='999|Paso de prueba';");
          } catch (e) { out.error = String(e); }
-         d.ok();
+         var t2 = new Timer; t2.interval = 2; t2.periodic = false;
+         t2.onTimeout = function () { d.ok(); };
+         t2.start();
       };
       tm.start();
       d.execute();
