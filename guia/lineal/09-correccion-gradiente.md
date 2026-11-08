@@ -23,7 +23,7 @@ El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida
 - **Sustracción** para contaminación lumínica (aditiva); **división** sólo para viñeteo residual. Ante la duda, probar las dos y comparar el modelo.
 - Queda gradiente en el cielo → escala 8 (copia algo más, fondo más plano) o, si el residuo es liso, plano robusto grado 1 encima (no puede comerse formas).
 - No usar la escala por defecto de sample_free (se comió el 18 % de una galaxia grande) ni `-sample_free_simplified true`.
-- IA de GraXpert: sólo objetos pequeños en campo amplio; se come objetos extensos.
+- IA de GraXpert: sólo objetos pequeños en campo amplio; se come objetos extensos. Aun así entra en la comparativa: las medidas deciden.
 - Con GraXpert por sustracción el fondo sale además con el color neutralizado; MGC no lo hace. Comparar el color del fondo después de SPCC.
 - `herramientas/graxpert.js` (ejecutable externo) sólo para RBF, Kriging, Splines con muestras propias o denoise.
 
@@ -58,9 +58,12 @@ if (!mgc.executeOn(v)) throw new Error("MGC falló");   // crea <vista>_MGC_grad
 ```
 
 **Comparativa en una sola llamada** (`herramientas/gradiente.js`): `gradienteCandidatos(vista, { spfc, dossier })` compara por defecto, sobre copias:
-- GraXpert sample_free 10 y 8;
+- GraXpert sample_free 10 y 8, y GraXpert con su modelo de IA (`graxpertIA: false` para quitarlo);
+- GradientCorrection, el proceso nativo de PixInsight: automático, sin astrometría ni MARS, con protección de estructuras (`gradientCorrection: false` para quitarlo; `gcOpts` para sus parámetros);
 - MGC 1024 y 2048, con y sin corrección de bordes;
 - polinomio robusto de grado 1 y 2 por canal, ajustado fuera del objeto.
+
+Sin astrometría, MGC no se puede probar, pero quedan 6 candidatos. En IC 63 sin calibrar (8 nov 2026) ganó GradientCorrection: dejó el 62 % del gradiente y se llevó el 2 % del objeto; los tres GraXpert se llevaban entre el 4 y el 6 %. `gradienteVarias` (varias vistas) conserva la tabla de la comparación en `comparados` (una fila por candidato, con `elegido`). Si el objeto llena el campo y no quedan celdas de cielo, `fondoResidual` se mide en la rejilla 4×3 de toda la imagen (lo dice `fondo_medido_en`); una medida imposible cuenta como la peor.
 
 Mide cada uno así:
 - `gcStructCopy`: cuánto se parece el modelo al objeto.

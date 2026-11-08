@@ -57,6 +57,15 @@ if (!P.executeOn(v)) throw new Error("GHS fase 1 falló");
 
 **Estrellas con el mismo estirado (`estrellas: "extraer"`).** Suma starless lineal + estrellas lineales (SXT lineal es una suma exacta), le repite exactamente las pasadas de GHS y los puntos negros de la starless y separa con `screenStarsExtract`. Las estrellas quedan con el brillo que tendrían en la imagen entera. Comparación galaxia grande (7 nov 2026): con `starStretch` amount 2 la final se quedó con 269 estrellas detectables (0,19 % de píxeles con aporte); con este método (Opus v7), 13 721. Si no se puede (modo `fondo`, falta `realces.js`), cae a `starStretch` y lo dice en `aviso`.
 
+**Antes de estirar, quitar el STF.** El STF sólo cambia la pantalla: con él puesto la imagen parece ya estirada y la estirada se ve estirada dos veces. Las funciones de `estirado.js` lo quitan solas de la vista de entrada.
+
+**Comparar métodos** (`estirarCandidatos(starless, { cielo })`, mismo fichero): prueba sobre copias GHS al fallo, MultiscaleAdaptiveStretch (sin su saturación, que va después) y ArcsinhStretch (factor por bisección y punto negro bajo el cielo del canal más bajo), y los lleva todos al mismo cielo para comparar en igualdad. Gana, entre los que no fallan (ruido del cielo, recortes, dominante), el que más separa la señal débil del fondo: `senal_debil_en_ruidos` = (p90 − cielo) / ruido del cielo. La tabla va en `comparados`; con `cerrar: false` se conservan todos para mirarlos. La capa de estrellas va aparte (`estirarEstrellas`).
+
+```javascript
+var r = estirarCandidatos("Starless", { cielo: 0.10, nuevaVista: "Starless_st" });   // { metodos: ["ghs", "mas", "arcsinh"], mas: {...} }
+JSON.stringify(r.comparados);
+```
+
 **Meseta del núcleo.** `meseta_nucleo.radio_px` es el radio equivalente de lo que queda por encima de 0,95 alrededor del punto más brillante. Con estructura: 0–3 px; galaxia grande con Qwen, 22 px (núcleo y la galaxia satélite planos). Si pasa de 3, `no_cumple` lo dice y el siguiente paso es `comprimirNucleo` (Paso 5), **no** volver a estirar ni encadenar más GHS.
 
 ```javascript
