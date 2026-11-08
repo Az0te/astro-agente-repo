@@ -198,10 +198,10 @@ static const std::map<String, String>& Table()
       { u"Ejecutar sin preguntar", u"Run without asking" },
       { u"Dictar", u"Dictate" },
       { u"Escuchando… (parar)", u"Listening… (stop)" },
-      { u"<p>Escucha por el micrófono y escribe lo que dices en el Prompt (reconocedor de Windows). "
-        u"Termina cuando dejas de hablar unos segundos; púlsalo otra vez para parar. También vale Win + H.</p>",
-        u"<p>Listens through the microphone and types what you say into the Prompt (Windows recognizer). "
-        u"It ends when you stop talking for a few seconds; press it again to stop. Win + H also works.</p>" },
+      { u"<p>Abre el dictado de Windows (Win + H) con el cursor en el Prompt: lo que dices se escribe ahí. "
+        u"Necesita internet (lo procesa Microsoft). Para cerrarlo, Win + H o Esc.</p>",
+        u"<p>Opens Windows voice typing (Win + H) with the cursor in the Prompt: what you say is typed there. "
+        u"It needs internet (Microsoft processes it). To close it, Win + H or Esc.</p>" },
       { u"Leer en voz alta", u"Read aloud" },
       { u"<p>Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).</p>",
         u"<p>Reads each model answer with the Windows voice (without the script code).</p>" },

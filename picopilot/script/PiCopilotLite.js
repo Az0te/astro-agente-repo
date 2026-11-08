@@ -115,6 +115,7 @@ function PLAjustes() {
    this.internet = true;                  // Claude: WebSearch y WebFetch; todos: simbad/wikipedia/leerWeb/imagenCatalogo
    this.voz = false;                      // leer en voz alta cada respuesta del modelo
    this.vozVelocidad = 0;                 // -10 (lenta) … 10 (rápida)
+   this.dictadoAntiguo = false;           // true = reconocedor antiguo de Windows (SAPI, sin internet); false = Win + H
 
    var CAMPOS = { proveedor: DataType_UCString, modeloOllama: DataType_UCString, modeloClaude: DataType_UCString,
                   modeloCodex: DataType_UCString, ollamaUrl: DataType_UCString, temperatura: DataType_UCString,
@@ -122,7 +123,7 @@ function PLAjustes() {
                   guia: DataType_UCString, ejecutarSinPreguntar: DataType_Boolean, umbralN: DataType_Int32,
                   claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
                   codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean,
-                  voz: DataType_Boolean, vozVelocidad: DataType_Int32 };
+                  voz: DataType_Boolean, vozVelocidad: DataType_Int32, dictadoAntiguo: DataType_Boolean };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -999,6 +1000,16 @@ var PL_PS_DICTAR =
    "} catch { $texto = @('ERROR: ' + $_.Exception.Message) }\r\n" +
    "[IO.File]::WriteAllText($salida, ($texto -join ' '), [Text.Encoding]::UTF8)\r\n";
 
+// Dictado moderno de Windows 11 (Win + H, en línea, mucho mejor que el reconocedor antiguo; Rafael 8 nov 2026): se pone
+// el foco en el prompt y se pulsa Win + H desde un PowerShell aparte; Windows escribe directamente en el cuadro.
+var PL_PS_WINH =
+   "Add-Type -Namespace PL -Name Teclas -MemberDefinition '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);'\r\n" +
+   "Start-Sleep -Milliseconds 200\r\n" +
+   "[PL.Teclas]::keybd_event(0x5B, 0, 0, [UIntPtr]::Zero)\r\n" +
+   "[PL.Teclas]::keybd_event(0x48, 0, 0, [UIntPtr]::Zero)\r\n" +
+   "[PL.Teclas]::keybd_event(0x48, 0, 2, [UIntPtr]::Zero)\r\n" +
+   "[PL.Teclas]::keybd_event(0x5B, 0, 2, [UIntPtr]::Zero)\r\n";
+
 // Texto para leer: sin bloques de código, sin símbolos de Markdown, enlaces por su texto y tablas como frases.
 function plTextoParaVoz(md) {
    var t = String(md).replace(/\r\n/g, "\n");
@@ -1134,8 +1145,8 @@ function plConstruirDialogo(aj) {
    this.sVel.onValueUpdated = function (v) { aj.vozVelocidad = v; aj.guardar(); };
    this.bDictar = new PushButton(pPrompt);
    this.bDictar.text = "Dictar";
-   this.bDictar.toolTip = "Escucha por el micrófono y escribe lo que dices en el prompt (reconocedor de Windows en español). " +
-                          "Para cuando dejas de hablar unos segundos; púlsalo otra vez para parar antes. También vale Win + H.";
+   this.bDictar.toolTip = "Abre el dictado de Windows (Win + H) con el cursor en el prompt: lo que dices se escribe ahí. " +
+                          "Necesita internet (lo procesa Microsoft). Para cerrarlo, Win + H o Esc.";
    this.bDictar.onClick = function () { self.dictar(); };
    var filaV = new HorizontalSizer; filaV.spacing = 6;
    var lVel = new Label(pPrompt); lVel.text = "Velocidad:"; lVel.textAlignment = TextAlign_Right | TextAlign_VertCenter;
@@ -1387,6 +1398,14 @@ function plConstruirDialogo(aj) {
          if (this.entradas[i].tipo == "asst") { this.hablar(this.entradas[i].texto); return; }
    };
    this.dictar = function () {
+      if (!aj.dictadoAntiguo) {   // dictado de Windows 11 (Win + H): escribe en el prompt
+         this.pararVoz();
+         this.entrada.focus();
+         try { plPowerShell({ nombre: "dictado_windows", codigo: PL_PS_WINH }, []); }
+         catch (e) { this.estadoLbl.text = "No se pudo abrir el dictado de Windows: " + (e.message || e); return; }
+         this.estadoLbl.text = "Dictado de Windows abierto: habla y se escribe en el prompt. Para cerrarlo, Win + H o Esc; luego revisa y pulsa Enviar.";
+         return;
+      }
       if (this.pDictado && this.pDictado.isRunning) {   // segunda pulsación: parar y quedarse con lo que haya
          plParar(this.pDictado); this.pDictado = null;
          if (this.tDictado) this.tDictado.stop();

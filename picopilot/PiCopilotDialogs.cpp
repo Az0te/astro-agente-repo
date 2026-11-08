@@ -289,8 +289,33 @@ void PiCopilotChatDialog::StopVoice()
    }
 }
 
+// Dictado moderno de Windows 11 (Win + H): mucho mejor que el reconocedor antiguo (Rafael, 8 nov 2026). Se pone el foco
+// en el Prompt y se pulsa Win + H desde un PowerShell aparte; Windows escribe directamente en el cuadro (necesita internet).
+static const char16_t* s_psWinH =
+   u"Add-Type -Namespace PL -Name Teclas -MemberDefinition '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);'\r\n"
+   u"Start-Sleep -Milliseconds 200\r\n"
+   u"[PL.Teclas]::keybd_event(0x5B, 0, 0, [UIntPtr]::Zero)\r\n"
+   u"[PL.Teclas]::keybd_event(0x48, 0, 0, [UIntPtr]::Zero)\r\n"
+   u"[PL.Teclas]::keybd_event(0x48, 0, 2, [UIntPtr]::Zero)\r\n"
+   u"[PL.Teclas]::keybd_event(0x5B, 0, 2, [UIntPtr]::Zero)\r\n";
+
 void PiCopilotChatDialog::StartDictation()
 {
+   bool antiguo = false;   // Settings "DictationSAPI": true = reconocedor antiguo (sin internet)
+   Settings::Read( "DictationSAPI", antiguo );
+   if ( !antiguo )
+   {
+      StopVoice();
+      if ( GUI != nullptr )
+         GUI->Prompt_TextBox.Focus();
+      try
+      {
+         std::unique_ptr<ExternalProcess> p( StartPowerShell( "dictado_windows", s_psWinH, StringList() ) );
+         p->WaitForFinished( 5000 );
+      }
+      catch ( ... ) {}
+      return;
+   }
    if ( m_dictation )   // segunda pulsación: cancelar
    {
       try { if ( m_dictation->IsRunning() ) m_dictation->Kill(); } catch ( ... ) {}
@@ -491,8 +516,8 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
    Settings::Read( "Voice", w.m_voiceOn );
    Settings::Read( "VoiceRate", w.m_voiceRate );
    Dictate_Button.SetText( Tr( u"Dictar" ) );
-   Dictate_Button.SetToolTip( Tr( u"<p>Escucha por el micrófono y escribe lo que dices en el Prompt (reconocedor de Windows). "
-                              u"Termina cuando dejas de hablar unos segundos; púlsalo otra vez para parar. También vale Win + H.</p>" ) );
+   Dictate_Button.SetToolTip( Tr( u"<p>Abre el dictado de Windows (Win + H) con el cursor en el Prompt: lo que dices se escribe ahí. "
+                              u"Necesita internet (lo procesa Microsoft). Para cerrarlo, Win + H o Esc.</p>" ) );
    Dictate_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
    Voice_CheckBox.SetText( Tr( u"Leer en voz alta" ) );
    Voice_CheckBox.SetToolTip( Tr( u"<p>Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).</p>" ) );
