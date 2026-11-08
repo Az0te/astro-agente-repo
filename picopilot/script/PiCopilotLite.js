@@ -23,6 +23,20 @@
 #include <pjsr/FrameStyle.jsh>
 #include <pjsr/TextAlign.jsh>
 
+// Motor de BlindSolver en modo librería (como picopilot-runner.js): lo usan blindSolve, resolverAstrometria,
+// bxtCorrectOnly y alinearMasters. Las clases quedan globales y el código del modelo, que se evalúa aquí, las ve.
+#define VERSION "1.0.0"
+#define TITLE "BlindSolver"
+#define SETTINGS_MODULE "BlindSolver"
+#include <pjsr/astrometry/AstrometricMetadata.js>
+#include <pjsr/astrometry/UtilityControls.js>
+#include <pjsr/utility/ScriptErrors.js>
+#ifeq __PI_PLATFORM__ MACOSX
+#include "/Applications/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
+#else
+#include "C:/Program Files/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
+#endif
+
 var PL_VERSION = "0.1.0";
 var PL_CLAVE = "PiCopilotLite";
 var PL_RUTA_SCRIPT = File.extractDrive(#__FILE__) + File.extractDirectory(#__FILE__);   // .../picopilot/script
@@ -293,6 +307,9 @@ function plCargarGuia(guia) {
    var g = plGlobal(), avisos = [];
    plDefinirConstantesJsh();
    plConstantesEnPrototipo();
+   // El runner se carga con eval y ahí no existen los #define: blindSolve usa este nombre como variable.
+   // (Troceado para que el preprocesador no lo sustituya aquí.)
+   g["SETTINGS" + "_MODULE"] = "BlindSolver";
    g.PICOPILOT_GUIA = guia;
    g.GUIA_HERRAMIENTAS = guia + "/herramientas";
    // Funciones propias del runner del MCP (vistas, estadisticas, previa, abrirImagen...): se reutilizan tal cual.
@@ -336,8 +353,8 @@ var PL_FIRMAS_RUNNER = {
    historial: "historial(vista, {parametros})", previa: "previa(vista, opciones)", abrirImagen: "abrirImagen(fichero)",
    guardarImagen: "guardarImagen(vista, fichero, sobrescribir)", cerrarVista: "cerrarVista(vista, descartar)"
 };
-// No disponibles en la versión Lite (necesitan BlindSolver o son el run_script del MCP).
-var PL_EXCLUIDAS = { run_script: 1, resolverAstrometria: 1 };
+// No disponibles en la versión Lite (el run_script del MCP).
+var PL_EXCLUIDAS = { run_script: 1 };
 
 function plFirma(nombre) {
    if (PL_FIRMAS_RUNNER[nombre]) return PL_FIRMAS_RUNNER[nombre];
@@ -1361,6 +1378,11 @@ function plPrueba(salida, cli) {
       var avisos = plCargarGuia(aj.guia), g = plGlobal();
       return { avisos: avisos, funciones: ["vistas", "estadisticas", "analizarMaster", "gradienteCandidatos", "estirarStarless", "reducirRuido"]
                .map(function (n) { return n + ":" + typeof g[n]; }) };
+   });
+   paso("blindSolver", function () {
+      // El código del modelo debe ver el motor de BlindSolver (incluido arriba) y blindSolve del runner.
+      return plEjecutarScript(aj, "var c = new BlindSolverConfiguration(SETTINGS_MODULE); c.LoadSettings();\n" +
+                              "[typeof BlindSolverEngine, typeof blindSolve, typeof resolverAstrometria].join(' ');");
    });
    paso("prompt", function () { var s = plPromptSistema(aj); return { caracteres: s.length, inicioVentanas: s.substring(s.indexOf("Vistas abiertas ahora")) }; });
    paso("ollamaModelos", function () { return plOllamaModelos(aj); });
