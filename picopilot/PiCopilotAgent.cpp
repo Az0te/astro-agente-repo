@@ -904,15 +904,16 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
    struct Helper { const char* file; const char16_t* call; const char16_t* lib; };
    static const Helper helpers[] =
    {
-      { "lineal/01-analisis-del-objeto.md", u"analizarMaster(\"%V\")", u"analisis.js" },
+      { "lineal/01-analisis-del-objeto.md", u"analizarMaster(\"%V\") y, en el mismo script, simbad(<OBJECT de la cabecera>) (web.js) para saber el tipo de objeto; si las búsquedas en internet están desactivadas, sólo analizarMaster", u"analisis.js" },
       { "lineal/13-bxt-completo.md", u"bxtCandidatos(\"%V\", { tipo: ... }) y, en el mismo script, bxtAplicar(\"%V\", { nonstellar: r.recomendada.nonstellar, stars: r.recomendada.stars, nuevaVista: ... }) devolviendo JSON.stringify({ candidatos: r, aplicado: a })", u"deconvolucion.js" },
-      { "lineal/14-noisex-suave.md", u"reducirRuido(\"%V\", { denoise: 0.50, detail: 0.15, iterations: 2, nuevaVista: ... })", u"ruido.js" },
-      { "lineal/15-starx.md", u"separarEstrellas(\"%V\", { nuevaVista: ..., nuevasEstrellas: ... }) y, en el mismo script, reducirRuido(s.starless, ...) (híbrido con el modelo del perfil si es mono; { denoise: 0.50 } si es RGB y ya pasó el NXT suave del Paso 14, 0.70 sin él: con más salen manchas de color; mira moteado_color_despues) devolviendo JSON.stringify({ separacion: s, denoise: d })", u"ruido.js" },
+      { "lineal/14-noisex-suave.md", u"ruidoCandidatos(\"%V\", { nuevaVista: ... }) (compara NXT 0,30/0,50/0,70, MLDenoise y MultiscaleTGVDenoise y se queda con el mejor que cumpla; enseña su tabla comparados)", u"ruido.js" },
+      { "lineal/15-starx.md", u"separarEstrellas(\"%V\", { nuevaVista: ..., nuevasEstrellas: ... }) y, en el mismo script, ruidoCandidatos(s.starless, { principal: true, nuevaVista: ... }) (compara NXT, MLDenoise y MultiscaleTGVDenoise; prefiere bajar el ruido 50-80 % cumpliendo los controles) devolviendo JSON.stringify({ separacion: s, denoise: d })", u"ruido.js" },
       { "no-lineal/05-boost.md", u"saturarAlFallo(\"%V\", { tipo: \"nebulosa\" | \"galaxia\", nuevaVista: ... }) para la saturación (el LHE y las curvas, si hacen falta, después y a mano). "
-        u"En galaxias, ANTES y en su propio script, comprimirNucleo(\"%V\", { nuevaVista: ... }) (nucleo.js) si el estirado dio meseta_nucleo.radio_px > 3, "
+        u"En galaxias, ANTES y en su propio script, nucleoCandidatos(\"%V\", { nuevaVista: ... }) (nucleo.js: compara HDRMT y GradientHDRCompression) si el estirado dio meseta_nucleo.radio_px > 3; "
+        u"el contraste local, también en su propio script, con contrasteCandidatos(\"%V\", { nuevaVista: ... }) (realces.js: LHE, HDRMT y DarkStructureEnhance; puede recomendar no tocarla), "
         u"y la saturación sobre su resultado", u"boost.js" },
       { "no-lineal/10-recorte-exportacion.md", u"exportarFinal(\"%V\", { carpeta: ..., nombre: ..., girar180: ... })", u"exportar.js" },
-      { "no-lineal/06-noisex.md", u"reducirRuido(\"%V\", { denoise: 0.30, detail: 0.15, nuevaVista: ... })", u"ruido.js" },
+      { "no-lineal/06-noisex.md", u"ruidoCandidatos(\"%V\", { nuevaVista: ... }) (sobre la imagen estirada compara NXT 0,15/0,30/0,45, MLDenoise y MultiscaleTGVDenoise)", u"ruido.js" },
       { "lineal/08-plate-solve.md", u"resolverAstrometria(\"%V\")", u"lineal.js" },
       { "lineal/07-extraccion-canales.md", u"desmezclarDualBand(\"%V\")", u"bandaestrecha.js" },
       { "lineal/16-linearfit-continuo.md", u"medirContinuo(<banda estrecha CON estrellas>, <RGB calibrada CON estrellas>, { canal: 0 }) y restarContinuo(\"%V\", <RGB sin estrellas>, { k: ..., nuevaVista: ... }) en el mismo script", u"bandaestrecha.js" },
@@ -924,15 +925,17 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
       { "lineal/12-spcc.md", u"calibrarColor(\"%V\", { nuevaVista: ..., spcc: { ...filtros y QE del perfil... } })", u"color.js" },
       { "no-lineal/01-estirado.md", u"estirarCapas(\"%V\", \"%S\", { cielo: 0.10, nuevaStarless: ..., nuevasEstrellas: ... }) (si el objeto es una galaxia, "
         u"OBLIGATORIO { tipo: \"galaxia\", nuevaStarless: ..., nuevasEstrellas: ... } sin cielo: cielo 0,07 y estrellas con el mismo estirado; "
-        u"si es una nebulosa oscura de polvo, { tipo: \"nebulosa_oscura\", ... } sin cielo)", u"estirado.js" },
+        u"si es una nebulosa oscura de polvo, { tipo: \"nebulosa_oscura\", ... } sin cielo). En nebulosas de emisión o reflexión, mejor "
+        u"estirarCandidatos(\"%V\", { cielo: 0.10, nuevaVista: ... }) (compara GHS al fallo, MAS y ArcsinhStretch con el mismo cielo) y, en el mismo "
+        u"script, estirarEstrellas(\"%S\", { nuevaVista: ... })", u"estirado.js" },
       { "no-lineal/08-estrellas.md", u"prepararEstrellas(\"%V\", { nuevaVista: ... })", u"estrellas.js" },
       { "no-lineal/09-recombinacion.md", u"recombinarEstrellas(\"%V\", \"%S\", { nuevaVista: ... })", u"recombinacion.js" },
       { "lineal/10-combinacion-rgb-nb.md", u"combinarMasters(<carpeta o lista de masters alineados>, { tipo: \"nebulosa\" | \"galaxia\" }) (no usa ninguna vista: "
         u"clasifica cada master por su filtro y combina lo que toca). Antes mira «Cuándo aplica» en la ficha: si sólo hay una imagen RGB "
         u"(OSC sin filtro) o sólo dual band, di que el paso no aplica y no escribas script", u"combinacion.js" },
       { "lineal/09-correccion-gradiente.md", u"gradienteCandidatos(\"%V\", { spfc: { ...filtros y QE del perfil... }, "
-        u"analisis: \"<tu análisis breve>\", dossier: \"<la ruta del dossier indicada arriba>\" }) — por defecto compara GraXpert (10, 8), "
-        u"MGC (1024, 2048, con y sin bordes; base MARS de PixInsight) y polinomio robusto (grado 1 y 2), los mide, recomienda y escribe el dossier. "
+        u"analisis: \"<tu análisis breve>\", dossier: \"<la ruta del dossier indicada arriba>\" }) — por defecto compara GraXpert (10, 8 e IA), "
+        u"GradientCorrection, MGC (1024, 2048, con y sin bordes; base MARS de PixInsight; sólo con astrometría) y polinomio robusto (grado 1 y 2), los mide, recomienda y escribe el dossier. "
         u"No hay método preferido: recomienda el que mida mejor en ESTA imagen (lee la «leyenda» del resultado). No escribas tú GraXpert, "
         u"MultiscaleGradientCorrection, DBE ni ABE", u"gradiente.js" },
       { "lineal/06-hdr-composition.md", u"componerHDR(<carpeta o lista [larga, corta] de masters alineados>, { nuevaVista: \"HDR\" }) (no usa ninguna vista; la HDR sale como vista nueva)", u"hdr.js" },
@@ -952,7 +955,7 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
          String call( h.call );
          // Estirado sin capa de estrellas (sólo hay una vista de ese tamaño): sólo la starless.
          if ( step.file == "no-lineal/01-estirado.md" && secondViewId.IsEmpty() )
-            call = u"estirarStarless(\"%V\", { cielo: 0.10, nuevaVista: ... }) (no hay capa de estrellas: sólo la starless)";
+            call = u"estirarCandidatos(\"%V\", { cielo: 0.10, nuevaVista: ... }) (no hay capa de estrellas: sólo la starless; compara GHS al fallo, MAS y ArcsinhStretch y enseña la tabla)";
          call.ReplaceString( u"%V", viewId.IsEmpty() ? String( u"<vista seleccionada>" ) : viewId );
          call.ReplaceString( u"%S", secondViewId.IsEmpty() ? String( u"<capa de estrellas preparada>" ) : secondViewId );
          return u"\n\nUsa la función ya hecha " + call + u" de herramientas/" + String( h.lib ) +
