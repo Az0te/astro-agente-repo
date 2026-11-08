@@ -1106,15 +1106,20 @@ function plBorrarTemporales() {
    try {
       var d = plCarpetaPrevias();
       searchDirectory(d + "/*.jpg", false).forEach(function (f) { try { File.remove(f); } catch (e) {} });
-      var html = PL_TMP + "/chat.html";
-      if (File.exists(html)) File.remove(html);
+      searchDirectory(plCarpeta(PL_TMP) + "/chat*.html", false).forEach(function (f) { try { File.remove(f); } catch (e) {} });
    } catch (e) {}
 }
 
+// Cada página va a un fichero nuevo: el visor mantiene abierto el que está cargando y reescribirlo fallaba con
+// «El proceso no tiene acceso al archivo» (Win32 32). Los anteriores se borran si se puede; si no, al limpiar.
+var plPaginaN = 0, plPaginaAnterior = null;
 function plMostrarPagina(wv, html) {
-   var f = plCarpeta(PL_TMP) + "/chat.html";
-   File.writeTextFile(f, html);
+   var f = plCarpeta(PL_TMP) + "/chat_" + (++plPaginaN) + ".html";
+   try { File.writeTextFile(f, html); }
+   catch (e) { wv.setHTML(html); return; }   // sin fichero, al menos el texto (sin miniaturas)
    wv.loadContent(f);
+   if (plPaginaAnterior) try { File.remove(plPaginaAnterior); } catch (e) {}
+   plPaginaAnterior = f;
 }
 
 // Con #engine v8, Dialog es una clase: hay que heredar con «class ... extends» y super().
