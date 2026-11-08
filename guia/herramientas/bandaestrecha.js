@@ -299,3 +299,118 @@ function previsualizarPaletas(haId, oiiiId, o) {
                       revisar_a_ojo: ["elegir con el usuario (pregunta de una palabra, con una recomendada)", "fondo teñido u OIII que inunda el campo de cian"],
                       nota: "Sin SII real: cualquier paleta con S sería pseudo-SHO. Con la elegida, aplicar la misma fórmula a resolución completa y las estrellas RGB en screen. Una paleta es una convención, no el color real." } };
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Paso 2 no lineal: la paleta elegida a resolución completa (previsualizarPaletas sólo hace previas reducidas de HOO).
+// En una prueba con cuatro masters (RGB + tres dual band) se pidió "paleta SHO verdadera" y no había función: Qwen siguió con la
+// RGB + Hα y la paleta no se aplicó (7 nov 2026). Fórmulas: tabla del Paso 2 no lineal (AutoPalette Studio v1.2.0).
+//   var p = componerPaleta({ S: "SII_st", H: "Ha_st", O: "OIII_st" }, { paleta: "SHO", estrellas: "Estrellas_st" });
+//   paletasDisponibles()   // nombres y fórmulas
+// capas: rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(id, { cielo: 0.10 }) en cada una).
+// Opciones: paleta (ver BE_PALETAS; por defecto SHO con S, HOO sin S), blend (0..1: mezcla del canal compartido en SHO/HOO,
+// 0,5 Neutral, 0,6 Soft, 0,7 Hard), estrellas (capa de estrellas RGB estirada, se suma en screen), nuevaVista.
+// Sin SII real, las paletas con S usan un SII sintético (0,6·Hα + 0,4·OIII; Foraxx: 0,85·Hα + 0,15·OIII) y se marcan pseudo.
+var BE_PALETAS = (function () {
+  var inv = function (x) { return "(1-(" + x + "))"; };
+  var p = function (x) { return "((" + x + ")^" + inv(x) + ")"; };
+  var mix = function (b, x, y) { return b + "*" + x + "+" + (+(1 - b).toFixed(3)) + "*" + y; };
+  var perm = function (a) { return function (c) { return [c[a[0]], c[a[1]], c[a[2]]]; }; };
+  var hoo = function (b) { return function (c) { return [c.H, mix(b, c.H, c.O), c.O]; }; };
+  var T = {
+    SHO: { usaS: true, f: function (c, b) { return b === null ? [c.S, c.H, c.O] : [mix(b, c.S, c.H), mix(b, c.H, c.O), c.O]; }, d: "Classic SHO (Hubble): R = S, G = H, B = O" },
+    HSO: { usaS: true, f: perm("HSO"), d: "Classic HSO: R = H, G = S, B = O" },
+    OHS: { usaS: true, f: perm("OHS"), d: "R = O, G = H, B = S" },
+    HOS: { usaS: true, f: perm("HOS"), d: "R = H, G = O, B = S" },
+    SOH: { usaS: true, f: perm("SOH"), d: "R = S, G = O, B = H" },
+    OSH: { usaS: true, f: perm("OSH"), d: "R = O, G = S, B = H" },
+    HOO: { usaS: false, f: function (c, b) { return hoo(b === null ? 0.6 : b)(c); }, d: "Classic HOO (Soft por defecto): R = H, G = b·H + (1−b)·O, B = O" },
+    HOO_NEUTRAL: { usaS: false, f: hoo(0.5), d: "HOO Neutral 50/50" },
+    HOO_SOFT: { usaS: false, f: hoo(0.6), d: "HOO Soft 60/40" },
+    HOO_HARD: { usaS: false, f: hoo(0.7), d: "HOO Hard 70/30" },
+    HOO_NOVA: { usaS: false, f: function (c) { var o = "min(" + c.O + ",0.85*" + c.H + ")"; return [c.H, "0.15*" + c.H + "+0.90*" + o, o]; }, d: "HOO con límite al OIII (NOVA): O' = min(O, 0,85·H)" },
+    FORAXX: { usaS: true, sint: "foraxx", f: function (c) { var ho = p(c.H + "*" + c.O), oo = p(c.O); return [oo + "*" + c.S + "+" + inv(oo) + "*" + c.H, ho + "*" + c.H + "+" + inv(ho) + "*" + c.O, c.O]; }, d: "Foraxx Classic: R = o·S + ~o·H, G = ho·H + ~ho·O, B = O" },
+    FORAXX_BICOLOR: { usaS: false, f: function (c) { var ho = p(c.H + "*" + c.O); return [c.H, ho + "*" + c.H + "+" + inv(ho) + "*" + c.O, c.O]; }, d: "Foraxx Classic bicolor (sin SII): R = H, G = ho·H + ~ho·O, B = O" },
+    FORAXX_HOS: { usaS: false, pseudo: true, f: function (c) {
+        var ho = p(c.H + "*" + c.O), oo = p(c.O), g = ho + "*" + c.H + "+" + inv(ho) + "*" + c.O;
+        var s1 = "0.78*" + c.O + "+0.22*(" + ho + "*" + c.H + "+" + inv(ho) + "*max(0," + c.H + "-0.22*" + c.O + "))";
+        return [c.H, "0.88*(" + g + ")+0.12*" + c.O, oo + "*(" + s1 + ")+" + inv(oo) + "*" + c.O]; },
+      d: "Foraxx HOS sin SII (subtle, pseudo): R = H, G = 0,88·(ho·H + ~ho·O) + 0,12·O, B = o·S' + ~o·O" }
+  };
+  T.HUBBLE = T.SHO; T.FORAXX_CLASSIC = T.FORAXX;
+  return T;
+})();
+
+function paletasDisponibles() {
+  var r = {};
+  for (var k in BE_PALETAS) r[k] = (BE_PALETAS[k].usaS ? "[con SII] " : "") + BE_PALETAS[k].d;
+  return { paletas: r, nota: "Las 42 variantes Foraxx de AutoPalette Studio (familias SHO, HOS, OHS, HOO, HSO, OSH, SOH) todavía no están." };
+}
+
+function componerPaleta(capas, o) {
+  o = o || {};
+  if (!capas || typeof capas !== "object" || capas instanceof Array)
+    throw new Error("componerPaleta({ S: id, H: id, O: id }, opciones): las capas van en un objeto con S (opcional), H y O");
+  var ids = {};
+  ["S", "H", "O"].forEach(function (k) {
+    var v = capas[k] !== undefined ? capas[k] : capas[k === "S" ? "SII" : k === "H" ? "Ha" : "OIII"];
+    if (v) ids[k] = beId(v);
+  });
+  if (!ids.H || !ids.O) throw new Error("Hacen falta al menos H (Hα) y O (OIII)");
+  var tieneS = !!ids.S, nombre = String(o.paleta || (tieneS ? "SHO" : "HOO")).toUpperCase().replace(/[\s-]+/g, "_");
+  var def = BE_PALETAS[nombre];
+  if (!def) throw new Error("paleta '" + o.paleta + "' no reconocida. Disponibles: " + Object.keys(BE_PALETAS).join(", "));
+  var ref = beView(ids.H), W = ref.image.width, Hh = ref.image.height, med = {};
+  for (var k in ids) {
+    var v = beView(ids[k]);
+    if (v.image.width !== W || v.image.height !== Hh) throw new Error(k + " (" + ids[k] + ") no tiene el tamaño de H: alinear antes (Paso 5 lineal)");
+    if (v.image.numberOfChannels !== 1) throw new Error(k + " (" + ids[k] + ") es en color: usa la raya desmezclada (mono) del Paso 7 lineal");
+    v.image.resetSelections();
+    med[k] = +v.image.median().toFixed(4);
+    if (med[k] < 0.02) throw new Error(k + " (" + ids[k] + ") parece lineal (mediana " + med[k] + "): sepárale las estrellas (separarEstrellas) y estira cada " +
+                                      "raya starless con el mismo cielo, estirarStarless(id, { cielo: 0.10 }), antes de componer la paleta");
+  }
+  var c = { S: ids.S, H: ids.H, O: ids.O }, pseudo = !!def.pseudo;
+  if (def.usaS && !tieneS) {
+    c.S = def.sint === "foraxx" ? "(0.85*" + ids.H + "+0.15*" + ids.O + ")" : "(0.6*" + ids.H + "+0.4*" + ids.O + ")";
+    pseudo = true;
+  }
+  var e = def.f(c, (o.blend !== undefined) ? o.blend : null);
+  var etiqueta = (pseudo ? "pseudo_" : "") + nombre;
+  var id = beUnique((typeof o.nuevaVista === "string" && o.nuevaVista) || ("Paleta_" + etiqueta));
+  var P = new PixelMath;
+  P.useSingleExpression = false; P.expression = e[0]; P.expression1 = e[1]; P.expression2 = e[2];
+  P.createNewImage = true; P.newImageId = id;
+  P.newImageColorSpace = (PixelMath.RGB !== undefined) ? PixelMath.RGB : PixelMath.prototype.RGB;
+  P.newImageSampleFormat = (PixelMath.f32 !== undefined) ? PixelMath.f32 : PixelMath.prototype.f32;
+  P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
+  if (!P.executeOn(ref)) throw new Error("PixelMath de la paleta falló");
+  var w = ImageWindow.windowById(id), hecho = [def.d + (pseudo ? " (pseudo: sin SII real)" : "")];
+  w.keywords = ref.window.keywords;
+  if (ref.window.hasAstrometricSolution) try { w.copyAstrometricSolution(ref.window); } catch (x) { }
+  var noCumple = [];
+  if (o.estrellas) {
+    var st = beView(beId(o.estrellas));
+    if (st.image.width !== W || st.image.height !== Hh) throw new Error("La capa de estrellas no tiene el tamaño de las rayas");
+    st.image.resetSelections();
+    if (st.image.median() > 0.2) noCumple.push("la capa de estrellas tiene mediana " + st.image.median().toFixed(3) + ": parece una imagen con nebulosa, no sólo estrellas");
+    var Q = new PixelMath;
+    Q.useSingleExpression = true; Q.expression = "~(~$T*~" + st.id + ")"; Q.createNewImage = false; Q.truncate = true;
+    if (!Q.executeOn(w.mainView)) throw new Error("Screen de las estrellas falló");
+    hecho.push("estrellas de " + st.id + " sumadas en screen");
+  }
+  var im = w.mainView.image, porCanal = [];
+  for (var ch = 0; ch < 3; ++ch) { im.selectedChannel = ch; porCanal.push(+im.median().toFixed(4)); }
+  im.resetSelections();
+  w.show();
+  return {
+    vista: id, paleta: etiqueta, capas: ids, medianas_capas: med, mediana_por_canal: porCanal, hecho: hecho, no_cumple: noCumple,
+    formula: { R: e[0], G: e[1], B: e[2] },
+    control: {
+      medido: { mismo_tamano: true, capas_estiradas: true, estrellas_sumadas: !!o.estrellas, sii_real: tieneS },
+      revisar_a_ojo: ["en SHO el verde domina si domina Hα: es esperable; si molesta, SCNR suave o blend 0,6 (Soft)",
+                      "estrellas: color natural de la RGB, sin halos magenta",
+                      "fondo: sin tinte fuerte (si lo hay, curvas por canal)"],
+      nota: (pseudo ? "Sin SII real: es pseudo-" + nombre + "; decirlo. " : "") + "Una paleta es una convención, no el color real. Siguiente: SCNR / curvas / saturación (Pasos 3–5 no lineales)."
+    }
+  };
+}

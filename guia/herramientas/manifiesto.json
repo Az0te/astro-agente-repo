@@ -845,7 +845,7 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") y la capa de estrellas con starStretch, en vistas nuevas.",
+   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") y la capa de estrellas con starStretch, en vistas nuevas. Hacen falta LAS DOS capas de separarEstrellas (r.starless y r.estrellas): con una imagen con estrellas como starless, las estrellas salen enormes.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",
@@ -944,6 +944,42 @@
      "ha",
      "oiii"
     ]
+   }
+  },
+  {
+   "nombre": "componerPaleta",
+   "fichero": "bandaestrecha.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, FORAXX, FORAXX_BICOLOR, FORAXX_HOS; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); suma en screen la capa de estrellas RGB estirada si se da. Es la que se usa cuando el usuario pide una paleta.",
+   "paso": "no-lineal/02-lrgb-paleta.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "capas": {
+      "type": "object",
+      "description": "{ S: id SII (opcional), H: id Hα, O: id OIII }, starless y estiradas."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { paleta (por defecto SHO con S, HOO sin S; sin SII las de S usan SII sintético y salen pseudo), blend (0..1, mezcla del canal compartido; 0,6 = Soft), estrellas: id de la capa de estrellas RGB estirada, nuevaVista }"
+     }
+    },
+    "required": [
+     "capas"
+    ]
+   }
+  },
+  {
+   "nombre": "paletasDisponibles",
+   "fichero": "bandaestrecha.js",
+   "nivel": "lectura",
+   "timeout_s": 30,
+   "descripcion": "Lista las paletas que acepta componerPaleta, con su fórmula.",
+   "paso": "no-lineal/02-lrgb-paleta.md",
+   "params": {
+    "type": "object",
+    "properties": {}
    }
   },
   {

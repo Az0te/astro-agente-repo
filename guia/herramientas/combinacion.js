@@ -174,7 +174,7 @@ function combinarMasters(lista, o) {
     }
   }
   // 3. Hα en la RGB.
-  if (por.RGB && por.Ha && o.inyectar !== false) {
+  if (por.RGB && por.Ha && o.inyectar !== false && !/SHO|HSO|HOO|PALETA|FORAXX/i.test(String(o.tipo || ""))) {
     var h = inyectarHa(por.RGB[0], por.Ha[0], { tipo: o.tipo, alfa: o.alfa, nuevaVista: por.RGB[0] + "_Ha" });
     r.hecho.push("Hα inyectado en el R de " + por.RGB[0] + " → " + h.vista + " (" + h.control.medido[0] + ")");
     r.no_cumple = r.no_cumple.concat(h.no_cumple);
@@ -188,6 +188,10 @@ function combinarMasters(lista, o) {
   if (por.RGB && nbRGB.length) r.control.medido.push("Con RGB sólo se inyecta el Hα en lineal; " + nbRGB.join(", ") + " siguen abiertas para la paleta o para mezclarlas en el Paso 2 no lineal. Si hay dos vistas de la misma raya (de dos filtros dual band), pásalas las dos y se combinan aquí.");
   if (nb.length && !por.RGB) r.control.medido.push("Banda estrecha sin RGB (" + nb.join(", ") + "): la paleta (HOO, SHO...) se monta en el Paso 2 no lineal; aquí no hay nada que combinar en lineal.");
   if (!r.hecho.length) r.control.medido.push("Nada que combinar en lineal con estos masters.");
+  // La vista principal que sale de aquí (Qwen buscó "la última ventana" porque no había r.vista, 7 nov 2026).
+  r.vista = r.inyeccion ? r.inyeccion.vista : (por.RGB ? por.RGB[0] : null);
+  if (/SHO|HSO|HOO|PALETA|FORAXX/i.test(String(o.tipo || "")))
+    r.control.medido.push("Paleta " + o.tipo + ": NO se monta en lineal. Ruta: separarEstrellas de cada raya (mono) y de la RGB, estirarStarless(raya, { cielo: 0.10 }) en cada raya, estirarCapas(starless RGB, estrellas RGB) y en el Paso 2 no lineal componerPaleta({ S, H, O }, { paleta: \"" + o.tipo + "\", estrellas: capa de estrellas RGB estirada }). La RGB lleva SPCC igualmente (da el color de las estrellas). Con paleta no se inyecta el Hα en la RGB.");
   r.vistas = ImageWindow.windows.map(function (w) { return w.mainView.id; });
   return r;
 }

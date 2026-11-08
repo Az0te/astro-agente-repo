@@ -295,7 +295,12 @@ function estirarStarless(viewId, o) {
                   "sobre la starless lineal, y volver a estirar");
   }
   if (Math.abs(c.cielo - cielo) > 0.02) noCumple.push("cielo " + c.cielo + " fuera del objetivo " + cielo);
-  if (meseta.radio_px > 3)
+  // Sólo en galaxias es un fallo (bulbo quemado). En nebulosas una meseta suele ser una estrella que quedó en la "starless"
+  // (7 nov 2026: Qwen estiró como starless una imagen con estrellas y comprimió el "núcleo" 4 veces).
+  var esGalaxia = String(o.tipo || "").toLowerCase() === "galaxia";
+  var avisoMeseta = (!esGalaxia && meseta.radio_px > 3) ? "meseta de " + meseta.radio_px + " px > 0,95 en " + JSON.stringify(meseta.centro) +
+      ": en una nebulosa suele ser una estrella que quedó en la starless (¿se separaron las estrellas?). No es motivo para comprimirNucleo" : null;
+  if (esGalaxia && meseta.radio_px > 3)
     noCumple.push("NÚCLEO QUEMADO: meseta de " + meseta.radio_px + " px de radio con luminancia > 0,95 (con estructura: 0–3 px). " +
                   "Siguiente paso, antes de saturar: comprimirNucleo (nucleo.js) sobre esta starless. No volver a estirar ni subir curvas");
   return {
@@ -310,11 +315,11 @@ function estirarStarless(viewId, o) {
         sin_sombras_aplastadas: c.cero_pct <= lim.cero,
         sin_luces_quemadas: c.alto_pct <= lim.alto,
         sin_dominante_en_el_cielo: dom < 5,
-        nucleo_con_estructura: meseta.radio_px <= 3
+        nucleo_con_estructura: !esGalaxia || meseta.radio_px <= 3
       },
-      revisar_a_ojo: ["núcleos brillantes (galaxias): aunque la meseta sea pequeña, si se ven planos, comprimirNucleo (nucleo.js)",
+      revisar_a_ojo: (avisoMeseta ? [avisoMeseta] : []).concat(["núcleos brillantes (galaxias): aunque la meseta sea pequeña, si se ven planos, comprimirNucleo (nucleo.js)",
                       "dientes de sierra al ampliar el histograma (posterización)",
-                      "ruido del fondo al 100 %: si molesta, repetir con ruidoMax menor (0,12)"],
+                      "ruido del fondo al 100 %: si molesta, repetir con ruidoMax menor (0,12)"]),
       nota: "Se estira hasta el fallo y se queda la pasada anterior: la imagen está todo lo estirada que permiten el ruido " +
             "y el recorte. 'parada' dice qué falló. Lo de revisar_a_ojo no lo mide esta función."
     }
@@ -541,7 +546,11 @@ function estirarCapas(starlessId, starsId, o) {
   o = o || {};
   var t = ES_TIPOS[String(o.tipo || "").toLowerCase()];
   if (t) { var o2 = {}; for (var k in o) o2[k] = o[k]; for (var k2 in t) if (o2[k2] === undefined) o2[k2] = t[k2]; o = o2; }
-  var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3 }) };
+  // Qwen llamó estirarCapas(imagen_con_estrellas, null) (7 nov 2026): las estrellas se estiraron como nebulosa y salieron enormes.
+  if (!starsId && !o.soloStarless)
+    throw new Error("Falta la capa de estrellas: estirarCapas(starless, estrellas, opciones). Las dos salen de separarEstrellas (Paso 15 lineal): " +
+                    "r.starless y r.estrellas (ids de texto). Si de verdad sólo quieres estirar una starless, pasa { soloStarless: true }");
+  var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3, tipo: o.tipo }) };
   if (starsId) {
     var aviso = null;
     if (o.estrellas === "extraer") {

@@ -359,6 +359,8 @@ var LISTA = {
    estirarStarless:      function (a) { return estirarStarless(a.vista, a.opciones || {}); },
    estirarEstrellas:     function (a) { return estirarEstrellas(a.vista, a.opciones || {}); },
    previsualizarPaletas: function (a) { return previsualizarPaletas(a.ha, a.oiii, a.opciones || {}); },
+   componerPaleta:       function (a) { return componerPaleta(a.capas, a.opciones || {}); },
+   paletasDisponibles:   function (a) { return paletasDisponibles(); },
    quitarVerde:          function (a) { return quitarVerde(a.vista, a.opciones || {}); },
    crearMascara:         function (a) { return crearMascara(a.vista, a.opciones || {}); },
    comprimirNucleo:      function (a) { return comprimirNucleo(a.vista, a.opciones || {}); },

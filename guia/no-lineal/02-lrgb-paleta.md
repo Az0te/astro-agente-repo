@@ -56,7 +56,7 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 - **Sin SII** (dual band, o mono con H y O): Classic HOO Soft, Classic HOO Hard, Foraxx Classic bicolor, Foraxx HOS (marcada pseudo), HOO + NBN (Mode1, shadowpoint 1, Lightness Off) y la composición natural como referencia.
 - **Con SII real**: Classic SHO, Classic Hubble (HSO), Foraxx Classic, Foraxx HOS, Classic HOO, SHO + NBN y la natural.
 - Plancha: copiar cada preview en su casilla de una ImageWindow grande con `setSamples`; si los rótulos con Bitmap/Graphics fallan, numerar las casillas y dar la leyenda en el mensaje.
-- Con la elegida: aplicar la misma fórmula con PixelMath a resolución completa y después las estrellas RGB en screen.
+- Con la elegida: aplicar la misma fórmula con PixelMath a resolución completa y después las estrellas RGB en screen. **En una llamada** (`herramientas/bandaestrecha.js`): `componerPaleta({ S, H, O }, { paleta: "SHO", estrellas })`. Paletas: SHO, HSO, OHS, HOS, SOH, OSH, HOO (Soft/Neutral/Hard), HOO_NOVA, FORAXX, FORAXX_BICOLOR y FORAXX_HOS (`paletasDisponibles()`); sin SII real las de S usan el SII sintético y salen marcadas pseudo. Antes, para cada raya desmezclada (mono): `separarEstrellas` y `estirarStarless(starless, { cielo: 0.10 })`; la RGB, con SPCC, da las estrellas (`estirarCapas(starless RGB, estrellas RGB)` y su `r.estrellas.vista`). Si el usuario ya ha dicho la paleta, no hacen falta previas.
 - Avisos: no hay fórmula Foraxx oficial única (la ficha C10-34 de astro-photographie no coincide con AutoPalette Studio: usar la de AutoPalette); en SHO el verde es esperable si domina Hα.
 
 **NarrowbandNormalization 1.0** (proceso, sí se ejecuta desde el watcher)
