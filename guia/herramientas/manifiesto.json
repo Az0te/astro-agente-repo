@@ -951,7 +951,7 @@
    "fichero": "bandaestrecha.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, FORAXX, FORAXX_BICOLOR y las familias Foraxx de AutoPalette Studio: FORAXX_SHO/HOS/OHS/HOO/HSO/OSH/SOH y sus 42 variantes FORAXX_<familia>_<variante>; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); suma en screen la capa de estrellas RGB estirada si se da. Es la que se usa cuando el usuario pide una paleta.",
+   "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, FORAXX, FORAXX_BICOLOR y las familias Foraxx de AutoPalette Studio: FORAXX_SHO/HOS/OHS/HOO/HSO/OSH/SOH y sus 42 variantes FORAXX_<familia>_<variante>; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); equilibra el verde con SCNR si G domina (Hα al verde). Devuelve la paleta SIN estrellas: después saturarAlFallo(paleta), prepararEstrellas(capa de estrellas RGB estirada, nunca la paleta) y recombinarEstrellas (r.siguiente). Es la que se usa cuando el usuario pide una paleta.",
    "paso": "no-lineal/02-lrgb-paleta.md",
    "params": {
     "type": "object",
@@ -962,7 +962,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { paleta (por defecto SHO con S, HOO sin S; sin SII las de S usan SII sintético y salen pseudo), blend (0..1, mezcla del canal compartido; 0,6 = Soft), estrellas: id de la capa de estrellas RGB estirada, nuevaVista }"
+      "description": "Opcional. { paleta (por defecto SHO con S, HOO sin S; sin SII las de S usan SII sintético y salen pseudo), blend (0..1, mezcla del canal compartido; 0,6 = Soft), verde (0..1, SCNR si G domina; 0,8 por defecto; false = no tocar), estrellas: id de la capa de estrellas RGB estirada (se devuelve para recombinarla al final; sumarEstrellas: true la suma ya y entonces no hay Pasos 8–9), nuevaVista }"
      }
     },
     "required": [

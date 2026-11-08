@@ -191,7 +191,7 @@ function combinarMasters(lista, o) {
   // La vista principal que sale de aquí (Qwen buscó "la última ventana" porque no había r.vista, 7 nov 2026).
   r.vista = r.inyeccion ? r.inyeccion.vista : (por.RGB ? por.RGB[0] : null);
   if (/SHO|HSO|HOO|PALETA|FORAXX/i.test(String(o.tipo || "")))
-    r.control.medido.push("Paleta " + o.tipo + ": NO se monta en lineal. Ruta: separarEstrellas de cada raya (mono) y de la RGB, estirarStarless(raya, { cielo: 0.10 }) en cada raya, estirarCapas(starless RGB, estrellas RGB) y en el Paso 2 no lineal componerPaleta({ S, H, O }, { paleta: \"" + o.tipo + "\", estrellas: capa de estrellas RGB estirada }). La RGB lleva SPCC igualmente (da el color de las estrellas). Con paleta no se inyecta el Hα en la RGB.");
+    r.control.medido.push("Paleta " + o.tipo + ": NO se monta en lineal. Ruta: separarEstrellas de cada raya (mono) y de la RGB, estirarStarless(raya, { cielo: 0.10 }) en cada raya, estirarCapas(starless RGB, estrellas RGB) y en el Paso 2 no lineal componerPaleta({ S, H, O }, { paleta: \"" + o.tipo + "\", estrellas: capa de estrellas RGB estirada }) (sale sin estrellas), saturarAlFallo(paleta), prepararEstrellas(capa de estrellas RGB) y recombinarEstrellas. La RGB lleva SPCC igualmente (da el color de las estrellas). Con paleta no se inyecta el Hα en la RGB.");
   r.vistas = ImageWindow.windows.map(function (w) { return w.mainView.id; });
   return r;
 }

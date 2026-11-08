@@ -445,29 +445,57 @@ function componerPaleta(capas, o) {
   w.keywords = ref.window.keywords;
   if (ref.window.hasAstrometricSolution) try { w.copyAstrometricSolution(ref.window); } catch (x) { }
   var noCumple = [];
-  if (o.estrellas) {
-    var st = beView(beId(o.estrellas));
+  // Equilibrio del verde (8 nov 2026, IC 1396 SHO): con cada raya estirada al mismo cielo, la que va al verde (casi siempre Hα)
+  // domina y la imagen sale verde entera; quitarVerde no lo ve porque mide sólo el cielo. Se mide en toda la imagen
+  // G / max(R, B) y, si pasa de 1,05, SCNR (Average Neutral, conserva luminosidad) con amount o.verde (0,8 por defecto).
+  var im = w.mainView.image;
+  function bePromedios() { var m = []; for (var ch = 0; ch < 3; ++ch) { im.selectedChannel = ch; m.push(im.mean()); } im.resetSelections(); return m; }
+  var m0 = bePromedios(), verde0 = m0[1] / Math.max(m0[0], m0[2], 1e-6), verde1 = verde0;
+  if (o.verde !== false && verde0 > 1.05) {
+    var S = new SCNR;
+    S.amount = (typeof o.verde === "number") ? Math.max(0, Math.min(1, o.verde)) : 0.8;
+    S.protectionMethod = (SCNR.AverageNeutral !== undefined) ? SCNR.AverageNeutral : SCNR.prototype.AverageNeutral;
+    S.colorToRemove = (SCNR.Green !== undefined) ? SCNR.Green : SCNR.prototype.Green;
+    S.preserveLightness = true;
+    if (!S.executeOn(w.mainView)) throw new Error("SCNR del verde falló");
+    var m1 = bePromedios(); verde1 = m1[1] / Math.max(m1[0], m1[2], 1e-6);
+    hecho.push("verde equilibrado con SCNR " + S.amount + ": G/max(R,B) " + verde0.toFixed(2) + " → " + verde1.toFixed(2) + " (opción verde: false para dejarlo)");
+  }
+  // Estrellas: NO se suman aquí por defecto. La paleta es la starless: se satura (Paso 5) y las estrellas RGB se preparan
+  // (prepararEstrellas sobre la CAPA DE ESTRELLAS) y se recombinan al final (Pasos 8–9). Si se sumaran ahora, la saturación
+  // las teñiría y prepararEstrellas acabaría corriendo sobre la paleta entera (estrellas dobles).
+  var estrellasId = o.estrellas ? beId(o.estrellas) : null, sumadas = false;
+  if (estrellasId) {
+    var st = beView(estrellasId);
     if (st.image.width !== W || st.image.height !== Hh) throw new Error("La capa de estrellas no tiene el tamaño de las rayas");
     st.image.resetSelections();
-    if (st.image.median() > 0.2) noCumple.push("la capa de estrellas tiene mediana " + st.image.median().toFixed(3) + ": parece una imagen con nebulosa, no sólo estrellas");
-    var Q = new PixelMath;
-    Q.useSingleExpression = true; Q.expression = "~(~$T*~" + st.id + ")"; Q.createNewImage = false; Q.truncate = true;
-    if (!Q.executeOn(w.mainView)) throw new Error("Screen de las estrellas falló");
-    hecho.push("estrellas de " + st.id + " sumadas en screen");
+    if (st.image.median() > 0.05) noCumple.push("la capa de estrellas tiene mediana " + st.image.median().toFixed(3) + ": parece una imagen con nebulosa, no sólo estrellas");
+    if (o.sumarEstrellas) {
+      var Q = new PixelMath;
+      Q.useSingleExpression = true; Q.expression = "~(~$T*~" + st.id + ")"; Q.createNewImage = false; Q.truncate = true;
+      if (!Q.executeOn(w.mainView)) throw new Error("Screen de las estrellas falló");
+      hecho.push("estrellas de " + st.id + " sumadas en screen (sumarEstrellas: true): NO hacer después prepararEstrellas ni recombinarEstrellas");
+      sumadas = true;
+    }
   }
-  var im = w.mainView.image, porCanal = [];
+  var porCanal = [];
   for (var ch = 0; ch < 3; ++ch) { im.selectedChannel = ch; porCanal.push(+im.median().toFixed(4)); }
   im.resetSelections();
   w.show();
+  var siguiente = sumadas ? "La paleta ya lleva las estrellas: saturarAlFallo(\"" + id + "\") con cuidado y exportar; NO prepararEstrellas ni recombinarEstrellas."
+    : "Paleta SIN estrellas: 1) saturarAlFallo(\"" + id + "\", { tipo: \"nebulosa\" }); 2) prepararEstrellas(" + (estrellasId ? "\"" + estrellasId + "\"" : "capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas)") +
+      ") — sobre la CAPA DE ESTRELLAS, nunca sobre la paleta; 3) recombinarEstrellas(paleta saturada, estrellas preparadas); 4) exportarFinal.";
   return {
     vista: id, paleta: etiqueta, capas: ids, medianas_capas: med, mediana_por_canal: porCanal, hecho: hecho, no_cumple: noCumple,
     formula: { R: e[0], G: e[1], B: e[2] },
+    estrellas_sumadas: sumadas, estrellas_para_recombinar: sumadas ? null : estrellasId,
+    siguiente: siguiente,
     control: {
-      medido: { mismo_tamano: true, capas_estiradas: true, estrellas_sumadas: !!o.estrellas, sii_real: tieneS },
-      revisar_a_ojo: ["en SHO el verde domina si domina Hα: es esperable; si molesta, SCNR suave o blend 0,6 (Soft)",
-                      "estrellas: color natural de la RGB, sin halos magenta",
+      medido: { mismo_tamano: true, capas_estiradas: true, estrellas_sumadas: sumadas, sii_real: tieneS,
+                verde_G_sobre_RB_antes: +verde0.toFixed(3), verde_G_sobre_RB_despues: +verde1.toFixed(3) },
+      revisar_a_ojo: ["color general: en SHO, zonas doradas (Hα+SII) y azules (OIII); si aún sale verde, repetir con { verde: 1 }",
                       "fondo: sin tinte fuerte (si lo hay, curvas por canal)"],
-      nota: (pseudo ? "Sin SII real: es pseudo-" + nombre + "; decirlo. " : "") + "Una paleta es una convención, no el color real. Siguiente: SCNR / curvas / saturación (Pasos 3–5 no lineales)."
+      nota: (pseudo ? "Sin SII real: es pseudo-" + nombre + "; decirlo. " : "") + "Una paleta es una convención, no el color real. " + siguiente
     }
   };
 }

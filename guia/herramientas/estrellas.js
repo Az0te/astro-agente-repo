@@ -77,6 +77,12 @@ function prepararEstrellas(viewId, o) {
   if (src.isNull) throw new Error("No existe la vista " + viewId);
   var sim = src.mainView.image;
   if (sim.numberOfChannels !== 3) throw new Error("La capa de estrellas debe ser RGB");
+  // 8 nov 2026: Qwen la pasó sobre la paleta saturada (nebulosa entera) y la recombinó encima: estrellas dobles. Una capa de
+  // estrellas estirada tiene el fondo casi a 0; con mediana > 0,05 no es una capa de estrellas.
+  sim.resetSelections();
+  if (!o.forzar && sim.median() > 0.05)
+    throw new Error(viewId + " no es una capa de estrellas (mediana " + sim.median().toFixed(3) + "; una capa de estrellas estirada tiene el fondo casi a 0): " +
+                    "pasa la capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas), nunca la starless, la paleta ni la imagen saturada");
 
   var id = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_prep");
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = ((typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_prep")) + "_" + n;
