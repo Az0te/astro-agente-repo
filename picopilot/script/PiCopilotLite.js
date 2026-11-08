@@ -263,10 +263,36 @@ function plQuitarDirectivas(texto) {
    return texto.split(/\r?\n/).map(function (l) { return /^\s*#/.test(l) ? "" : l; }).join("\n");
 }
 
+// En PixInsight 1.9.6 (v8) las constantes de los procesos están en el constructor (ScreenTransferFunction.SeparateChannels)
+// y Clase.prototype.CONSTANTE da undefined (luego «Invalid argument type»). Los modelos escriben a menudo la forma antigua:
+// se copian al prototipo para que las dos funcionen.
+function plConstantesEnPrototipo() {
+   var g = plGlobal(), n = 0;
+   Object.getOwnPropertyNames(g).forEach(function (k) {
+      if (!/^[A-Z]/.test(k)) return;
+      var C;
+      try { C = g[k]; if (typeof C !== "function" || !C.prototype) return; } catch (e) { return; }
+      try {
+         Object.getOwnPropertyNames(C).forEach(function (p) {
+            try {
+               if (/^[A-Z]/.test(p) && typeof C[p] === "number" && C.prototype[p] === undefined) { C.prototype[p] = C[p]; ++n; }
+            } catch (e) {}
+         });
+      } catch (e) {}
+   });
+   return n;
+}
+
+function plContratoApi(guia) {
+   var f = guia + "/anexos/A-contrato-api-pjsr.md";
+   try { return File.exists(f) ? plRecortar(File.readTextFile(f), 12000) : ""; } catch (e) { return ""; }
+}
+
 function plCargarGuia(guia) {
    if (plGuiaCargada === guia) return [];
    var g = plGlobal(), avisos = [];
    plDefinirConstantesJsh();
+   plConstantesEnPrototipo();
    g.PICOPILOT_GUIA = guia;
    g.GUIA_HERRAMIENTAS = guia + "/herramientas";
    // Funciones propias del runner del MCP (vistas, estadisticas, previa, abrirImagen...): se reutilizan tal cual.
@@ -423,8 +449,12 @@ function plPromptSistema(aj) {
    "comprueba w.isNull (no !w). View.viewById(id) devuelve null si no existe. El id de una ventana es w.mainView.id " +
    "(no existe w.name). ImageWindow.windows es un array e ImageWindow.activeWindow es la ventana activa.\n" +
    "- PJSR: console.writeln para la consola (console.log no existe).\n" +
+   "- Constantes de los procesos: en el constructor, Clase.CONSTANTE (por ejemplo PixelMath.RGB o " +
+   "ScreenTransferFunction.SeparateChannels), no Clase.prototype.CONSTANTE.\n" +
+   "- Antes de usar un proceso o una propiedad de PJSR que no esté en la guía ni en el contrato de abajo, no la inventes.\n" +
    "- Si un script falla, cambia el código que causó el error: no repitas el mismo script.\n\n" +
    "Funciones disponibles (nombre(argumentos) [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
+   (plContratoApi(aj.guia) ? "Contrato de la API PJSR que debes respetar:\n<<<\n" + plContratoApi(aj.guia) + "\n>>>\n\n" : "") +
    "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
 }
 
