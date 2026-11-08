@@ -45,7 +45,7 @@ Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y
 
 Al aportar aceptas que tu contribución se publique con la licencia de la parte del proyecto que tocas:
 
-- Código (`picopilot/`, `watcher/`, `servidor-mcp/`, `mcp/`): **MIT** ([`LICENSE`](LICENSE)).
+- Código (`mcp/`, `picopilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). El puente anterior (`watcher/`, `servidor-mcp/`), ya retirado y solo en el historial de Git, era MIT de Alain Escaffre (original) y Rafael Vidal (modificaciones).
 - Guía (`guia/`): **CC BY-SA 4.0** ([`guia/LICENSE.md`](guia/LICENSE.md)).
 
 Las imágenes y datos que enlaces siguen siendo tuyos; solo se usarán como digas en la *issue*.
@@ -103,7 +103,7 @@ Issues can be written in English or Spanish.
 
 By contributing you agree that your contribution is published under the licence of the part of the project you change:
 
-- Code (`picopilot/`, `watcher/`, `servidor-mcp/`, `mcp/`): **MIT** ([`LICENSE`](LICENSE)).
+- Code (`mcp/`, `picopilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). The previous bridge (`watcher/`, `servidor-mcp/`), now retired and only in the Git history, was MIT by Alain Escaffre (original) and Rafael Vidal (modifications).
 - Guide (`guia/`): **CC BY-SA 4.0** ([`guia/LICENSE.md`](guia/LICENSE.md)).
 
 Images and data you link to remain yours; they will only be used as you state in the issue.
