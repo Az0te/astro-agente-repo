@@ -650,6 +650,7 @@ function plExtraerScript(texto) {
 
 function plEjecutarScript(aj, codigo) {
    var avisos = plCargarGuia(aj.guia), g = plGlobal(), salida = [];
+   g.PICOPILOT_INTERNET = !!aj.internet;   // web.js lo respeta: sin la casilla, simbad/wikipedia/... no salen a internet
    avisos.forEach(function (a) { console.warningln("[PiCopilotLite] " + a); });
    g.chat = function () {
       var t = Array.prototype.slice.call(arguments).map(function (x) {
@@ -1002,6 +1003,12 @@ function plConstruirDialogo(aj) {
    this.cAuto.text = "Ejecutar sin preguntar";
    this.cAuto.checked = aj.ejecutarSinPreguntar;
    this.cAuto.onCheck = function (c) { aj.ejecutarSinPreguntar = c; };
+   this.cInternet = new CheckBox(pPrompt);
+   this.cInternet.text = "Internet";
+   this.cInternet.toolTip = "Permitir búsquedas externas. Claude: WebSearch y WebFetch. Todos los modelos: SIMBAD, Wikipedia, páginas web " +
+                            "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet.";
+   this.cInternet.checked = aj.internet;
+   this.cInternet.onCheck = function (c) { aj.internet = c; aj.guardar(); };
    this.bEjecutar = new PushButton(pPrompt);
    this.bEjecutar.text = "Ejecutar script";
    this.bEjecutar.enabled = false;
@@ -1033,7 +1040,7 @@ function plConstruirDialogo(aj) {
    var filaB = new HorizontalSizer;
    filaB.spacing = 6;
    filaB.add(this.bEnviar); filaB.add(this.bCancelar); filaB.addSpacing(12);
-   filaB.add(this.cAuto); filaB.add(this.bEjecutar); filaB.add(this.bVer); filaB.add(this.bCorregir);
+   filaB.add(this.cAuto); filaB.add(this.cInternet); filaB.add(this.bEjecutar); filaB.add(this.bVer); filaB.add(this.bCorregir);
    filaB.addStretch(); filaB.add(this.bLimpiar);
    pPrompt.sizer = new VerticalSizer;
    pPrompt.sizer.margin = 6; pPrompt.sizer.spacing = 6;
@@ -1147,12 +1154,6 @@ function plConstruirDialogo(aj) {
    this.eClaude = fila("Ejecutable claude:", aj.rutaClaude);
    this.eCodex = fila("Ejecutable codex:", aj.rutaCodex);
    this.eGuia = fila("Carpeta de la guía:", aj.guia, "Carpeta guia/ del repositorio (con herramientas/ y manifiesto.json).");
-   this.cInternet = new CheckBox(pAj);
-   this.cInternet.text = "Permitir búsquedas en internet (Claude: WebSearch/WebFetch; todos: SIMBAD, Wikipedia, catálogos)";
-   this.cInternet.checked = aj.internet;
-   this.cInternet.onCheck = function (c) { aj.internet = c; };
-   var fI = new HorizontalSizer; fI.addSpacing(156); fI.add(this.cInternet); fI.addStretch();
-   pAj.sizer.add(fI);
    this.bGuardar = new PushButton(pAj);
    this.bGuardar.text = "Guardar ajustes";
    this.bGuardar.onClick = function () { self.leerAjustes(); aj.guardar(); self.estadoLbl.text = "Ajustes guardados."; };
@@ -1504,6 +1505,14 @@ function plPrueba(salida, cli) {
       // El código del modelo debe ver el motor de BlindSolver (incluido arriba) y blindSolve del runner.
       return plEjecutarScript(aj, "var c = new BlindSolverConfiguration(SETTINGS_MODULE); c.LoadSettings();\n" +
                               "[typeof BlindSolverEngine, typeof blindSolve, typeof resolverAstrometria].join(' ');");
+   });
+   paso("internetApagado", function () {
+      // Con la casilla «Internet» desmarcada, las funciones de web.js no deben salir a internet.
+      var antes = aj.internet; aj.internet = false;
+      var r = plEjecutarScript(aj, "simbad('IC 63');");
+      aj.internet = antes;
+      if (r.ok) throw new Error("simbad funcionó con internet desactivado");
+      return r.texto.substring(0, 160);
    });
    paso("prompt", function () { var s = plPromptSistema(aj); return { caracteres: s.length, inicioVentanas: s.substring(s.indexOf("Vistas abiertas ahora")) }; });
    paso("ollamaModelos", function () { return plOllamaModelos(aj); });
