@@ -196,6 +196,22 @@ static const std::map<String, String>& Table()
         u"<p>Type your request and press <b>Send</b>. The answer arrives in the background: you can keep working in PixInsight meanwhile.</p>" },
       { u"Ejecutar script", u"Run script" },
       { u"Ejecutar sin preguntar", u"Run without asking" },
+      { u"Dictar", u"Dictate" },
+      { u"Escuchando… (parar)", u"Listening… (stop)" },
+      { u"<p>Escucha por el micrófono y escribe lo que dices en el Prompt (reconocedor de Windows). "
+        u"Termina cuando dejas de hablar unos segundos; púlsalo otra vez para parar. También vale Win + H.</p>",
+        u"<p>Listens through the microphone and types what you say into the Prompt (Windows recognizer). "
+        u"It ends when you stop talking for a few seconds; press it again to stop. Win + H also works.</p>" },
+      { u"Leer en voz alta", u"Read aloud" },
+      { u"<p>Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).</p>",
+        u"<p>Reads each model answer with the Windows voice (without the script code).</p>" },
+      { u"Leer", u"Read" },
+      { u"<p>Lee en voz alta la última respuesta del modelo.</p>", u"<p>Reads the last model answer aloud.</p>" },
+      { u"Parar voz", u"Stop voice" },
+      { u"Velocidad:", u"Speed:" },
+      { u"<p>Velocidad de la voz: -10 lenta, 0 normal, 10 rápida.</p>", u"<p>Voice speed: -10 slow, 0 normal, 10 fast.</p>" },
+      { u"Dictado: no he oído nada (¿micrófono?).", u"Dictation: I heard nothing (microphone?)." },
+      { u"Dictado: ", u"Dictation: " },
       { u"<p>Permitir búsquedas externas. Claude: WebSearch y WebFetch. Todos los modelos: SIMBAD, "
         u"Wikipedia, páginas web e imágenes de catálogo (web.js de la guía). Sin marcar, nada sale a internet.</p>",
         u"<p>Allow external searches. Claude: WebSearch and WebFetch. All models: SIMBAD, "

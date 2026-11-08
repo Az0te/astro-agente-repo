@@ -17,6 +17,7 @@
 #include <pcl/Dialog.h>
 #include <pcl/Edit.h>
 #include <pcl/Label.h>
+#include <pcl/ExternalProcess.h>
 #include <pcl/ProcessInterface.h>
 #include <pcl/PushButton.h>
 #include <pcl/SpinBox.h>
@@ -90,7 +91,14 @@ private:
             CheckBox          Internet_CheckBox;
             PushButton        Clear_Button;
             PushButton        New_Button;
-         Timer             Link_Timer;   // recoge los enlaces de paso pulsados en el WebView
+         HorizontalSizer   Voice_Sizer;   // voz (accesibilidad): dictar el prompt y leer las respuestas
+            PushButton        Dictate_Button;
+            CheckBox          Voice_CheckBox;
+            PushButton        ReadAloud_Button;
+            PushButton        StopVoice_Button;
+            Label             VoiceRate_Label;
+            SpinBox           VoiceRate_SpinBox;
+         Timer             Link_Timer;   // recoge los enlaces de paso pulsados en el WebView (y el fin del dictado)
    };
 
    GUIData* GUI = nullptr;
@@ -106,6 +114,17 @@ private:
    void e_LinkResult( WebView& sender, const Variant& result );
 
    void e_Click( Button& sender, bool checked );
+   void e_VoiceRate( SpinBox& sender, int value );
+
+   // Voz (Rafael, 8 nov 2026): voces y reconocedor de Windows (System.Speech) en un PowerShell aparte, sin internet.
+   std::unique_ptr<ExternalProcess> m_voice, m_dictation;
+   String m_dictationOut;
+   bool   m_voiceOn = false;
+   int    m_voiceRate = 0;
+   void Speak( const String& markdown );
+   void StopVoice();
+   void StartDictation();
+   void FinishDictation();
 
    friend struct GUIData;
 };

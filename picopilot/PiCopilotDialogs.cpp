@@ -14,6 +14,7 @@
 #include <pcl/File.h>
 #include <pcl/ImageWindow.h>
 #include <pcl/MessageBox.h>
+#include <pcl/Settings.h>
 #include <pcl/View.h>
 
 namespace pcl
@@ -35,6 +36,9 @@ PiCopilotChatDialog::PiCopilotChatDialog()
 
 PiCopilotChatDialog::~PiCopilotChatDialog()
 {
+   StopVoice();
+   if ( m_dictation )
+      try { if ( m_dictation->IsRunning() ) m_dictation->Kill(); } catch ( ... ) {}
    if ( GUI != nullptr )
       delete GUI, GUI = nullptr;
 }
@@ -138,6 +142,196 @@ void PiCopilotChatDialog::AppendAssistant( const String& modelName, const String
    RefreshHistory();
    m_lastScript = PiCopilotPrompts::ExtractScript( text );
    Refresh();
+   if ( m_voiceOn )
+      Speak( text );
+}
+
+// ----------------------------------------------------------------------------
+// Voz: leer las respuestas y dictar el prompt (accesibilidad, Rafael 8 nov 2026). Voces y reconocedor de Windows
+// (System.Speech, sin internet) en un PowerShell aparte: PixInsight no se bloquea mientras habla o escucha.
+
+static const char16_t* s_psSpeak =
+   u"param($f, $rate, $cultura)\r\n"
+   u"Add-Type -AssemblyName System.Speech\r\n"
+   u"$s = New-Object System.Speech.Synthesis.SpeechSynthesizer\r\n"
+   u"try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::NotSet, [System.Speech.Synthesis.VoiceAge]::NotSet, 0, [Globalization.CultureInfo]$cultura) } catch {}\r\n"
+   u"$s.Rate = [int]$rate\r\n"
+   u"$s.Speak([IO.File]::ReadAllText($f, [Text.Encoding]::UTF8))\r\n";
+
+// Frases seguidas hasta un silencio (8 s sin empezar, 2,5 s tras la última frase) o 90 s.
+static const char16_t* s_psDictate =
+   u"param($salida, $cultura)\r\n"
+   u"Add-Type -AssemblyName System.Speech\r\n"
+   u"$texto = @()\r\n"
+   u"try {\r\n"
+   u"  $r = New-Object System.Speech.Recognition.SpeechRecognitionEngine([Globalization.CultureInfo]$cultura)\r\n"
+   u"  $r.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))\r\n"
+   u"  $r.SetInputToDefaultAudioDevice()\r\n"
+   u"  $r.EndSilenceTimeout = [TimeSpan]::FromSeconds(1.2)\r\n"
+   u"  $r.InitialSilenceTimeout = [TimeSpan]::FromSeconds(8)\r\n"
+   u"  $fin = (Get-Date).AddSeconds(90)\r\n"
+   u"  while ((Get-Date) -lt $fin) {\r\n"
+   u"    $res = $r.Recognize()\r\n"
+   u"    if (-not $res) { break }\r\n"
+   u"    $texto += $res.Text\r\n"
+   u"    $r.InitialSilenceTimeout = [TimeSpan]::FromSeconds(2.5)\r\n"
+   u"  }\r\n"
+   u"} catch { $texto = @('ERROR: ' + $_.Exception.Message) }\r\n"
+   u"[IO.File]::WriteAllText($salida, ($texto -join ' '), [Text.Encoding]::UTF8)\r\n";
+
+static String VoiceDir()
+{
+   String d = PiCopilotUtil::JoinPath( File::SystemTempDirectory(), "PiCopilotVoz" );
+   if ( !File::DirectoryExists( d ) )
+      File::CreateDirectory( d, true );
+   return d;
+}
+
+static String VoiceCulture()
+{
+   return PiCopilotEnglish() ? String( "en-US" ) : String( "es-ES" );
+}
+
+// Texto para leer: sin bloques de código, sin símbolos de Markdown, enlaces por su texto y tablas como frases.
+static String VoiceText( const String& md )
+{
+   String src = md;
+   src.ReplaceString( "\r\n", "\n" );
+   StringList lines;
+   src.Break( lines, '\n' );
+   String out;
+   bool inCode = false;
+   for ( const String& raw : lines )
+   {
+      String t = raw.Trimmed();
+      if ( t.StartsWith( "```" ) )
+      {
+         if ( !inCode )
+            out << (PiCopilotEnglish() ? u" I have prepared a script. " : u" Te he preparado un script. ");
+         inCode = !inCode;
+         continue;
+      }
+      if ( inCode || t.IsEmpty() )
+         continue;
+      if ( t.StartsWith( '|' ) )
+      {
+         bool sep = true;
+         for ( size_type i = 0; i < t.Length(); ++i )
+            if ( t[i] != '|' && t[i] != '-' && t[i] != ':' && t[i] != ' ' ) { sep = false; break; }
+         if ( sep )
+            continue;
+         t = t.Substring( 1 );
+         if ( t.EndsWith( '|' ) ) t = t.Left( t.Length() - 1 );
+         t.ReplaceString( "|", ", " );
+      }
+      while ( t.StartsWith( '#' ) || t.StartsWith( '>' ) ) t = t.Substring( 1 ).Trimmed();
+      if ( t.StartsWith( "- " ) || t.StartsWith( "* " ) || t.StartsWith( u"• " ) ) t = t.Substring( 2 );
+      // Enlaces [texto](url) -> texto.
+      for ( ;; )
+      {
+         size_type a = t.Find( "](" );
+         if ( a == String::notFound ) break;
+         size_type b = t.Find( ')', a );
+         size_type o = t.FindLast( '[', a );
+         if ( b == String::notFound || o == String::notFound ) break;
+         t = t.Left( o ) + t.Substring( o + 1, a - o - 1 ) + t.Substring( b + 1 );
+      }
+      String clean;
+      for ( size_type i = 0; i < t.Length(); ++i )
+         if ( t[i] != '*' && t[i] != '_' && t[i] != '`' && t[i] != '#' )
+            clean << t[i];
+      clean.Trim();
+      if ( clean.IsEmpty() )
+         continue;
+      out << clean;
+      if ( !clean.EndsWith( '.' ) && !clean.EndsWith( ':' ) && !clean.EndsWith( '?' ) && !clean.EndsWith( '!' ) )
+         out << '.';
+      out << ' ';
+   }
+   return out.Trimmed();
+}
+
+static ExternalProcess* StartPowerShell( const String& name, const char16_t* code, const StringList& args )
+{
+   String ps1 = PiCopilotUtil::JoinPath( VoiceDir(), name + ".ps1" );
+   File f = File::CreateFileForWriting( ps1 );
+   f.Write( String( code ).ToUTF8() );   // sólo ASCII
+   f.Close();
+   StringList a;
+   a << "-NoProfile" << "-ExecutionPolicy" << "Bypass" << "-WindowStyle" << "Hidden" << "-File" << ps1;
+   for ( const String& s : args ) a << s;
+   ExternalProcess* P = new ExternalProcess;
+   P->Start( "powershell.exe", a );
+   return P;
+}
+
+void PiCopilotChatDialog::Speak( const String& markdown )
+{
+   StopVoice();
+   String t = VoiceText( markdown );
+   if ( t.IsEmpty() )
+      return;
+   String txt = PiCopilotUtil::JoinPath( VoiceDir(), "voz.txt" );
+   PiCopilotUtil::WriteText( txt, t );
+   try
+   {
+      m_voice.reset( StartPowerShell( "hablar", s_psSpeak, StringList() << txt << String( m_voiceRate ) << VoiceCulture() ) );
+   }
+   catch ( ... ) { m_voice.reset(); }
+}
+
+void PiCopilotChatDialog::StopVoice()
+{
+   if ( m_voice )
+   {
+      try { if ( m_voice->IsRunning() ) m_voice->Kill(); } catch ( ... ) {}
+      m_voice.reset();
+   }
+}
+
+void PiCopilotChatDialog::StartDictation()
+{
+   if ( m_dictation )   // segunda pulsación: cancelar
+   {
+      try { if ( m_dictation->IsRunning() ) m_dictation->Kill(); } catch ( ... ) {}
+      m_dictation.reset();
+      if ( GUI != nullptr ) GUI->Dictate_Button.SetText( Tr( u"Dictar" ) );
+      return;
+   }
+   StopVoice();
+   m_dictationOut = PiCopilotUtil::JoinPath( VoiceDir(), "dictado.txt" );
+   if ( File::Exists( m_dictationOut ) )
+      File::Remove( m_dictationOut );
+   try
+   {
+      m_dictation.reset( StartPowerShell( "dictar", s_psDictate, StringList() << m_dictationOut << VoiceCulture() ) );
+      if ( GUI != nullptr ) GUI->Dictate_Button.SetText( Tr( u"Escuchando… (parar)" ) );
+   }
+   catch ( ... ) { m_dictation.reset(); }
+}
+
+void PiCopilotChatDialog::FinishDictation()
+{
+   m_dictation.reset();
+   if ( GUI == nullptr )
+      return;
+   GUI->Dictate_Button.SetText( Tr( u"Dictar" ) );
+   String txt = File::Exists( m_dictationOut ) ? PiCopilotUtil::ReadText( m_dictationOut ).Trimmed() : String();
+   if ( !txt.IsEmpty() && txt[0] == 0xFEFF )
+      txt = txt.Substring( 1 ).Trimmed();
+   if ( txt.IsEmpty() || txt.StartsWith( "ERROR:" ) )
+   {
+      AppendInfo( txt.IsEmpty() ? Tr( u"Dictado: no he oído nada (¿micrófono?)." ) : Tr( u"Dictado: " ) + txt );
+      return;
+   }
+   String now = GUI->Prompt_TextBox.Text().Trimmed();
+   GUI->Prompt_TextBox.SetText( now.IsEmpty() ? txt : now + ' ' + txt );
+}
+
+void PiCopilotChatDialog::e_VoiceRate( SpinBox&, int value )
+{
+   m_voiceRate = value;
+   Settings::Write( "VoiceRate", m_voiceRate );
 }
 
 void PiCopilotChatDialog::AppendInfo( const String& text )
@@ -189,6 +383,30 @@ void PiCopilotChatDialog::e_Click( Button& sender, bool /*checked*/ )
       if ( ThePiCopilotInterface != nullptr )
          ThePiCopilotInterface->SetInternet( GUI->Internet_CheckBox.IsChecked() );
    }
+   else if ( sender == GUI->Voice_CheckBox )
+   {
+      m_voiceOn = GUI->Voice_CheckBox.IsChecked();
+      Settings::Write( "Voice", m_voiceOn );
+      if ( !m_voiceOn )
+         StopVoice();
+   }
+   else if ( sender == GUI->ReadAloud_Button )
+   {
+      for ( size_t i = m_entries.size(); i > 0; --i )
+         if ( m_entries[i-1].kind == PiCopilotChatEntry::Assistant )
+         {
+            Speak( m_entries[i-1].text );
+            break;
+         }
+   }
+   else if ( sender == GUI->StopVoice_Button )
+   {
+      StopVoice();
+   }
+   else if ( sender == GUI->Dictate_Button )
+   {
+      StartDictation();
+   }
    else if ( sender == GUI->RunScript_Button )
    {
       if ( !m_lastScript.IsEmpty() && ThePiCopilotInterface != nullptr )
@@ -208,6 +426,8 @@ void PiCopilotChatDialog::e_Click( Button& sender, bool /*checked*/ )
 
 void PiCopilotChatDialog::e_LinkTimer( Timer& )
 {
+   if ( m_dictation && !m_dictation->IsRunning() )
+      FinishDictation();
    if ( GUI == nullptr || !IsVisible() )
       return;
    GUI->History_WebView.EvaluateScript( u"(function(){var x=(typeof picoClick==='string')?picoClick:'';picoClick='';return x;})();" );
@@ -267,6 +487,39 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
    Internet_CheckBox.SetChecked( ThePiCopilotInterface == nullptr || ThePiCopilotInterface->InternetEnabled() );
    Internet_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
 
+   // Voz (accesibilidad).
+   Settings::Read( "Voice", w.m_voiceOn );
+   Settings::Read( "VoiceRate", w.m_voiceRate );
+   Dictate_Button.SetText( Tr( u"Dictar" ) );
+   Dictate_Button.SetToolTip( Tr( u"<p>Escucha por el micrófono y escribe lo que dices en el Prompt (reconocedor de Windows). "
+                              u"Termina cuando dejas de hablar unos segundos; púlsalo otra vez para parar. También vale Win + H.</p>" ) );
+   Dictate_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
+   Voice_CheckBox.SetText( Tr( u"Leer en voz alta" ) );
+   Voice_CheckBox.SetToolTip( Tr( u"<p>Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).</p>" ) );
+   Voice_CheckBox.SetChecked( w.m_voiceOn );
+   Voice_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
+   ReadAloud_Button.SetText( Tr( u"Leer" ) );
+   ReadAloud_Button.SetToolTip( Tr( u"<p>Lee en voz alta la última respuesta del modelo.</p>" ) );
+   ReadAloud_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
+   StopVoice_Button.SetText( Tr( u"Parar voz" ) );
+   StopVoice_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
+   VoiceRate_Label.SetText( Tr( u"Velocidad:" ) );
+   VoiceRate_Label.SetTextAlignment( TextAlign::Right|TextAlign::VertCenter );
+   VoiceRate_SpinBox.SetRange( -10, 10 );
+   VoiceRate_SpinBox.SetValue( w.m_voiceRate );
+   VoiceRate_SpinBox.SetToolTip( Tr( u"<p>Velocidad de la voz: -10 lenta, 0 normal, 10 rápida.</p>" ) );
+   VoiceRate_SpinBox.OnValueUpdated( (SpinBox::value_event_handler)&PiCopilotChatDialog::e_VoiceRate, w );
+   Voice_Sizer.SetSpacing( 6 );
+   Voice_Sizer.Add( Dictate_Button );
+   Voice_Sizer.AddSpacing( 12 );
+   Voice_Sizer.Add( Voice_CheckBox );
+   Voice_Sizer.Add( ReadAloud_Button );
+   Voice_Sizer.Add( StopVoice_Button );
+   Voice_Sizer.AddSpacing( 8 );
+   Voice_Sizer.Add( VoiceRate_Label );
+   Voice_Sizer.Add( VoiceRate_SpinBox );
+   Voice_Sizer.AddStretch();
+
    Link_Timer.SetInterval( 0.4 );
    Link_Timer.SetPeriodic( true );
    Link_Timer.OnTimer( (Timer::timer_event_handler)&PiCopilotChatDialog::e_LinkTimer, w );
@@ -296,6 +549,7 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
    Global_Sizer.Add( Prompt_Label );
    Global_Sizer.Add( Prompt_TextBox );
    Global_Sizer.Add( Buttons_Sizer );
+   Global_Sizer.Add( Voice_Sizer );
 
    w.SetSizer( Global_Sizer );
    w.EnsureLayoutUpdated();
