@@ -14,6 +14,12 @@ Versión mínima de PiCopilot como **script** de PixInsight: no es un módulo ni
   reenvía el error al modelo (máximo 3 veces seguidas; con «Ejecutar sin preguntar» se reenvía solo).
 - **Modelo**: Ollama (HTTP, `/api/chat`, lista de modelos leída de `/api/tags`), Claude Code (`claude -p` sin
   herramientas ni MCP) o Codex (`codex exec` en solo lectura). Las CLI reciben el prompt por un fichero temporal.
+- **Pesos N** (como «Configurar IA» del módulo): con Claude o Codex en el modelo «auto (pesos N)» (por defecto), el
+  modelo se elige según el **Paso** que marques en la pestaña Prompt. La puntuación del paso es la de
+  `guia/porcentajes_skill.json` (se lee en cada uso) más tu ajuste. Si es mayor que N, se usa el modelo inferior
+  (sonnet); si es igual o menor, el superior (opus). El prompt libre y los pasos sin valor van al superior. N
+  (por defecto 95), los modelos inferior y superior y los ajustes por paso están en la pestaña Modelo y se guardan
+  con Settings, no en el json. En el chat se ve qué modelo se ha usado y por qué (p. ej. «sonnet — 97 > 95»).
 - **Ajustes**: URL de Ollama, temperatura, rutas de `claude` y `codex`, carpeta de la guía. Se guardan con `Settings`
   de PixInsight (claves `PiCopilotLite/...`).
 

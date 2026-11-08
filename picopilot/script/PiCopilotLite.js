@@ -82,8 +82,15 @@ function plRutaCodexPorDefecto() {
 function PLAjustes() {
    this.proveedor = "ollama";             // ollama | claude | codex
    this.modeloOllama = "qwen38-32k";
-   this.modeloClaude = "";                // vacío = el que tenga configurado la CLI
-   this.modeloCodex = "";
+   this.modeloClaude = PL_AUTO;           // auto = pesos N; vacío = el que tenga configurado la CLI
+   this.modeloCodex = PL_AUTO;
+   // Pesos N (como «Configurar IA» del módulo): puntuación > N → modelo inferior; <= N → superior.
+   this.umbralN = 95;
+   this.claudeInferior = "sonnet";
+   this.claudeSuperior = "opus";
+   this.codexInferior = "";               // Codex: vacío = su modelo por defecto (igual que el módulo)
+   this.codexSuperior = "";
+   this.ajustesPesos = "";                // "paso=delta;..." (mismo formato que AIAdjustments del módulo)
    this.ollamaUrl = PL_URL_OLLAMA;
    this.temperatura = 0.2;
    this.pensar = false;                   // "think" de Ollama (los qwen3 tardan mucho más pensando)
@@ -92,10 +99,12 @@ function PLAjustes() {
    this.guia = plPadre(plPadre(PL_RUTA_SCRIPT)) + "/guia";
    this.ejecutarSinPreguntar = false;
 
-   var CAMPOS = { proveedor: DataType_String, modeloOllama: DataType_String, modeloClaude: DataType_String,
-                  modeloCodex: DataType_String, ollamaUrl: DataType_String, temperatura: DataType_String,
-                  pensar: DataType_Boolean, rutaClaude: DataType_String, rutaCodex: DataType_String,
-                  guia: DataType_String, ejecutarSinPreguntar: DataType_Boolean };
+   var CAMPOS = { proveedor: DataType_UCString, modeloOllama: DataType_UCString, modeloClaude: DataType_UCString,
+                  modeloCodex: DataType_UCString, ollamaUrl: DataType_UCString, temperatura: DataType_UCString,
+                  pensar: DataType_Boolean, rutaClaude: DataType_UCString, rutaCodex: DataType_UCString,
+                  guia: DataType_UCString, ejecutarSinPreguntar: DataType_Boolean, umbralN: DataType_Int32,
+                  claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
+                  codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -121,6 +130,104 @@ function PLAjustes() {
       else if (this.proveedor == "codex") this.modeloCodex = m;
       else this.modeloOllama = m;
    };
+
+   this.ajuste = function (paso) {
+      var a = plLeerAjustesPesos(this.ajustesPesos);
+      return a[paso] || 0;
+   };
+
+   this.ponerAjuste = function (paso, delta) {
+      var a = plLeerAjustesPesos(this.ajustesPesos), s = "";
+      a[paso] = delta;
+      for (var k in a) if (a[k]) s += k + "=" + a[k] + ";";
+      this.ajustesPesos = s;
+   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Pesos N: elección entre modelo inferior (Sonnet) y superior (Opus), copiada del módulo (PiCopilotConfig::TierModel)
+// ---------------------------------------------------------------------------------------------------------------
+
+var PL_AUTO = "auto (pesos N)";
+
+// Pasos de la guía, con las mismas etiquetas y claves que los botones del módulo.
+var PL_PASOS = [
+   ["Análisis del objeto", "lineal/01-analisis-del-objeto.md"], ["Inventario", "lineal/02-inventario.md"],
+   ["Blink / SubframeSel.", "lineal/03-blink-subframeselector.md"], ["Preprocesado", "lineal/04-preprocesado.md"],
+   ["StarAlignment + crop", "lineal/05-staralignment-crop.md"], ["HDRComposition", "lineal/06-hdr-composition.md"],
+   ["Extracción de canales", "lineal/07-extraccion-canales.md"], ["Plate Solve", "lineal/08-plate-solve.md"],
+   ["Corrección de Gradiente", "lineal/09-correccion-gradiente.md"], ["Combinación RGB / NB", "lineal/10-combinacion-rgb-nb.md"],
+   ["BXT Correct Only", "lineal/11-bxt-correct-only.md"], ["SPCC", "lineal/12-spcc.md"],
+   ["BXT completo", "lineal/13-bxt-completo.md"], ["NoiseX suave", "lineal/14-noisex-suave.md"],
+   ["StarX + NXT starless", "lineal/15-starx.md"], ["LinearFit / continuo", "lineal/16-linearfit-continuo.md"],
+   ["Checkpoint", "lineal/17-checkpoint.md"],
+   ["Estirado", "no-lineal/01-estirado.md"], ["LRGB / Paleta", "no-lineal/02-lrgb-paleta.md"],
+   ["SCNR", "no-lineal/03-scnr.md"], ["Máscaras", "no-lineal/04-mascaras.md"], ["Boost", "no-lineal/05-boost.md"],
+   ["NoiseX", "no-lineal/06-noisex.md"], ["Nitidez", "no-lineal/07-nitidez.md"], ["Estrellas", "no-lineal/08-estrellas.md"],
+   ["Recombinación", "no-lineal/09-recombinacion.md"], ["Recorte y exportación", "no-lineal/10-recorte-exportacion.md"],
+   ["Dossier", "no-lineal/11-dossier.md"], ["Resolución completa", "completa"]
+];
+
+// Respaldo si no existe guia/porcentajes_skill.json (la misma tabla que PiCopilotConfig::BuiltinScore).
+var PL_PESOS_INTERNOS = {
+   "lineal/01-analisis-del-objeto.md": 86, "lineal/02-inventario.md": 97, "lineal/03-blink-subframeselector.md": 92,
+   "lineal/04-preprocesado.md": 84, "lineal/05-staralignment-crop.md": 84, "lineal/06-hdr-composition.md": 100,
+   "lineal/07-extraccion-canales.md": 100, "lineal/08-plate-solve.md": 100, "lineal/09-correccion-gradiente.md": 87,
+   "lineal/10-combinacion-rgb-nb.md": 95, "lineal/11-bxt-correct-only.md": 95, "lineal/12-spcc.md": 95,
+   "lineal/13-bxt-completo.md": 95, "lineal/14-noisex-suave.md": 95, "lineal/15-starx.md": 95,
+   "lineal/16-linearfit-continuo.md": 95, "lineal/17-checkpoint.md": 95, "no-lineal/01-estirado.md": 95,
+   "no-lineal/02-lrgb-paleta.md": 95, "no-lineal/03-scnr.md": 89, "no-lineal/04-mascaras.md": 89,
+   "no-lineal/05-boost.md": 89, "no-lineal/06-noisex.md": 89, "no-lineal/07-nitidez.md": 89,
+   "no-lineal/08-estrellas.md": 89, "no-lineal/09-recombinacion.md": 89, "no-lineal/10-recorte-exportacion.md": 89,
+   "no-lineal/11-dossier.md": 80, "completa": 80
+};
+
+function plLeerAjustesPesos(s) {
+   var a = {};
+   String(s || "").split(";").forEach(function (it) {
+      var i = it.lastIndexOf("=");
+      if (i > 0) { var d = parseInt(it.substring(i + 1), 10); if (isFinite(d) && d) a[it.substring(0, i)] = d; }
+   });
+   return a;
+}
+
+// Tabla base: se lee de <guía>/porcentajes_skill.json en cada uso (como PiCopilotConfig::LoadScores): se quita el
+// "(...)" de la clave, se añade ".md" a las que llevan carpeta y, si un paso sale varias veces, se toma el menor.
+// Devuelve { tabla: {clave: valor}, fuente }.
+function plPesosBase(guia) {
+   var f = guia + "/porcentajes_skill.json";
+   try {
+      if (File.exists(f)) {
+         var procs = JSON.parse(File.readTextFile(f)).procesos, t = {}, n = 0;
+         for (var k in procs) {
+            var v = procs[k] && procs[k].sonnet_vs_opus;
+            if (typeof v !== "number") continue;
+            var c = k, p = c.indexOf("(");
+            if (p >= 0) c = c.substring(0, p);
+            c = c.trim();
+            if (c.indexOf("/") >= 0 && !/\.md$/.test(c)) c += ".md";
+            v = Math.round(v);
+            t[c] = t[c] === undefined ? v : Math.min(t[c], v);
+            ++n;
+         }
+         if (n) return { tabla: t, fuente: f };
+      }
+   } catch (e) {}
+   return { tabla: PL_PESOS_INTERNOS, fuente: "tabla interna (no se pudo leer " + f + ")" };
+}
+
+// Modelo que se pasa a la CLI y por qué. paso = clave del paso ("" = prompt libre).
+function plElegirModelo(aj, paso) {
+   if (aj.proveedor == "ollama") return { modelo: aj.modeloOllama, porque: "" };
+   var elegido = aj.modelo();
+   if (elegido != PL_AUTO) return { modelo: elegido, porque: elegido ? "elegido a mano" : "modelo por defecto de la CLI" };
+   var bajo = aj.proveedor == "claude" ? aj.claudeInferior : aj.codexInferior;
+   var alto = aj.proveedor == "claude" ? aj.claudeSuperior : aj.codexSuperior;
+   if (!paso) return { modelo: alto, porque: "Prompt libre: modelo superior" };
+   var base = plPesosBase(aj.guia).tabla[paso];
+   if (base === undefined) return { modelo: alto, porque: "paso sin valor en la tabla: modelo superior" };
+   var nota = base + aj.ajuste(paso), bajoGana = nota > aj.umbralN;
+   return { modelo: bajoGana ? bajo : alto, porque: nota + (bajoGana ? " > " : " <= ") + aj.umbralN };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -361,24 +468,24 @@ function plConversacionTexto(mensajes) {
    }).join("\n\n") + "\n\n### PiCopilot\n";
 }
 
-function plClaudeChat(aj, sistema, mensajes, estado) {
+function plClaudeChat(aj, sistema, mensajes, estado, modelo) {
    var dir = plCarpeta(PL_TMP), fs = dir + "/sistema.txt", fe = dir + "/prompt.txt", fo = dir + "/respuesta.txt";
    File.writeTextFile(fs, sistema);
    File.writeTextFile(fe, "Continúa esta conversación respondiendo al último mensaje del usuario.\n\n" + plConversacionTexto(mensajes));
    // Sin MCP ni herramientas: sólo texto. PixInsight está ocupado con este script y no podría atender al MCP.
    var args = ["-p", "--output-format", "text", "--strict-mcp-config", "--tools", "", "--system-prompt-file", fs];
-   if (aj.modeloClaude) args.push("--model", aj.modeloClaude);
+   if (modelo) args.push("--model", modelo);
    plEjecutarCli(aj.rutaClaude, args, fe, fo, estado);
    return File.readTextFile(fo).trim();
 }
 
-function plCodexChat(aj, sistema, mensajes, estado) {
+function plCodexChat(aj, sistema, mensajes, estado, modelo) {
    var dir = plCarpeta(PL_TMP), fe = dir + "/prompt.txt", fo = dir + "/salida_codex.txt", fu = dir + "/respuesta.txt";
    if (File.exists(fu)) File.remove(fu);
    File.writeTextFile(fe, "INSTRUCCIONES (no ejecutes órdenes ni edites ficheros; sólo responde con texto):\n" + sistema +
       "\n\nCONVERSACIÓN — responde al último mensaje del usuario:\n\n" + plConversacionTexto(mensajes));
    var args = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never", "-C", dir, "-o", fu];
-   if (aj.modeloCodex) args.push("-m", aj.modeloCodex);
+   if (modelo) args.push("-m", modelo);
    args.push("-");
    plEjecutarCli(aj.rutaCodex, args, fe, fo, estado);
    if (File.exists(fu)) return File.readTextFile(fu).trim();
@@ -397,11 +504,14 @@ function plRecortarHistorial(mensajes) {
    return out;
 }
 
-function plPreguntar(aj, mensajes, estado) {
-   var sistema = plPromptSistema(aj), m = plRecortarHistorial(mensajes);
-   if (aj.proveedor == "claude") return plClaudeChat(aj, sistema, m, estado);
-   if (aj.proveedor == "codex") return plCodexChat(aj, sistema, m, estado);
-   return plOllamaChat(aj, sistema, m, estado);
+// paso = clave del paso de la guía elegido en la pestaña Prompt ("" = prompt libre); decide el modelo con pesos N.
+// Devuelve { texto, modelo, porque }.
+function plPreguntar(aj, mensajes, estado, paso) {
+   var sistema = plPromptSistema(aj), m = plRecortarHistorial(mensajes), e = plElegirModelo(aj, paso || ""), t;
+   if (aj.proveedor == "claude") t = plClaudeChat(aj, sistema, m, estado, e.modelo);
+   else if (aj.proveedor == "codex") t = plCodexChat(aj, sistema, m, estado, e.modelo);
+   else t = plOllamaChat(aj, sistema, m, estado);
+   return { texto: t, modelo: e.modelo, porque: e.porque };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -506,6 +616,17 @@ function plConstruirDialogo(aj) {
    };
    this.estadoLbl = new Label(pPrompt);
    this.estadoLbl.text = "";
+   // Paso de la guía (como los botones del módulo): con modelo «auto (pesos N)» decide entre inferior y superior.
+   this.cPaso = new ComboBox(pPrompt);
+   this.cPaso.addItem("Prompt libre");
+   PL_PASOS.forEach(function (p) { self.cPaso.addItem(p[0]); });
+   this.cPaso.toolTip = "Paso de la guía al que se refiere la petición. Con Claude/Codex en «" + PL_AUTO + "» elige el " +
+                        "modelo: puntuación > N → inferior; <= N → superior. Prompt libre → superior.";
+   this.cPaso.onItemSelected = function () { self.actualizarEleccion(); };
+   this.eleccionLbl = new Label(pPrompt);
+   var filaP = new HorizontalSizer; filaP.spacing = 6;
+   var lP = new Label(pPrompt); lP.text = "Paso:"; lP.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   filaP.add(lP); filaP.add(this.cPaso); filaP.addSpacing(8); filaP.add(this.eleccionLbl, 100);
 
    var filaB = new HorizontalSizer;
    filaB.spacing = 6;
@@ -515,6 +636,7 @@ function plConstruirDialogo(aj) {
    pPrompt.sizer = new VerticalSizer;
    pPrompt.sizer.margin = 6; pPrompt.sizer.spacing = 6;
    pPrompt.sizer.add(this.historialBox, 100);
+   pPrompt.sizer.add(filaP);
    pPrompt.sizer.add(this.entrada);
    pPrompt.sizer.add(filaB);
    pPrompt.sizer.add(this.estadoLbl);
@@ -550,7 +672,60 @@ function plConstruirDialogo(aj) {
    pModelo.sizer = new VerticalSizer;
    pModelo.sizer.margin = 8; pModelo.sizer.spacing = 8;
    pModelo.sizer.add(fP); pModelo.sizer.add(fM); pModelo.sizer.add(this.cPensar); pModelo.sizer.add(this.notaModelo);
-   pModelo.sizer.addStretch();
+
+   // Pesos N (Claude / Codex con «auto (pesos N)»), como «Configurar IA» del módulo.
+   var gPesos = new GroupBox(pModelo);
+   gPesos.title = "Pesos N (Claude / Codex en «" + PL_AUTO + "»)";
+   this.sN = new SpinBox(gPesos);
+   this.sN.minValue = 0; this.sN.maxValue = 100; this.sN.value = aj.umbralN;
+   this.sN.toolTip = "Umbral N: si la puntuación del paso es mayor que N se usa el modelo inferior; si es igual o menor, el superior. Por defecto 95.";
+   this.sN.onValueUpdated = function (v) { aj.umbralN = v; self.rellenarPesos(); };
+   this.eInf = new Edit(gPesos); this.eInf.setScaledMinWidth(120);
+   this.eSup = new Edit(gPesos); this.eSup.setScaledMinWidth(120);
+   this.eInf.onEditCompleted = function () { self.leerAjustes(); self.rellenarPesos(); };
+   this.eSup.onEditCompleted = function () { self.leerAjustes(); self.rellenarPesos(); };
+   var fN = new HorizontalSizer; fN.spacing = 6;
+   var lN = new Label(gPesos); lN.text = "N:"; lN.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   var lI = new Label(gPesos); lI.text = "Modelo inferior:"; lI.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   var lS = new Label(gPesos); lS.text = "Modelo superior:"; lS.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   fN.add(lN); fN.add(this.sN); fN.addSpacing(12); fN.add(lI); fN.add(this.eInf); fN.addSpacing(12); fN.add(lS); fN.add(this.eSup); fN.addStretch();
+   this.tPesos = new TreeBox(gPesos);
+   this.tPesos.numberOfColumns = 5;
+   this.tPesos.headerVisible = true;
+   this.tPesos.rootDecoration = false;
+   this.tPesos.alternateRowColor = true;
+   ["Paso", "Base", "Ajuste", "Puntuación", "Modelo"].forEach(function (h, i) { self.tPesos.setHeaderText(i, h); });
+   this.tPesos.setScaledMinHeight(260);
+   this.tPesos.onCurrentNodeUpdated = function () {
+      var n = self.tPesos.currentNode;
+      if (n) { self.sAjuste.enabled = true; self.sAjuste.value = aj.ajuste(n.clave); }
+   };
+   this.sAjuste = new SpinBox(gPesos);
+   this.sAjuste.minValue = -100; this.sAjuste.maxValue = 100; this.sAjuste.enabled = false;
+   this.sAjuste.toolTip = "Ajuste tuyo de la puntuación del paso seleccionado (se suma al valor base). Se guarda en los ajustes de PixInsight, no en el json.";
+   this.sAjuste.onValueUpdated = function (v) {
+      var n = self.tPesos.currentNode;
+      if (!n) return;
+      aj.ponerAjuste(n.clave, v);
+      self.rellenarPesos(n.clave);
+   };
+   this.bResetPesos = new PushButton(gPesos);
+   this.bResetPesos.text = "Valores por defecto";
+   this.bResetPesos.toolTip = "N = 95, sin ajustes, sonnet / opus (Codex: su modelo por defecto).";
+   this.bResetPesos.onClick = function () {
+      aj.umbralN = 95; aj.ajustesPesos = ""; aj.claudeInferior = "sonnet"; aj.claudeSuperior = "opus";
+      aj.codexInferior = ""; aj.codexSuperior = "";
+      self.sN.value = 95; self.rellenarPesos();
+   };
+   this.fuentePesos = new Label(gPesos);
+   this.fuentePesos.wordWrapping = true;
+   var fA = new HorizontalSizer; fA.spacing = 6;
+   var lA = new Label(gPesos); lA.text = "Ajuste del paso seleccionado:"; lA.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   fA.add(lA); fA.add(this.sAjuste); fA.addStretch(); fA.add(this.bResetPesos);
+   gPesos.sizer = new VerticalSizer;
+   gPesos.sizer.margin = 6; gPesos.sizer.spacing = 6;
+   gPesos.sizer.add(fN); gPesos.sizer.add(this.tPesos, 100); gPesos.sizer.add(fA); gPesos.sizer.add(this.fuentePesos);
+   pModelo.sizer.add(gPesos, 100);
 
    // --- Pestaña Ajustes ---
    var pAj = new Control(this);
@@ -602,6 +777,54 @@ function plConstruirDialogo(aj) {
       if (g) aj.guia = g;
       var m = this.cModelo.editText.trim();
       if (m || aj.proveedor != "ollama") aj.ponerModelo(m);
+      aj.umbralN = this.sN.value;
+      if (aj.proveedor == "codex") { aj.codexInferior = this.eInf.text.trim(); aj.codexSuperior = this.eSup.text.trim(); }
+      else if (aj.proveedor == "claude") {
+         aj.claudeInferior = this.eInf.text.trim() || "sonnet"; aj.claudeSuperior = this.eSup.text.trim() || "opus";
+      }
+   };
+
+   this.pasoActual = function () {
+      var i = this.cPaso.currentItem;
+      return i > 0 ? PL_PASOS[i - 1][1] : "";
+   };
+
+   // Línea bajo el chat con el modelo que se usará para el paso elegido y por qué.
+   this.actualizarEleccion = function () {
+      var e = plElegirModelo(aj, this.pasoActual());
+      this.eleccionLbl.text = aj.proveedor == "ollama" ? "Ollama · " + aj.modeloOllama :
+         "Modelo: " + (e.modelo || "(por defecto de la CLI)") + (e.porque ? "  —  " + e.porque : "");
+   };
+
+   // Tabla de pesos con la puntuación (base + ajuste) y el modelo que saldría con N.
+   this.rellenarPesos = function (seleccionar) {
+      var pb = plPesosBase(aj.guia), bajo, alto;
+      var cod = aj.proveedor == "codex";
+      bajo = cod ? aj.codexInferior : aj.claudeInferior; alto = cod ? aj.codexSuperior : aj.claudeSuperior;
+      this.eInf.text = bajo; this.eSup.text = alto;
+      var activos = aj.proveedor != "ollama";
+      this.eInf.enabled = this.eSup.enabled = activos;
+      this.tPesos.clear();
+      var sel = null;
+      PL_PASOS.forEach(function (p) {
+         var n = new TreeBoxNode(self.tPesos), base = pb.tabla[p[1]], aju = aj.ajuste(p[1]);
+         n.clave = p[1];
+         n.setText(0, p[0]);
+         n.setText(1, base === undefined ? "—" : String(base));
+         n.setText(2, aju ? (aju > 0 ? "+" : "") + aju : "");
+         if (base === undefined) { n.setText(3, "—"); n.setText(4, "superior (sin valor)"); }
+         else {
+            var nota = base + aju, inf = nota > aj.umbralN;
+            n.setText(3, String(nota));
+            n.setText(4, (inf ? "inferior" : "superior") + " (" + ((inf ? bajo : alto) || "por defecto") + ")");
+         }
+         if (seleccionar && p[1] == seleccionar) sel = n;
+      });
+      for (var c = 0; c < 5; ++c) this.tPesos.adjustColumnWidthToContents(c);
+      if (sel) this.tPesos.currentNode = sel; else this.sAjuste.enabled = false;
+      this.fuentePesos.text = "Base: " + pb.fuente + ". Prompt libre → modelo superior." +
+                              (aj.modelo() == PL_AUTO || !activos ? "" : "  (Ahora el modelo está fijado a mano: la tabla no se aplica.)");
+      this.actualizarEleccion();
    };
 
    this.rellenarModelos = function (avisar) {
@@ -614,16 +837,19 @@ function plConstruirDialogo(aj) {
          try { lista = plOllamaModelos(aj); this.notaModelo.text = lista.length + " modelos en Ollama."; }
          catch (e) { this.notaModelo.text = String(e.message || e); if (avisar) this.estadoLbl.text = this.notaModelo.text; }
       } else if (aj.proveedor == "claude") {
-         lista = ["", "sonnet", "opus", "haiku"];
-         this.notaModelo.text = "Vacío = el modelo por defecto de Claude Code. Se lanza «claude -p» sin herramientas ni MCP.";
+         lista = [PL_AUTO, "", "sonnet", "opus", "haiku"];
+         this.notaModelo.text = "«" + PL_AUTO + "» = elige inferior o superior según el paso (tabla de abajo). " +
+                                "Vacío = el modelo por defecto de Claude Code. Se lanza «claude -p» sin herramientas ni MCP.";
       } else {
-         lista = [""];
-         this.notaModelo.text = "Vacío = el modelo por defecto de Codex. Se lanza «codex exec» en modo solo lectura.";
+         lista = [PL_AUTO, ""];
+         this.notaModelo.text = "«" + PL_AUTO + "» = elige inferior o superior según el paso. Vacío = el modelo por " +
+                                "defecto de Codex. Se lanza «codex exec» en modo solo lectura.";
       }
       if (lista.indexOf(actual) < 0) lista.unshift(actual);
       lista.forEach(function (m) { self.cModelo.addItem(m); });
       this.cModelo.currentItem = lista.indexOf(actual);
       this.cModelo.editText = actual;
+      this.rellenarPesos();
    };
 
    this.anotar = function (quien, texto) {
@@ -648,11 +874,14 @@ function plConstruirDialogo(aj) {
       this.leerAjustes();
       this.estado = { cancelado: false };
       this.ocupado(true);
-      var nombre = { ollama: "Ollama", claude: "Claude", codex: "Codex" }[aj.proveedor] + (aj.modelo() ? " · " + aj.modelo() : "");
+      var e0 = plElegirModelo(aj, this.pasoEnviado || "");
+      var nombre = { ollama: "Ollama", claude: "Claude", codex: "Codex" }[aj.proveedor] +
+                   " · " + (e0.modelo || "modelo por defecto") + (e0.porque ? " — " + e0.porque : "");
       this.estadoLbl.text = "Esperando a " + nombre + "…";
       var t0 = Date.now(), resp = null;
       try {
-         resp = plPreguntar(aj, this.mensajes, this.estado);
+         resp = plPreguntar(aj, this.mensajes, this.estado, this.pasoEnviado || "");
+         resp = resp.texto;
       } catch (e) {
          this.anotar("Error", String(e.message || e));
       }
@@ -675,8 +904,11 @@ function plConstruirDialogo(aj) {
       this.entrada.text = "";
       this.correcciones = 0;
       this.ultimoError = null;
-      this.mensajes.push({ role: "user", content: t });
-      this.anotar("Tú", t);
+      this.pasoEnviado = this.pasoActual();   // las correcciones siguientes usan el mismo paso
+      var pi = this.cPaso.currentItem;
+      var contenido = pi > 0 ? "[Paso de la guía: " + PL_PASOS[pi - 1][0] + " (" + PL_PASOS[pi - 1][1] + ")]\n" + t : t;
+      this.mensajes.push({ role: "user", content: contenido });
+      this.anotar("Tú", contenido);
       this.consultar();
    };
 
@@ -756,6 +988,17 @@ function plPrueba(salida, cli) {
             d.entrada.text = "¿Qué imágenes tengo abiertas? Usa vistas().";
             d.enviar();
             out.registro = d.registro;
+            // Pestaña Modelo con Claude en auto: tabla de pesos y elección para un paso.
+            var prov = aj.proveedor, mod = aj.modeloClaude;
+            d.cProv.currentItem = 1; d.cProv.onItemSelected(1);
+            d.cModelo.editText = PL_AUTO; d.leerAjustes(); d.rellenarPesos();
+            d.cPaso.currentItem = 2; d.cPaso.onItemSelected(2);   // Inventario
+            out.pesos = { filas: d.tPesos.numberOfChildren, fuente: d.fuentePesos.text, eleccionInventario: d.eleccionLbl.text };
+            d.cPaso.currentItem = 0; d.cPaso.onItemSelected(0);
+            out.pesos.eleccionLibre = d.eleccionLbl.text;
+            aj.modeloClaude = mod;
+            var ip = ["ollama", "claude", "codex"].indexOf(prov);
+            d.cProv.currentItem = ip; d.cProv.onItemSelected(ip);
          } catch (e) { out.error = String(e); }
          d.ok();
       };
@@ -774,7 +1017,7 @@ function plPrueba(salida, cli) {
    var respuesta = null;
    paso("ollamaChat", function () {
       var a = new PLAjustes(); a.cargar(); a.proveedor = "ollama";
-      respuesta = plPreguntar(a, [{ role: "user", content: "Lista las ventanas abiertas en PixInsight con la función vistas()." }], { cancelado: false });
+      respuesta = plPreguntar(a, [{ role: "user", content: "Lista las ventanas abiertas en PixInsight con la función vistas()." }], { cancelado: false }).texto;
       return { respuesta: plRecortar(respuesta, 1500), script: plExtraerScript(respuesta) };
    });
    paso("ejecutarTrivial", function () {
@@ -788,8 +1031,21 @@ function plPrueba(salida, cli) {
    paso("ejecutarError", function () { return plEjecutarScript(aj, "noExiste(1);"); });
    if (cli) paso("cliChat_" + cli, function () {
       var a = new PLAjustes(); a.cargar(); a.proveedor = cli;
-      var t = plPreguntar(a, [{ role: "user", content: "Lista las ventanas abiertas en PixInsight con la función vistas()." }], { cancelado: false });
-      return { respuesta: plRecortar(t, 1500), script: plExtraerScript(t) };
+      a.ponerModelo(PL_AUTO);
+      // Pesos N sin llamar a la CLI: prompt libre, un paso > N, uno <= N, y un ajuste del usuario que lo cambia.
+      var casos = {
+         libre: plElegirModelo(a, ""),
+         inventario: plElegirModelo(a, "lineal/02-inventario.md"),
+         gradiente: plElegirModelo(a, "lineal/09-correccion-gradiente.md")
+      };
+      var antes = a.ajustesPesos;
+      a.ponerAjuste("lineal/09-correccion-gradiente.md", 10);
+      casos.gradienteMas10 = plElegirModelo(a, "lineal/09-correccion-gradiente.md");
+      a.ajustesPesos = antes;
+      // Llamada real con un paso de puntuación > N (debe ir al modelo inferior).
+      var r = plPreguntar(a, [{ role: "user", content: "[Paso de la guía: Inventario (lineal/02-inventario.md)]\nResponde solo: OK" }],
+                          { cancelado: false }, "lineal/02-inventario.md");
+      return { casos: casos, llamada: { modelo: r.modelo, porque: r.porque, respuesta: plRecortar(r.texto, 300) } };
    });
    delete r.enCurso;
    r.fin = new Date().toISOString();
