@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+- **MCP picopilot: correcciones y modo compacto** (9 nov 2026).
+  - `gradienteVarias` estaba en `manifiesto.json` pero no en la `LISTA` del runner: el MCP la ofrecía y el runner la rechazaba. Añadida.
+  - `screenStarsCombine` y `screenStarsExtract` (realces.js) son ahora herramientas MCP, como decía `SKILL.md`.
+  - Nuevo campo `resumen` en el manifiesto (20 herramientas con descripción larga). `PICOPILOT_COMPACTO=1` lo usa en vez de la descripción y `PICOPILOT_FASE=lineal|no-lineal` ofrece sólo las herramientas de esa fase: la lista baja de ~10.900 tokens a ~6.600 (lineal) o ~4.700 (no lineal). Sin las variables, todo igual que antes.
+  - PiCopilot Lite usa el `resumen` cuando existe al listar las funciones para el modelo.
+
 - **Lo aprendido comparando LDN 1235 de Qwen (build89) con la v1 de Opus** (7 nov 2026, datos de Dominic Gareau). Qwen dejó el polvo casi pegado al cielo (cuerpo 0,009 por encima frente a 0,051), estrellas hinchadas (9,5 % del campo frente a 1,8 %) y llamó al objeto IC 63. Cambios:
   - `estrellas.js`: si la limpieza < 0,005 se lleva > 10 % del brillo, prueba < 0,002; si tampoco, sólo avisa (ya no manda a `extraer`). `no_cumple` nuevo si la capa pasa del 10 % de píxeles > 0,02 (hinchada).
   - `estirado.js`: `estrellas: "extraer"` da `no_cumple` si la capa pasa del 10 % (es sólo para galaxias); nuevo `tipo: "nebulosa_oscura"` (cielo 0,15, ruidoMax 0,20; sin calibrar).

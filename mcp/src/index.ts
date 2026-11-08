@@ -41,6 +41,11 @@ const RESULTADOS = join(DATOS, "resultados");
 // Tiempo máximo de espera dentro de una llamada: por debajo del límite de ~60 s de los clientes MCP.
 const ESPERA_MAX_S = Number(process.env.PICOPILOT_ESPERA_S ?? 45);
 const RECOGER_S = 60;   // si el runner no ha empezado en este tiempo, la petición se da por perdida
+// Para clientes con poco contexto (modelos locales a 32K): PICOPILOT_COMPACTO=1 usa el "resumen" de cada herramienta
+// en vez de la descripción larga, y PICOPILOT_FASE=lineal | no-lineal ofrece sólo las herramientas de esa fase
+// (más las que no son de ningún paso: vistas, estadisticas, previa, abrir/guardar...). Sin ellas, todo como antes.
+const COMPACTO = /^(1|true|si|sí|yes)$/i.test(process.env.PICOPILOT_COMPACTO ?? "");
+const FASE = (process.env.PICOPILOT_FASE ?? "").trim().toLowerCase();
 
 // --- Manifiesto ---------------------------------------------------------------------------------------------
 
@@ -50,6 +55,7 @@ interface Funcion {
   nivel: "lectura" | "copias" | "vista" | "disco" | "libre";
   timeout_s: number;
   descripcion: string;
+  resumen?: string;
   paso?: string;
   params: Record<string, unknown>;
 }
@@ -60,6 +66,12 @@ function leerManifiesto(): Funcion[] {
   // run_script (nivel libre) solo si el usuario lo ha permitido creando ~/.picopilot/permitir_libre.
   const libre = existsSync(join(DATOS, "permitir_libre"));
   return (m.funciones as Funcion[]).filter((f) => f.nivel !== "libre" || libre);
+}
+
+function herramientasVisibles(): Funcion[] {
+  const todas = leerManifiesto();
+  if (FASE !== "lineal" && FASE !== "no-lineal") return todas;
+  return todas.filter((f) => !f.paso || f.paso.startsWith(FASE + "/"));
 }
 
 // --- Token --------------------------------------------------------------------------------------------------
@@ -211,9 +223,9 @@ async function main() {
   };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [herramientaEstado, ...leerManifiesto().map((f) => ({
+    tools: [herramientaEstado, ...herramientasVisibles().map((f) => ({
       name: f.nombre,
-      description: `${f.descripcion}${f.paso ? ` (ficha: guia/${f.paso})` : ""} [nivel: ${f.nivel}]`,
+      description: `${COMPACTO && f.resumen ? f.resumen : f.descripcion}${f.paso ? ` (ficha: guia/${f.paso})` : ""} [nivel: ${f.nivel}]`,
       inputSchema: f.params,
     }))],
   }));
