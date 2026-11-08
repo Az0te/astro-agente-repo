@@ -676,11 +676,14 @@ function plEjecutarScript(aj, codigo) {
    try {
       var v = (0, eval)(limpio);
       var txt = salida.join("\n");
+      // El valor de la última expresión sólo se añade si el script no mandó nada con chat(), o si es corto: los modelos
+      // suelen hacer chat(JSON.stringify(r)) y además devolver r (o un JSON con todo junto), y salía repetido.
       if (v !== undefined && typeof v !== "function") {
          var s; try { s = typeof v === "string" ? v : JSON.stringify(v, null, 1); } catch (e) { s = String(v); }
-         if (s !== undefined) txt += (txt ? "\n" : "") + "Valor devuelto: " + s;
+         if (s !== undefined && (!salida.length || s.length < 200)) txt += (txt ? "\n" : "") + "Valor devuelto: " + s;
       }
-      return { ok: true, texto: plRecortar(txt || "(sin salida)", 6000), segundos: (Date.now() - t0) / 1000 };
+      // 20000 caracteres (antes 6000 cortaba análisis + ficha del objeto; el módulo manda hasta 30000 a interpretar).
+      return { ok: true, texto: plRecortar(txt || "(sin salida)", 20000), segundos: (Date.now() - t0) / 1000 };
    } catch (e) {
       var linea = e && e.lineNumber ? " (línea " + e.lineNumber + ")" : "";
       var vistas = "";
