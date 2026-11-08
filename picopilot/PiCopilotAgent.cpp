@@ -253,6 +253,27 @@ String PiCopilotConfig::PicopilotRunner() const
    return File::Exists( s ) ? s : String();
 }
 
+void PiCopilotConfig::WriteInternetFlag() const
+{
+   try
+   {
+      String dir = PiCopilotUtil::JoinPath( File::HomeDirectory(), ".picopilot" );
+      String flag = PiCopilotUtil::JoinPath( dir, "sin-internet" );
+      if ( internet )
+      {
+         if ( File::Exists( flag ) )
+            File::Remove( flag );
+      }
+      else
+      {
+         if ( !File::DirectoryExists( dir ) )
+            File::CreateDirectory( dir, true );
+         PiCopilotUtil::WriteText( flag, u"Búsquedas en internet desactivadas en PiCopilot (casilla «Internet»).\n" );
+      }
+   }
+   catch ( ... ) {}
+}
+
 String PiCopilotConfig::DefaultClaudeArgs()
 {
    // Herramientas permitidas sin preguntar en modo no interactivo: el MCP de
@@ -310,6 +331,9 @@ void PiCopilotConfig::Load()
 
    if ( !Settings::Read( "AutoRun", autoRun ) )
       autoRun = true;
+   if ( !Settings::Read( "Internet", internet ) )
+      internet = true;
+   WriteInternetFlag();
    if ( !Settings::Read( "UILanguage", uiLanguage ) || uiLanguage.IsEmpty() )
       uiLanguage = "es";
    SetPiCopilotEnglish( uiLanguage == "en" );
@@ -417,6 +441,8 @@ void PiCopilotConfig::Save() const
    Settings::Write( "ClaudeArgs", claudeArgs );
    Settings::Write( "UILanguage", uiLanguage );
    Settings::Write( "AutoRun", autoRun );
+   Settings::Write( "Internet", internet );
+   WriteInternetFlag();
    Settings::Write( "DataDirs", dataDirs );
 
    Settings::Write( "AIThreshold", threshold );

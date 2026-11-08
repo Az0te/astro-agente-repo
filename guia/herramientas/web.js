@@ -15,7 +15,10 @@ var WB_HTTPS = "https:" + "/" + "/";
 function wbGet(url, o) {
   o = o || {};
   // El panel puede prohibir las consultas externas (casilla «Internet» de PiCopilot Lite).
-  if (typeof PICOPILOT_INTERNET !== "undefined" && PICOPILOT_INTERNET === false)
+  // PiCopilot Lite pone la variable global; el módulo deja el fichero ~/.picopilot/sin-internet (también vale por el MCP).
+  var prohibido = (typeof PICOPILOT_INTERNET !== "undefined") ? PICOPILOT_INTERNET === false
+                                                              : File.exists(File.homeDirectory + "/.picopilot/sin-internet");
+  if (prohibido)
     throw new Error("Las búsquedas en internet están desactivadas (casilla «Internet» del panel): no consultes fuera; pídeselo al usuario");
   var datos = new ByteArray, t = new NetworkTransfer;
   t.setURL(url);

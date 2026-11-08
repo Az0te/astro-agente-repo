@@ -196,6 +196,10 @@ static const std::map<String, String>& Table()
         u"<p>Type your request and press <b>Send</b>. The answer arrives in the background: you can keep working in PixInsight meanwhile.</p>" },
       { u"Ejecutar script", u"Run script" },
       { u"Ejecutar sin preguntar", u"Run without asking" },
+      { u"<p>Permitir búsquedas externas. Claude: WebSearch y WebFetch. Todos los modelos: SIMBAD, "
+        u"Wikipedia, páginas web e imágenes de catálogo (web.js de la guía). Sin marcar, nada sale a internet.</p>",
+        u"<p>Allow external searches. Claude: WebSearch and WebFetch. All models: SIMBAD, "
+        u"Wikipedia, web pages and catalog images (the guide's web.js). Unchecked, nothing goes to the internet.</p>" },
       { u"<p>El script de la respuesta a tu Prompt se ejecuta en PixInsight sin esperar a que pulses "
         u"«Ejecutar script». Los enlaces «Siguiente paso» del chat ejecutan ese paso con un clic.</p>",
         u"<p>The script in the answer to your Prompt runs in PixInsight without waiting for you to press "

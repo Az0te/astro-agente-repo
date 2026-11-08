@@ -184,6 +184,11 @@ void PiCopilotChatDialog::e_Click( Button& sender, bool /*checked*/ )
       if ( ThePiCopilotInterface != nullptr )
          ThePiCopilotInterface->SetAutoRun( GUI->AutoRun_CheckBox.IsChecked() );
    }
+   else if ( sender == GUI->Internet_CheckBox )
+   {
+      if ( ThePiCopilotInterface != nullptr )
+         ThePiCopilotInterface->SetInternet( GUI->Internet_CheckBox.IsChecked() );
+   }
    else if ( sender == GUI->RunScript_Button )
    {
       if ( !m_lastScript.IsEmpty() && ThePiCopilotInterface != nullptr )
@@ -256,6 +261,12 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
    AutoRun_CheckBox.SetChecked( ThePiCopilotInterface == nullptr || ThePiCopilotInterface->AutoRunEnabled() );
    AutoRun_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
 
+   Internet_CheckBox.SetText( Tr( u"Internet" ) );
+   Internet_CheckBox.SetToolTip( Tr( u"<p>Permitir búsquedas externas. Claude: WebSearch y WebFetch. Todos los modelos: SIMBAD, "
+                                 u"Wikipedia, páginas web e imágenes de catálogo (web.js de la guía). Sin marcar, nada sale a internet.</p>" ) );
+   Internet_CheckBox.SetChecked( ThePiCopilotInterface == nullptr || ThePiCopilotInterface->InternetEnabled() );
+   Internet_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
+
    Link_Timer.SetInterval( 0.4 );
    Link_Timer.SetPeriodic( true );
    Link_Timer.OnTimer( (Timer::timer_event_handler)&PiCopilotChatDialog::e_LinkTimer, w );
@@ -273,6 +284,7 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
    Buttons_Sizer.Add( Send_Button );
    Buttons_Sizer.Add( RunScript_Button );
    Buttons_Sizer.Add( AutoRun_CheckBox );
+   Buttons_Sizer.Add( Internet_CheckBox );
    Buttons_Sizer.AddStretch();
    Buttons_Sizer.Add( Clear_Button );
    Buttons_Sizer.Add( New_Button );

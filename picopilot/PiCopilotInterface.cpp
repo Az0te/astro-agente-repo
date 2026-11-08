@@ -837,6 +837,14 @@ void PiCopilotInterface::SetAutoRun( bool on )
    m_cfg.Save();
 }
 
+// Casilla «Internet» (Rafael, 8 nov 2026): con ella desmarcada, Claude no tiene WebSearch ni WebFetch y las funciones
+// de web.js (simbad, wikipedia, leerWeb, imagenCatalogo) se niegan, también por el MCP (fichero ~/.picopilot/sin-internet).
+void PiCopilotInterface::SetInternet( bool on )
+{
+   m_cfg.internet = on;
+   m_cfg.Save();
+}
+
 // Rafael (8 nov 2026): con «Ejecutar sin preguntar» marcado, pulsar «Ejecutar script» sobre un plan suelto (una interpretación
 // fuera de serie) reanuda la serie: se ejecuta sin diálogo y, al acabar, se pide el paso siguiente. Antes había que escribir
 // «sigue hasta el final» después de cada paso.
@@ -1472,6 +1480,11 @@ bool PiCopilotInterface::StartClaude( const String& prompt )
       args << "--mcp-config" << mcpConfig;
 
    args << SplitArgs( m_cfg.claudeArgs );
+   // Búsquedas externas según la casilla «Internet»: permitidas sin preguntar (en -p nadie puede contestar) o prohibidas.
+   if ( m_cfg.internet )
+      args << "--allowedTools" << "WebSearch" << "WebFetch";
+   else
+      args << "--disallowedTools" << "WebSearch" << "WebFetch";
 
    m_job.stdinData = prompt.ToUTF8();
 

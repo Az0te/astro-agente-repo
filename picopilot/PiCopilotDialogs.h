@@ -87,6 +87,7 @@ private:
             PushButton        Send_Button;
             PushButton        RunScript_Button;
             CheckBox          AutoRun_CheckBox;
+            CheckBox          Internet_CheckBox;
             PushButton        Clear_Button;
             PushButton        New_Button;
          Timer             Link_Timer;   // recoge los enlaces de paso pulsados en el WebView

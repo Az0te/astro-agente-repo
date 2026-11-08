@@ -72,6 +72,11 @@ public:
    String dataDirs;               // Carpetas de datos para Claude, separadas por ';'
    String uiLanguage = "es";      // idioma de la interfaz: "es" | "en"
    bool   autoRun = true;         // ejecutar sin preguntar el script de la respuesta a un Prompt (Rafael, 7 nov 2026)
+   bool   internet = true;        // búsquedas externas: WebSearch/WebFetch de Claude y web.js de la guía (Rafael, 8 nov 2026)
+
+   // Fichero marca ~/.picopilot/sin-internet: lo crea el módulo con la casilla desmarcada y web.js lo respeta
+   // (también cuando la función llega por el MCP y se ejecuta en el runner).
+   void WriteInternetFlag() const;
 
    // Configurar IA: cada paso tiene una puntuación (valor base de la tabla
    // + ajuste del usuario). Si es >= threshold se usa el modelo inferior

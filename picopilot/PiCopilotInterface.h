@@ -67,6 +67,8 @@ public:
    void StepLinkClicked( const String& text, bool lastMessage, const String& lastScript );
    bool AutoRunEnabled() const { return m_cfg.autoRun; }
    void SetAutoRun( bool on );
+   bool InternetEnabled() const { return m_cfg.internet; }
+   void SetInternet( bool on );
    void ResetChat();
    void CleanTempFiles();   // previas y scripts temporales (también al pulsar Limpiar)
    void RunScript( const String& code, bool ask = true );
