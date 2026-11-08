@@ -212,7 +212,11 @@ function medirContinuo(nbId, contId, o) {
       if (fC > 0) ratios.push(fN / fC);
       x += R2;
     }
-  if (ratios.length < 20) throw new Error("Pocas estrellas medidas (" + ratios.length + "): ¿las imágenes tienen estrellas y están registradas?");
+  // Qwen pasó la starless de la RGB (7 nov 2026): el continuo se mide en ESTRELLAS, hacen falta las dos con estrellas.
+  if (ratios.length < 20) throw new Error("Pocas estrellas medidas (" + ratios.length + "): el continuo se mide con las estrellas, así que las dos vistas " +
+    "tienen que tenerlas (la raya y la RGB de ANTES de separarEstrellas, ya alineadas; nunca una starless)" +
+    (/starless/i.test(nbId + contId) ? ". " + (/starless/i.test(contId) ? contId : nbId) + " es una starless: usa la vista anterior a separarEstrellas" : "") +
+    ". Si el Hα ya se inyectó en la RGB (combinarMasters/inyectarHa), el Paso 16 no aplica: sáltalo.");
   ratios.sort(function (a, b) { return a - b; });
   var kk = ratios[ratios.length >> 1], q1 = ratios[Math.floor(ratios.length * 0.25)], q3 = ratios[Math.floor(ratios.length * 0.75)];
   return { k: +kk.toFixed(4), estrellas: ratios.length, rango_intercuartil: [+q1.toFixed(4), +q3.toFixed(4)], canal_continuo: ch,
