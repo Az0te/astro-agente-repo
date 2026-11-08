@@ -113,13 +113,16 @@ function PLAjustes() {
    this.guia = plPadre(plPadre(PL_RUTA_SCRIPT)) + "/guia";
    this.ejecutarSinPreguntar = false;
    this.internet = true;                  // Claude: WebSearch y WebFetch; todos: simbad/wikipedia/leerWeb/imagenCatalogo
+   this.voz = false;                      // leer en voz alta cada respuesta del modelo
+   this.vozVelocidad = 0;                 // -10 (lenta) … 10 (rápida)
 
    var CAMPOS = { proveedor: DataType_UCString, modeloOllama: DataType_UCString, modeloClaude: DataType_UCString,
                   modeloCodex: DataType_UCString, ollamaUrl: DataType_UCString, temperatura: DataType_UCString,
                   pensar: DataType_Boolean, rutaClaude: DataType_UCString, rutaCodex: DataType_UCString,
                   guia: DataType_UCString, ejecutarSinPreguntar: DataType_Boolean, umbralN: DataType_Int32,
                   claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
-                  codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean };
+                  codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean,
+                  voz: DataType_Boolean, vozVelocidad: DataType_Int32 };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -962,6 +965,69 @@ function plPagina(entradas) {
    return h + "<div id=\"fin\"></div><script>window.scrollTo(0, document.body.scrollHeight);</script></body></html>";
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Voz (accesibilidad, Rafael 8 nov 2026): leer las respuestas en voz alta y dictar el prompt, con las voces y el
+// reconocedor de Windows (System.Speech, sin internet). Cada cosa va en un PowerShell aparte: PixInsight no se bloquea.
+// ---------------------------------------------------------------------------------------------------------------
+
+var PL_PS_HABLAR =
+   "param($f, $rate, $cultura)\r\n" +
+   "Add-Type -AssemblyName System.Speech\r\n" +
+   "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer\r\n" +
+   "try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::NotSet, [System.Speech.Synthesis.VoiceAge]::NotSet, 0, [Globalization.CultureInfo]$cultura) } catch {}\r\n" +
+   "$s.Rate = [int]$rate\r\n" +
+   "$s.Speak([IO.File]::ReadAllText($f, [Text.Encoding]::UTF8))\r\n";
+
+// Dicta frases seguidas hasta un silencio (8 s sin empezar a hablar, 2,5 s tras la última frase) o 90 s en total.
+var PL_PS_DICTAR =
+   "param($salida, $cultura)\r\n" +
+   "Add-Type -AssemblyName System.Speech\r\n" +
+   "$texto = @()\r\n" +
+   "try {\r\n" +
+   "  $r = New-Object System.Speech.Recognition.SpeechRecognitionEngine([Globalization.CultureInfo]$cultura)\r\n" +
+   "  $r.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))\r\n" +
+   "  $r.SetInputToDefaultAudioDevice()\r\n" +
+   "  $r.EndSilenceTimeout = [TimeSpan]::FromSeconds(1.2)\r\n" +
+   "  $r.InitialSilenceTimeout = [TimeSpan]::FromSeconds(8)\r\n" +
+   "  $fin = (Get-Date).AddSeconds(90)\r\n" +
+   "  while ((Get-Date) -lt $fin) {\r\n" +
+   "    $res = $r.Recognize()\r\n" +
+   "    if (-not $res) { break }\r\n" +
+   "    $texto += $res.Text\r\n" +
+   "    $r.InitialSilenceTimeout = [TimeSpan]::FromSeconds(2.5)\r\n" +
+   "  }\r\n" +
+   "} catch { $texto = @('ERROR: ' + $_.Exception.Message) }\r\n" +
+   "[IO.File]::WriteAllText($salida, ($texto -join ' '), [Text.Encoding]::UTF8)\r\n";
+
+// Texto para leer: sin bloques de código, sin símbolos de Markdown, enlaces por su texto y tablas como frases.
+function plTextoParaVoz(md) {
+   var t = String(md).replace(/\r\n/g, "\n");
+   t = t.replace(/```[\s\S]*?```/g, " (Te he preparado un script.) ");
+   t = t.split("\n").map(function (l) {
+      var s = l.trim();
+      if (/^\|?[\s|:\-]+\|?$/.test(s) && s.indexOf("-") >= 0) return "";            // separador de tabla
+      if (s.charAt(0) == "|") return s.replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); }).join(", ") + ".";
+      return s.replace(/^#+\s*/, "").replace(/^[-*•]\s+/, "").replace(/^>\s*/, "");
+   }).join("\n");
+   t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/https?:[^\s)]+/g, "").replace(/[*_`#]/g, "").replace(/\s*\n\s*/g, ". ").replace(/\.\s*\./g, ".");
+   return t.replace(/\s+/g, " ").trim();
+}
+
+function plPowerShell(script, args) {
+   var dir = plCarpeta(PL_TMP), f = dir + "/" + script.nombre + ".ps1";
+   File.writeTextFile(f, script.codigo);
+   var P = new ExternalProcess;
+   P.workingDirectory = dir;
+   P.start("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", f].concat(args));
+   return P;
+}
+
+function plParar(P) {
+   if (!P) return;
+   try { if (P.isRunning && plEsWindows() && P.pid) ExternalProcess.execute("taskkill", ["/F", "/T", "/PID", String(P.pid)]); } catch (e) {}
+   try { if (P.isRunning) P.kill(); } catch (e) {}
+}
+
 // Con #engine v8, Dialog es una clase: hay que heredar con «class ... extends» y super().
 class PLDialogo extends Dialog {
    constructor(aj) {
@@ -1048,6 +1114,34 @@ function plConstruirDialogo(aj) {
    pPrompt.sizer.add(filaP);
    pPrompt.sizer.add(this.entrada);
    pPrompt.sizer.add(filaB);
+
+   // Voz: leer respuestas y dictar el prompt.
+   this.cVoz = new CheckBox(pPrompt);
+   this.cVoz.text = "Leer en voz alta";
+   this.cVoz.toolTip = "Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).";
+   this.cVoz.checked = aj.voz;
+   this.cVoz.onCheck = function (c) { aj.voz = c; aj.guardar(); if (!c) self.pararVoz(); };
+   this.bLeer = new PushButton(pPrompt);
+   this.bLeer.text = "Leer";
+   this.bLeer.toolTip = "Lee en voz alta la última respuesta del modelo.";
+   this.bLeer.onClick = function () { self.leerUltima(); };
+   this.bParar = new PushButton(pPrompt);
+   this.bParar.text = "Parar voz";
+   this.bParar.onClick = function () { self.pararVoz(); };
+   this.sVel = new SpinBox(pPrompt);
+   this.sVel.minValue = -10; this.sVel.maxValue = 10; this.sVel.value = aj.vozVelocidad;
+   this.sVel.toolTip = "Velocidad de la voz (-10 lenta, 0 normal, 10 rápida).";
+   this.sVel.onValueUpdated = function (v) { aj.vozVelocidad = v; aj.guardar(); };
+   this.bDictar = new PushButton(pPrompt);
+   this.bDictar.text = "Dictar";
+   this.bDictar.toolTip = "Escucha por el micrófono y escribe lo que dices en el prompt (reconocedor de Windows en español). " +
+                          "Para cuando dejas de hablar unos segundos; púlsalo otra vez para parar antes. También vale Win + H.";
+   this.bDictar.onClick = function () { self.dictar(); };
+   var filaV = new HorizontalSizer; filaV.spacing = 6;
+   var lVel = new Label(pPrompt); lVel.text = "Velocidad:"; lVel.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   filaV.add(this.bDictar); filaV.addSpacing(12); filaV.add(this.cVoz); filaV.add(this.bLeer); filaV.add(this.bParar);
+   filaV.addSpacing(8); filaV.add(lVel); filaV.add(this.sVel); filaV.addStretch();
+   pPrompt.sizer.add(filaV);
    pPrompt.sizer.add(this.estadoLbl);
 
    // --- Pestaña Modelo ---
@@ -1174,7 +1268,12 @@ function plConstruirDialogo(aj) {
    this.sizer.margin = 8; this.sizer.spacing = 8;
    this.sizer.add(this.tabs, 100);
    this.sizer.add(fC);
-   this.onHide = function () { if (self.tEnlaces) self.tEnlaces.stop(); self.leerAjustes(); aj.guardar(); };
+   this.onHide = function () {
+      if (self.tEnlaces) self.tEnlaces.stop();
+      if (self.tDictado) self.tDictado.stop();
+      plParar(self.pVoz); plParar(self.pDictado);
+      self.leerAjustes(); aj.guardar();
+   };
    this.adjustToContents();
 
    // --- Lógica ---
@@ -1271,6 +1370,53 @@ function plConstruirDialogo(aj) {
       plEventos();
    };
 
+   // --- Voz ---
+   this.pVoz = null; this.pDictado = null; this.tDictado = null;
+   this.hablar = function (texto) {
+      this.pararVoz();
+      var t = plTextoParaVoz(texto);
+      if (!t) return;
+      var f = plCarpeta(PL_TMP) + "/voz.txt";
+      File.writeTextFile(f, t);
+      try { this.pVoz = plPowerShell({ nombre: "hablar", codigo: PL_PS_HABLAR }, [f, String(aj.vozVelocidad || 0), "es-ES"]); }
+      catch (e) { this.estadoLbl.text = "No se pudo lanzar la voz: " + (e.message || e); }
+   };
+   this.pararVoz = function () { plParar(this.pVoz); this.pVoz = null; };
+   this.leerUltima = function () {
+      for (var i = this.entradas.length - 1; i >= 0; --i)
+         if (this.entradas[i].tipo == "asst") { this.hablar(this.entradas[i].texto); return; }
+   };
+   this.dictar = function () {
+      if (this.pDictado && this.pDictado.isRunning) {   // segunda pulsación: parar y quedarse con lo que haya
+         plParar(this.pDictado); this.pDictado = null;
+         if (this.tDictado) this.tDictado.stop();
+         this.bDictar.text = "Dictar"; this.estadoLbl.text = "Dictado cancelado.";
+         return;
+      }
+      this.pararVoz();
+      var out = plCarpeta(PL_TMP) + "/dictado.txt";
+      if (File.exists(out)) File.remove(out);
+      try { this.pDictado = plPowerShell({ nombre: "dictar", codigo: PL_PS_DICTAR }, [out, "es-ES"]); }
+      catch (e) { this.estadoLbl.text = "No se pudo lanzar el dictado: " + (e.message || e); return; }
+      this.bDictar.text = "Escuchando… (parar)";
+      this.estadoLbl.text = "Habla ahora: el dictado termina cuando dejas de hablar unos segundos.";
+      if (!this.tDictado) {
+         this.tDictado = new Timer; this.tDictado.interval = 0.3; this.tDictado.periodic = true;
+         this.tDictado.onTimeout = function () {
+            var P = self.pDictado;
+            if (P && P.isRunning) return;
+            self.tDictado.stop(); self.pDictado = null; self.bDictar.text = "Dictar";
+            var txt = File.exists(out) ? File.readTextFile(out).replace(/^﻿/, "").trim() : "";
+            if (txt.indexOf("ERROR:") == 0) { self.estadoLbl.text = "Dictado: " + txt; return; }
+            if (!txt) { self.estadoLbl.text = "No he oído nada (¿micrófono?)."; return; }
+            var actual = self.entrada.text.trim();
+            self.entrada.text = actual ? actual + " " + txt : txt;
+            self.estadoLbl.text = "Dictado añadido al prompt: revísalo y pulsa Enviar.";
+         };
+      }
+      this.tDictado.start();
+   };
+
    this.ponerPendiente = function (s) {
       this.pendiente = s;
       this.bEjecutar.enabled = !!s && !this.estado;
@@ -1311,6 +1457,7 @@ function plConstruirDialogo(aj) {
       }
       this.mensajes.push({ role: "assistant", content: resp });
       this.anotar("PiCopilot (" + nombre + ")", resp, "asst");
+      if (this.cVoz.checked) this.hablar(resp);
       var s = plExtraerScript(resp);
       // Si la corrección trae el mismo script que ya falló, no se ejecuta otra vez: se pide uno distinto.
       if (s && this.scriptFallido && s.replace(/\s+/g, "") == this.scriptFallido.replace(/\s+/g, "")) {
@@ -1505,6 +1652,18 @@ function plPrueba(salida, cli) {
       // El código del modelo debe ver el motor de BlindSolver (incluido arriba) y blindSolve del runner.
       return plEjecutarScript(aj, "var c = new BlindSolverConfiguration(SETTINGS_MODULE); c.LoadSettings();\n" +
                               "[typeof BlindSolverEngine, typeof blindSolve, typeof resolverAstrometria].join(' ');");
+   });
+   paso("textoParaVoz", function () {
+      var t = plTextoParaVoz("## Análisis\n**IC 63** es una [nebulosa](https:" + "/" + "/x.org).\n\n| Canal | Mediana |\n|---|---|\n| R | 0,0018 |\n\n" +
+                             "```javascript\nvar r = 1;\n```\nSiguiente paso: gradiente.");
+      if (/[*#|`]|var r|https/.test(t)) throw new Error("quedan símbolos o código: " + t);
+      // Lanzar PowerShell como hacen la voz y el dictado (sin sonido: un script que sólo escribe un fichero).
+      var f = plCarpeta(PL_TMP) + "/prueba_ps.txt";
+      if (File.exists(f)) File.remove(f);
+      var P = plPowerShell({ nombre: "prueba", codigo: "param($f)\r\nSet-Content -Path $f -Value 'ok'\r\n" }, [f]);
+      for (var i = 0; i < 200 && P.isRunning; ++i) { plEventos(); plDormir(50); }
+      if (!File.exists(f)) throw new Error("PowerShell no escribió el fichero");
+      return t;
    });
    paso("internetApagado", function () {
       // Con la casilla «Internet» desmarcada, las funciones de web.js no deben salir a internet.
