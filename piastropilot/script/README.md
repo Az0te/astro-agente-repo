@@ -28,7 +28,7 @@ No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio 
 1. Abre tu imagen en PixInsight.
 2. Lanza **Script > PiAstroPilot > PiAstroPilotLite** (o **Script > Execute Script File…** y elige `piastropilot/script/PiAstroPilotLite.js`).
 3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code o Codex) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola), y elige el **Idioma** (español o inglés).
-4. En **Prompt** escribe lo que quieres, por ejemplo «hazme un análisis de la imagen». Cuando el modelo proponga llamadas, revísalas y pulsa **Ejecutar llamadas**: nada se ejecuta sin que lo pulses. Las líneas «Siguiente paso» del chat son enlaces: púlsalos para hacer ese paso.
+4. En **Prompt** escribe lo que quieres, por ejemplo «hazme un análisis de la imagen». Las funciones de la guía que pide el modelo se ejecutan solas (se comprueban antes contra el manifiesto) y el modelo te explica el resultado; si fallan, le pide la corrección (hasta 3 veces). Las líneas «Siguiente paso» del chat son enlaces: púlsalos para hacer ese paso.
 
 ## Qué hace
 

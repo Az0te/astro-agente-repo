@@ -95,10 +95,8 @@ var PL_TR = {
    "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet."]:
       "Allow external lookups. Claude: WebSearch and WebFetch. All models: SIMBAD, Wikipedia, web pages and catalog " +
       "images (web.js). Unchecked, nothing goes out to the internet.",
-   "Ejecutar llamadas": "Run calls",
    "Pedir corrección": "Ask for a fix",
    "Reenvía el error al modelo para que corrija las llamadas.": "Sends the error back to the model so it fixes the calls.",
-   "Ver llamadas": "View calls",
    "Nueva conversación": "New conversation",
    "Limpiar": "Clear",
    "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.":
@@ -155,7 +153,7 @@ var PL_TR = {
    "Prompt": "Prompt", "Modelo": "Model", "Ajustes": "Settings",
    "Paso": "Step", "Base": "Base", "Ajuste": "Adjustment", "Puntuación": "Score",
    "Tú": "You",
-   "Llamadas pendientes": "Pending calls", "(ninguna)": "(none)",
+  
    "(ninguno)": "(none)",
    "Ajustes guardados.": "Settings saved.",
    "Idioma cambiado.": "Language changed.",
@@ -1467,21 +1465,11 @@ function plConstruirDialogo(aj) {
                             "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet.";
    this.cInternet.checked = aj.internet;
    this.cInternet.onCheck = function (c) { aj.internet = c; aj.guardar(); };
-   this.bEjecutar = new PushButton(pPrompt);
-   this.bEjecutar.text = "Ejecutar llamadas";
-   this.bEjecutar.enabled = false;
-   this.bEjecutar.onClick = function () { self.ejecutarPendiente(); };
    this.bCorregir = new PushButton(pPrompt);
    this.bCorregir.text = "Pedir corrección";
    this.bCorregir.toolTip = "Reenvía el error al modelo para que corrija las llamadas.";
    this.bCorregir.enabled = false;
    this.bCorregir.onClick = function () { self.pedirCorreccion(); };
-   this.bVer = new PushButton(pPrompt);
-   this.bVer.text = "Ver llamadas";
-   this.bVer.enabled = false;
-   this.bVer.onClick = function () {
-      self.anotar(plT("Llamadas pendientes"), self.pendiente ? "```json\n" + self.pendiente + "\n```" : plT("(ninguna)"), "asst");
-   };
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
@@ -1515,7 +1503,7 @@ function plConstruirDialogo(aj) {
    var filaB = new HorizontalSizer;
    filaB.spacing = 6;
    filaB.add(this.bEnviar); filaB.add(this.bCancelar); filaB.addSpacing(12);
-   filaB.add(this.cInternet); filaB.add(this.bEjecutar); filaB.add(this.bVer); filaB.add(this.bCorregir);
+   filaB.add(this.cInternet); filaB.add(this.bCorregir);
    filaB.addStretch(); filaB.add(this.bVaciar); filaB.add(this.bLimpiar);
    pPrompt.sizer = new VerticalSizer;
    pPrompt.sizer.margin = 6; pPrompt.sizer.spacing = 6;
@@ -1933,13 +1921,11 @@ function plConstruirDialogo(aj) {
 
    this.ponerPendiente = function (s) {
       this.pendiente = s;
-      this.bEjecutar.enabled = !!s && !this.estado;
-      this.bVer.enabled = !!s;
    };
 
    this.ocupado = function (si) {
       this.bEnviar.enabled = !si; this.bCancelar.enabled = si; this.bCorregir.enabled = false;
-      this.bEjecutar.enabled = !si && !!this.pendiente; this.cProv.enabled = !si;
+      this.cProv.enabled = !si;
    };
 
    this.consultar = function () {
@@ -1991,9 +1977,13 @@ function plConstruirDialogo(aj) {
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
          this.estadoLbl.text = plT(quedan ? "Llamadas repetidas. Puedes pedir otra corrección." : "Llamadas repetidas; revisa la petición.");
+         if (quedan) this.pedirCorreccion();
          return;
       }
       this.ponerPendiente(s);
+      // Las llamadas se ejecutan solas (Rafael, 9 nov 2026). Las de una interpretación (el paso siguiente) esperan al
+      // enlace «Siguiente paso», para que el usuario revise cada resultado antes de seguir.
+      if (s && !interpretando) this.ejecutarPendiente();
    };
 
    this.enviar = function () {
@@ -2051,6 +2041,7 @@ function plConstruirDialogo(aj) {
          this.bCorregir.enabled = quedan;
          this.estadoLbl.text = plT(quedan ? "Las llamadas han fallado. Puedes pedir una corrección al modelo." :
                                "Las llamadas han fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.");
+         if (quedan) this.pedirCorreccion();
       }
    };
 
@@ -2124,7 +2115,7 @@ function plBienvenida(aj) {
              "- You tell me which image you have (or simply «the image on screen») and which object it is.\n" +
              "- I answer with information, an analysis or the guide functions I want to run.\n" +
              "- I always work on copies: I do not modify your original views unless you explicitly ask.\n" +
-             "- When I propose calls, review them and press «Run calls»: nothing runs without you. The «Next step» links " +
+             "- The guide functions I ask for run on their own and I explain the result. The «Next step» links " +
              "run that step with one click.\n\n" +
              "Guide: `" + aj.guia + "`";
    return "**PiAstroPilot Lite** es un asistente de inteligencia artificial especializado en astrofotografía que funciona " +
@@ -2142,7 +2133,7 @@ function plBienvenida(aj) {
           "- Tú me dices qué imagen tienes (o simplemente «la imagen en pantalla») y qué objeto es.\n" +
           "- Yo te respondo con información, análisis o las funciones de la guía que quiero ejecutar.\n" +
           "- Siempre trabajo sobre copias: no modifico tus vistas originales sin que lo pidas explícitamente.\n" +
-          "- Cuando proponga llamadas, revísalas y pulsa «Ejecutar llamadas»: nada se ejecuta sin ti. Los enlaces " +
+          "- Las funciones de la guía que pido se ejecutan solas y te explico el resultado. Los enlaces " +
           "«Siguiente paso» hacen ese paso con un clic.\n\n" +
           "Guía: `" + aj.guia + "`";
 }

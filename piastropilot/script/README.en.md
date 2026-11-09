@@ -29,7 +29,7 @@ No Node.js or MCP server is needed: the script loads the guide inside PixInsight
 2. Launch **Script > PiAstroPilot > PiAstroPilotLite** (or **Script > Execute Script File…** and choose `piastropilot/script/PiAstroPilotLite.js`).
 3. In **Settings > Language** choose **English**: the window switches at once and the model answers in English. The setting is remembered.
 4. In the **Model** tab choose the provider (Ollama, Claude Code or Codex) and the model. In **Settings** check the Ollama URL, the `claude`/`codex` paths and the guide folder (detected automatically).
-5. In **Prompt** type what you want, for example «analyse the image». When the model proposes calls, review them and press **Run calls**: nothing runs until you press it. The «Next step» lines in the chat are links: click them to do that step.
+5. In **Prompt** type what you want, for example «analyse the image». The guide functions the model asks for run on their own (checked first against the manifest) and the model explains the result; if they fail, it is asked for a fix (up to 3 times). The «Next step» lines in the chat are links: click them to do that step.
 
 ## What it does
 
