@@ -390,7 +390,7 @@ function plListaFunciones(guia) {
    var man = JSON.parse(File.readTextFile(f)), out = [];
    (man.funciones || []).forEach(function (x) {
       if (PL_EXCLUIDAS[x.nombre]) return;
-      var d = String(x.descripcion || "");
+      var d = String(x.resumen || x.descripcion || "");
       var p = d.indexOf(". ");
       if (p > 0 && p < 220) d = d.substring(0, p + 1);
       var mp = /^(lineal|no-lineal)\/(\d+)-/.exec(String(x.paso || ""));

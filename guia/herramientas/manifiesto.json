@@ -1,6 +1,6 @@
 {
  "version": 1,
- "nota": "Funciones de la guía que el MCP picopilot ofrece como herramientas. El runner (mcp/pjsr/picopilot-runner.js) solo ejecuta las que tiene en su lista blanca (LISTA); este fichero describe sus parámetros para el modelo. Niveles: lectura (no cambia nada), copias (crea vistas nuevas, no toca las de entrada), vista (cambia la vista indicada, con historial), disco (lee o escribe ficheros), libre (código arbitrario, apagado por defecto).",
+ "nota": "resumen: versión corta de la descripción para clientes con poco contexto (PICOPILOT_COMPACTO=1, modelos locales). Funciones de la guía que el MCP picopilot ofrece como herramientas. El runner (mcp/pjsr/picopilot-runner.js) solo ejecuta las que tiene en su lista blanca (LISTA); este fichero describe sus parámetros para el modelo. Niveles: lectura (no cambia nada), copias (crea vistas nuevas, no toca las de entrada), vista (cambia la vista indicada, con historial), disco (lee o escribe ficheros), libre (código arbitrario, apagado por defecto).",
  "funciones": [
   {
    "nombre": "ping",
@@ -30,6 +30,7 @@
    "nivel": "lectura",
    "timeout_s": 60,
    "descripcion": "Mediana, MAD, media, mínimo y máximo por canal de una vista abierta (entera o de un rectángulo). Sirve para saber si está lineal (medianas < 0,05), comprobar el fondo o medir zonas concretas. Con bordes mide franjas de los cuatro bordes frente al centro (viñeteo, cuñas, zonas con menos subs).",
+   "resumen": "Mediana, MAD, media, mín. y máx. por canal (vista entera o rect). Con bordes: franjas de borde frente al centro.",
    "params": {
     "type": "object",
     "properties": {
@@ -89,6 +90,7 @@
    "nivel": "lectura",
    "timeout_s": 90,
    "descripcion": "Guarda un JPG de la vista (máx. 'lado' px, por defecto 1600) sin tocarla y devuelve su ruta para mirarla. Si la vista es lineal la estira como el STF automático; si ya está estirada la guarda tal cual. Con rect da un recorte (al 100 % si cabe en 'lado') para revisar detalle, estrellas, anillos o textura. Para revisar a ojo lo que una función no mide: lee el JPG que devuelve.",
+   "resumen": "JPG reducido de la vista (o recorte al 100 % con rect) para mirarla; si es lineal la estira como el STF. No la toca.",
    "params": {
     "type": "object",
     "properties": {
@@ -112,6 +114,7 @@
    "nivel": "lectura",
    "timeout_s": 120,
    "descripcion": "Paso 1 lineal: cabecera (objeto, filtro, cámara, focal...), escala en \"/px, mediana/MAD/saturados por canal, si está lineal, estrella más brillante, fracción del campo con señal y bordes sin datos. No interpreta. Con una lista de vistas devuelve un resultado por vista.",
+   "resumen": "Paso 1 lineal: cabecera, escala, estadísticas por canal, si está lineal, estrella más brillante y bordes sin datos. No interpreta.",
    "paso": "lineal/01-analisis-del-objeto.md",
    "params": {
     "type": "object",
@@ -162,6 +165,7 @@
    "nivel": "lectura",
    "timeout_s": 300,
    "descripcion": "Paso 2 lineal: recorre una o varias carpetas (FITS/XISF), lee solo cabeceras y agrupa lights, flats, darks y bias por filtro, exposición, temperatura, gain y noche. Excluye carpetas que empiezan por \"_\" y las de salida de WBPP. No abre ventanas.",
+   "resumen": "Paso 2 lineal: lee cabeceras de una o varias carpetas y agrupa lights, flats, darks y bias. No abre ventanas.",
    "paso": "lineal/02-inventario.md",
    "params": {
     "type": "object",
@@ -196,6 +200,7 @@
    "nivel": "lectura",
    "timeout_s": 300,
    "descripcion": "Paso 3 lineal: comprueba con las cabeceras que darks, flats y darks de flats casan con los lights (exposición, temperatura, gain, offset, binning, tamaño, telescopio, filtro) y mide el nivel de los flats (saturados o subexpuestos). No abre ventanas.",
+   "resumen": "Paso 3 lineal: comprueba con las cabeceras que darks y flats casan con los lights y mide el nivel de los flats.",
    "paso": "lineal/03-blink-subframeselector.md",
    "params": {
     "type": "object",
@@ -216,6 +221,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "descripcion": "Paso 4 lineal: mide los subs con ImageAnalysis y rechaza por FWHM, excentricidad y nubes dentro de cada grupo (carpeta, filtro, exposición). Devuelve tabla, aprobados, dudosos, rechazados con motivo, pesos y un fichero de lista de aprobados para lanzarWBPP. Puede tardar varios minutos: devuelve un trabajo.",
+   "resumen": "Paso 4 lineal: mide subs (FWHM, excentricidad, nubes), rechaza por grupo y deja la lista para lanzarWBPP. Devuelve un trabajo.",
    "paso": "lineal/03-blink-subframeselector.md",
    "params": {
     "type": "object",
@@ -294,6 +300,7 @@
    "nivel": "disco",
    "timeout_s": 1800,
    "descripcion": "Paso 5 lineal: registra los masters (ficheros, carpeta o vistas) sobre la referencia con StarAlignment (reescala si la escala difiere > 3 %), recorta todos a la zona común con datos (también franjas de borde con menos cobertura) y guarda <nombre>_alin.xisf en 'salida' (por defecto 'alineados' junto a los masters). Abre las vistas _alin y resuelve/copia la astrometría.",
+   "resumen": "Paso 5 lineal: registra los masters sobre la referencia, reescala si hace falta, recorta a la zona común y guarda <nombre>_alin.xisf.",
    "paso": "lineal/05-staralignment-crop.md",
    "params": {
     "type": "object",
@@ -410,6 +417,7 @@
    "nivel": "copias",
    "timeout_s": 1800,
    "descripcion": "Paso 9 lineal con VARIAS vistas (RGB + líneas desmezcladas): gradienteCandidatos en cada una, deja la recomendada como <vista>_gc, cierra los demás candidatos y devuelve sólo un resumen corto. Úsala en vez de un bucle de gradienteCandidatos. Las corregidas vuelven en r.corregidas y r.vista_corregida (original -> <vista>_gc). Si ya comparaste y sólo quieres quedarte con un candidato: gradienteVarias({\"Ha_raw\": \"GC_POLY2_2\"}) (no repite la comparación). Una vista con <vista>_gc ya hecha no se repite.",
+   "resumen": "Paso 9 lineal con VARIAS vistas: gradienteCandidatos en cada una y deja <vista>_gc. Con {vista: candidato} solo aplica el elegido.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
     "type": "object",
@@ -433,6 +441,7 @@
    "nivel": "copias",
    "timeout_s": 900,
    "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free y con IA, GradientCorrection de PixInsight, MGC con y sin bordes, polinomio robusto de grado 1 y 2) sobre copias GC_*, mide cuánto se come cada modelo del objeto y cuánto gradiente de cielo deja, y recomienda. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias.",
+   "resumen": "Paso 9 lineal, UNA vista: compara GraXpert, GradientCorrection, MGC y polinomio sobre copias GC_* y recomienda. Devuelve un trabajo.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
     "type": "object",
@@ -644,6 +653,7 @@
    "nivel": "copias",
    "timeout_s": 300,
    "descripcion": "Neutralización fina del cielo en LINEAL (desplazamiento aditivo por canal, como BackgroundNeutralization) en una copia (<vista>_bn). Para cuando tras SPCC el estirado da dominante en el cielo (> 5 %). Mide el cielo en las mismas zonas que el control del estirado (o en un rect de cielo limpio) y suma a cada canal lo que le falta; vale sobre la starless lineal sin rehacer BXT ni SXT.",
+   "resumen": "Lineal: neutraliza el cielo por canal en una copia <vista>_bn cuando tras SPCC queda dominante (> 5 %).",
    "paso": "lineal/12-spcc.md",
    "params": {
     "type": "object",
@@ -740,6 +750,7 @@
    "nivel": "copias",
    "timeout_s": 1800,
    "descripcion": "Compara NoiseXTerminator (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45), MLDenoise (amount 1,0, modelo .xmlm del perfil; lento) y MultiscaleTGVDenoise (strength 0,5/1,0) sobre la misma entrada con las medidas de reducirRuido, y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
+   "resumen": "Compara NXT, MLDenoise y MultiscaleTGVDenoise sobre la misma entrada y se queda con el mejor que cumple. Preferible a reducirRuido.",
    "paso": "lineal/14-noisex-suave.md",
    "params": {
     "type": "object",
@@ -870,6 +881,7 @@
    "nivel": "copias",
    "timeout_s": 900,
    "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") y la capa de estrellas con starStretch, en vistas nuevas. Hacen falta LAS DOS capas de separarEstrellas (r.starless y r.estrellas): con una imagen con estrellas como starless, las estrellas salen enormes.",
+   "resumen": "Paso 1 no lineal: estira la starless al fallo y las estrellas, en vistas nuevas. Necesita LAS DOS capas de separarEstrellas.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",
@@ -899,6 +911,7 @@
    "nivel": "copias",
    "timeout_s": 1800,
    "descripcion": "Paso 1 no lineal: compara GHS al fallo, MultiscaleAdaptiveStretch y ArcsinhStretch sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante; devuelve la tabla de la comparación. Preferible a estirarStarless con un solo método.",
+   "resumen": "Paso 1 no lineal: compara GHS, MAS y Arcsinh sobre la starless lineal con el mismo cielo y elige. Preferible a estirarStarless.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",
@@ -1000,6 +1013,7 @@
    "nivel": "copias",
    "timeout_s": 300,
    "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, FORAXX, FORAXX_BICOLOR y las familias Foraxx de AutoPalette Studio: FORAXX_SHO/HOS/OHS/HOO/HSO/OSH/SOH y sus 42 variantes FORAXX_<familia>_<variante>; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); equilibra el verde con SCNR si G domina (Hα al verde). Devuelve la paleta SIN estrellas: después saturarAlFallo(paleta), prepararEstrellas(capa de estrellas RGB estirada, nunca la paleta) y recombinarEstrellas (r.siguiente). Es la que se usa cuando el usuario pide una paleta.",
+   "resumen": "Paso 2 no lineal: paleta (SHO, HOO, Foraxx…; lista con paletasDisponibles) desde rayas mono SIN estrellas y ya estiradas. Devuelve la paleta sin estrellas.",
    "paso": "no-lineal/02-lrgb-paleta.md",
    "params": {
     "type": "object",
@@ -1108,6 +1122,7 @@
    "nivel": "copias",
    "timeout_s": 900,
    "descripcion": "Paso 5 no lineal, galaxias: compara HDRMultiscaleTransform y GradientHDRCompression con la misma máscara de bulbo y mezcla (comprimirNucleo) y se queda con el que deja menos meseta sin anillos ni bulbo plano; devuelve la tabla de la comparación. Preferible a comprimirNucleo con un solo método.",
+   "resumen": "Paso 5 no lineal, galaxias: compara HDRMT y GradientHDRCompression con máscara de bulbo y elige. Preferible a comprimirNucleo.",
    "paso": "no-lineal/05-boost.md",
    "params": {
     "type": "object",
@@ -1156,6 +1171,7 @@
    "nivel": "copias",
    "timeout_s": 600,
    "descripcion": "Paso 5 no lineal: curva S de saturación empujando hasta que algo falla (canales > 0,98, fondo teñido, ruido de croma) y se queda la anterior, en una copia. Con { mascara: true } satura a través de una máscara de luminancia: protege el cielo y da más color a la nebulosa (para cuando el usuario pide más color).",
+   "resumen": "Paso 5 no lineal: sube la saturación hasta que algo falla y se queda la anterior, en una copia. { mascara: true } protege el cielo.",
    "paso": "no-lineal/05-boost.md",
    "params": {
     "type": "object",
@@ -1253,6 +1269,64 @@
    }
   },
   {
+   "nombre": "screenStarsCombine",
+   "fichero": "realces.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "ScreenStars: recombina una starless y una capa de estrellas con screen 1 − (1−A)(1−B) (o suma con method: \"add\") en una vista nueva. Las dos capas con el mismo estirado. Para el Paso 9 completo con controles, recombinarEstrellas.",
+   "paso": "no-lineal/09-recombinacion.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "starless": {
+      "type": "string",
+      "description": "Id de la vista sin estrellas."
+     },
+     "estrellas": {
+      "type": "string",
+      "description": "Id de la capa de estrellas."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { method: \"screen\" | \"add\", reverseStretch: true, newId: \"starry\" }"
+     }
+    },
+    "required": [
+     "starless",
+     "estrellas"
+    ]
+   }
+  },
+  {
+   "nombre": "screenStarsExtract",
+   "fichero": "realces.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "ScreenStars: saca la capa de estrellas como (original − starless)/(1 − starless) (o resta con method: \"add\") en una vista nueva, sin repetir SXT.",
+   "paso": "no-lineal/08-estrellas.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "original": {
+      "type": "string",
+      "description": "Id de la vista con estrellas."
+     },
+     "starless": {
+      "type": "string",
+      "description": "Id de la vista sin estrellas."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { method: \"screen\" | \"add\", reverseStretch: true, newId: \"stars\" }"
+     }
+    },
+    "required": [
+     "original",
+     "starless"
+    ]
+   }
+  },
+  {
    "nombre": "starStretch",
    "fichero": "realces.js",
    "nivel": "vista",
@@ -1281,6 +1355,7 @@
    "nivel": "copias",
    "timeout_s": 900,
    "descripcion": "Contraste local de la starless estirada: compara LocalHistogramEqualization (radio 64 y 128), HDRMultiscaleTransform (6 capas, mezcla 50 %) y DarkStructureEnhance sobre copias, y se queda con el que más sube el contraste local sin subir el ruido del cielo más de un 25 %, sin mover el cielo ni quemar; si ninguno cumple, recomienda no tocarla. Devuelve la tabla de la comparación.",
+   "resumen": "Paso 5 no lineal: compara LHE, HDRMT y DarkStructureEnhance sobre la starless estirada; si ninguno cumple, recomienda no tocarla.",
    "paso": "no-lineal/05-boost.md",
    "params": {
     "type": "object",
@@ -1429,6 +1504,7 @@
    "nivel": "lectura",
    "timeout_s": 120,
    "descripcion": "Internet, Paso 1: identifica el objeto de una vista (OBJECT, astrometría o RA/DEC) o por su nombre y da su tipo (SIMBAD), un resumen (Wikipedia), la emisión esperada (rayas y filtros según el tipo), las estrellas brillantes del campo (V < 6) y los problemas que pueden dar (halos, reflejos, HDR). Usar junto a analizarMaster al analizar la imagen.",
+   "resumen": "Internet, Paso 1: tipo de objeto (SIMBAD), resumen, emisión esperada y estrellas brillantes del campo. Usar junto a analizarMaster.",
    "paso": "lineal/01-analisis-del-objeto.md",
    "params": { "type": "object", "properties": { "vista": { "type": "string", "description": "Id de la vista abierta o nombre del objeto (IC 63, M31...)." }, "opciones": { "type": "object", "description": "Opcional. { radio: grados del campo, magMax: 6, idioma: \"es\" }" } }, "required": ["vista"] }
   },  {
@@ -1463,6 +1539,7 @@
    "nivel": "copias",
    "timeout_s": 120,
    "descripcion": "Internet: abre en PixInsight una imagen de catálogo (SkyView, NASA) de un objeto, unas coordenadas o el campo de una vista con astrometría: DSS2 Red/Blue/IR, H-Alpha Comp (mapa Hα), WISE, 2MASS, GALEX. Para saber qué señal esperar y distinguir estructura real de gradiente; no para combinar.",
+   "resumen": "Internet: abre una imagen de catálogo (DSS2, Hα, WISE…) del campo para saber qué señal esperar. No para combinar.",
    "paso": "lineal/01-analisis-del-objeto.md",
    "params": { "type": "object", "properties": { "posicion": { "type": "string", "description": "Nombre del objeto, \"ra, dec\" en grados o id de una vista con astrometría." }, "opciones": { "type": "object", "description": "Opcional. { survey: \"DSS2 Red\", campo: 1 (grados), pixeles: 1000, abrir: true }" } }, "required": ["posicion"] }
   },
@@ -1472,6 +1549,7 @@
    "nivel": "libre",
    "timeout_s": 600,
    "descripcion": "PJSR libre en PixInsight, con las funciones de la guía cargadas. Solo existe si el usuario lo ha permitido (fichero ~/.picopilot/permitir_libre). Úsalo solo para lo que no cubren las demás herramientas. Devuelve el valor de la última expresión.",
+   "resumen": "PJSR libre con las funciones de la guía cargadas. Solo si lo permite ~/.picopilot/permitir_libre y nada más lo cubre.",
    "params": {
     "type": "object",
     "properties": {

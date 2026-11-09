@@ -35,7 +35,7 @@ Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en e
 
 ## Funciones de la guía
 
-Con el MCP `picopilot` son herramientas con el mismo nombre (no hay que cargar nada). En un script del panel PiCopilot se cargan con `eval(File.readTextFile(...))`. Las de realces y astrometría:
+Con el MCP `picopilot` son herramientas con el mismo nombre (no hay que cargar nada); con poco contexto, el servidor puede ofrecer sólo las de la fase en curso (`PICOPILOT_FASE`). En un script del panel PiCopilot se cargan con `eval(File.readTextFile(...))`. Las de realces y astrometría:
 
 | Función | Para qué | Paso |
 |---|---|---|

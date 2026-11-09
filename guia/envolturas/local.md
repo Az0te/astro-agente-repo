@@ -29,4 +29,6 @@ Agente que procesa astrofotografía en PixInsight con las funciones de la guía 
 | `repeat_penalty` | 1,0–1,05 | El código repite tokens (llaves, `var`, nombres); penalizarlos rompe el PJSR |
 | Modelo | El mayor que quepa con 32k de contexto y buen uso de herramientas | Las llamadas a herramientas fallan más que el razonamiento en modelos pequeños |
 
+**Con el MCP picopilot** (cliente MCP como Hermes Agent): arrancar el servidor con `PICOPILOT_COMPACTO=1` y `PICOPILOT_FASE=lineal` o `no-lineal` según la sesión; la lista de herramientas baja de ~10.900 a ~6.600 o ~4.700 tokens.
+
 **Si el modelo se pierde**: suele ser contexto lleno de resultados largos. Cerrar la conversación, dejar el estado en `estado.md` y seguir en una nueva.
