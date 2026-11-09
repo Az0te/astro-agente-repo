@@ -490,6 +490,10 @@ function plPromptSistema(aj) {
    "ScreenTransferFunction.SeparateChannels), no Clase.prototype.CONSTANTE.\n" +
    "- Antes de usar un proceso o una propiedad de PJSR que no esté en la guía ni en el contrato de abajo, no la inventes.\n" +
    "- Si un script falla, cambia el código que causó el error: no repitas el mismo script.\n" +
+   "- Encadena las vistas: cada función devuelve el id de lo que ha creado (r.vista; separarEstrellas: r.starless y " +
+   "r.estrellas; estirarCapas: r.starless.vista y r.estrellas.vista; gradienteVarias: r.corregidas). El paso siguiente trabaja " +
+   "sobre ese id (o el que salga en «Vistas abiertas»), nunca sobre el original ni sobre un nombre inventado. Si una función ya " +
+   "aplica el ganador de su comparación (…Candidatos), no lo apliques otra vez.\n" +
    "- Compara siempre: si la guía tiene una función que prueba varios candidatos y recomienda uno (gradienteCandidatos o " +
    "gradienteVarias, ruidoCandidatos, bxtCandidatos, estirarCandidatos, contrasteCandidatos, nucleoCandidatos...), úsala en vez de aplicar un solo método o valor, y enseña la tabla " +
    "de la comparación (comparados / candidatos) en tu resumen.\n\n" +
@@ -923,7 +927,7 @@ function plListaHtml(arr, cls, icono) {
 
 // Array de objetos → tabla (columnas: claves escalares y las de los objetos anidados, máx. 10; filas máx. 40).
 // Campos con rutas de miniaturas: se pintan como imágenes (plMiniaturas), no como columnas de texto.
-function plEsCampoPrevia(k) { return /^(previa|previa_modelo|jpg)$/.test(k); }
+function plEsCampoPrevia(k) { return /^(previa|previa_modelo|jpg|sel|clave)$/.test(k); }   // también datos internos (sel, clave)
 
 function plRutaFichero(p) { return "file:" + "/" + "/" + "/" + String(p).replace(/\\/g, "/"); }
 

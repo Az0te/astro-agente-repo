@@ -376,13 +376,37 @@ function estirarCandidatos(viewId, o) {
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): estirarCandidatos es para la starless lineal");
   var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "mas", "arcsinh"], t0 = Date.now();
+  // Imagen grande (> 8 MP): se comparan los métodos en un recorte con cielo y señal (rdElegirRecorte, ruido.js) y sólo el
+  // ganador se aplica a la imagen entera (9 nov 2026: en un drizzle 2x de 89 MP cada pasada de GHS al fallo es lenta).
+  var Wi = win.mainView.image.width, Hi = win.mainView.image.height;
+  if (o.recorte !== false && metodos.length > 1 && Wi * Hi > (o.recorteMP || 8) * 1e6 && typeof rdElegirRecorte === "function") {
+    var rc = rdElegirRecorte(win.mainView, o.ladoRecorte || 2000);
+    var wr = new ImageWindow(rc.width, rc.height, win.mainView.image.numberOfChannels, 32, true, win.mainView.image.isColor, viewId + "_rec");
+    wr.mainView.beginProcess(); wr.mainView.image.assign(win.mainView.image, rc); wr.mainView.endProcess();
+    var oR = {}; for (var kr in o) oR[kr] = o[kr];
+    oR.recorte = false; oR.cerrar = true; oR.nuevaVista = wr.mainView.id + "_st";
+    var enRec;
+    try { enRec = estirarCandidatos(wr.mainView.id, oR); }
+    finally { var wst = ImageWindow.windowById(oR.nuevaVista); if (!wst.isNull) wst.forceClose(); wr.forceClose(); }
+    var gana = enRec.comparados.filter(function (c) { return c.elegido; })[0];
+    if (!gana || !gana.clave) return enRec;
+    var oF = {}; for (var kf in o) oF[kf] = o[kf];
+    oF.recorte = false; oF.metodos = [gana.clave];
+    var tF = Date.now(), fin = estirarCandidatos(viewId, oF);
+    fin.comparados = enRec.comparados;
+    fin.comparado_en = { recorte: [rc.x0, rc.y0, rc.x1, rc.y1], nota: "métodos comparados en un recorte de " + rc.width + "×" + rc.height +
+                         " px; el ganador (" + gana.metodo + ") se aplicó a la imagen entera en " + Math.round((Date.now() - tF) / 1000) + " s" };
+    fin.motivo = "En el recorte: " + enRec.motivo + " En la imagen entera: " + fin.motivo;
+    fin.segundos = Math.round((Date.now() - t0) / 1000);
+    return fin;
+  }
   var lim = { ruido: o.ruidoMax || 0.15, cero: o.ceroMax || 0.05, alto: o.altoMax || 0.05 };
   var cands = [];
-  function medir(v, etiqueta, extra, t1) {
+  function medir(v, etiqueta, extra, t1, clave) {
     var c = esCheck(v), sd = esSkyDominance(v), f = esFallo(c, lim);
     if (sd.dominante_pct >= 5) f.push("dominante del cielo " + sd.dominante_pct + " %");
     var ruidoAbs = Math.max(c.ruido_rel * c.cielo, 1e-6);
-    cands.push({ etiqueta: etiqueta, vista: v.id, medidas: c, dominante_cielo_pct: sd.dominante_pct, fallos: f,
+    cands.push({ etiqueta: etiqueta, clave: clave, vista: v.id, medidas: c, dominante_cielo_pct: sd.dominante_pct, fallos: f,
                  senal_debil_en_ruidos: +((c.p90 - c.cielo) / ruidoAbs).toFixed(2), extra: extra,
                  segundos: Math.round((Date.now() - t1) / 1000), previa: pxPrevia(v.id, "est_" + v.id, { estirar: false }) });
   }
@@ -392,7 +416,7 @@ function estirarCandidatos(viewId, o) {
       var op = {}; for (var k in o) if (["metodos", "nuevaVista", "cerrar"].indexOf(k) < 0) op[k] = o[k];
       op.nuevaVista = viewId + "_st_ghs"; op.cielo = cielo;
       var g = estirarStarless(viewId, op);
-      medir(View.viewById(g.vista), "GHS al fallo (" + g.pasadas.length + " pasadas)", { parada: g.parada }, t1);
+      medir(View.viewById(g.vista), "GHS al fallo (" + g.pasadas.length + " pasadas)", { parada: g.parada }, t1, "ghs");
     } catch (e) { cands.push({ etiqueta: "GHS al fallo", error: String(e && e.message ? e.message : e) }); }
   }
   if (metodos.indexOf("mas") >= 0) {
@@ -405,7 +429,7 @@ function estirarCandidatos(viewId, o) {
       if (o.mas) for (var km in o.mas) M[km] = o.mas[km];
       if (!M.executeOn(wm.mainView)) throw new Error("MultiscaleAdaptiveStretch falló");
       var ajM = esCieloA(wm.mainView, cielo);
-      medir(wm.mainView, "MAS (fondo " + cielo + ")", { ajuste_cielo: ajM }, t2);
+      medir(wm.mainView, "MAS (fondo " + cielo + ")", { ajuste_cielo: ajM }, t2, "mas");
     } catch (e) { cands.push({ etiqueta: "MAS", error: String(e && e.message ? e.message : e) }); }
   }
   if (metodos.indexOf("arcsinh") >= 0) {
@@ -432,7 +456,7 @@ function estirarCandidatos(viewId, o) {
       var wa = esCopy(viewId, viewId + "_st_asinh"); wa.show();
       esArcsinh(wa.mainView, s, bp);
       var ajA = esCieloA(wa.mainView, cielo);
-      medir(wa.mainView, "ArcsinhStretch (stretch " + s.toFixed(1) + ")", { stretch: +s.toFixed(1), punto_negro: +bp.toPrecision(4), ajuste_cielo: ajA }, t3);
+      medir(wa.mainView, "ArcsinhStretch (stretch " + s.toFixed(1) + ")", { stretch: +s.toFixed(1), punto_negro: +bp.toPrecision(4), ajuste_cielo: ajA }, t3, "arcsinh");
     } catch (e) { cands.push({ etiqueta: "ArcsinhStretch", error: String(e && e.message ? e.message : e) }); }
   }
   var ok = cands.filter(function (c) { return c.medidas && !c.fallos.length; });
@@ -455,7 +479,7 @@ function estirarCandidatos(viewId, o) {
   });
   var comparados = cands.map(function (c) {
     if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
-    return { metodo: c.etiqueta, cielo: c.medidas.cielo, ruido_cielo_rel: c.medidas.ruido_rel, p90: c.medidas.p90, p99: c.medidas.p99,
+    return { metodo: c.etiqueta, clave: c.clave, cielo: c.medidas.cielo, ruido_cielo_rel: c.medidas.ruido_rel, p90: c.medidas.p90, p99: c.medidas.p99,
              senal_debil_en_ruidos: c.senal_debil_en_ruidos, sombras_a_0_pct: c.medidas.cero_pct, luces_095_pct: c.medidas.alto_pct,
              dominante_cielo_pct: c.dominante_cielo_pct, cumple: !c.fallos.length, segundos: c.segundos, elegido: c === best,
              previa: c.previa || undefined };

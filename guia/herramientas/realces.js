@@ -383,15 +383,40 @@ function contrasteCandidatos(viewId, o) {
   o = o || {};
   var src = rzView(viewId), t0 = Date.now();
   if (rzMedian(src) < 0.05) throw new Error("La imagen parece lineal (mediana " + rzMedian(src).toFixed(4) + "): el contraste local va después del estirado");
+  // Imagen grande (> 8 MP): comparar en un recorte con cielo y señal (rdElegirRecorte, ruido.js) y aplicar sólo el ganador
+  // a la imagen entera, con sus mismos parámetros (los radios de LHE son en píxeles: valen igual en el recorte).
+  var nLhe = (o.lhe || [1, 2]).length + (o.hdrmt !== false ? 1 : 0) + (o.dse !== false ? 1 : 0);
+  if (o.recorte !== false && nLhe > 1 && src.image.width * src.image.height > (o.recorteMP || 8) * 1e6 && typeof rdElegirRecorte === "function") {
+    var rc = rdElegirRecorte(src, o.ladoRecorte || 2000);
+    var wr = new ImageWindow(rc.width, rc.height, src.image.numberOfChannels, 32, true, src.image.isColor, viewId + "_rec");
+    wr.mainView.beginProcess(); wr.mainView.image.assign(src.image, rc); wr.mainView.endProcess();
+    var oR = {}; for (var kr in o) oR[kr] = o[kr];
+    oR.recorte = false; oR.cerrar = true; oR.nuevaVista = wr.mainView.id + "_lc";
+    var enRec;
+    try { enRec = contrasteCandidatos(wr.mainView.id, oR); }
+    finally { var wl = ImageWindow.windowById(oR.nuevaVista); if (!wl.isNull) wl.forceClose(); wr.forceClose(); }
+    var gana = enRec.comparados.filter(function (c) { return c.elegido; })[0];
+    if (!gana || !gana.sel) { enRec.vista = null; enRec.original = viewId; enRec.comparado_en = { recorte: [rc.x0, rc.y0, rc.x1, rc.y1] }; return enRec; }
+    var oF = {}; for (var kf in o) oF[kf] = o[kf];
+    oF.recorte = false; oF.lhe = gana.sel.lhe || []; oF.hdrmt = gana.sel.hdrmt === undefined ? false : gana.sel.hdrmt;
+    oF.dse = gana.sel.dse === undefined ? false : gana.sel.dse;
+    var tF = Date.now(), fin = contrasteCandidatos(viewId, oF);
+    fin.comparados = enRec.comparados;
+    fin.comparado_en = { recorte: [rc.x0, rc.y0, rc.x1, rc.y1], nota: "métodos comparados en un recorte de " + rc.width + "×" + rc.height +
+                         " px; el ganador (" + gana.metodo + ") se aplicó a la imagen entera en " + Math.round((Date.now() - tF) / 1000) + " s" };
+    fin.motivo = "En el recorte: " + enRec.motivo + " En la imagen entera: " + fin.motivo;
+    fin.segundos = Math.round((Date.now() - t0) / 1000);
+    return fin;
+  }
   var base = rzMedidasContraste(src), ruidoMax = o.ruidoMax || 1.25, cands = [];
   function copia(suf) { var w = rzCopy(src, viewId + suf); w.keywords = src.window.keywords; w.show(); return w; }
-  function medir(etiqueta, w, t1) {
+  function medir(etiqueta, w, t1, sel) {
     var m = rzMedidasContraste(w.mainView), f = [];
     var gc = m.contraste_local / Math.max(base.contraste_local, 1e-9), gr = m.ruido_cielo / Math.max(base.ruido_cielo, 1e-9);
     if (gr > ruidoMax) f.push("sube el ruido del cielo ×" + gr.toFixed(2) + " (máx. ×" + ruidoMax + ")");
     if (Math.abs(m.cielo - base.cielo) > 0.03) f.push("mueve el cielo de " + base.cielo + " a " + m.cielo);
     if (m.quemados_pct - base.quemados_pct > 0.05) f.push("quema " + (m.quemados_pct - base.quemados_pct).toFixed(3) + " % más de píxeles");
-    cands.push({ etiqueta: etiqueta, vista: w.mainView.id, medidas: m, contraste_x: +gc.toFixed(3), ruido_x: +gr.toFixed(3), fallos: f,
+    cands.push({ etiqueta: etiqueta, sel: sel, vista: w.mainView.id, medidas: m, contraste_x: +gc.toFixed(3), ruido_x: +gr.toFixed(3), fallos: f,
                  segundos: Math.round((Date.now() - t1) / 1000),
                  previa: typeof pxPrevia === "function" ? pxPrevia(w.mainView.id, "lc_" + w.mainView.id, { estirar: false }) : null });
   }
@@ -402,7 +427,7 @@ function contrasteCandidatos(viewId, o) {
       var P = new LocalHistogramEqualization;
       P.radius = p.radius; P.slopeLimit = p.slopeLimit; P.amount = p.amount; P.circularKernel = true;
       rzMust(P.executeOn(w.mainView), "LocalHistogramEqualization");
-      medir("LHE radio " + p.radius + ", pendiente " + p.slopeLimit + ", amount " + p.amount, w, t1);
+      medir("LHE radio " + p.radius + ", pendiente " + p.slopeLimit + ", amount " + p.amount, w, t1, { lhe: [p] });
     } catch (e) { cands.push({ etiqueta: "LHE radio " + p.radius, error: String(e && e.message ? e.message : e) }); }
   });
   if (o.hdrmt !== false) {
@@ -419,14 +444,14 @@ function contrasteCandidatos(viewId, o) {
       PM.truncate = true; PM.truncateLower = 0; PM.truncateUpper = 1; PM.createNewImage = false;
       rzMust(PM.executeOn(wh.mainView), "PixelMath (mezcla HDRMT)");
       aux.forceClose();
-      medir("HDRMT " + capas + " capas, luminosidad, mezcla " + mezcla, wh, t2);
+      medir("HDRMT " + capas + " capas, luminosidad, mezcla " + mezcla, wh, t2, { hdrmt: { capas: capas, mezcla: mezcla } });
     } catch (e) { cands.push({ etiqueta: "HDRMT", error: String(e && e.message ? e.message : e) }); }
   }
   if (o.dse !== false) {
     var t3 = Date.now();
     try {
       var d = darkStructureEnhance(viewId, { median: (o.dse && o.dse.median) || 0.7, nuevaVista: viewId + "_dse" });
-      medir("DarkStructureEnhance median " + d.median, ImageWindow.windowById(d.view), t3);
+      medir("DarkStructureEnhance median " + d.median, ImageWindow.windowById(d.view), t3, { dse: { median: d.median } });
     } catch (e) { cands.push({ etiqueta: "DarkStructureEnhance", error: String(e && e.message ? e.message : e) }); }
   }
   var ok = cands.filter(function (c) { return c.medidas && !c.fallos.length && c.contraste_x > 1.0; });
@@ -445,7 +470,7 @@ function contrasteCandidatos(viewId, o) {
     vista: vista, original: viewId, entrada: base,
     comparados: cands.map(function (c) {
       if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
-      return { metodo: c.etiqueta, contraste_x: c.contraste_x, ruido_cielo_x: c.ruido_x, cielo: c.medidas.cielo,
+      return { metodo: c.etiqueta, sel: c.sel, contraste_x: c.contraste_x, ruido_cielo_x: c.ruido_x, cielo: c.medidas.cielo,
                quemados_pct: c.medidas.quemados_pct, cumple: !c.fallos.length, fallos: c.fallos.join("; ") || undefined,
                segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
     }),
