@@ -91,7 +91,6 @@ var PL_TR = {
    "Escribe tu pregunta o petición y pulsa Enviar.": "Type your question or request and press Send.",
    "Enviar": "Send",
    "Cancelar": "Cancel",
-   "Ejecutar sin preguntar": "Run without asking",
    ["Permitir búsquedas externas. Claude: WebSearch y WebFetch. Todos los modelos: SIMBAD, Wikipedia, páginas web " +
    "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet."]:
       "Allow external lookups. Claude: WebSearch and WebFetch. All models: SIMBAD, Wikipedia, web pages and catalog " +
@@ -101,11 +100,6 @@ var PL_TR = {
    "Reenvía el error al modelo para que corrija las llamadas.": "Sends the error back to the model so it fixes the calls.",
    "Ver llamadas": "View calls",
    "Nueva conversación": "New conversation",
-   "Procesado completo": "Full processing",
-   ["Pide al modelo que procese la imagen activa siguiendo la guía, paso a paso y en su orden, " +
-   "parando tras cada paso para que lo revises y sigas (escribe «sigue» o pulsa el enlace «Siguiente paso»)."]:
-      "Asks the model to process the active image following the guide, step by step and in order, stopping after " +
-      "each step so you can review it and continue (type «continue» or click the «Next step» link).",
    "Limpiar": "Clear",
    "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.":
       "Empties the window and deletes the temporary thumbnails. The model keeps the conversation context.",
@@ -184,20 +178,6 @@ var PL_TR = {
    "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar.":
       "macOS dictation: click in the prompt and press the Fn key (or 🌐) twice; speak and press Send.",
    "Dictado: no hay dictado del sistema en Linux; escribe el prompt.": "Dictation: there is no system dictation on Linux; type the prompt.",
-   ["Procesa la imagen activa siguiendo la guía, paso a paso y en su orden, desde donde esté hasta exportar.\n" +
-   "- Empieza diciendo en una lista corta qué pasos harás y cuáles no aplican a esta imagen (y por qué), y haz el primero.\n" +
-   "- En cada paso usa la función de la guía de ese paso; donde haya una que compare candidatos, úsala.\n" +
-   "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (vista, starless, estrellas), nunca sobre el original.\n" +
-   "- Un paso por respuesta. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
-   "- Si algo no cumple (no_cumple), para y dime qué propones; no lo arregles inventando parámetros.\n" +
-   "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes."]:
-      "Process the active image following the guide, step by step and in order, from where it is up to export.\n" +
-      "- Start by listing briefly which steps you will do and which do not apply to this image (and why), and do the first one.\n" +
-      "- In each step use that step's guide function; where there is one that compares candidates, use it.\n" +
-      "- Chain the views: the next step works on the view returned by the previous one (vista, starless, estrellas), never on the original.\n" +
-      "- One step per reply. After each one, summarise Measured / Check by eye and wait until I say «continue» (or click the next step link).\n" +
-      "- If something fails (no_cumple), stop and tell me what you propose; do not fix it by inventing parameters.\n" +
-      "- Ask me for the checkpoint and export folders when needed; do not invent them."
 };
 
 // Trozos de textos montados con variables (de más largo a más corto al aplicarlos).
@@ -273,7 +253,6 @@ function PLAjustes() {
    this.rutaClaude = plRutaClaudePorDefecto();
    this.rutaCodex = plRutaCodexPorDefecto();
    this.guia = plPadre(plPadre(PL_RUTA_SCRIPT)) + "/guia";
-   this.ejecutarSinPreguntar = false;
    this.internet = true;                  // Claude: WebSearch y WebFetch; todos: simbad/wikipedia/leerWeb/imagenCatalogo
    this.voz = false;                      // leer en voz alta cada respuesta del modelo
    this.vozVelocidad = 0;                 // -10 (lenta) … 10 (rápida)
@@ -284,7 +263,7 @@ function PLAjustes() {
    var CAMPOS = { proveedor: DataType_UCString, modeloOllama: DataType_UCString, modeloClaude: DataType_UCString,
                   modeloCodex: DataType_UCString, ollamaUrl: DataType_UCString, temperatura: DataType_UCString,
                   pensar: DataType_Boolean, rutaClaude: DataType_UCString, rutaCodex: DataType_UCString,
-                  guia: DataType_UCString, ejecutarSinPreguntar: DataType_Boolean, umbralN: DataType_Int32,
+                  guia: DataType_UCString, umbralN: DataType_Int32,
                   claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
                   codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean,
                   voz: DataType_Boolean, vozVelocidad: DataType_Int32, dictadoAntiguo: DataType_Boolean,
@@ -1482,10 +1461,6 @@ function plConstruirDialogo(aj) {
    this.bCancelar.text = "Cancelar";
    this.bCancelar.enabled = false;
    this.bCancelar.onClick = function () { if (self.estado) self.estado.cancelado = true; };
-   this.cAuto = new CheckBox(pPrompt);
-   this.cAuto.text = "Ejecutar sin preguntar";
-   this.cAuto.checked = aj.ejecutarSinPreguntar;
-   this.cAuto.onCheck = function (c) { aj.ejecutarSinPreguntar = c; };
    this.cInternet = new CheckBox(pPrompt);
    this.cInternet.text = "Internet";
    this.cInternet.toolTip = "Permitir búsquedas externas. Claude: WebSearch y WebFetch. Todos los modelos: SIMBAD, Wikipedia, páginas web " +
@@ -1515,23 +1490,6 @@ function plConstruirDialogo(aj) {
       self.ultimoError = null; self.correcciones = 0; self.bCorregir.enabled = false;
       self.usoSesion = null; self.actualizarUso();
    };
-   // Procesado completo (Rafael, 9 nov 2026): la serie de la guía paso a paso, parando en cada uno para que el usuario
-   // confirme (o pulse el enlace «Siguiente paso»). Es el prompt general revisado, sin nada de un objeto concreto.
-   this.bSerie = new PushButton(pPrompt);
-   this.bSerie.text = "Procesado completo";
-   this.bSerie.toolTip = "Pide al modelo que procese la imagen activa siguiendo la guía, paso a paso y en su orden, " +
-                         "parando tras cada paso para que lo revises y sigas (escribe «sigue» o pulsa el enlace «Siguiente paso»).";
-   this.bSerie.onClick = function () {
-      if (self.estado) return;
-      self.enviarTexto(plT(
-         "Procesa la imagen activa siguiendo la guía, paso a paso y en su orden, desde donde esté hasta exportar.\n" +
-         "- Empieza diciendo en una lista corta qué pasos harás y cuáles no aplican a esta imagen (y por qué), y haz el primero.\n" +
-         "- En cada paso usa la función de la guía de ese paso; donde haya una que compare candidatos, úsala.\n" +
-         "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (vista, starless, estrellas), nunca sobre el original.\n" +
-         "- Un paso por respuesta. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
-         "- Si algo no cumple (no_cumple), para y dime qué propones; no lo arregles inventando parámetros.\n" +
-         "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes."));
-   };
    this.bVaciar = new PushButton(pPrompt);
    this.bVaciar.text = "Limpiar";
    this.bVaciar.toolTip = "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.";
@@ -1557,8 +1515,8 @@ function plConstruirDialogo(aj) {
    var filaB = new HorizontalSizer;
    filaB.spacing = 6;
    filaB.add(this.bEnviar); filaB.add(this.bCancelar); filaB.addSpacing(12);
-   filaB.add(this.cAuto); filaB.add(this.cInternet); filaB.add(this.bEjecutar); filaB.add(this.bVer); filaB.add(this.bCorregir);
-   filaB.addStretch(); filaB.add(this.bSerie); filaB.addSpacing(8); filaB.add(this.bVaciar); filaB.add(this.bLimpiar);
+   filaB.add(this.cInternet); filaB.add(this.bEjecutar); filaB.add(this.bVer); filaB.add(this.bCorregir);
+   filaB.addStretch(); filaB.add(this.bVaciar); filaB.add(this.bLimpiar);
    pPrompt.sizer = new VerticalSizer;
    pPrompt.sizer.margin = 6; pPrompt.sizer.spacing = 6;
    pPrompt.sizer.add(this.historialBox, 100);
@@ -1980,7 +1938,7 @@ function plConstruirDialogo(aj) {
    };
 
    this.ocupado = function (si) {
-      this.bEnviar.enabled = !si; this.bCancelar.enabled = si; this.bCorregir.enabled = false; this.bSerie.enabled = !si;
+      this.bEnviar.enabled = !si; this.bCancelar.enabled = si; this.bCorregir.enabled = false;
       this.bEjecutar.enabled = !si && !!this.pendiente; this.cProv.enabled = !si;
    };
 
@@ -2033,11 +1991,9 @@ function plConstruirDialogo(aj) {
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
          this.estadoLbl.text = plT(quedan ? "Llamadas repetidas. Puedes pedir otra corrección." : "Llamadas repetidas; revisa la petición.");
-         if (quedan && this.cAuto.checked) this.pedirCorreccion();
          return;
       }
       this.ponerPendiente(s);
-      if (s && this.cAuto.checked && !interpretando) this.ejecutarPendiente();
    };
 
    this.enviar = function () {
@@ -2095,7 +2051,6 @@ function plConstruirDialogo(aj) {
          this.bCorregir.enabled = quedan;
          this.estadoLbl.text = plT(quedan ? "Las llamadas han fallado. Puedes pedir una corrección al modelo." :
                                "Las llamadas han fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.");
-         if (quedan && this.cAuto.checked) this.pedirCorreccion();
       }
    };
 
@@ -2169,7 +2124,7 @@ function plBienvenida(aj) {
              "- You tell me which image you have (or simply «the image on screen») and which object it is.\n" +
              "- I answer with information, an analysis or the guide functions I want to run.\n" +
              "- I always work on copies: I do not modify your original views unless you explicitly ask.\n" +
-             "- When I propose calls, press «Run calls» (or tick «Run without asking»). The «Next step» links " +
+             "- When I propose calls, review them and press «Run calls»: nothing runs without you. The «Next step» links " +
              "run that step with one click.\n\n" +
              "Guide: `" + aj.guia + "`";
    return "**PiCopilot Lite** es un asistente de inteligencia artificial especializado en astrofotografía que funciona " +
@@ -2187,8 +2142,8 @@ function plBienvenida(aj) {
           "- Tú me dices qué imagen tienes (o simplemente «la imagen en pantalla») y qué objeto es.\n" +
           "- Yo te respondo con información, análisis o las funciones de la guía que quiero ejecutar.\n" +
           "- Siempre trabajo sobre copias: no modifico tus vistas originales sin que lo pidas explícitamente.\n" +
-          "- Cuando proponga llamadas, pulsa «Ejecutar llamadas» (o marca «Ejecutar sin preguntar»). Los enlaces " +
-          "«Siguiente paso» ejecutan ese paso con un clic.\n\n" +
+          "- Cuando proponga llamadas, revísalas y pulsa «Ejecutar llamadas»: nada se ejecuta sin ti. Los enlaces " +
+          "«Siguiente paso» hacen ese paso con un clic.\n\n" +
           "Guía: `" + aj.guia + "`";
 }
 
@@ -2218,14 +2173,13 @@ function plPrueba(salida, cli) {
       return { guia: aj.guia, proveedor: aj.proveedor, modelo: aj.modelo(), claude: aj.rutaClaude, codex: aj.rutaCodex };
    });
    paso("dialogo", function () {
-      // Abre el diálogo y simula al usuario: guardar ajustes, preguntar con «Ejecutar sin preguntar» y cerrar.
+      // Abre el diálogo y simula al usuario: guardar ajustes, preguntar y cerrar.
       var d = new PLDialogo(aj), tm = new Timer, out = {};
       tm.interval = 1.5; tm.periodic = false;
       tm.onTimeout = function () {
          try {
             d.bGuardar.onClick();
             out.estado = d.estadoLbl.text;
-            d.cAuto.checked = true;
             d.entrada.text = "¿Qué imágenes tengo abiertas? Usa vistas().";
             d.enviar();
             out.registro = d.registro;
@@ -2256,7 +2210,6 @@ function plPrueba(salida, cli) {
             try { d.childToFocus = d.entrada; } catch (e) { out.foco1 = String(e); }
             try { d.entrada.hasFocus = true; } catch (e) { out.foco2 = String(e); }
             d.enviarTexto = function (t) { out.clic = t; };
-            d.bSerie.onClick(); out.serie = out.clic.substring(0, 60);   // el botón manda el prompt de la serie
             // Informe .md y dossier PDF de la conversación de la prueba (en la carpeta temporal, no en la del usuario).
             var ciAntes = aj.carpetaInformes; d.eInformes.text = plCarpeta(PL_TMP) + "/dossiers";
             out.informe = d.crearInforme();
@@ -2270,7 +2223,6 @@ function plPrueba(salida, cli) {
       };
       tm.start();
       d.execute();
-      d.cAuto.checked = false; aj.ejecutarSinPreguntar = false; aj.guardar();
       return out;
    });
    paso("guia", function () {

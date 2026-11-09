@@ -29,8 +29,7 @@ No Node.js or MCP server is needed: the script loads the guide inside PixInsight
 2. Launch **Script > PiCopilot > PiCopilotLite** (or **Script > Execute Script File…** and choose `picopilot/script/PiCopilotLite.js`).
 3. In **Settings > Language** choose **English**: the window switches at once and the model answers in English. The setting is remembered.
 4. In the **Model** tab choose the provider (Ollama, Claude Code or Codex) and the model. In **Settings** check the Ollama URL, the `claude`/`codex` paths and the guide folder (detected automatically).
-5. In **Prompt** type what you want, for example «analyse the image». When the model proposes calls, press **Run calls** (or tick **Run without asking**). The «Next step» lines in the chat are links: click them to do that step.
-6. To process the whole image, press **Full processing**: the model says which steps apply and does them one by one, stopping after each until you type «continue» or click the link of the next one.
+5. In **Prompt** type what you want, for example «analyse the image». When the model proposes calls, review them and press **Run calls**: nothing runs until you press it. The «Next step» lines in the chat are links: click them to do that step.
 
 ## What it does
 
