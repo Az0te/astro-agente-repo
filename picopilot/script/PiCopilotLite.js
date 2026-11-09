@@ -567,7 +567,8 @@ function plOllamaChat(aj, sistema, mensajes, estado) {
    }
    var j = JSON.parse(r.texto);
    if (j.error) throw new Error("Ollama: " + j.error);
-   return String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "").trim();
+   return { texto: String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "").trim(),
+            uso: { entrada: j.prompt_eval_count || 0, salida: j.eval_count || 0, cache: j.prompt_eval_cached_count || 0, coste: 0 } };
 }
 
 // Lanza una CLI con el prompt por stdin (fichero) y la salida a fichero, sin congelar el diálogo.
@@ -618,10 +619,17 @@ function plClaudeChat(aj, sistema, mensajes, estado, modelo) {
    // Sin MCP: PixInsight está ocupado con este script y no podría atender al MCP. Con «internet», sólo WebSearch y
    // WebFetch (permitidas sin preguntar: en -p nadie puede contestar un permiso); si no, ninguna herramienta.
    var herr = aj.internet ? ["--tools", "WebSearch", "WebFetch", "--allowedTools", "WebSearch", "WebFetch"] : ["--tools", ""];
-   var args = ["-p", "--output-format", "text", "--strict-mcp-config"].concat(herr).concat(["--system-prompt-file", fs]);
+   // Salida JSON: trae la respuesta (result) y el consumo (usage, total_cost_usd).
+   var args = ["-p", "--output-format", "json", "--strict-mcp-config"].concat(herr).concat(["--system-prompt-file", fs]);
    if (modelo) args.push("--model", modelo);
    plEjecutarCli(aj.rutaClaude, args, fe, fo, estado);
-   return File.readTextFile(fo).trim();
+   var txt = File.readTextFile(fo).trim(), j = null;
+   try { j = JSON.parse(txt); } catch (e) { return { texto: txt, uso: null }; }   // por si alguna versión no da JSON
+   if (j.is_error) throw new Error("Claude: " + (j.result || j.subtype || "error"));
+   var u = j.usage || {};
+   return { texto: String(j.result || "").trim(),
+            uso: { entrada: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0),
+                   salida: u.output_tokens || 0, cache: u.cache_read_input_tokens || 0, coste: j.total_cost_usd || 0 } };
 }
 
 function plCodexChat(aj, sistema, mensajes, estado, modelo) {
@@ -633,8 +641,10 @@ function plCodexChat(aj, sistema, mensajes, estado, modelo) {
    if (modelo) args.push("-m", modelo);
    args.push("-");
    plEjecutarCli(aj.rutaCodex, args, fe, fo, estado);
-   if (File.exists(fu)) return File.readTextFile(fu).trim();
-   return File.readTextFile(fo).trim();
+   // Codex escribe al final «tokens used: N» (total) en su salida; sin desglose.
+   var log = File.exists(fo) ? File.readTextFile(fo) : "", mt = /tokens used[:\s]*([\d.,]+)/i.exec(log), uso = null;
+   if (mt) uso = { entrada: 0, salida: 0, total: parseInt(mt[1].replace(/[.,]/g, ""), 10) || 0, cache: 0, coste: 0 };
+   return { texto: File.exists(fu) ? File.readTextFile(fu).trim() : log.trim(), uso: uso };
 }
 
 // Los últimos mensajes que caben en el presupuesto (siempre al menos el último).
@@ -662,7 +672,17 @@ function plPreguntar(aj, mensajes, estado, paso) {
    if (aj.proveedor == "claude") t = plClaudeChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "codex") t = plCodexChat(aj, sistema, m, estado, e.modelo);
    else t = plOllamaChat(aj, sistema, m, estado);
-   return { texto: t, modelo: e.modelo, porque: e.porque };
+   return { texto: t.texto, uso: t.uso, modelo: e.modelo, porque: e.porque };
+}
+
+// «12.345 → 678 tokens (caché 9.000) · 0,021 $»
+function plMiles(n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+function plUsoTexto(u) {
+   if (!u) return "";
+   var s = u.total !== undefined && !u.entrada && !u.salida ? plMiles(u.total) + " tokens" :
+           plMiles(u.entrada) + " → " + plMiles(u.salida) + " tokens" + (u.cache ? " (caché " + plMiles(u.cache) + ")" : "");
+   if (u.coste) s += " · " + u.coste.toFixed(3).replace(".", ",") + " $";
+   return s;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1204,6 +1224,7 @@ function plConstruirDialogo(aj) {
       self.mensajes = []; self.registro = ""; self.entradas = []; plBorrarTemporales();
       plMostrarPagina(self.historialBox, plPagina([])); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0; self.bCorregir.enabled = false;
+      self.usoSesion = null; self.actualizarUso();
    };
    this.bVaciar = new PushButton(pPrompt);
    this.bVaciar.text = "Limpiar";
@@ -1216,8 +1237,16 @@ function plConstruirDialogo(aj) {
    this.estadoLbl.text = "";
    // Modelo que se usará. Como en el módulo, el prompt libre no tiene paso: con «auto (pesos N)» va al modelo superior.
    this.eleccionLbl = new Label(pPrompt);
+   this.usoLbl = new Label(pPrompt);
+   this.usoLbl.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   this.usoLbl.toolTip = "Tokens de la conversación: entrada → salida (y coste con Claude). Se reinicia con «Nueva conversación».";
    var filaP = new HorizontalSizer; filaP.spacing = 6;
-   filaP.add(this.eleccionLbl, 100);
+   filaP.add(this.eleccionLbl, 100); filaP.add(this.usoLbl);
+   this.actualizarUso = function () {
+      var S = this.usoSesion;
+      this.usoLbl.text = S && S.respuestas ? "Conversación: " + plUsoTexto(S.entrada || S.salida ? S : { total: S.total, coste: S.coste }) +
+                                             " en " + S.respuestas + (S.respuestas == 1 ? " respuesta" : " respuestas") : "";
+   };
 
    var filaB = new HorizontalSizer;
    filaB.spacing = 6;
@@ -1581,14 +1610,24 @@ function plConstruirDialogo(aj) {
       var t0 = Date.now(), resp = null;
       try {
          resp = plPreguntar(aj, this.mensajes, this.estado, this.pasoEnviado || "");
+         var uso = resp.uso;
          resp = resp.texto;
+         // Consumo: el de esta respuesta va en su título y el total de la conversación en la línea de abajo del chat.
+         if (uso) {
+            var S = this.usoSesion || (this.usoSesion = { entrada: 0, salida: 0, total: 0, coste: 0, respuestas: 0 });
+            S.entrada += uso.entrada || 0; S.salida += uso.salida || 0; S.coste += uso.coste || 0;
+            S.total += uso.total !== undefined ? uso.total : (uso.entrada || 0) + (uso.salida || 0); ++S.respuestas;
+            this.usoUltimo = uso;
+         } else this.usoUltimo = null;
       } catch (e) {
          this.anotar("Error", String(e.message || e), "err");
       }
       var cancelado = this.estado.cancelado;
       this.estado = null;
       this.ocupado(false);
-      this.estadoLbl.text = resp !== null ? "Respuesta en " + ((Date.now() - t0) / 1000).toFixed(1) + " s." : (cancelado ? "Cancelado." : "");
+      this.estadoLbl.text = resp !== null ? "Respuesta en " + ((Date.now() - t0) / 1000).toFixed(1) + " s" +
+                            (this.usoUltimo ? " · " + plUsoTexto(this.usoUltimo) : "") + "." : (cancelado ? "Cancelado." : "");
+      this.actualizarUso();
       if (resp === null) {   // la pregunta no obtuvo respuesta: no queda en el historial
          var q = this.mensajes.pop();
          // Si era la interpretación, el resultado del script sí se queda para el turno siguiente.
@@ -1596,7 +1635,7 @@ function plConstruirDialogo(aj) {
          return;
       }
       this.mensajes.push({ role: "assistant", content: resp });
-      this.anotar("PiCopilot (" + nombre + ")", resp, "asst");
+      this.anotar("PiCopilot (" + nombre + ")" + (this.usoUltimo ? " · " + plUsoTexto(this.usoUltimo) : ""), resp, "asst");
       if (this.cVoz.checked) this.hablar(resp);
       var s = plExtraerScript(resp);
       // Si la corrección trae el mismo script que ya falló, no se ejecuta otra vez: se pide uno distinto.
@@ -1823,8 +1862,10 @@ function plPrueba(salida, cli) {
    var respuesta = null;
    paso("ollamaChat", function () {
       var a = new PLAjustes(); a.cargar(); a.proveedor = "ollama";
-      respuesta = plPreguntar(a, [{ role: "user", content: "Lista las ventanas abiertas en PixInsight con la función vistas()." }], { cancelado: false }).texto;
-      return { respuesta: plRecortar(respuesta, 1500), script: plExtraerScript(respuesta) };
+      var rq = plPreguntar(a, [{ role: "user", content: "Lista las ventanas abiertas en PixInsight con la función vistas()." }], { cancelado: false });
+      respuesta = rq.texto;
+      if (!rq.uso || !rq.uso.salida) throw new Error("Ollama no ha devuelto el consumo de tokens");
+      return { respuesta: plRecortar(respuesta, 1500), script: plExtraerScript(respuesta), uso: plUsoTexto(rq.uso) };
    });
    paso("ejecutarTrivial", function () {
       return plEjecutarScript(aj, "var r = vistas();\nchat('Ventanas: ' + r.total);\nr.vistas.map(function (v) { return v.id; });");
@@ -1851,7 +1892,7 @@ function plPrueba(salida, cli) {
       // Llamada real con un paso de puntuación > N (debe ir al modelo inferior).
       var r = plPreguntar(a, [{ role: "user", content: "[Paso de la guía: Inventario (lineal/02-inventario.md)]\nResponde solo: OK" }],
                           { cancelado: false }, "lineal/02-inventario.md");
-      return { casos: casos, llamada: { modelo: r.modelo, porque: r.porque, respuesta: plRecortar(r.texto, 300) } };
+      return { casos: casos, llamada: { modelo: r.modelo, porque: r.porque, respuesta: plRecortar(r.texto, 300), uso: plUsoTexto(r.uso) } };
    });
    delete r.enCurso;
    r.fin = new Date().toISOString();
