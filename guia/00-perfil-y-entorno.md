@@ -26,19 +26,14 @@ Regla: "Cuando el usuario exprese una preferencia nueva (elige una versión fren
 |---|---|
 | Herramienta de más de ~45 s | Devuelve un id de trabajo y **sigue ejecutándose**: recoger el resultado con `estado(trabajo)`; no relanzar |
 | `estado` / `ping` | `estado(trabajo)` da el resultado de un trabajo largo; `ping` dice si PixInsight responde |
-| Bucles largos (medir cientos de subs) | Funciones que trabajen ~50 s, guarden el resultado en un CSV incremental y devuelvan el índice siguiente |
-| Cada llamada empieza sin estado | Guardar funciones reutilizables en `<versión>/tools/*.js` y cargarlas con `eval(File.readTextFile(ruta))` |
-| Herramientas de la guía | `herramientas/procesos.js` (SPCC, SPFC y MGC sin iconos), `herramientas/graxpert.js` (GraXpert por línea de comandos, para lo que no ofrece el proceso GraXpert) y `herramientas/gradcompare.js` (medir modelos de gradiente): `eval(File.readTextFile("<ruta de guia>/herramientas/<fichero>.js"))`. `herramientas/realces.js` (Star Stretch, ScreenStars, DarkStructureEnhance, BackgroundEnhance) está en el MCP como herramientas |
+| Código de PixInsight | El agente no lo escribe ni lo ejecuta: sólo llama a las funciones de la guía (`herramientas/manifiesto.json`). Si ninguna sirve, lo dice y propone qué hacer |
 | Astrometría | Sólo `resolverAstrometria("<vista>")` (motor de BlindSolver, PixInsight 1.9.6+), ver Paso 8 lineal |
-| Proceso que no existe en el script (`typeof BlurXTerminator`) | El módulo no está cargado en PixInsight: avisar al usuario; no sustituirlo por otro proceso |
-| Duda con un nombre | Para saber cómo se llama un parámetro: `console.writeln((new Proceso).toSource())` en un script (parámetros reales de la versión instalada) |
-| Scripts | La guía no los usa: cada uno tiene su equivalente con procesos y PixelMath ([Anexo A](anexos/A-contrato-api-pjsr.md), A.9) |
+| Una función dice que falta un proceso | El módulo no está cargado en PixInsight: avisar al usuario; no sustituirlo por otro proceso |
+| Scripts | La guía no los usa: cada uno tiene su función equivalente ([Anexo A](anexos/A-equivalentes-scripts.md)) |
 | PixInsight que deja de responder sin diálogo | No insistir con más llamadas pesadas: avisar y parar |
 | MCP antiguo `pixinsight` (watcher) | Retirado: no usar `run_script`, `watcher_status`, `describe_process` ni `list_open_images` aunque aparezcan |
 | Ver diálogos o la pantalla | Sólo si el usuario ha dado acceso a la pantalla (computer use); si no, no contar con verlos |
 | Ver resultados | Guardar JPG reducidos (IntegerResample) o recortes al 100 % en `<carpeta>/prev/`; mejor que capturas de pantalla |
-| Descargar desde PJSR | `NetworkTransfer` + `onDownloadDataAvailable` escribiendo a un `File` |
-| `beginProcess()` sin `endProcess()` | Vista bloqueada: clonar la imagen a una ventana nueva y cerrar la vieja |
 | Subs y masters del usuario | **Nunca borrar**: mover los descartes a `_rechazados` y que el usuario confirme. Nunca sobrescribir versiones (v1, v2…) |
 
 **Principio innegociable:** "Ceñirse a los datos, no inventar nada... 'Revelar, no inventar': cualquier estructura débil se confirma antes de realzarla, y cada paso se compara con la versión sin tocar".

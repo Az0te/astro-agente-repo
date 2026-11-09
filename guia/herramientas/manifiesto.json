@@ -1545,26 +1545,6 @@
    "resumen": "Internet: abre una imagen de catálogo (DSS2, Hα, WISE…) del campo para saber qué señal esperar. No para combinar.",
    "paso": "lineal/01-analisis-del-objeto.md",
    "params": { "type": "object", "properties": { "posicion": { "type": "string", "description": "Nombre del objeto, \"ra, dec\" en grados o id de una vista con astrometría." }, "opciones": { "type": "object", "description": "Opcional. { survey: \"DSS2 Red\", campo: 1 (grados), pixeles: 1000, abrir: true }" } }, "required": ["posicion"] }
-  },
-  {
-   "nombre": "run_script",
-   "fichero": null,
-   "nivel": "libre",
-   "timeout_s": 600,
-   "descripcion": "PJSR libre en PixInsight, con las funciones de la guía cargadas. Solo existe si el usuario lo ha permitido (fichero ~/.picopilot/permitir_libre). Úsalo solo para lo que no cubren las demás herramientas. Devuelve el valor de la última expresión.",
-   "resumen": "PJSR libre con las funciones de la guía cargadas. Solo si lo permite ~/.picopilot/permitir_libre y nada más lo cubre.",
-   "params": {
-    "type": "object",
-    "properties": {
-     "codigo": {
-      "type": "string",
-      "description": "Código PJSR."
-     }
-    },
-    "required": [
-     "codigo"
-    ]
-   }
   }
  ]
 }

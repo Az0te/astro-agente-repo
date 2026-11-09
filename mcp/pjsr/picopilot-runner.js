@@ -27,11 +27,8 @@
 #include <pjsr/astrometry/AstrometricMetadata.js>
 #include <pjsr/astrometry/UtilityControls.js>
 #include <pjsr/utility/ScriptErrors.js>
-#ifeq __PI_PLATFORM__ MACOSX
-#include "/Applications/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
-#else
-#include "C:/Program Files/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
-#endif
+// Ruta relativa a include/ de la instalación (vale en cualquier sistema y carpeta de instalación).
+#include <../src/scripts/BlindSolver/BlindSolverEngine.js>
 
 // Funciones de la guía (mismo repositorio), en orden de dependencias.
 // Ojo: con #include el preprocesador toma "//" dentro de un regex (p. ej. /^\//) como comentario: usar [\/].
@@ -304,13 +301,6 @@ function pprCerrar(ids, descartar) {
    return r;
 }
 
-function pprLibre(codigo) {
-   if (!File.exists(PPR_DIR + "/permitir_libre"))
-      throw new Error("run_script está desactivado. Para permitirlo, el usuario debe crear el fichero ~/.picopilot/permitir_libre.");
-   if (typeof codigo !== "string" || !codigo) throw new Error("Falta el código.");
-   return (0, eval)(codigo);
-}
-
 // ---------------------------------------------------------------------------------------------------------------
 // Lista blanca: nombre de herramienta -> función que recibe el objeto args de la petición.
 // Nada que no esté aquí se puede ejecutar.
@@ -326,7 +316,6 @@ var LISTA = {
    abrirImagen:          function (a) { return pprAbrir(a.fichero); },
    guardarImagen:        function (a) { return pprGuardar(a.vista, a.fichero, a.sobrescribir === true); },
    cerrarVista:          function (a) { return pprCerrar(a.vista, a.descartar === true); },
-   run_script:           function (a) { return pprLibre(a.codigo); },
    // Fase lineal
    analizarMaster:       function (a) { return analizarMaster(a.vista); },
    bordesSinDatos:       function (a) { return bordesSinDatos(a.vista); },

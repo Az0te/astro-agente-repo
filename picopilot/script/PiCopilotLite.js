@@ -2,8 +2,9 @@
 // Copyright (c) 2026 Rafael Vidal. Licencia MIT.
 //
 // Chat con un modelo (Ollama local por HTTP, o Claude Code / Codex por línea de órdenes) que, cuando quiere
-// actuar, devuelve un bloque ```javascript con código PJSR que usa las funciones de la guía
-// (los .js de guia/herramientas). El script carga la guía en este mismo proceso y ejecuta ese código aquí.
+// actuar, devuelve un bloque ```json con llamadas a funciones de la guía (nombre y parámetros, sin código).
+// El script valida cada llamada contra guia/herramientas/manifiesto.json y la ejecuta con la lista blanca del
+// runner (LISTA). El modelo nunca escribe código de PixInsight y aquí no se ejecuta nada que haya escrito él.
 //
 // Lanzar: Script > Execute Script File... > PiCopilotLite.js
 // Pruebas automáticas (para desarrollo):  PixInsight.exe -x=<ruta>/PiCopilotLite.js,--prueba[,<salida.json>[,claude|codex]]
@@ -24,7 +25,7 @@
 #include <pjsr/TextAlign.jsh>
 
 // Motor de BlindSolver en modo librería (como picopilot-runner.js): lo usan blindSolve, resolverAstrometria,
-// bxtCorrectOnly y alinearMasters. Las clases quedan globales y el código del modelo, que se evalúa aquí, las ve.
+// bxtCorrectOnly y alinearMasters. Las clases quedan globales y las funciones de la guía las ven.
 #define VERSION "1.0.0"
 #define TITLE "BlindSolver"
 #define SETTINGS_MODULE "BlindSolver"
@@ -95,10 +96,10 @@ var PL_TR = {
    "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet."]:
       "Allow external lookups. Claude: WebSearch and WebFetch. All models: SIMBAD, Wikipedia, web pages and catalog " +
       "images (web.js). Unchecked, nothing goes out to the internet.",
-   "Ejecutar script": "Run script",
+   "Ejecutar llamadas": "Run calls",
    "Pedir corrección": "Ask for a fix",
-   "Reenvía el error al modelo para que corrija el script.": "Sends the error back to the model so it fixes the script.",
-   "Ver script": "View script",
+   "Reenvía el error al modelo para que corrija las llamadas.": "Sends the error back to the model so it fixes the calls.",
+   "Ver llamadas": "View calls",
    "Nueva conversación": "New conversation",
    "Procesado completo": "Full processing",
    ["Pide al modelo que procese la imagen activa siguiendo la guía, paso a paso y en su orden, " +
@@ -111,8 +112,8 @@ var PL_TR = {
    "Tokens de la conversación: entrada → salida (y coste con Claude). Se reinicia con «Nueva conversación».":
       "Conversation tokens: input → output (and cost with Claude). Reset with «New conversation».",
    "Leer en voz alta": "Read aloud",
-   "Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).":
-      "Reads each model reply with the Windows voice (without the script code).",
+   "Lee cada respuesta del modelo con la voz de Windows (sin los bloques de llamadas).":
+      "Reads each model reply with the Windows voice (without the call blocks).",
    "Leer": "Read",
    "Lee en voz alta la última respuesta del modelo.": "Reads the last model reply aloud.",
    "Parar voz": "Stop voice",
@@ -127,9 +128,9 @@ var PL_TR = {
    "Guarda la conversación (respuestas, fichas de resultados y miniaturas) como PDF en la carpeta de dossieres (Ajustes).":
       "Saves the conversation (replies, result cards and thumbnails) as a PDF in the dossier folder (Settings).",
    "Informe .md": ".md report",
-   ["Guarda un informe Markdown con las funciones usadas, los errores con su script y la conversación, para " +
+   ["Guarda un informe Markdown con las funciones usadas, los errores con sus llamadas y la conversación, para " +
    "recopilar procesados y mejorar la guía."]:
-      "Saves a Markdown report with the functions used, the errors with their script and the conversation, to " +
+      "Saves a Markdown report with the functions used, the errors with their calls and the conversation, to " +
       "collect processing sessions and improve the guide.",
    "Leer modelos de Ollama": "Read Ollama models",
    "Dejar pensar al modelo (think de Ollama; más lento)": "Let the model think (Ollama think; slower)",
@@ -160,7 +161,7 @@ var PL_TR = {
    "Prompt": "Prompt", "Modelo": "Model", "Ajustes": "Settings",
    "Paso": "Step", "Base": "Base", "Ajuste": "Adjustment", "Puntuación": "Score",
    "Tú": "You",
-   "Script pendiente": "Pending script",
+   "Llamadas pendientes": "Pending calls", "(ninguna)": "(none)",
    "(ninguno)": "(none)",
    "Ajustes guardados.": "Settings saved.",
    "Idioma cambiado.": "Language changed.",
@@ -173,28 +174,28 @@ var PL_TR = {
    "Dictado añadido al prompt: revísalo y pulsa Enviar.": "Dictation added to the prompt: check it and press Send.",
    "Dictado de Windows abierto: haz clic en el prompt si el cursor no está ahí y habla. Para cerrarlo, Win + H o Esc.":
       "Windows dictation open: click in the prompt if the cursor is not there and speak. To close it, Win + H or Esc.",
-   "Ejecutando script…": "Running script…",
-   "Script ejecutado.": "Script run.",
-   "Cumple": "Pass", "No cumple": "Fail", "Resultado del script": "Script result",
+   "Ejecutando llamadas…": "Running calls…",
+   "Llamadas ejecutadas.": "Calls run.",
+   "Cumple": "Pass", "No cumple": "Fail", "Resultado de las llamadas": "Calls result",
    "Cancelado.": "Cancelled.",
-   "Script repetido. Puedes pedir otra corrección.": "Repeated script. You can ask for another fix.",
-   "Script repetido; revisa la petición.": "Repeated script; check the request.",
-   "El script ha fallado. Puedes pedir una corrección al modelo.": "The script failed. You can ask the model for a fix.",
+   "Llamadas repetidas. Puedes pedir otra corrección.": "Repeated calls. You can ask for another fix.",
+   "Llamadas repetidas; revisa la petición.": "Repeated calls; check the request.",
+   "Las llamadas han fallado. Puedes pedir una corrección al modelo.": "The calls failed. You can ask the model for a fix.",
    "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar.":
       "macOS dictation: click in the prompt and press the Fn key (or 🌐) twice; speak and press Send.",
    "Dictado: no hay dictado del sistema en Linux; escribe el prompt.": "Dictation: there is no system dictation on Linux; type the prompt.",
    ["Procesa la imagen activa siguiendo la guía, paso a paso y en su orden, desde donde esté hasta exportar.\n" +
    "- Empieza diciendo en una lista corta qué pasos harás y cuáles no aplican a esta imagen (y por qué), y haz el primero.\n" +
    "- En cada paso usa la función de la guía de ese paso; donde haya una que compare candidatos, úsala.\n" +
-   "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (r.vista, r.starless, r.estrellas), nunca sobre el original.\n" +
-   "- Un paso por script. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
+   "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (vista, starless, estrellas), nunca sobre el original.\n" +
+   "- Un paso por respuesta. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
    "- Si algo no cumple (no_cumple), para y dime qué propones; no lo arregles inventando parámetros.\n" +
    "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes."]:
       "Process the active image following the guide, step by step and in order, from where it is up to export.\n" +
       "- Start by listing briefly which steps you will do and which do not apply to this image (and why), and do the first one.\n" +
       "- In each step use that step's guide function; where there is one that compares candidates, use it.\n" +
-      "- Chain the views: the next step works on the view returned by the previous one (r.vista, r.starless, r.estrellas), never on the original.\n" +
-      "- One step per script. After each one, summarise Measured / Check by eye and wait until I say «continue» (or click the next step link).\n" +
+      "- Chain the views: the next step works on the view returned by the previous one (vista, starless, estrellas), never on the original.\n" +
+      "- One step per reply. After each one, summarise Measured / Check by eye and wait until I say «continue» (or click the next step link).\n" +
       "- If something fails (no_cumple), stop and tell me what you propose; do not fix it by inventing parameters.\n" +
       "- Ask me for the checkpoint and export folders when needed; do not invent them."
 };
@@ -207,7 +208,7 @@ var PL_TR_TROZOS = [
    ["No se pudo lanzar la voz: ", "Could not start the voice: "], ["No se pudo abrir el dictado de Windows: ", "Could not open Windows dictation: "],
    ["No se pudo lanzar el dictado: ", "Could not start dictation: "], ["Dictado: ", "Dictation: "],
    ["Esperando a ", "Waiting for "], ["Respuesta en ", "Reply in "],
-   ["El script ha fallado ", "The script failed "], [" veces seguidas; revisa la petición.", " times in a row; check the request."], ["Haz ahora este paso: ", "Do this step now: "],
+   ["Las llamadas han fallado ", "The calls failed "], [" veces seguidas; revisa la petición.", " times in a row; check the request."], ["Haz ahora este paso: ", "Do this step now: "],
    ["Conversación: ", "Conversation: "], [" respuestas", " replies"], [" respuesta", " reply"], [" en ", " in "],
    ["  (los pesos N no se aplican)", "  (N weights do not apply)"], ["(por defecto de la CLI)", "(CLI default)"],
    ["Prompt libre: modelo superior", "Free prompt: upper model"], ["paso sin valor en la tabla: modelo superior", "step with no value in the table: upper model"],
@@ -467,11 +468,6 @@ function plConstantesEnPrototipo() {
    return n;
 }
 
-function plContratoApi(guia) {
-   var f = guia + "/anexos/A-contrato-api-pjsr.md";
-   try { return File.exists(f) ? plRecortar(File.readTextFile(f), 12000) : ""; } catch (e) { return ""; }
-}
-
 function plCargarGuia(guia) {
    if (plGuiaCargada === guia) return [];
    var g = plGlobal(), avisos = [];
@@ -523,17 +519,30 @@ var PL_FIRMAS_RUNNER = {
    historial: "historial(vista, {parametros})", previa: "previa(vista, opciones)", abrirImagen: "abrirImagen(fichero)",
    guardarImagen: "guardarImagen(vista, fichero, sobrescribir)", cerrarVista: "cerrarVista(vista, descartar)"
 };
-// No disponibles en la versión Lite (el run_script del MCP).
-var PL_EXCLUIDAS = { run_script: 1 };
+// Nivel «libre» (código arbitrario): no existe ninguna función así y, si apareciera, no se ofrece ni se ejecuta.
+var PL_NIVEL_EXCLUIDO = "libre";
 
-function plFirma(nombre) {
-   if (PL_FIRMAS_RUNNER[nombre]) return PL_FIRMAS_RUNNER[nombre];
-   var L = plGlobal().LISTA;
-   if (L && typeof L[nombre] === "function") {
-      var m = /return\s+(\w+)\(([^;]*)\);/.exec(String(L[nombre]));
-      if (m) return m[1] + "(" + m[2].replace(/a\.(\w+)(\s*\|\|\s*\{\})?/g, "$1") + ")";
-   }
-   return nombre + "(vista, opciones)";
+// Manifiesto de la guía (nombre, nivel, paso, parámetros), leído una vez por ruta.
+var plManifiestoCache = { ruta: null, porNombre: null, lista: null };
+function plManifiesto(guia) {
+   var f = guia + "/herramientas/manifiesto.json";
+   if (plManifiestoCache.ruta === f) return plManifiestoCache;
+   var lista = [], porNombre = {};
+   try {
+      (JSON.parse(File.readTextFile(f)).funciones || []).forEach(function (x) {
+         if (x.nivel === PL_NIVEL_EXCLUIDO) return;
+         lista.push(x); porNombre[x.nombre] = x;
+      });
+   } catch (e) {}
+   plManifiestoCache = { ruta: f, porNombre: porNombre, lista: lista };
+   return plManifiestoCache;
+}
+
+// «nombre {vista*, opciones}»: parámetros del manifiesto; * = obligatorio.
+function plFirmaLlamada(x) {
+   var pr = (x.params && x.params.properties) || {}, req = (x.params && x.params.required) || [];
+   var ps = Object.keys(pr).map(function (k) { return k + (req.indexOf(k) >= 0 ? "*" : ""); });
+   return x.nombre + " {" + ps.join(", ") + "}";
 }
 
 // «Lineal: 1 Análisis del objeto, 2 Inventario, …; No lineal: 1 Estirado, …» a partir de PL_PASOS (mismo orden que el módulo).
@@ -548,17 +557,15 @@ function plOrdenPasos() {
 }
 
 function plListaFunciones(guia) {
-   var f = guia + "/herramientas/manifiesto.json";
-   if (!File.exists(f)) return "(no encuentro " + f + ")";
-   var man = JSON.parse(File.readTextFile(f)), out = [];
-   (man.funciones || []).forEach(function (x) {
-      if (PL_EXCLUIDAS[x.nombre]) return;
+   var man = plManifiesto(guia), out = [];
+   if (!man.lista.length) return "(no encuentro " + guia + "/herramientas/manifiesto.json)";
+   man.lista.forEach(function (x) {
       var d = String(x.resumen || x.descripcion || "");
       var p = d.indexOf(". ");
       if (p > 0 && p < 220) d = d.substring(0, p + 1);
       var mp = /^(lineal|no-lineal)\/(\d+)-/.exec(String(x.paso || ""));
       var paso = mp ? " (Paso " + parseInt(mp[2], 10) + (mp[1] == "lineal" ? " lineal" : " no lineal") + ")" : "";
-      out.push("- " + plFirma(x.nombre) + " [" + x.nivel + "]" + paso + ": " + plRecortar(d, 220));
+      out.push("- " + plFirmaLlamada(x) + " [" + x.nivel + "]" + paso + ": " + plRecortar(d, 220));
    });
    return out.join("\n");
 }
@@ -610,10 +617,7 @@ function plIdDe(x) {
 
 function plEnvolverFunciones(g, guia) {
    var nombres = Object.keys(PL_FIRMAS_RUNNER);
-   try {
-      var man = JSON.parse(File.readTextFile(guia + "/herramientas/manifiesto.json"));
-      (man.funciones || []).forEach(function (x) { nombres.push(x.nombre); });
-   } catch (e) {}
+   plManifiesto(guia).lista.forEach(function (x) { nombres.push(x.nombre); });
    nombres.forEach(function (n) {
       var f = g[n];
       if (typeof f !== "function" || f.plOriginal) return;
@@ -631,34 +635,31 @@ function plPromptSistema(aj) {
             "Respondes siempre en español, de forma clara y concisa. ") +
    "Eres fiel a los datos: no inventas parámetros ni " +
    "resultados; si algo no lo has medido o no está en la guía, lo dices.\n\n" +
-   "Cuando quieras actuar sobre PixInsight, devuelve UN único bloque ```javascript con código PJSR (ECMAScript 5) " +
-   "que se ejecutará en el propio PixInsight con las funciones de la guía ya cargadas (no uses #include ni " +
-   "eval de ficheros). Para devolver información al chat usa chat(texto) (también se ve en la consola); el valor de " +
-   "la última expresión del script también se devuelve. Si no hace falta ejecutar nada, responde sin bloque de código. " +
-   "Si no está claro sobre qué vista trabajar, pregunta antes de escribir el script.\n\n" +
+   "Cómo actuar sobre PixInsight: NUNCA escribas código (ni PJSR, ni JavaScript, ni PixelMath suelto). Sólo puedes pedir " +
+   "funciones de la lista «Funciones disponibles». Para pedirlas, devuelve UN único bloque ```json con este formato:\n" +
+   "```json\n{\"llamadas\": [{\"funcion\": \"analizarMaster\", \"parametros\": {\"vista\": \"id_real\"}}]}\n```\n" +
+   "- \"funcion\" es el nombre exacto de la lista; \"parametros\" usa sólo los nombres de parámetro de esa función " +
+   "(los marcados con * son obligatorios). Las opciones van dentro de \"opciones\" como un objeto.\n" +
+   "- Puedes pedir varias llamadas en el mismo bloque sólo si no dependen unas de otras (por ejemplo analizarMaster y " +
+   "documentarObjeto sobre la misma vista). Si una necesita lo que devuelve otra, pide la primera, espera el resultado y " +
+   "pide la siguiente en otra respuesta.\n" +
+   "- Las llamadas se validan contra el manifiesto de la guía y se ejecutan tal cual; el resultado te llega en el mensaje siguiente.\n" +
+   "- Si ninguna función sirve para lo que pide el usuario, dilo y propón qué hacer; no lo sustituyas por otra cosa.\n" +
+   "- Si no hace falta actuar, responde sin bloque. Si no está claro sobre qué vista trabajar, pregunta antes de pedir llamadas.\n\n" +
    "Reglas de la guía:\n" +
    "- Trabaja siempre sobre copias: no modifiques las vistas originales (las funciones de nivel «copias» ya crean vistas nuevas).\n" +
    "- No supongas qué objeto es por el nombre del fichero ni nombres objetos concretos que no te haya dicho el usuario.\n" +
    "- Antes de estirar, pregunta al usuario el tipo de objeto (galaxia, nebulosa de emisión, cúmulo...) si no lo sabes.\n" +
-   "- Mide antes y después (estadisticas) y no borres ni sobrescribas ficheros del usuario.\n" +
-   "- Las funciones devuelven objetos: pásalos por chat(JSON.stringify(r, null, 1)).\n\n" +
+   "- Mide antes y después (estadisticas) y no borres ni sobrescribas ficheros del usuario.\n\n" +
    "Vistas e ids (lo más importante):\n" +
    "- Usa sólo los ids de la lista «Vistas abiertas», escritos exactamente igual (mayúsculas y guiones bajos incluidos). " +
    "Nunca inventes ni completes un id. Los ejemplos de la guía usan ids genéricos (MasterLight y parecidos): sustitúyelos " +
    "siempre por un id real de la lista.\n" +
    "- Si el usuario nombra una vista, búscala en la lista; si habla de «la imagen en pantalla» o no dice cuál, usa la marcada " +
-   "como (activa). Si no está en la lista o hay dudas, pregunta sin escribir script.\n" +
-   "- Las funciones de la guía reciben el id como texto, por ejemplo analizarMaster(\"id_real\"), no una ventana ni una vista.\n" +
-   "- ImageWindow.windowById(id) nunca devuelve null: si el id no existe devuelve una ventana con isNull == true, así que " +
-   "comprueba w.isNull (no !w). View.viewById(id) devuelve null si no existe. El id de una ventana es w.mainView.id " +
-   "(no existe w.name). ImageWindow.windows es un array e ImageWindow.activeWindow es la ventana activa.\n" +
-   "- PJSR: console.writeln para la consola (console.log no existe).\n" +
-   "- Constantes de los procesos: en el constructor, Clase.CONSTANTE (por ejemplo PixelMath.RGB o " +
-   "ScreenTransferFunction.SeparateChannels), no Clase.prototype.CONSTANTE.\n" +
-   "- Antes de usar un proceso o una propiedad de PJSR que no esté en la guía ni en el contrato de abajo, no la inventes.\n" +
-   "- Si un script falla, cambia el código que causó el error: no repitas el mismo script.\n" +
-   "- Encadena las vistas: cada función devuelve el id de lo que ha creado (r.vista; separarEstrellas: r.starless y " +
-   "r.estrellas; estirarCapas: r.starless.vista y r.estrellas.vista; gradienteVarias: r.corregidas). El paso siguiente trabaja " +
+   "como (activa). Si no está en la lista o hay dudas, pregunta sin pedir llamadas.\n" +
+   "- Si una llamada falla, cambia lo que causó el error (id, parámetro, valor): no repitas la misma llamada.\n" +
+   "- Encadena las vistas: cada función devuelve el id de lo que ha creado (vista; separarEstrellas: starless y " +
+   "estrellas; estirarCapas: starless.vista y estrellas.vista; gradienteVarias: corregidas). El paso siguiente trabaja " +
    "sobre ese id (o el que salga en «Vistas abiertas»), nunca sobre el original ni sobre un nombre inventado. Si una función ya " +
    "aplica el ganador de su comparación (…Candidatos), no lo apliques otra vez.\n" +
    "- Compara siempre: si la guía tiene una función que prueba varios candidatos y recomienda uno (gradienteCandidatos o " +
@@ -667,23 +668,22 @@ function plPromptSistema(aj) {
    (aj.internet ?
    "Información de internet (objeto, filtros, cámaras, telescopios, qué señal tiene la nebulosa, problemas típicos):\n" +
    (aj.proveedor == "claude" ? "- Tienes WebSearch y WebFetch: úsalos directamente y cita las fuentes.\n" : "") +
-   "- Desde un script: simbad(\"IC 63\") da el tipo de objeto, coordenadas y tamaño; wikipedia(\"texto\", {idioma}) el resumen " +
-   "de un artículo; leerWeb(url) el texto de una página; imagenCatalogo(\"IC 63\" o id de vista con astrometría, {survey: \"H-Alpha Comp\"}) " +
-   "abre una imagen de catálogo (DSS2, Hα, WISE...) para saber qué señal esperar. Cita la fuente que devuelven y no inventes lo que no traigan.\n" +
-   "- Cuando el usuario pida analizar la imagen, en el mismo script llama a analizarMaster(\"id\") y a documentarObjeto(\"id\") " +
-   "(identifica el objeto por OBJECT o por la astrometría y da su tipo, un resumen, la emisión esperada, las estrellas brillantes del campo " +
+   "- Con llamadas: simbad {objeto} da el tipo de objeto, coordenadas y tamaño; wikipedia {texto, opciones} el resumen " +
+   "de un artículo; leerWeb {url} el texto de una página; imagenCatalogo {posicion, opciones} abre una imagen de catálogo " +
+   "(DSS2, Hα, WISE...) para saber qué señal esperar. Cita la fuente que devuelven y no inventes lo que no traigan.\n" +
+   "- Cuando el usuario pida analizar la imagen, pide en el mismo bloque analizarMaster y documentarObjeto sobre esa vista " +
+   "(documentarObjeto identifica el objeto por OBJECT o por la astrometría y da su tipo, un resumen, la emisión esperada, las estrellas brillantes del campo " +
    "y los problemas que pueden dar). En tu resumen junta las medidas de la imagen con esa información: qué objeto es, qué tipo, qué emite " +
    "(y si el filtro usado lo capta), qué estrellas pueden dar halos o reflejos y qué pasos de la guía conviene vigilar.\n\n" :
    "- Las búsquedas en internet están desactivadas: al analizar la imagen usa sólo analizarMaster.\n\n") +
    "Recomendar el paso siguiente:\n" +
-   "- Cuando respondas sin script (información, dudas, resúmenes), termina con una línea «Siguiente paso: <qué hacer y con " +
+   "- Cuando respondas sin llamadas (información, dudas, resúmenes), termina con una línea «Siguiente paso: <qué hacer y con " +
    "qué función de la guía>.» con lo que recomiendas según el orden de la guía y lo que ya se ha hecho en esta conversación " +
    "(por ejemplo, si una imagen aún no se ha analizado, lo primero es analizarla). Si hay alternativas razonables, añade " +
    "líneas que empiecen por «Paso N: ...». El chat las muestra como enlaces que el usuario pulsa para que lo hagas.\n\n" +
    "Orden de los pasos de la guía (no saltes ni cambies el orden al recomendar el siguiente; si uno no aplica, dilo y pasa al siguiente):\n" +
    plOrdenPasos() + "\n\n" +
-   "Funciones disponibles (nombre(argumentos) [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
-   (plContratoApi(aj.guia) ? "Contrato de la API PJSR que debes respetar:\n<<<\n" + plContratoApi(aj.guia) + "\n>>>\n\n" : "") +
+   "Funciones disponibles (nombre {parámetros, * = obligatorio} [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
    "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
 }
 
@@ -857,46 +857,80 @@ function plUsoTexto(u) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Ejecución del script del modelo
+// Ejecución de las llamadas del modelo (sólo funciones de la guía)
 // ---------------------------------------------------------------------------------------------------------------
 
-function plExtraerScript(texto) {
-   var m = /```(?:javascript|js|pjsr)?[ \t]*\r?\n([\s\S]*?)```/i.exec(texto);
-   return m ? m[1].trim() : null;
+// Devuelve el texto JSON del primer bloque ```json de la respuesta que tenga «llamadas», o null.
+// Un bloque ```javascript (código) no se acepta nunca: el modelo sólo puede pedir funciones de la guía.
+function plExtraerLlamadas(texto) {
+   var re = /```(?:json)?[ \t]*\r?\n([\s\S]*?)```/gi, m;
+   while ((m = re.exec(String(texto))) !== null) {
+      var t = m[1].trim();
+      if (t.charAt(0) == "{" && /"llamadas"\s*:/.test(t)) return t;
+   }
+   return null;
 }
 
-function plEjecutarScript(aj, codigo) {
-   var avisos = plCargarGuia(aj.guia), g = plGlobal(), salida = [];
-   g.PICOPILOT_INTERNET = !!aj.internet;
-   g.PICOPILOT_PREVIAS = plCarpetaPrevias();   // las comparaciones de la guía dejan aquí una miniatura por candidato   // web.js lo respeta: sin la casilla, simbad/wikipedia/... no salen a internet
-   avisos.forEach(function (a) { console.warningln("[PiCopilotLite] " + a); });
-   g.chat = function () {
-      var t = Array.prototype.slice.call(arguments).map(function (x) {
-         return typeof x === "string" ? x : JSON.stringify(x, null, 1);
-      }).join(" ");
-      salida.push(t);
-      console.writeln(t);
-   };
-   var limpio = plQuitarDirectivas(codigo), t0 = Date.now();
-   console.noteln("[PiCopilotLite] Ejecutando script del modelo…");
-   try {
-      var v = (0, eval)(limpio);
-      var txt = salida.join("\n");
-      // El valor de la última expresión sólo se añade si el script no mandó nada con chat(), o si es corto: los modelos
-      // suelen hacer chat(JSON.stringify(r)) y además devolver r (o un JSON con todo junto), y salía repetido.
-      if (v !== undefined && typeof v !== "function") {
-         var s; try { s = typeof v === "string" ? v : JSON.stringify(v, null, 1); } catch (e) { s = String(v); }
-         if (s !== undefined && (!salida.length || s.length < 200)) txt += (txt ? "\n" : "") + "Valor devuelto: " + s;
-      }
-      // 20000 caracteres (antes 6000 cortaba análisis + ficha del objeto; el módulo manda hasta 30000 a interpretar).
-      return { ok: true, texto: plRecortar(txt || "(sin salida)", 20000), segundos: (Date.now() - t0) / 1000 };
-   } catch (e) {
-      var linea = e && e.lineNumber ? " (línea " + e.lineNumber + ")" : "";
-      var vistas = "";
-      try { if (String(e).indexOf("Vistas abiertas") < 0) vistas = "\nVistas abiertas (ids exactos): " + plResumenVistas(); } catch (x) {}
-      return { ok: false, texto: plRecortar((salida.length ? salida.join("\n") + "\n" : "") + "ERROR: " +
-               (e && e.message ? e.message : String(e)) + linea + vistas, 6000), segundos: (Date.now() - t0) / 1000 };
+function plTipoJson(v) { return v === null ? "null" : v instanceof Array ? "array" : typeof v; }
+
+// Comprueba una llamada contra el manifiesto: función conocida, de la lista blanca del runner, parámetros conocidos,
+// obligatorios presentes y tipos básicos. Devuelve el texto del error o null.
+function plValidarLlamada(ll, man, L) {
+   if (!ll || typeof ll !== "object") return "cada llamada debe ser un objeto {funcion, parametros}";
+   var n = ll.funcion, x = man.porNombre[n];
+   if (typeof n !== "string" || !x) return "«" + n + "» no es una función de la guía (mira la lista de funciones disponibles)";
+   if (!L || typeof L[n] !== "function" || !L.hasOwnProperty(n)) return "«" + n + "» no está en la lista blanca del runner";
+   var p = ll.parametros === undefined ? {} : ll.parametros;
+   if (plTipoJson(p) !== "object") return n + ": \"parametros\" debe ser un objeto";
+   var pr = (x.params && x.params.properties) || {}, req = (x.params && x.params.required) || [];
+   for (var k in p) if (p.hasOwnProperty(k)) {
+      if (!pr.hasOwnProperty(k)) return n + ": parámetro desconocido «" + k + "» (admite: " + (Object.keys(pr).join(", ") || "ninguno") + ")";
+      var t = pr[k].type, tv = plTipoJson(p[k]);
+      if (t && !(t == tv || (t == "number" && tv == "number") || (t == "integer" && tv == "number")))
+         return n + ": «" + k + "» debe ser " + t + " y es " + tv;
    }
+   for (var i = 0; i < req.length; ++i) if (p[req[i]] === undefined) return n + ": falta el parámetro obligatorio «" + req[i] + "»";
+   return null;
+}
+
+function plEjecutarLlamadas(aj, texto) {
+   var avisos = plCargarGuia(aj.guia), g = plGlobal(), salida = [], t0 = Date.now();
+   g.PICOPILOT_INTERNET = !!aj.internet;   // web.js lo respeta: sin la casilla, simbad/wikipedia/... no salen a internet
+   g.PICOPILOT_PREVIAS = plCarpetaPrevias();   // las comparaciones de la guía dejan aquí una miniatura por candidato
+   avisos.forEach(function (a) { console.warningln("[PiCopilotLite] " + a); });
+   var lista;
+   try {
+      var o = JSON.parse(texto);
+      lista = o && o.llamadas;
+      if (!(lista instanceof Array) || !lista.length) throw new Error("falta la lista \"llamadas\"");
+   } catch (e) {
+      return { ok: false, texto: "ERROR: el bloque ```json no es válido (" + (e.message || e) + "). Formato: " +
+               "{\"llamadas\": [{\"funcion\": \"…\", \"parametros\": {…}}]}", segundos: 0 };
+   }
+   var man = plManifiesto(aj.guia), L = g.LISTA;
+   // Todas se validan antes de ejecutar ninguna.
+   for (var i = 0; i < lista.length; ++i) {
+      var err = plValidarLlamada(lista[i], man, L);
+      if (err) return { ok: false, texto: "ERROR en la llamada " + (i + 1) + ": " + err + ". No se ha ejecutado nada." +
+                        "\nVistas abiertas (ids exactos): " + plResumenVistas(), segundos: 0 };
+   }
+   for (var j = 0; j < lista.length; ++j) {
+      var ll = lista[j], p = ll.parametros || {};
+      console.noteln("[PiCopilotLite] " + ll.funcion + " " + JSON.stringify(p));
+      try {
+         var v = L[ll.funcion](p), s;
+         try { s = typeof v === "string" ? v : JSON.stringify(v === undefined ? null : v, null, 1); } catch (x) { s = String(v); }
+         salida.push(ll.funcion + ":\n" + s);
+      } catch (e) {
+         var linea = e && e.lineNumber ? " (línea " + e.lineNumber + ")" : "";
+         var vistas = "";
+         try { if (String(e).indexOf("Vistas abiertas") < 0) vistas = "\nVistas abiertas (ids exactos): " + plResumenVistas(); } catch (x) {}
+         return { ok: false, texto: plRecortar((salida.length ? salida.join("\n\n") + "\n\n" : "") + "ERROR en " + ll.funcion + ": " +
+                  (e && e.message ? e.message : String(e)) + linea + vistas, 6000), segundos: (Date.now() - t0) / 1000 };
+      }
+   }
+   // 20000 caracteres (antes 6000 cortaba análisis + ficha del objeto; el módulo manda hasta 30000 a interpretar).
+   return { ok: true, texto: plRecortar(salida.join("\n\n") || "(sin salida)", 20000), segundos: (Date.now() - t0) / 1000 };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -905,7 +939,7 @@ function plEjecutarScript(aj, codigo) {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Chat en HTML (WebView), con el mismo aspecto que el módulo (PiCopilotRender.cpp): Markdown de las respuestas
-// (tablas, negritas, enlaces, código) y fichas con los datos de los resultados de los scripts.
+// (tablas, negritas, enlaces, código) y fichas con los datos de los resultados de las llamadas.
 // ---------------------------------------------------------------------------------------------------------------
 
 var PL_CSS =
@@ -977,7 +1011,7 @@ function plInline(raw) {
 
 // Enlaces de paso (como el módulo): «Siguiente paso: ...», «Paso siguiente: ...», «Next step: ...» y las líneas que
 // empiezan por «Paso N ...» se pintan como enlace. Al pulsarlo, la página deja «mensaje|texto» en window.plClick y el
-// diálogo lo recoge con su temporizador: ejecuta el script pendiente de ese mensaje o le pide el paso al modelo.
+// diálogo lo recoge con su temporizador: ejecuta las llamadas pendientes de ese mensaje o le pide el paso al modelo.
 function plAncla(objetivo, despues) {
    var plano = objetivo.split("**").join("").split("`").join("").trim();
    if (!plano) return "";
@@ -1174,7 +1208,7 @@ function plFicha(r, json) {
    var h = "<div class=\"card\"><div class=\"cardtitle\">";
    var nc = r && r.no_cumple, ctl = (r && r.control) || {};
    if (Array.isArray(nc)) h += nc.length ? "<span class=\"badge bad\">" + plT("No cumple") + "</span> " : "<span class=\"badge ok\">" + plT("Cumple") + "</span> ";
-   h += plT("Resultado del script") + "</div>";
+   h += plT("Resultado de las llamadas") + "</div>";
    h += plListaHtml(nc, "nc", "&#10007;") + plListaHtml(ctl.medido, "med", "&#10003;") + plListaHtml(ctl.revisar_a_ojo, "ojo", "&#128065;");
    h += plMiniaturas(r);
    var acc = { filas: "", extra: "" };
@@ -1262,14 +1296,14 @@ function plDatosImagen() {
    return { vista: w.mainView.id, objeto: obj };
 }
 
-// Funciones de la guía que aparecen en los scripts de la conversación (por el manifiesto).
+// Funciones de la guía que aparecen en las llamadas de la conversación (por el manifiesto).
 function plFuncionesUsadas(entradas, guia) {
    var nombres = [], usadas = {};
    try { JSON.parse(File.readTextFile(guia + "/herramientas/manifiesto.json")).funciones.forEach(function (f) { nombres.push(f.nombre); }); } catch (e) {}
    entradas.forEach(function (e) {
       if (e.tipo != "asst") return;
-      var s = plExtraerScript(e.texto);
-      if (s) nombres.forEach(function (n) { if (new RegExp("\\b" + n + "\\s*\\(").test(s)) usadas[n] = (usadas[n] || 0) + 1; });
+      var s = plExtraerLlamadas(e.texto);
+      if (s) nombres.forEach(function (n) { if (new RegExp("\"funcion\"\\s*:\\s*\"" + n + "\"").test(s)) usadas[n] = (usadas[n] || 0) + 1; });
    });
    return usadas;
 }
@@ -1279,12 +1313,12 @@ function plInformeMd(entradas, aj, uso) {
    var ok = entradas.filter(function (e) { return e.tipo == "info" && /^Resultado/.test(e.titulo); }).length;
    for (var i = 0; i < entradas.length; ++i) if (entradas[i].tipo == "err" && /^Error al ejecutar/.test(entradas[i].titulo)) {
       var script = null;
-      for (var j = i - 1; j >= 0 && !script; --j) if (entradas[j].tipo == "asst") script = plExtraerScript(entradas[j].texto);
+      for (var j = i - 1; j >= 0 && !script; --j) if (entradas[j].tipo == "asst") script = plExtraerLlamadas(entradas[j].texto);
       errores.push({ error: entradas[i].texto, script: script });
    }
    md.push("# Informe de procesado — PiCopilot Lite", "",
            "- Fecha: " + plSello().replace("_", " "), "- Objeto (OBJECT): " + (di.objeto || "—") + " · vista: " + (di.vista || "—"),
-           "- Modelo: " + aj.proveedor + " · " + (aj.modelo() || "por defecto"), "- Scripts correctos: " + ok + " · con error: " + errores.length,
+           "- Modelo: " + aj.proveedor + " · " + (aj.modelo() || "por defecto"), "- Llamadas correctas: " + ok + " · con error: " + errores.length,
            "- Tokens: " + (uso ? plUsoTexto(uso.entrada || uso.salida ? uso : { total: uso.total, coste: uso.coste }) : "—"), "",
            "## Funciones de la guía usadas", "");
    var ks = Object.keys(usadas);
@@ -1293,7 +1327,7 @@ function plInformeMd(entradas, aj, uso) {
    if (!errores.length) md.push("(ninguno)", "");
    errores.forEach(function (e, n) {
       md.push("### Error " + (n + 1), "", "```", plRecortar(e.error, 1500), "```", "");
-      if (e.script) md.push("Script que lo provocó:", "", "```javascript", plRecortar(e.script, 3000), "```", "");
+      if (e.script) md.push("Llamadas que lo provocaron:", "", "```json", plRecortar(e.script, 3000), "```", "");
    });
    md.push("## Conversación", "");
    entradas.forEach(function (e) {
@@ -1352,7 +1386,7 @@ var PL_PS_WINH =
 // Texto para leer: sin bloques de código, sin símbolos de Markdown, enlaces por su texto y tablas como frases.
 function plTextoParaVoz(md) {
    var t = String(md).replace(/\r\n/g, "\n");
-   t = t.replace(/```[\s\S]*?```/g, " (Te he preparado un script.) ");
+   t = t.replace(/```[\s\S]*?```/g, " (Te he preparado las llamadas.) ");
    t = t.split("\n").map(function (l) {
       var s = l.trim();
       if (/^\|?[\s|:\-]+\|?$/.test(s) && s.indexOf("-") >= 0) return "";            // separador de tabla
@@ -1425,7 +1459,7 @@ function plConstruirDialogo(aj) {
    this.mensajes = [];            // { role: "user" | "assistant", content }
    this.registro = "";            // copia en texto plano del chat (pruebas)
    this.entradas = [];            // { tipo: user | asst | info | err, titulo, texto, hora } para el HTML
-   this.pendiente = null;        // script de la última respuesta, sin ejecutar
+   this.pendiente = null;        // llamadas de la última respuesta, sin ejecutar
    this.ultimoError = null;
    this.correcciones = 0;
    this.estado = null;            // { cancelado } mientras se espera al modelo
@@ -1459,19 +1493,19 @@ function plConstruirDialogo(aj) {
    this.cInternet.checked = aj.internet;
    this.cInternet.onCheck = function (c) { aj.internet = c; aj.guardar(); };
    this.bEjecutar = new PushButton(pPrompt);
-   this.bEjecutar.text = "Ejecutar script";
+   this.bEjecutar.text = "Ejecutar llamadas";
    this.bEjecutar.enabled = false;
    this.bEjecutar.onClick = function () { self.ejecutarPendiente(); };
    this.bCorregir = new PushButton(pPrompt);
    this.bCorregir.text = "Pedir corrección";
-   this.bCorregir.toolTip = "Reenvía el error al modelo para que corrija el script.";
+   this.bCorregir.toolTip = "Reenvía el error al modelo para que corrija las llamadas.";
    this.bCorregir.enabled = false;
    this.bCorregir.onClick = function () { self.pedirCorreccion(); };
    this.bVer = new PushButton(pPrompt);
-   this.bVer.text = "Ver script";
+   this.bVer.text = "Ver llamadas";
    this.bVer.enabled = false;
    this.bVer.onClick = function () {
-      self.anotar(plT("Script pendiente"), self.pendiente ? "```javascript\n" + self.pendiente + "\n```" : plT("(ninguno)"), "asst");
+      self.anotar(plT("Llamadas pendientes"), self.pendiente ? "```json\n" + self.pendiente + "\n```" : plT("(ninguna)"), "asst");
    };
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
@@ -1493,8 +1527,8 @@ function plConstruirDialogo(aj) {
          "Procesa la imagen activa siguiendo la guía, paso a paso y en su orden, desde donde esté hasta exportar.\n" +
          "- Empieza diciendo en una lista corta qué pasos harás y cuáles no aplican a esta imagen (y por qué), y haz el primero.\n" +
          "- En cada paso usa la función de la guía de ese paso; donde haya una que compare candidatos, úsala.\n" +
-         "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (r.vista, r.starless, r.estrellas), nunca sobre el original.\n" +
-         "- Un paso por script. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
+         "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (vista, starless, estrellas), nunca sobre el original.\n" +
+         "- Un paso por respuesta. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
          "- Si algo no cumple (no_cumple), para y dime qué propones; no lo arregles inventando parámetros.\n" +
          "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes."));
    };
@@ -1535,7 +1569,7 @@ function plConstruirDialogo(aj) {
    // Voz: leer respuestas y dictar el prompt.
    this.cVoz = new CheckBox(pPrompt);
    this.cVoz.text = "Leer en voz alta";
-   this.cVoz.toolTip = "Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).";
+   this.cVoz.toolTip = "Lee cada respuesta del modelo con la voz de Windows (sin los bloques de llamadas).";
    this.cVoz.checked = aj.voz;
    this.cVoz.onCheck = function (c) { aj.voz = c; aj.guardar(); if (!c) self.pararVoz(); };
    this.bLeer = new PushButton(pPrompt);
@@ -1565,7 +1599,7 @@ function plConstruirDialogo(aj) {
    this.bDossier.onClick = function () { self.crearDossier(); };
    this.bInforme = new PushButton(pPrompt);
    this.bInforme.text = "Informe .md";
-   this.bInforme.toolTip = "Guarda un informe Markdown con las funciones usadas, los errores con su script y la conversación, para " +
+   this.bInforme.toolTip = "Guarda un informe Markdown con las funciones usadas, los errores con sus llamadas y la conversación, para " +
                            "recopilar procesados y mejorar la guía.";
    this.bInforme.onClick = function () { self.crearInforme(); };
    filaV.add(this.bDossier); filaV.add(this.bInforme);
@@ -1951,7 +1985,7 @@ function plConstruirDialogo(aj) {
    };
 
    this.consultar = function () {
-      var interpretando = this.interpretando;   // interpretación de un resultado: su script no se ejecuta solo
+      var interpretando = this.interpretando;   // interpretación de un resultado: sus llamadas no se ejecutan solas
       this.interpretando = false;
       this.leerAjustes();
       this.estado = { cancelado: false };
@@ -1983,22 +2017,22 @@ function plConstruirDialogo(aj) {
       this.actualizarUso();
       if (resp === null) {   // la pregunta no obtuvo respuesta: no queda en el historial
          var q = this.mensajes.pop();
-         // Si era la interpretación, el resultado del script sí se queda para el turno siguiente.
+         // Si era la interpretación, el resultado de las llamadas sí se queda para el turno siguiente.
          if (interpretando && q) this.mensajes.push({ role: "user", content: q.content }, { role: "assistant", content: "Visto." });
          return;
       }
       this.mensajes.push({ role: "assistant", content: resp });
       this.anotar("PiCopilot (" + nombre + ")" + (this.usoUltimo ? " · " + plUsoTexto(this.usoUltimo) : ""), resp, "asst");
       if (this.cVoz.checked) this.hablar(resp);
-      var s = plExtraerScript(resp);
-      // Si la corrección trae el mismo script que ya falló, no se ejecuta otra vez: se pide uno distinto.
+      var s = plExtraerLlamadas(resp);
+      // Si la corrección trae las mismas llamadas que ya fallaron, no se ejecutan otra vez: se piden otras.
       if (s && this.scriptFallido && s.replace(/\s+/g, "") == this.scriptFallido.replace(/\s+/g, "")) {
          this.ponerPendiente(null);
          this.repetido = true;
-         this.anotar("Aviso", "El modelo ha devuelto el mismo script que ya falló; no lo ejecuto.", "err");
+         this.anotar("Aviso", "El modelo ha devuelto las mismas llamadas que ya fallaron; no las ejecuto.", "err");
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
-         this.estadoLbl.text = plT(quedan ? "Script repetido. Puedes pedir otra corrección." : "Script repetido; revisa la petición.");
+         this.estadoLbl.text = plT(quedan ? "Llamadas repetidas. Puedes pedir otra corrección." : "Llamadas repetidas; revisa la petición.");
          if (quedan && this.cAuto.checked) this.pedirCorreccion();
          return;
       }
@@ -2028,16 +2062,16 @@ function plConstruirDialogo(aj) {
       if (!this.pendiente || this.estado) return;
       var s = this.pendiente;
       this.ponerPendiente(null);
-      this.estadoLbl.text = plT("Ejecutando script…");
+      this.estadoLbl.text = plT("Ejecutando llamadas…");
       plEventos();
-      var r = plEjecutarScript(aj, s);
+      var r = plEjecutarLlamadas(aj, s);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
       // Como en el módulo: un resultado con datos se manda al modelo para que lo interprete y recomiende el paso
       // siguiente, con las líneas «Siguiente paso: ...» que el chat pinta como enlaces.
       if (r.ok && r.texto != "(sin salida)") {
          this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null;
-         this.mensajes.push({ role: "user", content: "El script ha terminado sin errores. Resultado:\n" + r.texto +
-            "\nAhora, sin escribir ningún script, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
+         this.mensajes.push({ role: "user", content: "Las llamadas han terminado sin errores. Resultado:\n" + r.texto +
+            "\nAhora, sin pedir ninguna llamada, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
             "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +
             "demuestra, con su valor) y «Revisar a ojo» (lo que el resultado no mide); nunca des por bueno algo de la segunda.\n" +
             "Termina con una línea «Siguiente paso: <qué hacer y con qué función de la guía>.» con el paso siguiente en el ORDEN DE LA GUÍA " +
@@ -2050,17 +2084,17 @@ function plConstruirDialogo(aj) {
          return;
       }
       // El resultado entra en la conversación para que el modelo lo tenga en cuenta en el siguiente turno.
-      this.mensajes.push({ role: "user", content: (r.ok ? "Resultado de ejecutar tu script:\n" : "Tu script ha fallado:\n") + r.texto });
+      this.mensajes.push({ role: "user", content: (r.ok ? "Resultado de tus llamadas:\n" : "Tus llamadas han fallado:\n") + r.texto });
       this.mensajes.push({ role: "assistant", content: r.ok ? "Visto." : "Entendido, lo reviso si me lo pides." });
       if (r.ok) {
-         this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null; this.estadoLbl.text = plT("Script ejecutado.");
+         this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null; this.estadoLbl.text = plT("Llamadas ejecutadas.");
       } else {
          this.ultimoError = r.texto;
          this.scriptFallido = s;
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
-         this.estadoLbl.text = plT(quedan ? "El script ha fallado. Puedes pedir una corrección al modelo." :
-                               "El script ha fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.");
+         this.estadoLbl.text = plT(quedan ? "Las llamadas han fallado. Puedes pedir una corrección al modelo." :
+                               "Las llamadas han fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.");
          if (quedan && this.cAuto.checked) this.pedirCorreccion();
       }
    };
@@ -2068,13 +2102,13 @@ function plConstruirDialogo(aj) {
    this.pedirCorreccion = function () {
       if (!this.ultimoError || this.estado || this.correcciones >= PL_MAX_CORRECCIONES) return;
       ++this.correcciones;
-      // Sustituye el par «ha fallado / entendido» (o «corrección / script repetido») por la petición de corrección.
+      // Sustituye el par «ha fallado / entendido» (o «corrección / llamadas repetidas») por la petición de corrección.
       this.mensajes.pop(); this.mensajes.pop();
-      var t = "El script ha fallado con este error:\n" + this.ultimoError +
-              (this.repetido ? "\nTu última respuesta repetía exactamente ese mismo script. Escribe uno distinto que " +
-                               "quite la causa del error." : "") +
-              "\nRevisa los ids (sólo los de la lista de vistas abiertas, tal cual) y los tipos de los argumentos. " +
-              "Corrígelo y devuelve el script completo en un único bloque ```javascript.";
+      var t = "Las llamadas han fallado con este error:\n" + this.ultimoError +
+              (this.repetido ? "\nTu última respuesta repetía exactamente las mismas llamadas. Pide otras que " +
+                               "quiten la causa del error." : "") +
+              "\nRevisa los ids (sólo los de la lista de vistas abiertas, tal cual), los nombres de las funciones y de sus " +
+              "parámetros. Corrígelo y devuelve las llamadas en un único bloque ```json, sin código.";
       this.repetido = false;
       this.mensajes.push({ role: "user", content: t });
       this.anotar("Corrección " + this.correcciones + "/" + PL_MAX_CORRECCIONES, "Reenviando el error al modelo…");
@@ -2090,7 +2124,7 @@ function plConstruirDialogo(aj) {
       if (this.estado) { this.anotar("Aviso", "Espera a que termine lo que está en marcha antes de pulsar otro paso."); return; }
       var ultimo = -1;
       for (var i = 0; i < this.entradas.length; ++i) if (this.entradas[i].tipo == "asst") ultimo = i;
-      // El enlace del último mensaje con un script sin ejecutar es ese script: se ejecuta tal cual.
+      // El enlace del último mensaje con llamadas sin ejecutar son esas llamadas: se ejecutan tal cual.
       if (indice === ultimo && this.pendiente) { this.anotar("Paso", ">>> Ejecuto el paso: " + texto); this.ejecutarPendiente(); return; }
       this.enviarTexto(plT("Haz ahora este paso: ") + texto);
    };
@@ -2127,15 +2161,15 @@ function plBienvenida(aj) {
              "### What exactly do I do?\n\n" +
              "- **I analyse:** I identify the object (SIMBAD/Wikipedia), check headers, measure statistics and detect " +
              "problems (edges, gradient, noise).\n" +
-             "- **I run:** I can launch PixInsight processes (WBPP, BXT, SPCC, StarXTerminator, etc.) through safe PJSR " +
-             "scripts, always working on copies and measuring results before and after.\n" +
+             "- **I run:** I can launch the guide's functions (WBPP, BXT, SPCC, StarXTerminator, method comparisons, etc.), " +
+             "always working on copies and measuring results before and after. I never write code: I only ask for guide functions.\n" +
              "- **I recommend:** I propose the next logical step according to the guide, comparing methods when possible " +
              "(e.g. GraXpert vs. MGC for the gradient) and showing you the metrics.\n\n" +
              "### How do you use it?\n\n" +
              "- You tell me which image you have (or simply «the image on screen») and which object it is.\n" +
-             "- I answer with information, an analysis or a script that I run in PixInsight.\n" +
+             "- I answer with information, an analysis or the guide functions I want to run.\n" +
              "- I always work on copies: I do not modify your original views unless you explicitly ask.\n" +
-             "- When I propose a script, press «Run script» (or tick «Run without asking»). The «Next step» links " +
+             "- When I propose calls, press «Run calls» (or tick «Run without asking»). The «Next step» links " +
              "run that step with one click.\n\n" +
              "Guide: `" + aj.guia + "`";
    return "**PiCopilot Lite** es un asistente de inteligencia artificial especializado en astrofotografía que funciona " +
@@ -2145,15 +2179,15 @@ function plBienvenida(aj) {
           "### ¿Qué hago exactamente?\n\n" +
           "- **Analizo:** identifico el objeto (SIMBAD/Wikipedia), reviso cabeceras, mido estadísticas y detecto " +
           "problemas (bordes, gradiente, ruido).\n" +
-          "- **Ejecuto:** puedo lanzar procesos de PixInsight (WBPP, BXT, SPCC, StarXTerminator, etc.) mediante scripts " +
-          "PJSR seguros, siempre trabajando sobre copias y midiendo resultados antes y después.\n" +
+          "- **Ejecuto:** puedo lanzar las funciones de la guía (WBPP, BXT, SPCC, StarXTerminator, comparaciones de métodos, etc.), " +
+          "siempre trabajando sobre copias y midiendo resultados antes y después. Nunca escribo código: sólo pido funciones de la guía.\n" +
           "- **Recomiendo:** te propongo el siguiente paso lógico según la guía, comparando métodos cuando sea posible " +
           "(ej. GraXpert vs. MGC para gradiente) y mostrándote las métricas.\n\n" +
           "### ¿Cómo se usa?\n\n" +
           "- Tú me dices qué imagen tienes (o simplemente «la imagen en pantalla») y qué objeto es.\n" +
-          "- Yo te respondo con información, análisis o un script que ejecuto en PixInsight.\n" +
+          "- Yo te respondo con información, análisis o las funciones de la guía que quiero ejecutar.\n" +
           "- Siempre trabajo sobre copias: no modifico tus vistas originales sin que lo pidas explícitamente.\n" +
-          "- Cuando proponga un script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»). Los enlaces " +
+          "- Cuando proponga llamadas, pulsa «Ejecutar llamadas» (o marca «Ejecutar sin preguntar»). Los enlaces " +
           "«Siguiente paso» ejecutan ese paso con un clic.\n\n" +
           "Guía: `" + aj.guia + "`";
 }
@@ -2245,14 +2279,15 @@ function plPrueba(salida, cli) {
                .map(function (n) { return n + ":" + typeof g[n]; }) };
    });
    paso("blindSolver", function () {
-      // El código del modelo debe ver el motor de BlindSolver (incluido arriba) y blindSolve del runner.
-      return plEjecutarScript(aj, "var c = new BlindSolverConfiguration(SETTINGS_MODULE); c.LoadSettings();\n" +
-                              "[typeof BlindSolverEngine, typeof blindSolve, typeof resolverAstrometria].join(' ');");
+      // Las funciones de la guía deben ver el motor de BlindSolver (incluido arriba) y blindSolve del runner.
+      plCargarGuia(aj.guia);
+      var c = new BlindSolverConfiguration(SETTINGS_MODULE); c.LoadSettings();
+      return [typeof BlindSolverEngine, typeof plGlobal().blindSolve, typeof plGlobal().resolverAstrometria].join(" ");
    });
    paso("textoParaVoz", function () {
       var t = plTextoParaVoz("## Análisis\n**IC 63** es una [nebulosa](https:" + "/" + "/x.org).\n\n| Canal | Mediana |\n|---|---|\n| R | 0,0018 |\n\n" +
-                             "```javascript\nvar r = 1;\n```\nSiguiente paso: gradiente.");
-      if (/[*#|`]|var r|https/.test(t)) throw new Error("quedan símbolos o código: " + t);
+                             "```json\n{\"llamadas\": []}\n```\nSiguiente paso: gradiente.");
+      if (/[*#|`]|llamadas|https/.test(t)) throw new Error("quedan símbolos o código: " + t);
       // Lanzar PowerShell como hacen la voz y el dictado (sin sonido: un script que sólo escribe un fichero).
       var f = plCarpeta(PL_TMP) + "/prueba_ps.txt";
       if (File.exists(f)) File.remove(f);
@@ -2264,7 +2299,7 @@ function plPrueba(salida, cli) {
    paso("internetApagado", function () {
       // Con la casilla «Internet» desmarcada, las funciones de web.js no deben salir a internet.
       var antes = aj.internet; aj.internet = false;
-      var r = plEjecutarScript(aj, "simbad('IC 63');");
+      var r = plEjecutarLlamadas(aj, '{"llamadas": [{"funcion": "simbad", "parametros": {"objeto": "IC 63"}}]}');
       aj.internet = antes;
       if (r.ok) throw new Error("simbad funcionó con internet desactivado");
       return r.texto.substring(0, 160);
@@ -2274,20 +2309,30 @@ function plPrueba(salida, cli) {
    var respuesta = null;
    paso("ollamaChat", function () {
       var a = new PLAjustes(); a.cargar(); a.proveedor = "ollama";
-      var rq = plPreguntar(a, [{ role: "user", content: "Lista las ventanas abiertas en PixInsight con la función vistas()." }], { cancelado: false });
+      var rq = plPreguntar(a, [{ role: "user", content: "Lista las ventanas abiertas en PixInsight con la función vistas." }], { cancelado: false });
       respuesta = rq.texto;
       if (!rq.uso || !rq.uso.salida) throw new Error("Ollama no ha devuelto el consumo de tokens");
-      return { respuesta: plRecortar(respuesta, 1500), script: plExtraerScript(respuesta), uso: plUsoTexto(rq.uso) };
+      return { respuesta: plRecortar(respuesta, 1500), llamadas: plExtraerLlamadas(respuesta), uso: plUsoTexto(rq.uso) };
    });
    paso("ejecutarTrivial", function () {
-      return plEjecutarScript(aj, "var r = vistas();\nchat('Ventanas: ' + r.total);\nr.vistas.map(function (v) { return v.id; });");
+      return plEjecutarLlamadas(aj, '{"llamadas": [{"funcion": "vistas", "parametros": {}}]}');
    });
-   paso("ejecutarScriptDelModelo", function () {
-      var s = respuesta && plExtraerScript(respuesta);
-      if (!s) return "la respuesta no traía script";
-      return plEjecutarScript(aj, s);
+   paso("ejecutarLlamadasDelModelo", function () {
+      var s = respuesta && plExtraerLlamadas(respuesta);
+      if (!s) return "la respuesta no traía llamadas";
+      return plEjecutarLlamadas(aj, s);
    });
-   paso("ejecutarError", function () { return plEjecutarScript(aj, "noExiste(1);"); });
+   paso("rechazos", function () {
+      // Nada fuera del manifiesto: función inexistente, parámetro desconocido, código y JSON mal formado.
+      var r = {
+         inexistente: plEjecutarLlamadas(aj, '{"llamadas": [{"funcion": "noExiste", "parametros": {}}]}'),
+         parametro: plEjecutarLlamadas(aj, '{"llamadas": [{"funcion": "vistas", "parametros": {"codigo": "1"}}]}'),
+         javascript: plExtraerLlamadas("```javascript\nvistas();\n```"),
+         malformado: plEjecutarLlamadas(aj, "{llamadas: [")
+      };
+      if (r.inexistente.ok || r.parametro.ok || r.javascript !== null || r.malformado.ok) throw new Error("se aceptó algo que debía rechazarse");
+      return { inexistente: r.inexistente.texto.substring(0, 120), parametro: r.parametro.texto.substring(0, 120) };
+   });
    if (cli) paso("cliChat_" + cli, function () {
       var a = new PLAjustes(); a.cargar(); a.proveedor = cli;
       a.ponerModelo(PL_AUTO);
