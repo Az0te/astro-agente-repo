@@ -41,6 +41,7 @@ No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio 
 - **Internet** (casilla «Internet»): ficha del objeto (tipo, emisión esperada, estrellas brillantes que darán problemas) con SIMBAD y Wikipedia, e imágenes de catálogo. Con Claude, además, búsqueda web. Desmarcada, nada sale a internet.
 - **Voz**: «Dictar» abre el dictado de Windows (Win + H) en el prompt y «Leer en voz alta» lee las respuestas con la voz de Windows.
 - **Pesos N**: con Claude o Codex en «auto (pesos N)», elige un modelo más barato (sonnet) o más capaz (opus), como el módulo.
+- **Idioma** (Ajustes > Idioma): español o inglés. Cambia al momento los textos de la ventana y el modelo pasa a responder en ese idioma.
 - Ajustes guardados en PixInsight (claves `PiCopilotLite/...`).
 
 Mientras espera al modelo la ventana no se congela y se puede cancelar. Es una ventana modal: mientras está abierta no se puede usar el resto de PixInsight (el módulo PiCopilot sí lo permite).

@@ -79,6 +79,165 @@ function plJsonAscii(o) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Idioma de la ventana (Rafael, 9 nov 2026): español o inglés, como el módulo. El código escribe los textos en español
+// y plT() los traduce si el idioma es inglés: primero la frase entera y, si no está, los trozos de PL_TR_TROZOS
+// (para los textos que se montan con variables). Lo que no esté traducido sale en español.
+// ---------------------------------------------------------------------------------------------------------------
+
+var PL_EN = false;
+
+var PL_TR = {
+   "Escribe tu pregunta o petición y pulsa Enviar.": "Type your question or request and press Send.",
+   "Enviar": "Send",
+   "Cancelar": "Cancel",
+   "Ejecutar sin preguntar": "Run without asking",
+   ["Permitir búsquedas externas. Claude: WebSearch y WebFetch. Todos los modelos: SIMBAD, Wikipedia, páginas web " +
+   "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet."]:
+      "Allow external lookups. Claude: WebSearch and WebFetch. All models: SIMBAD, Wikipedia, web pages and catalog " +
+      "images (web.js). Unchecked, nothing goes out to the internet.",
+   "Ejecutar script": "Run script",
+   "Pedir corrección": "Ask for a fix",
+   "Reenvía el error al modelo para que corrija el script.": "Sends the error back to the model so it fixes the script.",
+   "Ver script": "View script",
+   "Nueva conversación": "New conversation",
+   "Procesado completo": "Full processing",
+   ["Pide al modelo que procese la imagen activa siguiendo la guía, paso a paso y en su orden, " +
+   "parando tras cada paso para que lo revises y sigas (escribe «sigue» o pulsa el enlace «Siguiente paso»)."]:
+      "Asks the model to process the active image following the guide, step by step and in order, stopping after " +
+      "each step so you can review it and continue (type «continue» or click the «Next step» link).",
+   "Limpiar": "Clear",
+   "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.":
+      "Empties the window and deletes the temporary thumbnails. The model keeps the conversation context.",
+   "Tokens de la conversación: entrada → salida (y coste con Claude). Se reinicia con «Nueva conversación».":
+      "Conversation tokens: input → output (and cost with Claude). Reset with «New conversation».",
+   "Leer en voz alta": "Read aloud",
+   "Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).":
+      "Reads each model reply with the Windows voice (without the script code).",
+   "Leer": "Read",
+   "Lee en voz alta la última respuesta del modelo.": "Reads the last model reply aloud.",
+   "Parar voz": "Stop voice",
+   "Velocidad de la voz (-10 lenta, 0 normal, 10 rápida).": "Voice speed (-10 slow, 0 normal, 10 fast).",
+   "Dictar": "Dictate",
+   ["Abre el dictado de Windows (Win + H) con el cursor en el prompt: lo que dices se escribe ahí. " +
+   "Necesita internet (lo procesa Microsoft). Para cerrarlo, Win + H o Esc."]:
+      "Opens Windows dictation (Win + H) with the cursor in the prompt: what you say is typed there. " +
+      "Needs internet (Microsoft processes it). To close it, Win + H or Esc.",
+   "Velocidad:": "Speed:",
+   "Dossier PDF": "PDF dossier",
+   "Guarda la conversación (respuestas, fichas de resultados y miniaturas) como PDF en la carpeta de dossieres (Ajustes).":
+      "Saves the conversation (replies, result cards and thumbnails) as a PDF in the dossier folder (Settings).",
+   "Informe .md": ".md report",
+   ["Guarda un informe Markdown con las funciones usadas, los errores con su script y la conversación, para " +
+   "recopilar procesados y mejorar la guía."]:
+      "Saves a Markdown report with the functions used, the errors with their script and the conversation, to " +
+      "collect processing sessions and improve the guide.",
+   "Leer modelos de Ollama": "Read Ollama models",
+   "Dejar pensar al modelo (think de Ollama; más lento)": "Let the model think (Ollama think; slower)",
+   "Proveedor:": "Provider:",
+   "Modelo:": "Model:",
+   "Umbral N: si la puntuación del paso es mayor que N se usa el modelo inferior; si es igual o menor, el superior. Por defecto 95.":
+      "Threshold N: if the step score is greater than N the lower model is used; if equal or lower, the upper one. Default 95.",
+   "Modelo inferior:": "Lower model:",
+   "Modelo superior:": "Upper model:",
+   "Ajuste tuyo de la puntuación del paso seleccionado (se suma al valor base). Se guarda en los ajustes de PixInsight, no en el json.":
+      "Your adjustment of the selected step score (added to the base value). Saved in PixInsight settings, not in the json.",
+   "Valores por defecto": "Defaults",
+   "N = 95, sin ajustes, sonnet / opus (Codex: su modelo por defecto).": "N = 95, no adjustments, sonnet / opus (Codex: its default model).",
+   "Ajuste del paso seleccionado:": "Adjustment of the selected step:",
+   "URL de Ollama:": "Ollama URL:",
+   "Temperatura:": "Temperature:",
+   "0 = determinista. Sólo para Ollama.": "0 = deterministic. Ollama only.",
+   "Ejecutable claude:": "claude executable:",
+   "Ejecutable codex:": "codex executable:",
+   "Carpeta de la guía:": "Guide folder:",
+   "Carpeta guia/ del repositorio (con herramientas/ y manifiesto.json).": "The repository's guia/ folder (with herramientas/ and manifiesto.json).",
+   "Carpeta de dossieres:": "Dossier folder:",
+   "Donde se guardan el dossier PDF y el informe .md de la conversación.": "Where the PDF dossier and the .md report of the conversation are saved.",
+   "Idioma:": "Language:",
+   "Idioma de la ventana y de las respuestas del modelo.": "Language of the window and of the model replies.",
+   "Guardar ajustes": "Save settings",
+   "Cerrar": "Close",
+   "Prompt": "Prompt", "Modelo": "Model", "Ajustes": "Settings",
+   "Paso": "Step", "Base": "Base", "Ajuste": "Adjustment", "Puntuación": "Score",
+   "Tú": "You",
+   "Script pendiente": "Pending script",
+   "(ninguno)": "(none)",
+   "Ajustes guardados.": "Settings saved.",
+   "Idioma cambiado.": "Language changed.",
+   "No hay conversación que guardar.": "There is no conversation to save.",
+   "Generando el dossier en PDF…": "Generating the PDF dossier…",
+   "Dictado cancelado.": "Dictation cancelled.",
+   "Escuchando… (parar)": "Listening… (stop)",
+   "Habla ahora: el dictado termina cuando dejas de hablar unos segundos.": "Speak now: dictation ends when you stop talking for a few seconds.",
+   "No he oído nada (¿micrófono?).": "I heard nothing (microphone?).",
+   "Dictado añadido al prompt: revísalo y pulsa Enviar.": "Dictation added to the prompt: check it and press Send.",
+   "Dictado de Windows abierto: haz clic en el prompt si el cursor no está ahí y habla. Para cerrarlo, Win + H o Esc.":
+      "Windows dictation open: click in the prompt if the cursor is not there and speak. To close it, Win + H or Esc.",
+   "Ejecutando script…": "Running script…",
+   "Script ejecutado.": "Script run.",
+   "Cumple": "Pass", "No cumple": "Fail", "Resultado del script": "Script result",
+   "Cancelado.": "Cancelled.",
+   "Script repetido. Puedes pedir otra corrección.": "Repeated script. You can ask for another fix.",
+   "Script repetido; revisa la petición.": "Repeated script; check the request.",
+   "El script ha fallado. Puedes pedir una corrección al modelo.": "The script failed. You can ask the model for a fix.",
+   "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar.":
+      "macOS dictation: click in the prompt and press the Fn key (or 🌐) twice; speak and press Send.",
+   "Dictado: no hay dictado del sistema en Linux; escribe el prompt.": "Dictation: there is no system dictation on Linux; type the prompt.",
+   ["Procesa la imagen activa siguiendo la guía, paso a paso y en su orden, desde donde esté hasta exportar.\n" +
+   "- Empieza diciendo en una lista corta qué pasos harás y cuáles no aplican a esta imagen (y por qué), y haz el primero.\n" +
+   "- En cada paso usa la función de la guía de ese paso; donde haya una que compare candidatos, úsala.\n" +
+   "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (r.vista, r.starless, r.estrellas), nunca sobre el original.\n" +
+   "- Un paso por script. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
+   "- Si algo no cumple (no_cumple), para y dime qué propones; no lo arregles inventando parámetros.\n" +
+   "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes."]:
+      "Process the active image following the guide, step by step and in order, from where it is up to export.\n" +
+      "- Start by listing briefly which steps you will do and which do not apply to this image (and why), and do the first one.\n" +
+      "- In each step use that step's guide function; where there is one that compares candidates, use it.\n" +
+      "- Chain the views: the next step works on the view returned by the previous one (r.vista, r.starless, r.estrellas), never on the original.\n" +
+      "- One step per script. After each one, summarise Measured / Check by eye and wait until I say «continue» (or click the next step link).\n" +
+      "- If something fails (no_cumple), stop and tell me what you propose; do not fix it by inventing parameters.\n" +
+      "- Ask me for the checkpoint and export folders when needed; do not invent them."
+};
+
+// Trozos de textos montados con variables (de más largo a más corto al aplicarlos).
+var PL_TR_TROZOS = [
+   ["Informe guardado: ", "Report saved: "], ["No se pudo guardar el informe: ", "Could not save the report: "],
+   ["Dossier guardado: ", "Dossier saved: "], [" (y la página en .html)", " (and the page as .html)"],
+   ["No se pudo crear el PDF (", "Could not create the PDF ("], ["); queda la página en ", "); the page is left at "],
+   ["No se pudo lanzar la voz: ", "Could not start the voice: "], ["No se pudo abrir el dictado de Windows: ", "Could not open Windows dictation: "],
+   ["No se pudo lanzar el dictado: ", "Could not start dictation: "], ["Dictado: ", "Dictation: "],
+   ["Esperando a ", "Waiting for "], ["Respuesta en ", "Reply in "],
+   ["El script ha fallado ", "The script failed "], [" veces seguidas; revisa la petición.", " times in a row; check the request."], ["Haz ahora este paso: ", "Do this step now: "],
+   ["Conversación: ", "Conversation: "], [" respuestas", " replies"], [" respuesta", " reply"], [" en ", " in "],
+   ["  (los pesos N no se aplican)", "  (N weights do not apply)"], ["(por defecto de la CLI)", "(CLI default)"],
+   ["Prompt libre: modelo superior", "Free prompt: upper model"], ["paso sin valor en la tabla: modelo superior", "step with no value in the table: upper model"],
+   ["elegido a mano", "chosen by hand"], ["modelo por defecto de la CLI", "CLI default model"],
+   [" modelos en Ollama.", " models in Ollama."],
+   [" = elige inferior o superior según el paso (tabla de abajo). ", " = picks lower or upper depending on the step (table below). "],
+   [" = elige inferior o superior según el paso. ", " = picks lower or upper depending on the step. "],
+   ["Vacío = el modelo por defecto de Claude Code. Se lanza «claude -p» sin herramientas ni MCP.", "Empty = Claude Code's default model. Runs «claude -p» without tools or MCP."],
+   ["Vacío = el modelo por defecto de Codex. Se lanza «codex exec» en modo solo lectura.", "Empty = Codex's default model. Runs «codex exec» in read-only mode."],
+   [". Como en el módulo, el Prompt libre usa el modelo superior; la tabla decide en los pasos.", ". As in the module, the free Prompt uses the upper model; the table decides in the steps."],
+   ["  (Ahora el modelo está fijado a mano: la tabla no se aplica.)", "  (The model is now set by hand: the table does not apply.)"],
+   ["superior (sin valor)", "upper (no value)"], ["por defecto", "default"], ["inferior", "lower"], ["superior", "upper"],
+   ["Modelo: ", "Model: "], ["Pesos N (Claude / Codex en «", "N weights (Claude / Codex in «"]
+];
+PL_TR_TROZOS.sort(function (a, b) { return b[0].length - a[0].length; });
+
+function plT(s) {
+   if (!PL_EN || s === null || s === undefined) return s;
+   s = String(s);
+   if (Object.prototype.hasOwnProperty.call(PL_TR, s)) return PL_TR[s];
+   PL_TR_TROZOS.forEach(function (t) { if (s.indexOf(t[0]) >= 0) s = s.split(t[0]).join(t[1]); });
+   return s;
+}
+
+// Clases de controles de la ventana: plConstruirDialogo las tapa con versiones que apuntan cada control creado, para
+// poder traducir sus textos al cambiar de idioma.
+var PL_CLASES = { Label: Label, PushButton: PushButton, CheckBox: CheckBox, GroupBox: GroupBox, Edit: Edit,
+                  TextBox: TextBox, SpinBox: SpinBox, ComboBox: ComboBox };
+
+// ---------------------------------------------------------------------------------------------------------------
 // Ajustes (Settings de PixInsight, claves "PiCopilotLite/...")
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -119,6 +278,7 @@ function PLAjustes() {
    this.vozVelocidad = 0;                 // -10 (lenta) … 10 (rápida)
    this.dictadoAntiguo = false;           // true = reconocedor antiguo de Windows (SAPI, sin internet); false = Win + H
    this.carpetaInformes = File.homeDirectory + "/PiCopilotLite/dossiers";   // dossieres PDF e informes .md
+   this.idioma = "es";                    // es | en: textos de la ventana y de las respuestas del modelo
 
    var CAMPOS = { proveedor: DataType_UCString, modeloOllama: DataType_UCString, modeloClaude: DataType_UCString,
                   modeloCodex: DataType_UCString, ollamaUrl: DataType_UCString, temperatura: DataType_UCString,
@@ -127,7 +287,7 @@ function PLAjustes() {
                   claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
                   codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean,
                   voz: DataType_Boolean, vozVelocidad: DataType_Int32, dictadoAntiguo: DataType_Boolean,
-                  carpetaInformes: DataType_UCString };
+                  carpetaInformes: DataType_UCString, idioma: DataType_UCString };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -137,6 +297,7 @@ function PLAjustes() {
             else this[k] = v;
          }
       }
+      PL_EN = this.idioma == "en";
    };
 
    this.guardar = function () {
@@ -464,7 +625,11 @@ function plEnvolverFunciones(g, guia) {
 
 function plPromptSistema(aj) {
    return "Eres PiCopilot Lite, un asistente experto en procesado de astrofotografía que trabaja dentro de PixInsight. " +
-   "Respondes siempre en español, de forma clara y concisa. Eres fiel a los datos: no inventas parámetros ni " +
+   (PL_EN ? "IDIOMA: el usuario tiene la ventana en inglés. Responde SIEMPRE en inglés (la guía y estas reglas están en " +
+            "español: tradúcelo tú), de forma clara y concisa, y escribe la línea del paso siguiente como «Next step: ...» " +
+            "en lugar de «Siguiente paso: ...». Los nombres de las funciones y de los campos de la guía no se traducen. " :
+            "Respondes siempre en español, de forma clara y concisa. ") +
+   "Eres fiel a los datos: no inventas parámetros ni " +
    "resultados; si algo no lo has medido o no está en la guía, lo dices.\n\n" +
    "Cuando quieras actuar sobre PixInsight, devuelve UN único bloque ```javascript con código PJSR (ECMAScript 5) " +
    "que se ejecutará en el propio PixInsight con las funciones de la guía ya cargadas (no uses #include ni " +
@@ -1008,8 +1173,8 @@ function plFilasDatos(obj, prefijo, acc, prof) {
 function plFicha(r, json) {
    var h = "<div class=\"card\"><div class=\"cardtitle\">";
    var nc = r && r.no_cumple, ctl = (r && r.control) || {};
-   if (Array.isArray(nc)) h += nc.length ? "<span class=\"badge bad\">No cumple</span> " : "<span class=\"badge ok\">Cumple</span> ";
-   h += "Resultado del script</div>";
+   if (Array.isArray(nc)) h += nc.length ? "<span class=\"badge bad\">" + plT("No cumple") + "</span> " : "<span class=\"badge ok\">" + plT("Cumple") + "</span> ";
+   h += plT("Resultado del script") + "</div>";
    h += plListaHtml(nc, "nc", "&#10007;") + plListaHtml(ctl.medido, "med", "&#10003;") + plListaHtml(ctl.revisar_a_ojo, "ojo", "&#128065;");
    h += plMiniaturas(r);
    var acc = { filas: "", extra: "" };
@@ -1248,6 +1413,15 @@ class PLDialogo extends Dialog {
 function plConstruirDialogo(aj) {
    var self = this;
    this.aj = aj;
+   // Controles con texto: se apuntan al crearlos para traducirlos (plAplicarIdioma).
+   var controles = this.controlesTexto = [];
+   function apuntado(nombre) {
+      var K = PL_CLASES[nombre];
+      return function (padre) { var c = arguments.length ? new K(padre) : new K(); controles.push({ c: c, clase: nombre }); return c; };
+   }
+   var Label = apuntado("Label"), PushButton = apuntado("PushButton"), CheckBox = apuntado("CheckBox"),
+       GroupBox = apuntado("GroupBox"), Edit = apuntado("Edit"), TextBox = apuntado("TextBox"),
+       SpinBox = apuntado("SpinBox"), ComboBox = apuntado("ComboBox");
    this.mensajes = [];            // { role: "user" | "assistant", content }
    this.registro = "";            // copia en texto plano del chat (pruebas)
    this.entradas = [];            // { tipo: user | asst | info | err, titulo, texto, hora } para el HTML
@@ -1297,7 +1471,7 @@ function plConstruirDialogo(aj) {
    this.bVer.text = "Ver script";
    this.bVer.enabled = false;
    this.bVer.onClick = function () {
-      self.anotar("Script pendiente", self.pendiente ? "```javascript\n" + self.pendiente + "\n```" : "(ninguno)", "asst");
+      self.anotar(plT("Script pendiente"), self.pendiente ? "```javascript\n" + self.pendiente + "\n```" : plT("(ninguno)"), "asst");
    };
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
@@ -1315,14 +1489,14 @@ function plConstruirDialogo(aj) {
                          "parando tras cada paso para que lo revises y sigas (escribe «sigue» o pulsa el enlace «Siguiente paso»).";
    this.bSerie.onClick = function () {
       if (self.estado) return;
-      self.enviarTexto(
+      self.enviarTexto(plT(
          "Procesa la imagen activa siguiendo la guía, paso a paso y en su orden, desde donde esté hasta exportar.\n" +
          "- Empieza diciendo en una lista corta qué pasos harás y cuáles no aplican a esta imagen (y por qué), y haz el primero.\n" +
          "- En cada paso usa la función de la guía de ese paso; donde haya una que compare candidatos, úsala.\n" +
          "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (r.vista, r.starless, r.estrellas), nunca sobre el original.\n" +
          "- Un paso por script. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
          "- Si algo no cumple (no_cumple), para y dime qué propones; no lo arregles inventando parámetros.\n" +
-         "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes.");
+         "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes."));
    };
    this.bVaciar = new PushButton(pPrompt);
    this.bVaciar.text = "Limpiar";
@@ -1332,7 +1506,7 @@ function plConstruirDialogo(aj) {
       self.bienvenida();
    };
    this.estadoLbl = new Label(pPrompt);
-   this.estadoLbl.text = "";
+   this.estadoLbl.text = plT("");
    // Modelo que se usará. Como en el módulo, el prompt libre no tiene paso: con «auto (pesos N)» va al modelo superior.
    this.eleccionLbl = new Label(pPrompt);
    this.usoLbl = new Label(pPrompt);
@@ -1342,8 +1516,8 @@ function plConstruirDialogo(aj) {
    filaP.add(this.eleccionLbl, 100); filaP.add(this.usoLbl);
    this.actualizarUso = function () {
       var S = this.usoSesion;
-      this.usoLbl.text = S && S.respuestas ? "Conversación: " + plUsoTexto(S.entrada || S.salida ? S : { total: S.total, coste: S.coste }) +
-                                             " en " + S.respuestas + (S.respuestas == 1 ? " respuesta" : " respuestas") : "";
+      this.usoLbl.text = plT(S && S.respuestas ? "Conversación: " + plUsoTexto(S.entrada || S.salida ? S : { total: S.total, coste: S.coste }) +
+                                             " en " + S.respuestas + (S.respuestas == 1 ? " respuesta" : " respuestas") : "");
    };
 
    var filaB = new HorizontalSizer;
@@ -1503,9 +1677,17 @@ function plConstruirDialogo(aj) {
    this.eCodex = fila("Ejecutable codex:", aj.rutaCodex);
    this.eGuia = fila("Carpeta de la guía:", aj.guia, "Carpeta guia/ del repositorio (con herramientas/ y manifiesto.json).");
    this.eInformes = fila("Carpeta de dossieres:", aj.carpetaInformes, "Donde se guardan el dossier PDF y el informe .md de la conversación.");
+   this.cIdioma = new ComboBox(pAj);
+   this.cIdioma.addItem("Español"); this.cIdioma.addItem("English");
+   this.cIdioma.currentItem = aj.idioma == "en" ? 1 : 0;
+   this.cIdioma.toolTip = "Idioma de la ventana y de las respuestas del modelo.";
+   this.cIdioma.onItemSelected = function (i) { self.cambiarIdioma(i == 1 ? "en" : "es"); };
+   var lIdioma = new Label(pAj); lIdioma.text = "Idioma:"; lIdioma.setScaledMinWidth(150); lIdioma.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   var fIdioma = new HorizontalSizer; fIdioma.spacing = 6; fIdioma.add(lIdioma); fIdioma.add(this.cIdioma); fIdioma.addStretch();
+   pAj.sizer.add(fIdioma);
    this.bGuardar = new PushButton(pAj);
    this.bGuardar.text = "Guardar ajustes";
-   this.bGuardar.onClick = function () { self.leerAjustes(); aj.guardar(); self.estadoLbl.text = "Ajustes guardados."; };
+   this.bGuardar.onClick = function () { self.leerAjustes(); aj.guardar(); self.estadoLbl.text = plT("Ajustes guardados."); };
    var fG = new HorizontalSizer; fG.addStretch(); fG.add(this.bGuardar);
    pAj.sizer.add(fG);
    pAj.sizer.addStretch();
@@ -1528,6 +1710,27 @@ function plConstruirDialogo(aj) {
       if (self.tDictado) self.tDictado.stop();
       plParar(self.pVoz); plParar(self.pDictado);
       self.leerAjustes(); aj.guardar();
+   };
+   // Idioma: los textos fijos se guardan en español la primera vez y se traducen con plT. Los que cambian solos
+   // (estado, tokens, modelo elegido, notas) se traducen donde se escriben y se rehacen aquí.
+   var dinamicos = [this.estadoLbl, this.usoLbl, this.eleccionLbl, this.notaModelo, this.fuentePesos];
+   this.aplicarIdioma = function () {
+      controles.forEach(function (o) {
+         if (!o.es) o.es = { text: /^(Label|PushButton|CheckBox)$/.test(o.clase) && dinamicos.indexOf(o.c) < 0 ? o.c.text : null,
+                             toolTip: o.c.toolTip, title: o.clase == "GroupBox" ? o.c.title : null };
+         if (o.es.text) o.c.text = plT(o.es.text);
+         if (o.es.toolTip) o.c.toolTip = plT(o.es.toolTip);
+         if (o.es.title) o.c.title = plT(o.es.title);
+      });
+      ["Prompt", "Modelo", "Ajustes"].forEach(function (t, i) { self.tabs.setPageLabel(i, plT(t)); });
+      ["Paso", "Base", "Ajuste", "Puntuación", "Modelo"].forEach(function (h, i) { self.tPesos.setHeaderText(i, plT(h)); });
+   };
+   this.cambiarIdioma = function (idioma) {
+      aj.idioma = idioma; PL_EN = idioma == "en"; aj.guardar();
+      this.aplicarIdioma();
+      if (!this.estado) { this.rellenarModelos(false); this.actualizarUso(); }
+      if (!this.conversacion().length) { this.entradas = []; this.registro = ""; this.bienvenida(); }
+      this.estadoLbl.text = plT("Idioma cambiado.");
    };
    this.adjustToContents();
 
@@ -1557,8 +1760,8 @@ function plConstruirDialogo(aj) {
    // Línea bajo el chat con el modelo que se usará para el paso elegido y por qué.
    this.actualizarEleccion = function () {
       var e = plElegirModelo(aj, this.pasoActual());
-      this.eleccionLbl.text = aj.proveedor == "ollama" ? "Ollama · " + aj.modeloOllama + "  (los pesos N no se aplican)" :
-         "Modelo: " + (e.modelo || "(por defecto de la CLI)") + (e.porque ? "  —  " + e.porque : "");
+      this.eleccionLbl.text = plT(aj.proveedor == "ollama" ? "Ollama · " + aj.modeloOllama + "  (los pesos N no se aplican)" :
+         "Modelo: " + (e.modelo || "(por defecto de la CLI)") + (e.porque ? "  —  " + e.porque : ""));
    };
 
    // Tabla de pesos con la puntuación (base + ajuste) y el modelo que saldría con N.
@@ -1578,18 +1781,18 @@ function plConstruirDialogo(aj) {
          n.setText(0, p[0]);
          n.setText(1, base === undefined ? "—" : String(base));
          n.setText(2, aju ? (aju > 0 ? "+" : "") + aju : "");
-         if (base === undefined) { n.setText(3, "—"); n.setText(4, "superior (sin valor)"); }
+         if (base === undefined) { n.setText(3, "—"); n.setText(4, plT("superior (sin valor)")); }
          else {
             var nota = base + aju, inf = nota > aj.umbralN;
             n.setText(3, String(nota));
-            n.setText(4, (inf ? "inferior" : "superior") + " (" + ((inf ? bajo : alto) || "por defecto") + ")");
+            n.setText(4, plT((inf ? "inferior" : "superior") + " (" + ((inf ? bajo : alto) || "por defecto") + ")"));
          }
          if (seleccionar && p[1] == seleccionar) sel = n;
       });
       for (var c = 0; c < 5; ++c) this.tPesos.adjustColumnWidthToContents(c);
       if (sel) this.tPesos.currentNode = sel; else this.sAjuste.enabled = false;
-      this.fuentePesos.text = "Base: " + pb.fuente + ". Como en el módulo, el Prompt libre usa el modelo superior; la tabla decide en los pasos." +
-                              (aj.modelo() == PL_AUTO || !activos ? "" : "  (Ahora el modelo está fijado a mano: la tabla no se aplica.)");
+      this.fuentePesos.text = plT("Base: " + pb.fuente + ". Como en el módulo, el Prompt libre usa el modelo superior; la tabla decide en los pasos." +
+                              (aj.modelo() == PL_AUTO || !activos ? "" : "  (Ahora el modelo está fijado a mano: la tabla no se aplica.)"));
       this.actualizarEleccion();
    };
 
@@ -1600,16 +1803,16 @@ function plConstruirDialogo(aj) {
       this.cPensar.enabled = aj.proveedor == "ollama";
       if (aj.proveedor == "ollama") {
          this.leerAjustes(); aj.ponerModelo(actual);
-         try { lista = plOllamaModelos(aj); this.notaModelo.text = lista.length + " modelos en Ollama."; }
-         catch (e) { this.notaModelo.text = String(e.message || e); if (avisar) this.estadoLbl.text = this.notaModelo.text; }
+         try { lista = plOllamaModelos(aj); this.notaModelo.text = plT(lista.length + " modelos en Ollama."); }
+         catch (e) { this.notaModelo.text = plT(String(e.message || e)); if (avisar) this.estadoLbl.text = plT(this.notaModelo.text); }
       } else if (aj.proveedor == "claude") {
          lista = [PL_AUTO, "", "sonnet", "opus", "haiku"];
-         this.notaModelo.text = "«" + PL_AUTO + "» = elige inferior o superior según el paso (tabla de abajo). " +
-                                "Vacío = el modelo por defecto de Claude Code. Se lanza «claude -p» sin herramientas ni MCP.";
+         this.notaModelo.text = plT("«" + PL_AUTO + "» = elige inferior o superior según el paso (tabla de abajo). " +
+                                "Vacío = el modelo por defecto de Claude Code. Se lanza «claude -p» sin herramientas ni MCP.");
       } else {
          lista = [PL_AUTO, ""];
-         this.notaModelo.text = "«" + PL_AUTO + "» = elige inferior o superior según el paso. Vacío = el modelo por " +
-                                "defecto de Codex. Se lanza «codex exec» en modo solo lectura.";
+         this.notaModelo.text = plT("«" + PL_AUTO + "» = elige inferior o superior según el paso. Vacío = el modelo por " +
+                                "defecto de Codex. Se lanza «codex exec» en modo solo lectura.");
       }
       if (lista.indexOf(actual) < 0) lista.unshift(actual);
       lista.forEach(function (m) { self.cModelo.addItem(m); });
@@ -1635,13 +1838,13 @@ function plConstruirDialogo(aj) {
    };
    this.conversacion = function () { return this.entradas.filter(function (e) { return !e.bienvenida; }); };
    this.crearInforme = function () {
-      if (!this.conversacion().length) { this.estadoLbl.text = "No hay conversación que guardar."; return null; }
+      if (!this.conversacion().length) { this.estadoLbl.text = plT("No hay conversación que guardar."); return null; }
       var f = this.baseInforme() + ".md";
-      try { File.writeTextFile(f, plInformeMd(this.conversacion(), aj, this.usoSesion)); this.estadoLbl.text = "Informe guardado: " + f; return f; }
-      catch (e) { this.estadoLbl.text = "No se pudo guardar el informe: " + (e.message || e); return null; }
+      try { File.writeTextFile(f, plInformeMd(this.conversacion(), aj, this.usoSesion)); this.estadoLbl.text = plT("Informe guardado: " + f); return f; }
+      catch (e) { this.estadoLbl.text = plT("No se pudo guardar el informe: " + (e.message || e)); return null; }
    };
    this.crearDossier = function (alTerminar) {
-      if (!this.conversacion().length) { this.estadoLbl.text = "No hay conversación que guardar."; return; }
+      if (!this.conversacion().length) { this.estadoLbl.text = plT("No hay conversación que guardar."); return; }
       var base = this.baseInforme(), di = plDatosImagen(), S = this.usoSesion;
       var cab = "<div class=\"portada\"><h1>Dossier de procesado" + (di.objeto ? " — " + plEsc(di.objeto) : "") + "</h1>" +
                 "<p>" + plEsc(plSello().replace("_", " ")) + " · vista " + plEsc(di.vista || "—") + " · modelo " + plEsc(aj.proveedor + " " + (aj.modelo() || "")) +
@@ -1652,12 +1855,12 @@ function plConstruirDialogo(aj) {
       // Un visor aparte (oculto) carga la página desde fichero, para que salgan las miniaturas, y la guarda en PDF.
       if (!this.wvPdf) { this.wvPdf = new WebView(this); this.wvPdf.setFixedSize(900, 1200); this.wvPdf.hide(); }
       var wv = this.wvPdf;
-      this.estadoLbl.text = "Generando el dossier en PDF…";
+      this.estadoLbl.text = plT("Generando el dossier en PDF…");
       wv.onLoadFinished = function () {
          var t = new Timer; t.interval = 1; t.periodic = false;
          t.onTimeout = function () {
-            try { wv.saveAsPDF(fp); self.estadoLbl.text = "Dossier guardado: " + fp + " (y la página en .html)"; }
-            catch (e) { self.estadoLbl.text = "No se pudo crear el PDF (" + (e.message || e) + "); queda la página en " + fh; }
+            try { wv.saveAsPDF(fp); self.estadoLbl.text = plT("Dossier guardado: " + fp + " (y la página en .html)"); }
+            catch (e) { self.estadoLbl.text = plT("No se pudo crear el PDF (" + (e.message || e) + "); queda la página en " + fh); }
             if (alTerminar) alTerminar(fp);
          };
          t.start();
@@ -1683,7 +1886,7 @@ function plConstruirDialogo(aj) {
             this.pVoz = P;
          }
       }
-      catch (e) { this.estadoLbl.text = "No se pudo lanzar la voz: " + (e.message || e); }
+      catch (e) { this.estadoLbl.text = plT("No se pudo lanzar la voz: " + (e.message || e)); }
    };
    this.pararVoz = function () { plParar(this.pVoz); this.pVoz = null; };
    this.leerUltima = function () {
@@ -1692,8 +1895,8 @@ function plConstruirDialogo(aj) {
    };
    this.dictar = function () {
       if (!plEsWindows()) {   // en macOS se abre a mano; en Linux no hay dictado del sistema
-         this.estadoLbl.text = plEsMac() ? "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar."
-                                         : "Dictado: no hay dictado del sistema en Linux; escribe el prompt.";
+         this.estadoLbl.text = plT(plEsMac() ? "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar."
+                                         : "Dictado: no hay dictado del sistema en Linux; escribe el prompt.");
          return;
       }
       if (!aj.dictadoAntiguo) {   // dictado de Windows 11 (Win + H): escribe en el prompt
@@ -1702,35 +1905,35 @@ function plConstruirDialogo(aj) {
          try { this.childToFocus = this.entrada; } catch (e) {}
          try { this.entrada.hasFocus = true; } catch (e) {}
          try { plPowerShell({ nombre: "dictado_windows", codigo: PL_PS_WINH }, []); }
-         catch (e) { this.estadoLbl.text = "No se pudo abrir el dictado de Windows: " + (e.message || e); return; }
-         this.estadoLbl.text = "Dictado de Windows abierto: haz clic en el prompt si el cursor no está ahí y habla. Para cerrarlo, Win + H o Esc.";
+         catch (e) { this.estadoLbl.text = plT("No se pudo abrir el dictado de Windows: " + (e.message || e)); return; }
+         this.estadoLbl.text = plT("Dictado de Windows abierto: haz clic en el prompt si el cursor no está ahí y habla. Para cerrarlo, Win + H o Esc.");
          return;
       }
       if (this.pDictado && this.pDictado.isRunning) {   // segunda pulsación: parar y quedarse con lo que haya
          plParar(this.pDictado); this.pDictado = null;
          if (this.tDictado) this.tDictado.stop();
-         this.bDictar.text = "Dictar"; this.estadoLbl.text = "Dictado cancelado.";
+         this.bDictar.text = plT("Dictar"); this.estadoLbl.text = plT("Dictado cancelado.");
          return;
       }
       this.pararVoz();
       var out = plCarpeta(PL_TMP) + "/dictado.txt";
       if (File.exists(out)) File.remove(out);
       try { this.pDictado = plPowerShell({ nombre: "dictar", codigo: PL_PS_DICTAR }, [out, "es-ES"]); }
-      catch (e) { this.estadoLbl.text = "No se pudo lanzar el dictado: " + (e.message || e); return; }
-      this.bDictar.text = "Escuchando… (parar)";
-      this.estadoLbl.text = "Habla ahora: el dictado termina cuando dejas de hablar unos segundos.";
+      catch (e) { this.estadoLbl.text = plT("No se pudo lanzar el dictado: " + (e.message || e)); return; }
+      this.bDictar.text = plT("Escuchando… (parar)");
+      this.estadoLbl.text = plT("Habla ahora: el dictado termina cuando dejas de hablar unos segundos.");
       if (!this.tDictado) {
          this.tDictado = new Timer; this.tDictado.interval = 0.3; this.tDictado.periodic = true;
          this.tDictado.onTimeout = function () {
             var P = self.pDictado;
             if (P && P.isRunning) return;
-            self.tDictado.stop(); self.pDictado = null; self.bDictar.text = "Dictar";
+            self.tDictado.stop(); self.pDictado = null; self.bDictar.text = plT("Dictar");
             var txt = File.exists(out) ? File.readTextFile(out).replace(/^﻿/, "").trim() : "";
-            if (txt.indexOf("ERROR:") == 0) { self.estadoLbl.text = "Dictado: " + txt; return; }
-            if (!txt) { self.estadoLbl.text = "No he oído nada (¿micrófono?)."; return; }
+            if (txt.indexOf("ERROR:") == 0) { self.estadoLbl.text = plT("Dictado: " + txt); return; }
+            if (!txt) { self.estadoLbl.text = plT("No he oído nada (¿micrófono?)."); return; }
             var actual = self.entrada.text.trim();
             self.entrada.text = actual ? actual + " " + txt : txt;
-            self.estadoLbl.text = "Dictado añadido al prompt: revísalo y pulsa Enviar.";
+            self.estadoLbl.text = plT("Dictado añadido al prompt: revísalo y pulsa Enviar.");
          };
       }
       this.tDictado.start();
@@ -1756,7 +1959,7 @@ function plConstruirDialogo(aj) {
       var e0 = plElegirModelo(aj, this.pasoEnviado || "");
       var nombre = { ollama: "Ollama", claude: "Claude", codex: "Codex" }[aj.proveedor] +
                    " · " + (e0.modelo || "modelo por defecto") + (e0.porque ? " — " + e0.porque : "");
-      this.estadoLbl.text = "Esperando a " + nombre + "…";
+      this.estadoLbl.text = plT("Esperando a " + nombre + "…");
       var t0 = Date.now(), resp = null;
       try {
          resp = plPreguntar(aj, this.mensajes, this.estado, this.pasoEnviado || "");
@@ -1775,8 +1978,8 @@ function plConstruirDialogo(aj) {
       var cancelado = this.estado.cancelado;
       this.estado = null;
       this.ocupado(false);
-      this.estadoLbl.text = resp !== null ? "Respuesta en " + ((Date.now() - t0) / 1000).toFixed(1) + " s" +
-                            (this.usoUltimo ? " · " + plUsoTexto(this.usoUltimo) : "") + "." : (cancelado ? "Cancelado." : "");
+      this.estadoLbl.text = plT(resp !== null ? "Respuesta en " + ((Date.now() - t0) / 1000).toFixed(1) + " s" +
+                            (this.usoUltimo ? " · " + plUsoTexto(this.usoUltimo) : "") + "." : (cancelado ? "Cancelado." : ""));
       this.actualizarUso();
       if (resp === null) {   // la pregunta no obtuvo respuesta: no queda en el historial
          var q = this.mensajes.pop();
@@ -1795,7 +1998,7 @@ function plConstruirDialogo(aj) {
          this.anotar("Aviso", "El modelo ha devuelto el mismo script que ya falló; no lo ejecuto.", "err");
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
-         this.estadoLbl.text = quedan ? "Script repetido. Puedes pedir otra corrección." : "Script repetido; revisa la petición.";
+         this.estadoLbl.text = plT(quedan ? "Script repetido. Puedes pedir otra corrección." : "Script repetido; revisa la petición.");
          if (quedan && this.cAuto.checked) this.pedirCorreccion();
          return;
       }
@@ -1817,7 +2020,7 @@ function plConstruirDialogo(aj) {
       this.scriptFallido = null; this.repetido = false;
       this.pasoEnviado = this.pasoActual();   // las correcciones siguientes usan el mismo paso
       this.mensajes.push({ role: "user", content: t });
-      this.anotar("Tú", t, "user");
+      this.anotar(plT("Tú"), t, "user");
       this.consultar();
    };
 
@@ -1825,7 +2028,7 @@ function plConstruirDialogo(aj) {
       if (!this.pendiente || this.estado) return;
       var s = this.pendiente;
       this.ponerPendiente(null);
-      this.estadoLbl.text = "Ejecutando script…";
+      this.estadoLbl.text = plT("Ejecutando script…");
       plEventos();
       var r = plEjecutarScript(aj, s);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
@@ -1850,14 +2053,14 @@ function plConstruirDialogo(aj) {
       this.mensajes.push({ role: "user", content: (r.ok ? "Resultado de ejecutar tu script:\n" : "Tu script ha fallado:\n") + r.texto });
       this.mensajes.push({ role: "assistant", content: r.ok ? "Visto." : "Entendido, lo reviso si me lo pides." });
       if (r.ok) {
-         this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null; this.estadoLbl.text = "Script ejecutado.";
+         this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null; this.estadoLbl.text = plT("Script ejecutado.");
       } else {
          this.ultimoError = r.texto;
          this.scriptFallido = s;
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.bCorregir.enabled = quedan;
-         this.estadoLbl.text = quedan ? "El script ha fallado. Puedes pedir una corrección al modelo." :
-                               "El script ha fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.";
+         this.estadoLbl.text = plT(quedan ? "El script ha fallado. Puedes pedir una corrección al modelo." :
+                               "El script ha fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.");
          if (quedan && this.cAuto.checked) this.pedirCorreccion();
       }
    };
@@ -1889,7 +2092,7 @@ function plConstruirDialogo(aj) {
       for (var i = 0; i < this.entradas.length; ++i) if (this.entradas[i].tipo == "asst") ultimo = i;
       // El enlace del último mensaje con un script sin ejecutar es ese script: se ejecuta tal cual.
       if (indice === ultimo && this.pendiente) { this.anotar("Paso", ">>> Ejecuto el paso: " + texto); this.ejecutarPendiente(); return; }
-      this.enviarTexto("Haz ahora este paso: " + texto);
+      this.enviarTexto(plT("Haz ahora este paso: ") + texto);
    };
    this.historialBox.onScriptResultAvailable = function (r) {
       var v = r === undefined || r === null ? "" : String(r);
@@ -1910,11 +2113,31 @@ function plConstruirDialogo(aj) {
       this.anotar("PiCopilot Lite", plBienvenida(aj), "asst");
       this.entradas[this.entradas.length - 1].bienvenida = true;
    };
+   this.aplicarIdioma();
    this.bienvenida();
 }
 
 // Mensaje de inicio del Prompt (texto de Rafael, 9 nov 2026); también tras «Limpiar» y «Nueva conversación».
 function plBienvenida(aj) {
+   if (PL_EN)
+      return "**PiCopilot Lite** is an artificial intelligence assistant specialised in astrophotography that works " +
+             "inside PixInsight.\n\n" +
+             "My goal is to guide you and run concrete steps of the processing guide, both in the **linear phase** " +
+             "(calibration, alignment, corrections) and in the **non-linear** one (stretching, colour, sharpening, export).\n\n" +
+             "### What exactly do I do?\n\n" +
+             "- **I analyse:** I identify the object (SIMBAD/Wikipedia), check headers, measure statistics and detect " +
+             "problems (edges, gradient, noise).\n" +
+             "- **I run:** I can launch PixInsight processes (WBPP, BXT, SPCC, StarXTerminator, etc.) through safe PJSR " +
+             "scripts, always working on copies and measuring results before and after.\n" +
+             "- **I recommend:** I propose the next logical step according to the guide, comparing methods when possible " +
+             "(e.g. GraXpert vs. MGC for the gradient) and showing you the metrics.\n\n" +
+             "### How do you use it?\n\n" +
+             "- You tell me which image you have (or simply «the image on screen») and which object it is.\n" +
+             "- I answer with information, an analysis or a script that I run in PixInsight.\n" +
+             "- I always work on copies: I do not modify your original views unless you explicitly ask.\n" +
+             "- When I propose a script, press «Run script» (or tick «Run without asking»). The «Next step» links " +
+             "run that step with one click.\n\n" +
+             "Guide: `" + aj.guia + "`";
    return "**PiCopilot Lite** es un asistente de inteligencia artificial especializado en astrofotografía que funciona " +
           "dentro de PixInsight.\n\n" +
           "Mi objetivo es guiarte y ejecutar pasos concretos de la guía de procesado, tanto en la **fase lineal** " +
@@ -1986,6 +2209,15 @@ function plPrueba(salida, cli) {
             // Enlace de paso: se simula el clic dejando plClick en la página; el temporizador debe recogerlo.
             out.enlaceHtml = plMarkdown("Siguiente paso: gradiente con gradienteCandidatos. Después, color.").indexOf("class=\"step\"") >= 0;
             out.entradasChat = d.entradas.map(function (e) { return e.tipo + ": " + e.titulo; });
+            // Idioma: a inglés y vuelta al que hubiera.
+            var idAntes = aj.idioma, ent = d.entradas, reg = d.registro;
+            d.entradas = []; d.cambiarIdioma("en");
+            out.idioma = { enviar: d.bEnviar.text, pestana: d.tabs.pageLabel(2), tooltip: d.bVaciar.toolTip, grupo: d.gPesos.title,
+                           eleccion: d.eleccionLbl.text, bienvenida: d.entradas.length ? d.entradas[0].texto.substring(0, 60) : "",
+                           prompt: plPromptSistema(aj).indexOf("Responde SIEMPRE en inglés") > 0 };
+            d.cambiarIdioma(idAntes);
+            out.idioma.vuelta = d.bEnviar.text + " / " + d.tabs.pageLabel(2) + " / " + d.gPesos.title;
+            d.entradas = ent; d.registro = reg;
             // El foco del dictado no debe lanzar errores (PJSR no tiene focus()).
             try { d.childToFocus = d.entrada; } catch (e) { out.foco1 = String(e); }
             try { d.entrada.hasFocus = true; } catch (e) { out.foco2 = String(e); }
