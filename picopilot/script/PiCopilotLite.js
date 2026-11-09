@@ -1230,6 +1230,23 @@ function plConstruirDialogo(aj) {
       self.ultimoError = null; self.correcciones = 0; self.bCorregir.enabled = false;
       self.usoSesion = null; self.actualizarUso();
    };
+   // Procesado completo (Rafael, 9 nov 2026): la serie de la guía paso a paso, parando en cada uno para que el usuario
+   // confirme (o pulse el enlace «Siguiente paso»). Es el prompt general revisado, sin nada de un objeto concreto.
+   this.bSerie = new PushButton(pPrompt);
+   this.bSerie.text = "Procesado completo";
+   this.bSerie.toolTip = "Pide al modelo que procese la imagen activa siguiendo la guía, paso a paso y en su orden, " +
+                         "parando tras cada paso para que lo revises y sigas (escribe «sigue» o pulsa el enlace «Siguiente paso»).";
+   this.bSerie.onClick = function () {
+      if (self.estado) return;
+      self.enviarTexto(
+         "Procesa la imagen activa siguiendo la guía, paso a paso y en su orden, desde donde esté hasta exportar.\n" +
+         "- Empieza diciendo en una lista corta qué pasos harás y cuáles no aplican a esta imagen (y por qué), y haz el primero.\n" +
+         "- En cada paso usa la función de la guía de ese paso; donde haya una que compare candidatos, úsala.\n" +
+         "- Encadena las vistas: el paso siguiente trabaja sobre la vista que devolvió el anterior (r.vista, r.starless, r.estrellas), nunca sobre el original.\n" +
+         "- Un paso por script. Tras cada uno, resume Medido / Revisar a ojo y espera a que yo diga «sigue» (o pulse el enlace del siguiente paso).\n" +
+         "- Si algo no cumple (no_cumple), para y dime qué propones; no lo arregles inventando parámetros.\n" +
+         "- Pregúntame las carpetas de checkpoint y exportación cuando hagan falta; no las inventes.");
+   };
    this.bVaciar = new PushButton(pPrompt);
    this.bVaciar.text = "Limpiar";
    this.bVaciar.toolTip = "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.";
@@ -1256,7 +1273,7 @@ function plConstruirDialogo(aj) {
    filaB.spacing = 6;
    filaB.add(this.bEnviar); filaB.add(this.bCancelar); filaB.addSpacing(12);
    filaB.add(this.cAuto); filaB.add(this.cInternet); filaB.add(this.bEjecutar); filaB.add(this.bVer); filaB.add(this.bCorregir);
-   filaB.addStretch(); filaB.add(this.bVaciar); filaB.add(this.bLimpiar);
+   filaB.addStretch(); filaB.add(this.bSerie); filaB.addSpacing(8); filaB.add(this.bVaciar); filaB.add(this.bLimpiar);
    pPrompt.sizer = new VerticalSizer;
    pPrompt.sizer.margin = 6; pPrompt.sizer.spacing = 6;
    pPrompt.sizer.add(this.historialBox, 100);
@@ -1597,7 +1614,7 @@ function plConstruirDialogo(aj) {
    };
 
    this.ocupado = function (si) {
-      this.bEnviar.enabled = !si; this.bCancelar.enabled = si; this.bCorregir.enabled = false;
+      this.bEnviar.enabled = !si; this.bCancelar.enabled = si; this.bCorregir.enabled = false; this.bSerie.enabled = !si;
       this.bEjecutar.enabled = !si && !!this.pendiente; this.cProv.enabled = !si;
    };
 
@@ -1820,6 +1837,7 @@ function plPrueba(salida, cli) {
             try { d.childToFocus = d.entrada; } catch (e) { out.foco1 = String(e); }
             try { d.entrada.hasFocus = true; } catch (e) { out.foco2 = String(e); }
             d.enviarTexto = function (t) { out.clic = t; };
+            d.bSerie.onClick(); out.serie = out.clic.substring(0, 60);   // el botón manda el prompt de la serie
             d.historialBox.evaluateScript("plClick='999|Paso de prueba';");
          } catch (e) { out.error = String(e); }
          var t2 = new Timer; t2.interval = 2; t2.periodic = false;
