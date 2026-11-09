@@ -16,9 +16,9 @@ Un módulo nativo de PixInsight (no un script): se acopla al panel lateral y las
   |---|---|---|
   | Claude | Claude Code (`claude -p`) con el MCP picopilot | Trabaja sobre la imagen él mismo |
   | Codex | Codex CLI (`codex exec`) con el MCP | Igual que Claude |
-  | Local (Ollama, LM Studio…) o cualquier endpoint OpenAI-compatible | HTTP con `curl.exe` | Propone un script PJSR con las funciones de la guía; tú lo ejecutas con «Ejecutar script» |
+  | Local (Ollama, LM Studio…) o cualquier endpoint OpenAI-compatible | HTTP con `curl.exe` | Propone llamadas a las funciones de la guía (bloque JSON, nunca código); tú las ejecutas con «Ejecutar llamadas» |
 
-- **Errores de script a fichero**: cada script que falla queda en `tmp_logs/picopilot-errores.log` del repositorio (hora, vista, error y script).
+- **Errores a fichero**: cada llamada que falla queda en `tmp_logs/picopilot-errores.log` del repositorio (hora, vista, error y llamadas).
 - **Configurar IA**: elige el modelo inferior o el superior de cada paso según su dificultad (`guia/porcentajes_skill.json`).
 - Interfaz en español o inglés.
 
@@ -56,9 +56,9 @@ Los makefiles de `linux/` y `macosx/` vienen de la plantilla de PCL y **no se ha
 
 ## Seguridad
 
-PiCopilot ejecuta en PixInsight scripts escritos por un modelo de IA:
-- Con los modelos locales, **siempre pide confirmación** antes de ejecutar y puedes revisar el script en la ventana de Prompt.
-- Con Claude y Codex, el modelo actúa a través del MCP de PixInsight.
+Ningún modelo escribe ni ejecuta código de PixInsight:
+- Con los modelos locales, el modelo propone llamadas a funciones de la guía (nombre y parámetros). El runner de picopilot las comprueba contra el manifiesto (`guia/herramientas/manifiesto.json`) y su lista blanca antes de ejecutar ninguna. Si la casilla «Ejecutar sin preguntar» está desmarcada, PiCopilot te enseña la lista y pide confirmación.
+- Con Claude y Codex, el modelo actúa a través del MCP de PixInsight, que sólo ofrece esas mismas funciones.
 
 Trabaja sobre copias, ten copia de tus masters y revisa lo que hace la IA. Los modelos en la nube reciben la vista activa, los resultados de las medidas y las fichas de la guía; no se les envía ningún fichero de perfil personal.
 
@@ -66,7 +66,7 @@ Trabaja sobre copias, ten copia de tus masters y revisa lo que hace la IA. Los m
 
 | Fichero | Qué contiene |
 |---|---|
-| `PiCopilotInterface.*` | Panel, tareas asíncronas, ejecución de scripts, vistas previas, registro de errores |
+| `PiCopilotInterface.*` | Panel, tareas asíncronas, ejecución de las llamadas (con el runner), vistas previas, registro de errores |
 | `PiCopilotDialogs.*` | Prompt, Añadir modelo, Configurar IA y Dossier |
 | `PiCopilotRender.*` | Página HTML del chat (Markdown, tablas, tarjetas, previas) |
 | `PiCopilotAgent.*` | Modelos, configuración, pasos de la guía, funciones por paso y prompts |

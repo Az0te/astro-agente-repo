@@ -377,6 +377,75 @@ var LISTA = {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Llamadas propuestas por un modelo sin herramientas (módulo PiCopilot): {"llamadas":[{"funcion","parametros"}]}.
+// Son DATOS, no código: cada llamada se comprueba contra el manifiesto de la guía y la lista blanca antes de
+// ejecutar ninguna. Devuelve el texto del resultado, o "PICOPILOT_ERROR: …".
+// ---------------------------------------------------------------------------------------------------------------
+
+function pprTipoJson(v) { return v === null ? "null" : v instanceof Array ? "array" : typeof v; }
+
+function pprManifiesto() {
+   var porNombre = {};
+   (JSON.parse(File.readTextFile(GUIA_HERRAMIENTAS + "/manifiesto.json")).funciones || []).forEach(function (x) {
+      if (x.nivel !== "libre") porNombre[x.nombre] = x;
+   });
+   return porNombre;
+}
+
+function pprValidarLlamada(ll, man) {
+   if (!ll || pprTipoJson(ll) !== "object") return "cada llamada debe ser un objeto {funcion, parametros}";
+   var n = ll.funcion, x = (typeof n === "string" && man.hasOwnProperty(n)) ? man[n] : null;
+   if (!x) return "«" + n + "» no es una función de la guía";
+   if (!LISTA.hasOwnProperty(n)) return "«" + n + "» no está en la lista blanca del runner";
+   var p = ll.parametros === undefined ? {} : ll.parametros;
+   if (pprTipoJson(p) !== "object") return n + ": \"parametros\" debe ser un objeto";
+   var pr = (x.params && x.params.properties) || {}, req = (x.params && x.params.required) || [];
+   for (var k in p) if (p.hasOwnProperty(k)) {
+      if (!pr.hasOwnProperty(k)) return n + ": parámetro desconocido «" + k + "» (admite: " + (Object.keys(pr).join(", ") || "ninguno") + ")";
+      var t = pr[k].type, tv = pprTipoJson(p[k]);
+      if (t && !(t == tv || (t == "integer" && tv == "number"))) return n + ": «" + k + "» debe ser " + t + " y es " + tv;
+   }
+   for (var i = 0; i < req.length; ++i) if (p[req[i]] === undefined) return n + ": falta el parámetro obligatorio «" + req[i] + "»";
+   return null;
+}
+
+function pprVistasTexto() {
+   try { return pprVistas().vistas.map(function (v) { return v.id; }).join(", ") || "ninguna"; } catch (e) { return "?"; }
+}
+
+function pprEjecutarLlamadas(texto) {
+   var lista, man;
+   try {
+      var o = JSON.parse(texto);
+      lista = o && o.llamadas;
+      if (!(lista instanceof Array) || !lista.length) throw new Error("falta la lista \"llamadas\"");
+   } catch (e) {
+      return "PICOPILOT_ERROR: el bloque ```json no es válido (" + (e.message || e) + "). Formato: " +
+             "{\"llamadas\": [{\"funcion\": \"…\", \"parametros\": {…}}]}";
+   }
+   try { man = pprManifiesto(); } catch (e) { return "PICOPILOT_ERROR: no se puede leer el manifiesto de la guía (" + (e.message || e) + ")"; }
+   // Todas se validan antes de ejecutar ninguna.
+   for (var i = 0; i < lista.length; ++i) {
+      var err = pprValidarLlamada(lista[i], man);
+      if (err) return "PICOPILOT_ERROR: llamada " + (i + 1) + ": " + err + ". No se ha ejecutado nada. Vistas abiertas (ids exactos): " + pprVistasTexto();
+   }
+   var salida = [];
+   for (var j = 0; j < lista.length; ++j) {
+      var ll = lista[j], p = ll.parametros || {}, s;
+      console.noteln("[picopilot] " + ll.funcion + " " + JSON.stringify(p));
+      try {
+         var v = LISTA[ll.funcion](p);
+         try { s = typeof v === "string" ? v : JSON.stringify(v === undefined ? null : v); } catch (x) { s = String(v); }
+      } catch (e) {
+         return "PICOPILOT_ERROR: " + (salida.length ? "(antes: " + salida.join(" | ").substring(0, 4000) + ") " : "") + ll.funcion + ": " +
+                (e && e.message ? e.message : String(e)) + ". Vistas abiertas (ids exactos): " + pprVistasTexto();
+      }
+      salida.push(lista.length == 1 ? s : ll.funcion + ": " + s);
+   }
+   return salida.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 
 function pprMain() {
    var id = (typeof jsArguments !== "undefined" && jsArguments.length) ? String(jsArguments[0]) : "";

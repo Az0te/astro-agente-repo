@@ -625,27 +625,6 @@ String PiCopilotConfig::CurlPath() const
 // Prompts
 // ----------------------------------------------------------------------------
 
-static String DossierSchema()
-{
-   return
-   u"{\n"
-   u"  \"titulo\": \"Corrección de gradiente - <vista>\",\n"
-   u"  \"vista\": \"<id de la vista original>\",\n"
-   u"  \"analisis\": \"resumen del análisis previo de la imagen\",\n"
-   u"  \"candidatos\": [\n"
-   u"    { \"vista\": \"<id exacto de la copia abierta en PixInsight>\",\n"
-   u"      \"modelo\": \"<id de la vista con su modelo de fondo (gradiente)>\",\n"
-   u"      \"metodo\": \"GraXpert\", \"parametros\": \"sample_free escala 10\",\n"
-   u"      \"metricas\": { \"gcStructCopy\": 0.05, \"flat\": 1.2 },\n"
-   u"      \"notas\": \"observaciones\" }\n"
-   u"  ],\n"
-   u"  \"intermedias\": [\"<ids de las demás vistas auxiliares que hayas creado: bases, recortes, binados, SPFC...>\"],\n"
-   u"  \"recomendado\": \"<id de la vista recomendada>\",\n"
-   u"  \"motivo\": \"por qué es la mejor opción\",\n"
-   u"  \"informe\": \"ruta opcional a un dossier .md con imágenes\"\n"
-   u"}";
-}
-
 static String ViewText( const String& viewId )
 {
    return viewId.IsEmpty() ? String( u"(no hay ninguna imagen seleccionada)" ) : u"\"" + viewId + u"\"";
@@ -664,37 +643,95 @@ String PiCopilotPrompts::System()
 static String ComparativeBlock( const PiCopilotModel& model, const String& dossierPath )
 {
    String s =
-   u"\n\nEste paso tiene varias soluciones posibles, así que:\n"
-   u"a) Haz primero un análisis de la imagen (tipo y forma del gradiente, si la nebulosa llena el campo, "
+   u"\n\nEste paso tiene varias soluciones posibles: no fijes un método, compáralos.\n"
+   u"a) Haz primero un análisis breve de la imagen (tipo y forma del gradiente, si la nebulosa llena el campo, "
    u"si es banda ancha o estrecha).\n"
-   u"b) Lanza comparativas SOBRE COPIAS de la imagen con los métodos que la guía considere aplicables "
-   u"(GraXpert, MGC, DBE, ABE, GradientCorrection...), cada uno con 2 o 3 valores de su parámetro principal.\n"
-   u"c) Mide cada resultado con guia/herramientas/gradcompare.js (gcStructCopy sobre el modelo como medida "
-   u"principal; flat, contrast y ring sólo cuando la máscara del objeto sea fiable).\n"
-   u"d) No apliques nada sobre la imagen original: el usuario elegirá la copia que prefiera.\n"
-   u"e) Como último paso escribe el dossier en JSON (UTF-8) en esta ruta exacta:\n   " + dossierPath +
-   u"\n   con esta forma:\n" + DossierSchema() +
-   u"\n   En \"vista\" de cada candidato pon el id exacto de la copia abierta en PixInsight y en \"modelo\" el de su "
-   u"modelo de fondo. Deja abiertas todas las vistas que listes: PiCopilot muestra cada candidato junto a su modelo "
-   u"y, cuando el usuario elige uno, cierra los demás, sus modelos y las intermedias. Usa el prefijo GC_ para todas "
-   u"las vistas que crees en la comparativa.";
-   if ( !model.IsAgent() )
-      // Sin herramientas, los modelos locales fallaban escribiendo el bucle de comparativa a mano; con la
-      // función de la guía, Qwen 3.8 lo resolvió 3 de 3 veces (prueba del Paso 9, 4 nov 2026).
-      s << u"\n   No escribas tú el bucle de comparativa: usa la función ya hecha gradienteCandidatos() de "
-           u"herramientas/gradiente.js (está en la ficha), que crea las copias, ejecuta GraXpert y MGC, los mide y "
-           u"escribe el dossier si le pasas la ruta en la opción \"dossier\". Tu script debe cargar gradiente.js con "
-           u"eval en el nivel superior, llamar a gradienteCandidatos con la vista, las escalas que elijas y los valores "
-           u"del perfil (spfc, mars, mgcOpts), pasar tu análisis en la opción \"analisis\" y escribir el resultado en "
-           u"la consola. Si tu análisis previo necesita alguna medida, hazla antes, de forma breve.";
+   u"b) Usa la función de la guía gradienteCandidatos: crea copias GC_* con cada método aplicable, las mide y "
+   u"recomienda una. No apliques nada sobre la imagen original: el usuario elegirá la copia que prefiera.\n"
+   u"c) Pásale tu análisis en la opción \"analisis\" y esta ruta exacta en la opción \"dossier\": " + dossierPath +
+   u" (la función escribe ahí el dossier; PiCopilot enseña cada candidato junto a su modelo y, cuando el usuario "
+   u"elige uno, cierra los demás).";
+   if ( model.IsAgent() )
+      s << u"\n   Llámala con la herramienta mcp__picopilot__gradienteCandidatos; no escribas tú el bucle de comparativa.";
    return s;
 }
 
 static String RetryRule( const PiCopilotConfig& cfg );
 
+String PiCopilotPrompts::CallsFormat()
+{
+   return
+   u"\n\nCómo actuar sobre PixInsight: NUNCA escribas código (ni PJSR, ni JavaScript, ni PixelMath suelto). Sólo puedes "
+   u"pedir funciones de la lista «Funciones de la guía». Para pedirlas, devuelve UN único bloque ```json con este formato:\n"
+   u"```json\n{\"llamadas\": [{\"funcion\": \"analizarMaster\", \"parametros\": {\"vista\": \"id_real\"}}]}\n```\n"
+   u"- \"funcion\" es el nombre exacto de la lista; \"parametros\" usa sólo los nombres de parámetro de esa función "
+   u"(los marcados con * son obligatorios). Las opciones van dentro de \"opciones\" como un objeto.\n"
+   u"- Varias llamadas en el mismo bloque sólo si no dependen unas de otras. Si una necesita lo que devuelve otra, pide "
+   u"la primera, espera el resultado y pide la siguiente en otra respuesta.\n"
+   u"- PiCopilot comprueba las llamadas contra el manifiesto de la guía, las ejecuta tal cual y te devuelve el resultado.\n"
+   u"- Si ninguna función sirve para lo que se pide, dilo y propón qué hacer; no lo sustituyas por otra cosa.\n"
+   u"- Usa los ids exactos de las vistas abiertas: nunca inventes ni completes un id (los ejemplos de la guía usan ids "
+   u"genéricos como \"MasterLight\").";
+}
+
+String PiCopilotPrompts::FunctionList( const String& guideDir, bool summaries )
+{
+   String out;
+   try
+   {
+      String path = guideDir + u"/herramientas/manifiesto.json";
+      JsonValue root;
+      String why;
+      if ( !File::Exists( path ) || !JsonValue::Parse( File::ReadTextFile( path ), root, why ) )
+         return u"(no encuentro " + path + u")";
+      const JsonValue& list = root["funciones"];
+      for ( size_t i = 0; i < list.Size(); ++i )
+      {
+         const JsonValue& f = list[i];
+         if ( f["nombre"].type != JsonValue::Str || (f["nivel"].type == JsonValue::Str && f["nivel"].s == u"libre") )
+            continue;
+         const JsonValue& props = f["params"]["properties"];
+         const JsonValue& req = f["params"]["required"];
+         String ps;
+         for ( const auto& kv : props.o )
+         {
+            bool r = false;
+            for ( const JsonValue& q : req.a )
+               if ( q.s == kv.first )
+                  r = true;
+            ps << (ps.IsEmpty() ? u"" : u", ") << kv.first << (r ? u"*" : u"");
+         }
+         String d = f["resumen"].type == JsonValue::Str ? f["resumen"].s : f["descripcion"].s;
+         size_type dot = d.Find( u". " );
+         if ( dot != String::notFound && dot < 220 )
+            d = d.Left( dot + 1 );
+         if ( d.Length() > 220 )
+            d = d.Left( 219 ) + u"…";
+         String paso;
+         if ( f["paso"].type == JsonValue::Str )
+         {
+            String ps2 = f["paso"].s;
+            bool nl = ps2.StartsWith( u"no-lineal/" );
+            size_type sl = ps2.Find( '/' );
+            if ( sl != String::notFound )
+            {
+               String num = ps2.Substring( sl + 1, 2 );
+               if ( num.Length() == 2 && num[0] >= '0' && num[0] <= '9' && num[1] >= '0' && num[1] <= '9' )
+                  paso = String().Format( " (Paso %d", (num[0] - '0')*10 + (num[1] - '0') ) + (nl ? u" no lineal)" : u" lineal)");
+            }
+         }
+         out << u"- " << f["nombre"].s << u" {" << ps << u"}";
+         if ( summaries )
+            out << paso << u": " << d;
+         out << u"\n";
+      }
+   }
+   catch ( ... ) {}
+   return out;
+}
+
 static String HttpContext( const PiCopilotConfig& cfg, const PiCopilotModel& model )
 {
-   String contract = PiCopilotUtil::ReadText( PiCopilotUtil::JoinPath( cfg.guideDir, "anexos/A-contrato-api-pjsr.md" ), 12000 );
    // Sin acceso a ficheros, el modelo no puede leer el perfil: se adjunta (filtros, QE, base MARS, ajustes).
    // Sólo a modelos locales: el perfil es privado y no se manda a servicios en la nube.
    String perfil = model.IsCloud() ? String() : PiCopilotUtil::ReadText( PiCopilotUtil::JoinPath( cfg.guideDir, "perfil.md" ), 14000 );
@@ -702,34 +739,18 @@ static String HttpContext( const PiCopilotConfig& cfg, const PiCopilotModel& mod
    if ( !perfil.IsEmpty() )
       s << u"\n\nPerfil del usuario (equipo, filtros, QE, base MARS y ajustes; úsalo para los valores que la guía "
            u"deja al perfil):\n<<<\n" << perfil << u"\n>>>";
-   s <<
-   u"\n\nNo tienes acceso directo a PixInsight. Responde con:\n"
-   u"1) Una explicación breve del plan, los parámetros elegidos y por qué.\n"
-   u"2) Un único bloque ```javascript con un script PJSR (ECMAScript 5) que ejecute la tarea. "
-   u"El usuario lo revisará y lo ejecutará desde PiCopilot. Escribe en la consola (console.writeln) "
-   u"las medidas antes y después. Sé breve en la explicación para que el script quepa entero.";
+   s << u"\n\nNo tienes acceso directo a PixInsight. Responde con:\n"
+        u"1) Una explicación breve del plan, los parámetros elegidos y por qué.\n"
+        u"2) Un único bloque ```json con las llamadas a las funciones de la guía. Los bloques de código de las fichas "
+        u"explican qué hace cada función: no los copies; pide la función con sus parámetros."
+     << PiCopilotPrompts::CallsFormat();
+   return s;
+}
 
-   // Rutas reales y trampas vistas en la prueba con Qwen 3.8 (Paso 9, nebulosa dual band):
-   // inventaba la ruta de la guía y funciones de PJSR que no existen.
-   String guide = cfg.guideDir;
-   guide.ReplaceString( "\\", "/" );
-   s << u"\n\nRutas reales: la guía está en " << guide << u" y sus herramientas en " << guide << u"/herramientas/ "
-        u"(cárgalas con eval(File.readTextFile(ruta)) en el nivel superior del script, nunca dentro de una función)."
-     << u"\nCopia el código de la ficha y cambia sólo IDs y valores. No inventes procesos, parámetros ni funciones:"
-        u"\n- Renombrar una vista: ventana.mainView.id = \"NuevoId\" (no existe windowId)."
-        u"\n- Recorrer ventanas: ImageWindow.windows (array); no existen windowCount ni windowByIndex."
-        u"\n- gcStructCopy(base, idModelo) devuelve un objeto {copy, corr}, no un número."
-        u"\n- Para crear una carpeta: if (!File.directoryExists(ruta)) File.createDirectory(ruta, true); "
-        u"(si ya existe, createDirectory falla)."
-        u"\n- Los ejemplos de la guía usan ids genéricos como \"MasterLight\": sustitúyelos siempre por el id "
-        u"exacto de la vista objetivo de esta tarea."
-        u"\n- Para escribir en la consola: console.writeln(texto) (console.log no existe en PJSR)."
-        u"\n- El proceso GraXpert crea GraXpert_sample_free_background_extraction (corregida) y GraXpert_background "
-        u"(modelo), con 1, 2... detrás si ya existían: no llevan el nombre de la vista de entrada."
-        u"\n- Los procesos que crean ventanas nuevas (GraXpert, MGC) las nombran solos y añaden 1, 2... si ya "
-        u"existen: localiza la ventana nueva comparando ImageWindow.windows antes y después.";
-   if ( !contract.IsEmpty() )
-      s << u"\n\nContrato de la API PJSR que debes respetar:\n<<<\n" << contract << u"\n>>>";
+// Lista corta de funciones para los pasos (el Prompt libre lleva el catálogo completo, ToolCatalog).
+static String ShortCatalog( const PiCopilotConfig& cfg )
+{
+   String s = u"\n\nFunciones de la guía («nombre {parámetros}», * = obligatorio):\n" + PiCopilotPrompts::FunctionList( cfg.guideDir, false );
    return s;
 }
 
@@ -737,10 +758,10 @@ static String HttpContext( const PiCopilotConfig& cfg, const PiCopilotModel& mod
 static String HelperBlock( const PiCopilotStep& step, const String& viewId, const String& secondViewId );
 
 // Orden final para los modelos sin herramientas. Si el prompt acaba en el bloque de contexto, Qwen 3.8 contestaba
-// la mitad de las veces con un JSON de error de API inventado (3 de 6); con esta línea al final, 6 de 6 traen script.
+// la mitad de las veces con un JSON de error de API inventado (3 de 6); con esta línea al final, 6 de 6 respondían bien.
 static String ClosingLine()
 {
-   return u"\n\nResponde ahora con el plan breve y un único bloque ```javascript con el script "
+   return u"\n\nResponde ahora con el plan breve y un único bloque ```json con las llamadas "
           u"(o, si no está claro qué vista usar, sólo con tu pregunta).";
 }
 
@@ -791,7 +812,7 @@ static String OpenViewsLine( const String& viewId )
    if ( others > 0 )
       s << u" (Hay " << String().Format( "%d", others ) << u" más de otro tamaño, que no sirven para combinar con ella.)";
    s << u"\nSi el paso necesita otra capa (estrellas, starless, canal…) y no está claro por el nombre cuál de estas es, "
-        u"NO escribas el script: di qué vistas dudas y pregunta cuál usar.\n";
+        u"NO pidas llamadas: di qué vistas dudas y pregunta cuál usar.\n";
    return s;
 }
 
@@ -852,8 +873,7 @@ String PiCopilotPrompts::Step( const PiCopilotConfig& cfg, const PiCopilotModel&
          s << u"Este paso trabaja con ficheros, no con una vista. " << DataFolder( step ) << u", elegida por el usuario: " << df
            << u". Úsala tal cual como carpeta de entrada";
       s << u" (para flats y darks, las subcarpetas FLAT y DARK si existen; la biblioteca de master darks, la del perfil). "
-           u"No preguntes por la ruta. No listes la carpeta ni compruebes los ficheros tú: la función lo hace "
-           u"(File.listFiles y File.listDirectory no existen en PixInsight).\n";
+           u"No preguntes por la ruta. No listes la carpeta ni compruebes los ficheros tú: la función lo hace.\n";
    }
    else
       s << u"Imagen objetivo en PixInsight: vista " << ViewText( viewId ) << u".\n";
@@ -901,61 +921,60 @@ String PiCopilotPrompts::Step( const PiCopilotConfig& cfg, const PiCopilotModel&
       if ( step.comparative )
          s << ComparativeBlock( model, dossierPath );
       s << HelperBlock( step, viewId, secondViewId );
-      s << HttpContext( cfg, model ) << ClosingLine();
+      s << HttpContext( cfg, model ) << ShortCatalog( cfg ) << ClosingLine();
    }
    return s;
 }
 
-// Pasos con una función ya hecha en guia/herramientas: a los modelos sin herramientas se les pide usarla en
-// vez de escribir el código. Sin la instrucción explícita la usaban sólo la mitad de las veces; usándola,
-// Qwen 3.8 pasó de ~15–18/40 a ~31–33/40 (banco de pruebas del 4 nov 2026).
+// Pasos con una función ya hecha en guia/herramientas: a los modelos sin herramientas se les pide usarla. Sin la
+// instrucción explícita la usaban sólo la mitad de las veces; usándola, Qwen 3.8 pasó de ~15–18/40 a ~31–33/40
+// (banco de pruebas del 4 nov 2026). Formato: «funcion {parametros}», que el modelo pasa a su bloque ```json.
 static String HelperBlock( const PiCopilotStep& step, const String& viewId, const String& secondViewId )
 {
-   struct Helper { const char* file; const char16_t* call; const char16_t* lib; };
+   struct Helper { const char* file; const char16_t* call; };
    static const Helper helpers[] =
    {
-      { "lineal/01-analisis-del-objeto.md", u"analizarMaster(\"%V\") y, en el mismo script, documentarObjeto(\"%V\") (web.js: identifica el objeto por OBJECT o la astrometría y da tipo, resumen, emisión esperada, estrellas brillantes del campo y problemas que pueden dar), devolviendo JSON.stringify({ medidas: a, objeto: d }); en el resumen junta las medidas con esa información (qué es, qué emite y si el filtro lo capta, qué estrellas darán halos o reflejos). Si las búsquedas en internet están desactivadas, sólo analizarMaster", u"analisis.js" },
-      { "lineal/13-bxt-completo.md", u"bxtCandidatos(\"%V\", { tipo: ... }) y, en el mismo script, bxtAplicar(\"%V\", { nonstellar: r.recomendada.nonstellar, stars: r.recomendada.stars, nuevaVista: ... }) devolviendo JSON.stringify({ candidatos: r, aplicado: a })", u"deconvolucion.js" },
-      { "lineal/14-noisex-suave.md", u"ruidoCandidatos(\"%V\", { nuevaVista: ... }) (compara NXT 0,30/0,50/0,70, MLDenoise y MultiscaleTGVDenoise y se queda con el mejor que cumpla; enseña su tabla comparados)", u"ruido.js" },
-      { "lineal/15-starx.md", u"separarEstrellas(\"%V\", { nuevaVista: ..., nuevasEstrellas: ... }) y, en el mismo script, ruidoCandidatos(s.starless, { principal: true, nuevaVista: ... }) (compara NXT, MLDenoise y MultiscaleTGVDenoise; prefiere bajar el ruido 50-80 % cumpliendo los controles) devolviendo JSON.stringify({ separacion: s, denoise: d })", u"ruido.js" },
-      { "no-lineal/05-boost.md", u"saturarAlFallo(\"%V\", { tipo: \"nebulosa\" | \"galaxia\", nuevaVista: ... }) para la saturación (el LHE y las curvas, si hacen falta, después y a mano). "
-        u"En galaxias, ANTES y en su propio script, nucleoCandidatos(\"%V\", { nuevaVista: ... }) (nucleo.js: compara HDRMT y GradientHDRCompression) si el estirado dio meseta_nucleo.radio_px > 3; "
-        u"el contraste local, también en su propio script, con contrasteCandidatos(\"%V\", { nuevaVista: ... }) (realces.js: LHE, HDRMT y DarkStructureEnhance; puede recomendar no tocarla), "
-        u"y la saturación sobre su resultado", u"boost.js" },
-      { "no-lineal/10-recorte-exportacion.md", u"exportarFinal(\"%V\", { carpeta: ..., nombre: ..., girar180: ... })", u"exportar.js" },
-      { "no-lineal/06-noisex.md", u"ruidoCandidatos(\"%V\", { nuevaVista: ... }) (sobre la imagen estirada compara NXT 0,15/0,30/0,45, MLDenoise y MultiscaleTGVDenoise)", u"ruido.js" },
-      { "lineal/08-plate-solve.md", u"resolverAstrometria(\"%V\")", u"lineal.js" },
-      { "lineal/07-extraccion-canales.md", u"desmezclarDualBand(\"%V\")", u"bandaestrecha.js" },
-      { "lineal/16-linearfit-continuo.md", u"medirContinuo(<banda estrecha CON estrellas>, <RGB calibrada CON estrellas>, { canal: 0 }) y restarContinuo(\"%V\", <RGB sin estrellas>, { k: ..., nuevaVista: ... }) en el mismo script", u"bandaestrecha.js" },
-      { "no-lineal/04-mascaras.md", u"crearMascara(\"%V\", { tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\" })", u"mascaras.js" },
-      { "no-lineal/02-lrgb-paleta.md", u"previsualizarPaletas(\"%V\", <OIII estirado igual>, { carpeta: ... }) para las previews; la composición final con componerPaleta({ S, H, O }, { paleta: \"SHO\" | \"HOO\" | \"FORAXX\" ..., estrellas }) y la paleta que elija el usuario (paletasDisponibles() da la lista)", u"bandaestrecha.js" },
-      { "lineal/11-bxt-correct-only.md", u"bxtCorrectOnly(\"%V\", { nuevaVista: ... })", u"lineal.js" },
-      { "lineal/17-checkpoint.md", u"checkpointLineal(\"%V\", { carpeta: ..., objeto: ..., version: ... })", u"lineal.js" },
-      { "no-lineal/03-scnr.md", u"quitarVerde(\"%V\", { nuevaVista: ... })", u"lineal.js" },
-      { "lineal/12-spcc.md", u"calibrarColor(\"%V\", { nuevaVista: ..., spcc: { ...filtros y QE del perfil... } })", u"color.js" },
-      { "no-lineal/01-estirado.md", u"estirarCapas(\"%V\", \"%S\", { cielo: 0.10, nuevaStarless: ..., nuevasEstrellas: ... }) (si el objeto es una galaxia, "
-        u"OBLIGATORIO { tipo: \"galaxia\", nuevaStarless: ..., nuevasEstrellas: ... } sin cielo: cielo 0,07 y estrellas con el mismo estirado; "
-        u"si es una nebulosa oscura de polvo, { tipo: \"nebulosa_oscura\", ... } sin cielo). En nebulosas de emisión o reflexión, mejor "
-        u"estirarCandidatos(\"%V\", { cielo: 0.10, nuevaVista: ... }) (compara GHS al fallo, MAS y ArcsinhStretch con el mismo cielo) y, en el mismo "
-        u"script, estirarEstrellas(\"%S\", { nuevaVista: ... })", u"estirado.js" },
-      { "no-lineal/08-estrellas.md", u"prepararEstrellas(\"%V\", { nuevaVista: ... })", u"estrellas.js" },
-      { "no-lineal/09-recombinacion.md", u"recombinarEstrellas(\"%V\", \"%S\", { nuevaVista: ... })", u"recombinacion.js" },
-      { "lineal/10-combinacion-rgb-nb.md", u"combinarMasters(<carpeta o lista de masters alineados>, { tipo: \"nebulosa\" | \"galaxia\" }) (no usa ninguna vista: "
+      { "lineal/01-analisis-del-objeto.md", u"analizarMaster {vista: \"%V\"} y, en el mismo bloque, documentarObjeto {vista: \"%V\"} (identifica el objeto por OBJECT o la astrometría y da tipo, resumen, emisión esperada, estrellas brillantes del campo y problemas que pueden dar); en el resumen junta las medidas con esa información (qué es, qué emite y si el filtro lo capta, qué estrellas darán halos o reflejos). Si las búsquedas en internet están desactivadas, sólo analizarMaster" },
+      { "lineal/13-bxt-completo.md", u"bxtCandidatos {vista: \"%V\", opciones: {tipo: ...}} y, cuando veas su resultado, en otra respuesta, bxtAplicar {vista: \"%V\", opciones: {nonstellar: <recomendada.nonstellar>, stars: <recomendada.stars>, nuevaVista: ...}}" },
+      { "lineal/14-noisex-suave.md", u"ruidoCandidatos {vista: \"%V\", opciones: {nuevaVista: ...}} (compara NXT 0,30/0,50/0,70, MLDenoise y MultiscaleTGVDenoise y se queda con el mejor que cumpla; enseña su tabla comparados)" },
+      { "lineal/15-starx.md", u"separarEstrellas {vista: \"%V\", opciones: {nuevaVista: ..., nuevasEstrellas: ...}} y, en el mismo bloque, ruidoCandidatos {vista: <el id que has dado en nuevaVista>, opciones: {principal: true, nuevaVista: ...}} (compara NXT, MLDenoise y MultiscaleTGVDenoise; prefiere bajar el ruido 50-80 % cumpliendo los controles)" },
+      { "no-lineal/05-boost.md", u"saturarAlFallo {vista: \"%V\", opciones: {tipo: \"nebulosa\" | \"galaxia\", nuevaVista: ...}} para la saturación (el LHE y las curvas, si hacen falta, después y a mano). "
+        u"En galaxias, ANTES y en su propia respuesta, nucleoCandidatos {vista: \"%V\", opciones: {nuevaVista: ...}} (compara HDRMT y GradientHDRCompression) si el estirado dio meseta_nucleo.radio_px > 3; "
+        u"el contraste local, también en su propia respuesta, con contrasteCandidatos {vista: \"%V\", opciones: {nuevaVista: ...}} (LHE, HDRMT y DarkStructureEnhance; puede recomendar no tocarla), "
+        u"y la saturación sobre su resultado" },
+      { "no-lineal/10-recorte-exportacion.md", u"exportarFinal {vista: \"%V\", opciones: {carpeta: ..., nombre: ..., girar180: ...}}" },
+      { "no-lineal/06-noisex.md", u"ruidoCandidatos {vista: \"%V\", opciones: {nuevaVista: ...}} (sobre la imagen estirada compara NXT 0,15/0,30/0,45, MLDenoise y MultiscaleTGVDenoise)" },
+      { "lineal/08-plate-solve.md", u"resolverAstrometria {vista: \"%V\"}" },
+      { "lineal/07-extraccion-canales.md", u"desmezclarDualBand {vista: \"%V\"}" },
+      { "lineal/16-linearfit-continuo.md", u"medirContinuo {nb: <banda estrecha CON estrellas>, continuo: <RGB calibrada CON estrellas>, opciones: {canal: 0}} y, con el k que devuelva, en otra respuesta, restarContinuo {nb: \"%V\", continuo: <RGB sin estrellas>, opciones: {k: ..., nuevaVista: ...}}" },
+      { "no-lineal/04-mascaras.md", u"crearMascara {vista: \"%V\", opciones: {tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\"}}" },
+      { "no-lineal/02-lrgb-paleta.md", u"previsualizarPaletas {ha: \"%V\", oiii: <OIII estirado igual>, opciones: {carpeta: ...}} para las previews; la composición final con componerPaleta {capas: {S, H, O}, opciones: {paleta: \"SHO\" | \"HOO\" | \"FORAXX\" ..., estrellas}} y la paleta que elija el usuario (paletasDisponibles {} da la lista)" },
+      { "lineal/11-bxt-correct-only.md", u"bxtCorrectOnly {vista: \"%V\", opciones: {nuevaVista: ...}}" },
+      { "lineal/17-checkpoint.md", u"checkpointLineal {vista: \"%V\", opciones: {carpeta: ..., objeto: ..., version: ...}}" },
+      { "no-lineal/03-scnr.md", u"quitarVerde {vista: \"%V\", opciones: {nuevaVista: ...}}" },
+      { "lineal/12-spcc.md", u"calibrarColor {vista: \"%V\", opciones: {nuevaVista: ..., spcc: {...filtros y QE del perfil...}}}" },
+      { "no-lineal/01-estirado.md", u"estirarCapas {starless: \"%V\", estrellas: \"%S\", opciones: {cielo: 0.10, nuevaStarless: ..., nuevasEstrellas: ...}} (si el objeto es una galaxia, "
+        u"OBLIGATORIO opciones {tipo: \"galaxia\", nuevaStarless: ..., nuevasEstrellas: ...} sin cielo: cielo 0,07 y estrellas con el mismo estirado; "
+        u"si es una nebulosa oscura de polvo, {tipo: \"nebulosa_oscura\", ...} sin cielo). En nebulosas de emisión o reflexión, mejor "
+        u"estirarCandidatos {vista: \"%V\", opciones: {cielo: 0.10, nuevaVista: ...}} (compara GHS al fallo, MAS y ArcsinhStretch con el mismo cielo) y, en el mismo "
+        u"bloque, estirarEstrellas {vista: \"%S\", opciones: {nuevaVista: ...}}" },
+      { "no-lineal/08-estrellas.md", u"prepararEstrellas {vista: \"%V\", opciones: {nuevaVista: ...}}" },
+      { "no-lineal/09-recombinacion.md", u"recombinarEstrellas {starless: \"%V\", estrellas: \"%S\", opciones: {nuevaVista: ...}}" },
+      { "lineal/10-combinacion-rgb-nb.md", u"combinarMasters {masters: <carpeta o lista de masters alineados>, opciones: {tipo: \"nebulosa\" | \"galaxia\"}} (no usa ninguna vista: "
         u"clasifica cada master por su filtro y combina lo que toca). Antes mira «Cuándo aplica» en la ficha: si sólo hay una imagen RGB "
-        u"(OSC sin filtro) o sólo dual band, di que el paso no aplica y no escribas script", u"combinacion.js" },
-      { "lineal/09-correccion-gradiente.md", u"gradienteCandidatos(\"%V\", { spfc: { ...filtros y QE del perfil... }, "
-        u"analisis: \"<tu análisis breve>\", dossier: \"<la ruta del dossier indicada arriba>\" }) — por defecto compara GraXpert (10, 8 e IA), "
+        u"(OSC sin filtro) o sólo dual band, di que el paso no aplica y no pidas llamadas" },
+      { "lineal/09-correccion-gradiente.md", u"gradienteCandidatos {vista: \"%V\", opciones: {spfc: {...filtros y QE del perfil...}, "
+        u"analisis: \"<tu análisis breve>\", dossier: \"<la ruta del dossier indicada arriba>\"}} — por defecto compara GraXpert (10, 8 e IA), "
         u"GradientCorrection, MGC (1024, 2048, con y sin bordes; base MARS de PixInsight; sólo con astrometría) y polinomio robusto (grado 1 y 2), los mide, recomienda y escribe el dossier. "
-        u"No hay método preferido: recomienda el que mida mejor en ESTA imagen (lee la «leyenda» del resultado). No escribas tú GraXpert, "
-        u"MultiscaleGradientCorrection, DBE ni ABE", u"gradiente.js" },
-      { "lineal/06-hdr-composition.md", u"componerHDR(<carpeta o lista [larga, corta] de masters alineados>, { nuevaVista: \"HDR\" }) (no usa ninguna vista; la HDR sale como vista nueva)", u"hdr.js" },
-      { "lineal/05-staralignment-crop.md", u"alinearMasters(<carpeta, lista de masters .xisf o lista de ids de las vistas abiertas>, { referencia: <el master de mejor resolución y SNR: L o Hα; si no lo sabes, no la pongas> }) (sin salida, salvo que el usuario dé la carpeta: la función crea 'alineados' junto a los masters)", u"alineado.js" },
-      { "lineal/02-inventario.md", u"inventario(<carpeta del objeto>, { darks: <carpeta o lista de master darks de la biblioteca, si el perfil la da> }) (no usa ninguna vista)", u"preproceso.js" },
-      { "lineal/03-blink-subframeselector.md", u"seleccionarSubs(<carpeta de LIGHT o lista de ficheros>, { csv: ... }) (no usa ninguna vista)", u"preproceso.js" },
-      { "lineal/04-preprocesado.md", u"revisarCalibracion({ lights: ..., flats: ..., flatDarks: ..., darks: ... }) (no usa ninguna vista). "
-        u"En este script SÓLO revisarCalibracion: nunca lances WBPP en el mismo script ni con un if sobre el resultado. "
-        u"Cuando el usuario haya visto la revisión y te pida seguir, en otro script lanzarWBPP({ lights: ..., flats: ..., flatDarks: ..., darks: ..., salida: <ruta corta> }) "
-        u"y después estadoWBPP(<salida>) hasta que devuelva terminado: true", u"preproceso.js" },
+        u"No hay método preferido: recomienda el que mida mejor en ESTA imagen (lee la «leyenda» del resultado)" },
+      { "lineal/06-hdr-composition.md", u"componerHDR {masters: <carpeta o lista [larga, corta] de masters alineados>, opciones: {nuevaVista: \"HDR\"}} (no usa ninguna vista; la HDR sale como vista nueva)" },
+      { "lineal/05-staralignment-crop.md", u"alinearMasters {masters: <carpeta, lista de masters .xisf o lista de ids de las vistas abiertas>, opciones: {referencia: <el master de mejor resolución y SNR: L o Hα; si no lo sabes, no la pongas>}} (sin salida, salvo que el usuario dé la carpeta: la función crea 'alineados' junto a los masters)" },
+      { "lineal/02-inventario.md", u"inventario {carpeta: <carpeta del objeto>, opciones: {darks: <carpeta o lista de master darks de la biblioteca, si el perfil la da>}} (no usa ninguna vista)" },
+      { "lineal/03-blink-subframeselector.md", u"seleccionarSubs {subs: <carpeta de LIGHT o lista de ficheros>, opciones: {csv: ...}} (no usa ninguna vista)" },
+      { "lineal/04-preprocesado.md", u"revisarCalibracion {calibracion: {lights: ..., flats: ..., flatDarks: ..., darks: ...}} (no usa ninguna vista). "
+        u"En esta respuesta SÓLO revisarCalibracion: nunca lances WBPP en el mismo bloque. "
+        u"Cuando el usuario haya visto la revisión y te pida seguir, en otra respuesta lanzarWBPP {wbpp: {lights: ..., flats: ..., flatDarks: ..., darks: ..., salida: <ruta corta>}} "
+        u"y después estadoWBPP {salida: <salida>} hasta que devuelva terminado: true" },
    };
    for ( const Helper& h : helpers )
       if ( step.file == h.file )
@@ -965,15 +984,13 @@ static String HelperBlock( const PiCopilotStep& step, const String& viewId, cons
          String call( h.call );
          // Estirado sin capa de estrellas (sólo hay una vista de ese tamaño): sólo la starless.
          if ( step.file == "no-lineal/01-estirado.md" && secondViewId.IsEmpty() )
-            call = u"estirarCandidatos(\"%V\", { cielo: 0.10, nuevaVista: ... }) (no hay capa de estrellas: sólo la starless; compara GHS al fallo, MAS y ArcsinhStretch y enseña la tabla)";
+            call = u"estirarCandidatos {vista: \"%V\", opciones: {cielo: 0.10, nuevaVista: ...}} (no hay capa de estrellas: sólo la starless; compara GHS al fallo, MAS y ArcsinhStretch y enseña la tabla)";
          call.ReplaceString( u"%V", viewId.IsEmpty() ? String( u"<vista seleccionada>" ) : viewId );
          call.ReplaceString( u"%S", secondViewId.IsEmpty() ? String( u"<capa de estrellas preparada>" ) : secondViewId );
-         return u"\n\nUsa la función ya hecha " + call + u" de herramientas/" + String( h.lib ) +
-                u" (está en la ficha) en vez de escribir tú ese código: cárgala con eval en el nivel superior del "
-                u"script y llámala. Haz que la última expresión del script sea JSON.stringify(resultado) y no hagas nada "
-                u"más con el resultado dentro del script (no lo recorras ni lo imprimas: no conoces sus campos hasta verlo). "
-                u"PiCopilot te devolverá ese resultado para que lo interpretes según la ficha. La entrada principal es "
-                u"la vista seleccionada; la vista nueva tiene que tener un nombre nuevo, nunca el de una que ya existe.";
+         return u"\n\nUsa la función de la guía " + call + u". Pídela en tu bloque ```json: en cada «funcion {…}», el "
+                u"nombre va en \"funcion\" y lo de dentro de las llaves en \"parametros\" (los «...» y «<…>» los decides tú). "
+                u"PiCopilot te devolverá el resultado para que lo interpretes según la ficha. La entrada principal es la "
+                u"vista seleccionada; la vista nueva tiene que tener un nombre nuevo, nunca el de una que ya existe.";
       }
    return String();
 }
@@ -1009,10 +1026,10 @@ String PiCopilotPrompts::Full( const PiCopilotConfig& cfg, const PiCopilotModel&
      << u"\n   Después continúa con la copia recomendada.";
    if ( !model.IsAgent() )
       // Qwen metía los 11 pasos en un script de 8 minutos y cada corrección lo repetía entero (7 nov 2026).
-      s << u"\n\nHazlo en varios scripts: UN PASO POR SCRIPT (como mucho dos muy ligados). Ahora propón sólo el primero; "
-           u"cuando veas su resultado, el siguiente, con los ids de las vistas que devolvió.";
+      s << u"\n\nHazlo en varias respuestas: UN PASO POR RESPUESTA (como mucho dos muy ligados). Ahora pide sólo las "
+           u"llamadas del primero; cuando veas su resultado, las del siguiente, con los ids de las vistas que devolvió.";
    if ( !model.IsAgent() )
-      s << HttpContext( cfg, model ) << ClosingLine();
+      s << HttpContext( cfg, model ) << ShortCatalog( cfg ) << ClosingLine();
    return s;
 }
 
@@ -1021,99 +1038,62 @@ String PiCopilotPrompts::Full( const PiCopilotConfig& cfg, const PiCopilotModel&
 // SPCC no existía (prueba del 5 nov 2026): el Prompt libre no llevaba nada de la guía.
 static String ToolCatalog( const PiCopilotConfig& cfg )
 {
-   String g = cfg.guideDir;
-   g.ReplaceString( u"\\", u"/" );
    return
-      u"\n\nFunciones ya hechas de la guía (" + g + u"/herramientas). PiCopilot ya las tiene cargadas al ejecutar tu script; "
-      u"si aun así las cargas, usa sólo estos ficheros con eval(File.readTextFile(\"" + g +
-      u"/herramientas/<fichero>.js\")) en el nivel superior del script (checkpoint.js y similares no existen). Cada una trabaja sobre una copia, mide y devuelve "
-      u"un objeto (vista nueva, medidas, no_cumple, control). Úsalas en vez de escribir el código:\n"
-      u"- analisis.js: analizarMaster(vista o lista de vistas) — Paso 1 lineal (análisis del objeto)\n"
-      u"- preproceso.js (trabajan con ficheros; aceptan una carpeta o una lista de carpetas o ficheros, y ellas buscan los "
-      u"ficheros: no escribas tu propia búsqueda, File.listFiles no existe): inventario(carpeta del objeto, { darks }) — Paso 2; "
-      u"seleccionarSubs(carpeta LIGHT, de la noche o del objeto) — Paso 3; revisarCalibracion({ carpeta: noche, darks }) — Paso 4; "
-      u"lanzarWBPP({ carpeta, darks, salida }) y estadoWBPP(salida) — Paso 4, sólo cuando el usuario lo pida\n"
-      u"- alineado.js: alinearMasters(carpeta, lista de ficheros o lista de ids de vistas abiertas) — Paso 5 (StarAlignment + "
-      u"recorte común; no le pases salida ni inventes rutas: crea 'alineados' junto a los masters y abre los _alin; "
-      u"devuelve r.vistas (ids _alin) y r.vista (la referencia) y YA resuelve la astrometría y la copia a todas: no llames "
-      u"después a resolverAstrometria; analizarMaster(r.vistas) analiza todas de una vez. Orden con varios masters: "
-      u"ALINEAR PRIMERO y astrometría después (resolver antes no sirve: la solución no pasa a los alineados); si el usuario "
-      u"pide astrometría antes de alinear, sugiérele este orden y por qué; "
-      u"pásale sólo los masters del mismo objeto que el usuario quiere alinear: si hay vistas abiertas de otro objeto, "
-      u"repetidas o que no son masters (copias _bxt, _spcc, starless…) y no está claro cuáles van, pregunta antes; "
-      u"elige sola la referencia si no la sabes); astrometriaLineal(ventana) — llámala ANTES de Crop, Resample, IntegerResample, "
-      u"DynamicCrop o FastRotation sobre una imagen con astrometría: si la solución tiene splines, el proceso abre un diálogo "
-      u"y el script se queda parado\n"
-      u"- hdr.js: componerHDR([larga, corta], { nuevaVista }) — Paso 6 (HDRComposition con umbral medido)\n"
-      u"- combinacion.js: combinarMasters(carpeta o lista de masters, { tipo }) — Paso 10 (clasifica y combina); también inyectarHa(rgb, ha, { tipo, nuevaVista }) y combinarMismoCanal(a, b, { nuevaVista }) sobre vistas\n"
-      u"- lineal.js: resolverAstrometria(vista) — Paso 8 (plate solve con blindSolve); bxtCorrectOnly(vista, { nuevaVista }) — Paso 11; "
-      u"checkpointLineal(vista, { carpeta, objeto, version }) — Paso 17; quitarVerde(vista, { nuevaVista }) — Paso 3 no lineal (SCNR)\n"
-      u"- bandaestrecha.js: desmezclarDualBand(vista) — Paso 7; medirContinuo(nb, rgb, { canal }) y restarContinuo(nb, rgb, { k }) — Paso 16; "
-      u"previsualizarPaletas(ha, oiii, { carpeta }) — Paso 2 no lineal (previews); componerPaleta({ S, H, O }, { paleta, estrellas }) — composición final "
-      u"con capas starless estiradas (SHO, HOO, FORAXX…; paletasDisponibles() da la lista)\n"
-      u"- mascaras.js: crearMascara(vista, { tipo: luminancia | cielo | fondo_lhe }) — Paso 4 no lineal\n"
-      u"- gradiente.js: r = gradienteCandidatos(vista, {...}) — Paso 9 lineal (gradiente). NO corrige la vista: compara copias "
-      u"GC_* y devuelve r.recomendado (id de la copia recomendada). Los pasos siguientes van sobre r.recomendado, nunca sobre "
-      u"r.vista (que es la original SIN corregir)\n"
-      u"- color.js: calibrarColor(vista, { nuevaVista, spcc: {filtros del perfil} }) — Paso 12 lineal (SPCC; OSC sin filtro: spcc vacío, "
-      u"no existe la opción filtros); neutralizarCielo(vista lineal, { nuevaVista }) — si calibrarColor, checkpointLineal o el "
-      u"estirado dan el cielo no neutro / dominante del cielo: neutraliza el fondo en LINEAL (vale sobre la starless lineal) y "
-      u"se vuelve a estirar. Nunca SCNR ni curvas para eso\n"
-      u"- deconvolucion.js: r = bxtCandidatos(vista, { tipo }) y bxtAplicar(vista, { nonstellar: r.recomendada.nonstellar, stars: r.recomendada.stars, nuevaVista }) — Paso 13 (BlurX completo)\n"
-      u"- ruido.js: reducirRuido(vista, { denoise, detail, iterations, nuevaVista }) — Paso 14 lineal (denoise 0,50), Paso 15 sobre la starless (RGB: 0,50 tras el NXT suave del 14, 0,70 sin él; si moteado_color_despues > 1,5, menos) y Paso 6 no lineal (0,30); separarEstrellas(vista, { nuevaVista, nuevasEstrellas }) — Paso 15 (StarX)\n"
-      u"- estirado.js: estirarCapas(starless, estrellas, { cielo: 0.10, nuevaStarless, nuevasEstrellas }) — Paso 1 no lineal; en GALAXIAS "
-      u"SIEMPRE { tipo: \"galaxia\", nuevaStarless, nuevasEstrellas } y sin cielo (cielo 0,07 y estrellas con el mismo estirado que la starless); "
-      u"en NEBULOSAS OSCURAS (polvo: LDN, LBN, vdB, sin emisión) { tipo: \"nebulosa_oscura\", nuevaStarless, nuevasEstrellas } sin cielo (cielo 0,12); "
-      u"estrellas: \"extraer\" SÓLO en galaxias (en nebulosas hincha las estrellas); la capa de estrellas sale con arcsinh: NO pases amount (starStretch pierde las estrellas débiles). "
-      u"Si NO sabes qué tipo de objeto es (sin OBJECT y con un nombre de fichero genérico), antes del Paso 1 no lineal PARA y PREGUNTA al usuario el tipo "
-      u"(galaxia, nebulosa oscura, de emisión, de reflexión, planetaria, cúmulo…); no estires con los valores por defecto\n"
-      u"- nucleo.js: comprimirNucleo(vista, { nuevaVista }) — Paso 5 no lineal en GALAXIAS, antes de saturar (HDRMT al 60 % con máscara de bulbo; "
-      u"obligatorio si estirarCapas dio meseta_nucleo.radio_px > 3); medirMeseta(vista) sólo mide\n"
-      u"- boost.js: saturarAlFallo(vista, { tipo }) — Paso 5 no lineal (saturación)\n"
-      u"- estrellas.js: prepararEstrellas(vista, { nuevaVista }) — Paso 8 no lineal\n"
-      u"- recombinacion.js: recombinarEstrellas(starless, estrellas, { nuevaVista }) — Paso 9 no lineal\n"
-      u"- exportar.js: exportarFinal(vista, { carpeta, nombre, girar180 }) — Paso 10 no lineal\n"
-      u"UN PASO POR SCRIPT (como mucho dos muy ligados, p. ej. bxtCandidatos + bxtAplicar o separarEstrellas + su denoise): "
-      u"aunque te pidan el procesado completo, propón el script del primer paso, y al ver su resultado el del siguiente. Así, "
-      u"si un paso falla, no se repiten los anteriores (cada uno tarda minutos). Entre scripts usa los ids de las vistas que "
-      u"devolvió el paso anterior. Dentro de un script, la vista de una función es la entrada de la siguiente (r.vista, "
-      u"s.starless, s.estrellas...; las funciones aceptan también el resultado entero) y se termina con JSON.stringify({ ...resultados... }). "
-      u"Esas vistas son ids (texto): pásalos tal cual, sin .id. no_cumple es una lista (vacía si todo cumple): NO pares el "
-      u"script por ella ni la uses en un if; devuélvela en el resultado. PERO al ver el resultado, si no_cumple no está vacío, "
-      u"NO pases al paso siguiente: haz lo que dice el mensaje (repetir ese paso o volver al que indica, p. ej. neutralizarCielo "
-      u"si el checkpoint da el cielo no neutro, o repetir estirarCapas sin amount —en galaxias con tipo \"galaxia\"— si las estrellas casi no aportan). "
+      u"\n\nFunciones de la guía («nombre {parámetros}», * = obligatorio). Cada una trabaja sobre una copia, mide y "
+      u"devuelve un objeto (vista nueva, medidas, no_cumple, control). Son lo único que puedes pedir:\n" +
+      PiCopilotPrompts::FunctionList( cfg.guideDir ) +
+      u"\nNotas de uso:\n"
+      u"- Las de preproceso (inventario, seleccionarSubs, revisarCalibracion, lanzarWBPP, estadoWBPP) trabajan con ficheros: "
+      u"aceptan una carpeta o una lista de carpetas o ficheros y ellas buscan los ficheros. lanzarWBPP sólo cuando el usuario lo pida.\n"
+      u"- alinearMasters: no le pases salida ni inventes rutas (crea 'alineados' junto a los masters y abre los _alin); devuelve "
+      u"vistas (ids _alin) y vista (la referencia) y YA resuelve la astrometría y la copia a todas: no pidas después "
+      u"resolverAstrometria. Con varios masters: ALINEAR PRIMERO y astrometría después (resolver antes no sirve: la solución no "
+      u"pasa a los alineados); si el usuario pide astrometría antes de alinear, sugiérele este orden y por qué. Pásale sólo los "
+      u"masters del mismo objeto: si hay vistas de otro objeto, repetidas o que no son masters (copias _bxt, _spcc, starless…) "
+      u"y no está claro cuáles van, pregunta antes.\n"
+      u"- gradienteCandidatos NO corrige la vista: compara copias GC_* y devuelve recomendado (id de la copia recomendada). "
+      u"Los pasos siguientes van sobre recomendado, nunca sobre la original SIN corregir.\n"
+      u"- calibrarColor: OSC sin filtro, spcc vacío. neutralizarCielo (sobre una vista LINEAL) si calibrarColor, checkpointLineal "
+      u"o el estirado dan el cielo no neutro: neutraliza el fondo en lineal y se vuelve a estirar. Nunca SCNR ni curvas para eso.\n"
+      u"- bxtCandidatos y después, con su recomendada, bxtAplicar (Paso 13).\n"
+      u"- reducirRuido: denoise 0,50 en el Paso 14, sobre la starless RGB del 15 0,50 tras el NXT suave del 14 (0,70 sólo sin "
+      u"él; si moteado_color_despues > 1,5, menos) y 0,30 en el Paso 6 no lineal.\n"
+      u"- estirarCapas: en GALAXIAS SIEMPRE opciones {tipo: \"galaxia\", nuevaStarless, nuevasEstrellas} sin cielo (cielo 0,07 y "
+      u"estrellas con el mismo estirado que la starless); en NEBULOSAS OSCURAS (polvo, sin emisión) {tipo: \"nebulosa_oscura\", …} "
+      u"sin cielo; estrellas \"extraer\" SÓLO en galaxias (en nebulosas hincha las estrellas); NO pases amount. Devuelve "
+      u"starless.vista y estrellas.vista. Si NO sabes qué tipo de objeto es (sin OBJECT y con un nombre de fichero genérico), "
+      u"antes del Paso 1 no lineal PARA y PREGUNTA el tipo (galaxia, nebulosa oscura, de emisión, de reflexión, planetaria, "
+      u"cúmulo…); no estires con los valores por defecto.\n"
+      u"- comprimirNucleo: Paso 5 no lineal en GALAXIAS, antes de saturar (obligatorio si estirarCapas dio meseta_nucleo.radio_px > 3); "
+      u"medirMeseta sólo mide.\n"
+      u"UN PASO POR RESPUESTA (como mucho dos muy ligados): aunque te pidan el procesado completo, pide las llamadas del "
+      u"primer paso, y al ver su resultado las del siguiente. Así, si un paso falla, no se repiten los anteriores (cada uno "
+      u"tarda minutos). Usa los ids de las vistas que devolvió el paso anterior, tal cual. no_cumple es una lista (vacía si "
+      u"todo cumple): si no está vacía, NO pases al paso siguiente: haz lo que dice el mensaje (repetir ese paso o volver al "
+      u"que indica, p. ej. neutralizarCielo si el checkpoint da el cielo no neutro, o repetir estirarCapas sin amount —en "
+      u"galaxias con tipo \"galaxia\"— si las estrellas casi no aportan). "
       u"El nombre del objeto y la carpeta de trabajo salen de la cabecera (OBJECT), de la ruta del master o de lo que diga el usuario; "
       u"si no los sabes, pregúntalos: NUNCA uses nombres que aparezcan en la guía ni los deduzcas de las coordenadas. "
       u"El continuo (16) sólo aplica si hay un master de banda estrecha (Hα, OIII) y otro de banda ancha: con un solo master RGB/OSC, sáltalo. "
-      u"En el Paso 15 sobre la starless RGB, denoise 0,50 si ya se hizo el NoiseX suave del 14 (0,70 sólo sin él). "
-      u"Los únicos umbrales son los de las funciones: no inventes otros («límite 2,0» no existe). SCNR y más NoiseX no quitan "
-      u"manchas de color grandes en no lineal. "
+      u"Los únicos umbrales son los de las funciones: no inventes otros. SCNR y más NoiseX no quitan manchas de color grandes en no lineal. "
       u"Orden lineal (respétalo: el gradiente SIEMPRE antes de SPCC): análisis (1) → alinear masters (5, si hay varios) → HDR (6) → "
-      u"desmezcla dual band (7) → astrometría (8) → gradiente (9: gradienteCandidatos, y se sigue con r.recomendado) → "
+      u"desmezcla dual band (7) → astrometría (8) → gradiente (9: gradienteCandidatos, y se sigue con recomendado) → "
       u"combinación RGB/NB (10) → BlurX correct only (11, ya hecho si el master viene del flujo) → SPCC (12) → BlurX completo (13) → "
       u"NoiseX suave (14) → StarX + denoise de la starless (15) → continuo (16) → checkpointLineal (17). Orden no lineal: "
       u"estirarCapas (1) → paleta (2) → SCNR (3) → máscaras (4, sólo si se van a usar) → en galaxias comprimirNucleo (5) → saturarAlFallo (5) → "
-      u"NoiseX (6) → prepararEstrellas (8) → "
-      u"recombinarEstrellas (9) → exportarFinal (10). estirarCapas devuelve { starless: {vista, ...}, estrellas: {vista, ...} }: "
-      u"las vistas estiradas son r.starless.vista y r.estrellas.vista. Si te piden desde un paso, empieza en ese paso.\n"
-      u"Nombres reales de los procesos: SPCC = SpectrophotometricColorCalibration, BXT = BlurXTerminator, "
-      u"NXT = NoiseXTerminator, SXT = StarXTerminator, GHS = GeneralizedHyperbolicStretch. No existen StarReduction, "
-      u"StarSplitting, Image.activeImage ni alert(); un script PJSR no puede usar return en el nivel superior.\n"
+      u"NoiseX (6) → prepararEstrellas (8) → recombinarEstrellas (9) → exportarFinal (10). Si te piden desde un paso, empieza en ese paso.\n"
       u"Si lo que te piden lo hace una de estas funciones (p. ej. «analiza la corrección de gradiente» → gradienteCandidatos, "
-      u"que compara GraXpert, MGC y polinomio y mide cuánto se come cada uno el objeto), USA LA FUNCIÓN: no escribas tú GraXpert, "
-      u"MultiscaleGradientCorrection, BlurX, NoiseX ni tus propias métricas. Si no hay imagen seleccionada, pide al usuario "
-      u"que la seleccione o que te diga su id; nunca uses ImageWindow.windows[0] ni la primera ventana que encuentres.\n"
-      u"NO leas campos del resultado que no conozcas (r.medidas.escala y parecidos fallan con \"Cannot read properties of "
-      u"undefined\"): devuelve el objeto entero con JSON.stringify y coméntalo cuando veas lo que ha medido. Si te piden "
-      u"analizar varias imágenes, llama a la función una vez por vista y devuelve todo junto: JSON.stringify({ vista1: r1, vista2: r2, … }).\n"
+      u"que compara GraXpert, MGC y polinomio y mide cuánto se come cada uno el objeto), USA LA FUNCIÓN. Si ninguna lo hace, dilo "
+      u"y propón qué puede hacer el usuario. Si no hay imagen seleccionada, pide al usuario que la seleccione o que te diga su id. "
+      u"Si te piden analizar varias imágenes, pide una llamada por vista en el mismo bloque.\n"
       u"ANTES DE NADA, con varios masters (filtros, noches o cámaras distintas): si no están alineados y recortados "
       u"(sus ids no acaban en _alin, o analizarMaster da bordes_sin_datos.hay), el primer paso es el 5, alinearMasters con "
       u"sus ficheros, y el resto se hace sobre los _alin. Nunca gradiente, BXT, SPCC ni desmezcla antes. Con un solo master y "
-      u"bordes_sin_datos.hay, recortar primero con Crop (bordes_sin_datos.recorte). SPCC con filtros de banda ancha NO va "
-      u"sobre los masters dual band: rompe la desmezcla.\n"
+      u"bordes_sin_datos.hay, el recorte (bordes_sin_datos.recorte) lo hace el usuario con Crop: díselo. SPCC con filtros de banda "
+      u"ancha NO va sobre los masters dual band: rompe la desmezcla.\n"
       u"No hay un método de gradiente preferido: se comparan con gradienteCandidatos y se aplica el que mejor mida. "
       u"Masters de cámara color con filtro dual band (HaO3, S2O3, SHb…): Paso 7 desmezclarDualBand sobre CADA master dual band "
-      u"(detecta el filtro; devuelve r.lineas, p. ej. { SII: \"SII_raw_S2O3\", OIII: \"OIII_raw_S2O3\" }); después el gradiente "
+      u"(detecta el filtro; devuelve lineas, p. ej. { SII: \"SII_raw_S2O3\", OIII: \"OIII_raw_S2O3\" }); después el gradiente "
       u"(Paso 9) se hace sobre cada raya desmezclada y sobre el RGB, NO sobre los masters dual band en color; "
       u"Paso 16 restar continuo si hace falta y Paso 10 combinarMasters con el RGB. Las paletas (SHO, HOO…) se eligen en el "
       u"Paso 2 no lineal, no en la fase lineal.";
@@ -1147,14 +1127,14 @@ String PiCopilotPrompts::Free( const PiCopilotConfig& cfg, const PiCopilotModel&
       if ( model.IsAgent() )
          return text;
       return u"[Vista activa: " + ViewText( viewId ) + u"." + AllViewsLine() +
-             u" Para medir o procesar, propón un script PJSR con las funciones de la guía.]\n\n" + text;
+             u" Para medir o procesar, pide funciones de la guía en un bloque ```json (nunca código).]\n\n" + text;
    }
    String s;
    s << u"[Contexto de PiCopilot: imagen activa en PixInsight: vista " << ViewText( viewId ) << u"." << AllViewsLine();
    if ( model.IsAgent() )
       s << u" Puedes actuar sobre ella con las herramientas MCP de PiCopilot (mcp__picopilot__*) si te lo pido.";
    else
-      s << u" Si propones un script PJSR, ponlo en un único bloque ```javascript.";
+      s << u" Si hay que medir o procesar, pide funciones de la guía en un único bloque ```json; nunca escribas código.";
    s << u"]";
    if ( !model.IsAgent() )
       s << ToolCatalog( cfg ) << HttpContext( cfg, model );
@@ -1162,30 +1142,35 @@ String PiCopilotPrompts::Free( const PiCopilotConfig& cfg, const PiCopilotModel&
    return s;
 }
 
-String PiCopilotPrompts::ExtractScript( const String& response )
+String PiCopilotPrompts::ExtractCalls( const String& response )
 {
-   static const char* fences[] = { "```javascript", "```js", "```JavaScript" };
-   size_type best = String::notFound;
-   size_type bestLen = 0;
-   for ( const char* f : fences )
+   // El último bloque ```json (o ``` sin lenguaje) que sea un objeto con "llamadas". Un ```javascript no vale: el
+   // modelo no puede proponer código.
+   String found;
+   size_type from = 0;
+   for ( ;; )
    {
-      size_type p = response.FindLast( f );
-      if ( p != String::notFound && (best == String::notFound || p > best) )
+      size_type p = response.Find( "```", from );
+      if ( p == String::notFound )
+         break;
+      size_type nl = response.Find( '\n', p + 3 );
+      if ( nl == String::notFound )
+         break;
+      String lang = response.Substring( p + 3, nl - p - 3 ).Trimmed().CaseFolded();
+      size_type stop = response.Find( "```", nl + 1 );
+      if ( stop == String::notFound )
+         stop = response.Length();
+      if ( lang.IsEmpty() || lang == u"json" )
       {
-         best = p;
-         bestLen = ::strlen( f );
+         String body = response.Substring( nl + 1, stop - nl - 1 ).Trimmed();
+         if ( body.StartsWith( '{' ) && body.Contains( u"\"llamadas\"" ) )
+            found = body;
       }
+      from = stop + 3;
+      if ( from >= response.Length() )
+         break;
    }
-   if ( best == String::notFound )
-      return String();
-   size_type start = response.Find( '\n', best + bestLen );
-   if ( start == String::notFound )
-      return String();
-   ++start;
-   size_type stop = response.Find( "```", start );
-   if ( stop == String::notFound )
-      stop = response.Length();
-   return response.Substring( start, stop - start ).Trimmed();
+   return found;
 }
 
 // ----------------------------------------------------------------------------

@@ -170,8 +170,16 @@ namespace PiCopilotPrompts
    // Prompt libre escrito por el usuario, con el contexto de la imagen.
    String Free( const PiCopilotConfig&, const PiCopilotModel&, const String& text, const String& viewId, bool firstTurn );
 
-   // Extrae el último bloque ```javascript (o ```js) de una respuesta.
-   String ExtractScript( const String& response );
+   // Extrae el último bloque ```json con {"llamadas": [...]} de una respuesta (o vacío). El modelo nunca escribe
+   // código: sólo propone llamadas a funciones de la guía, que el runner valida contra el manifiesto.
+   String ExtractCalls( const String& response );
+
+   // Lista de las funciones del manifiesto de la guía: "- nombre {p1*, p2} (Paso N): resumen" (* = obligatorio).
+   // Sin summaries, sólo "- nombre {p1*, p2}" (para los recordatorios, más cortos).
+   String FunctionList( const String& guideDir, bool summaries = true );
+
+   // Instrucciones del formato de llamadas para los modelos sin herramientas.
+   String CallsFormat();
 }
 
 // ----------------------------------------------------------------------------

@@ -97,7 +97,7 @@ void PiCopilotChatDialog::Refresh()
       return;
    GUI->Send_Button.Enable( !m_busy );
    GUI->Send_Button.SetText( m_busy ? String( Tr( u"Pensando..." ) ) : String( Tr( u"Enviar" ) ) );
-   GUI->RunScript_Button.Enable( !m_busy && !m_lastScript.IsEmpty() );
+   GUI->RunCalls_Button.Enable( !m_busy && !m_lastCalls.IsEmpty() );
    GUI->New_Button.Enable( !m_busy );
 }
 
@@ -140,7 +140,7 @@ void PiCopilotChatDialog::AppendAssistant( const String& modelName, const String
 {
    Push( m_entries, PiCopilotChatEntry::Assistant, modelName, text );
    RefreshHistory();
-   m_lastScript = PiCopilotPrompts::ExtractScript( text );
+   m_lastCalls = PiCopilotPrompts::ExtractCalls( text );
    Refresh();
    if ( m_voiceOn )
       Speak( text );
@@ -207,7 +207,7 @@ static String VoiceText( const String& md )
       if ( t.StartsWith( "```" ) )
       {
          if ( !inCode )
-            out << (PiCopilotEnglish() ? u" I have prepared a script. " : u" Te he preparado un script. ");
+            out << (PiCopilotEnglish() ? u" I have prepared the calls. " : u" Te he preparado las llamadas. ");
          inCode = !inCode;
          continue;
       }
@@ -383,7 +383,7 @@ void PiCopilotChatDialog::ClearView()
 void PiCopilotChatDialog::ClearConversation()
 {
    m_entries.clear();
-   m_lastScript.Clear();
+   m_lastCalls.Clear();
    RefreshHistory();
    Refresh();
 }
@@ -432,10 +432,10 @@ void PiCopilotChatDialog::e_Click( Button& sender, bool /*checked*/ )
    {
       StartDictation();
    }
-   else if ( sender == GUI->RunScript_Button )
+   else if ( sender == GUI->RunCalls_Button )
    {
-      if ( !m_lastScript.IsEmpty() && ThePiCopilotInterface != nullptr )
-         ThePiCopilotInterface->RunScriptButton( m_lastScript );
+      if ( !m_lastCalls.IsEmpty() && ThePiCopilotInterface != nullptr )
+         ThePiCopilotInterface->RunCallsButton( m_lastCalls );
    }
    else if ( sender == GUI->Clear_Button )
    {
@@ -475,7 +475,7 @@ void PiCopilotChatDialog::e_LinkResult( WebView&, const Variant& result )
    for ( size_t i = 0; i < m_entries.size(); ++i )
       if ( m_entries[i].kind == PiCopilotChatEntry::Assistant )
          lastAssistant = int( i );
-   ThePiCopilotInterface->StepLinkClicked( text, index >= 0 && index == lastAssistant, m_lastScript );
+   ThePiCopilotInterface->StepLinkClicked( text, index >= 0 && index == lastAssistant, m_lastCalls );
 }
 
 PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
@@ -495,14 +495,14 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
    Send_Button.SetText( Tr( u"Enviar" ) );
    Send_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
 
-   RunScript_Button.SetText( Tr( u"Ejecutar script" ) );
-   RunScript_Button.SetToolTip( Tr( u"<p>Ejecuta en PixInsight el último bloque <i>```javascript</i> de la respuesta. "
-                                u"Revísalo antes: se te pedirá confirmación.</p>" ) );
-   RunScript_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
+   RunCalls_Button.SetText( Tr( u"Ejecutar llamadas" ) );
+   RunCalls_Button.SetToolTip( Tr( u"<p>Ejecuta en PixInsight las llamadas a funciones de la guía del último bloque <i>```json</i> de la respuesta. "
+                                u"Revísalas antes: se te pedirá confirmación.</p>" ) );
+   RunCalls_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
 
    AutoRun_CheckBox.SetText( Tr( u"Ejecutar sin preguntar" ) );
-   AutoRun_CheckBox.SetToolTip( Tr( u"<p>El script de la respuesta a tu Prompt se ejecuta en PixInsight sin esperar a que pulses "
-                                u"«Ejecutar script». Los enlaces «Siguiente paso» del chat ejecutan ese paso con un clic.</p>" ) );
+   AutoRun_CheckBox.SetToolTip( Tr( u"<p>Las llamadas de la respuesta a tu Prompt se ejecutan en PixInsight sin esperar a que pulses "
+                                u"«Ejecutar llamadas». Los enlaces «Siguiente paso» del chat ejecutan ese paso con un clic.</p>" ) );
    AutoRun_CheckBox.SetChecked( ThePiCopilotInterface == nullptr || ThePiCopilotInterface->AutoRunEnabled() );
    AutoRun_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
 
@@ -520,7 +520,7 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
                               u"Necesita internet (lo procesa Microsoft). Para cerrarlo, Win + H o Esc.</p>" ) );
    Dictate_Button.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
    Voice_CheckBox.SetText( Tr( u"Leer en voz alta" ) );
-   Voice_CheckBox.SetToolTip( Tr( u"<p>Lee cada respuesta del modelo con la voz de Windows (sin el código de los scripts).</p>" ) );
+   Voice_CheckBox.SetToolTip( Tr( u"<p>Lee cada respuesta del modelo con la voz de Windows (sin los bloques de llamadas).</p>" ) );
    Voice_CheckBox.SetChecked( w.m_voiceOn );
    Voice_CheckBox.OnClick( (Button::click_event_handler)&PiCopilotChatDialog::e_Click, w );
    ReadAloud_Button.SetText( Tr( u"Leer" ) );
@@ -560,7 +560,7 @@ PiCopilotChatDialog::GUIData::GUIData( PiCopilotChatDialog& w )
 
    Buttons_Sizer.SetSpacing( 6 );
    Buttons_Sizer.Add( Send_Button );
-   Buttons_Sizer.Add( RunScript_Button );
+   Buttons_Sizer.Add( RunCalls_Button );
    Buttons_Sizer.Add( AutoRun_CheckBox );
    Buttons_Sizer.Add( Internet_CheckBox );
    Buttons_Sizer.AddStretch();
@@ -773,7 +773,7 @@ PiCopilotAIConfigDialog::PiCopilotAIConfigDialog( PiCopilotConfig& cfg, const Pi
    TurnsStep_Label.SetTextAlignment( TextAlign::Right|TextAlign::VertCenter );
    TurnsStep_SpinBox.SetRange( 0, 2000 );
    TurnsStep_SpinBox.SetValue( cfg.maxTurnsStep );
-   TurnsStep_SpinBox.SetToolTip( Tr( u"<p>Límite de turnos de Claude (cada lectura, herramienta o script cuenta uno) en un "
+   TurnsStep_SpinBox.SetToolTip( Tr( u"<p>Límite de turnos de Claude (cada lectura o herramienta cuenta uno) en un "
                                  u"paso o en el Prompt. Al llegar, Claude se para. 0 = sin límite.</p>" ) );
    TurnsFull_Label.SetText( Tr( u"Resolución Completa:" ) );
    TurnsFull_Label.SetTextAlignment( TextAlign::Right|TextAlign::VertCenter );
