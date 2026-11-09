@@ -1303,7 +1303,7 @@ function plConstruirDialogo(aj) {
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
       self.mensajes = []; self.registro = ""; self.entradas = []; plBorrarTemporales();
-      plMostrarPagina(self.historialBox, plPagina([])); self.ponerPendiente(null);
+      self.bienvenida(); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0; self.bCorregir.enabled = false;
       self.usoSesion = null; self.actualizarUso();
    };
@@ -1329,7 +1329,7 @@ function plConstruirDialogo(aj) {
    this.bVaciar.toolTip = "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.";
    this.bVaciar.onClick = function () {
       self.registro = ""; self.entradas = []; plBorrarTemporales();
-      plMostrarPagina(self.historialBox, plPagina([]));
+      self.bienvenida();
    };
    this.estadoLbl = new Label(pPrompt);
    this.estadoLbl.text = "";
@@ -1633,20 +1633,21 @@ function plConstruirDialogo(aj) {
       var di = plDatosImagen(), nombre = plSello() + "_" + (di.objeto || di.vista || "picopilot").replace(/[^A-Za-z0-9_-]+/g, "_");
       return plCarpeta(aj.carpetaInformes) + "/" + nombre;
    };
+   this.conversacion = function () { return this.entradas.filter(function (e) { return !e.bienvenida; }); };
    this.crearInforme = function () {
-      if (!this.entradas.length) { this.estadoLbl.text = "No hay conversación que guardar."; return null; }
+      if (!this.conversacion().length) { this.estadoLbl.text = "No hay conversación que guardar."; return null; }
       var f = this.baseInforme() + ".md";
-      try { File.writeTextFile(f, plInformeMd(this.entradas, aj, this.usoSesion)); this.estadoLbl.text = "Informe guardado: " + f; return f; }
+      try { File.writeTextFile(f, plInformeMd(this.conversacion(), aj, this.usoSesion)); this.estadoLbl.text = "Informe guardado: " + f; return f; }
       catch (e) { this.estadoLbl.text = "No se pudo guardar el informe: " + (e.message || e); return null; }
    };
    this.crearDossier = function (alTerminar) {
-      if (!this.entradas.length) { this.estadoLbl.text = "No hay conversación que guardar."; return; }
+      if (!this.conversacion().length) { this.estadoLbl.text = "No hay conversación que guardar."; return; }
       var base = this.baseInforme(), di = plDatosImagen(), S = this.usoSesion;
       var cab = "<div class=\"portada\"><h1>Dossier de procesado" + (di.objeto ? " — " + plEsc(di.objeto) : "") + "</h1>" +
                 "<p>" + plEsc(plSello().replace("_", " ")) + " · vista " + plEsc(di.vista || "—") + " · modelo " + plEsc(aj.proveedor + " " + (aj.modelo() || "")) +
                 (S && S.respuestas ? " · " + plEsc(plUsoTexto(S.entrada || S.salida ? S : { total: S.total, coste: S.coste })) : "") + "</p>" +
                 "<p>PiCopilot Lite " + PL_VERSION + " · guía " + plEsc(aj.guia) + "</p></div>";
-      var html = plPagina(this.entradas, { claro: true, cabecera: cab }), fh = base + ".html", fp = base + ".pdf";
+      var html = plPagina(this.conversacion(), { claro: true, cabecera: cab }), fh = base + ".html", fp = base + ".pdf";
       File.writeTextFile(fh, html);
       // Un visor aparte (oculto) carga la página desde fichero, para que salgan las miniaturas, y la guarda en PDF.
       if (!this.wvPdf) { this.wvPdf = new WebView(this); this.wvPdf.setFixedSize(900, 1200); this.wvPdf.hide(); }
@@ -1905,9 +1906,33 @@ function plConstruirDialogo(aj) {
 
    plBorrarTemporales();   // al abrir: miniaturas de sesiones anteriores fuera
    this.rellenarModelos(false);
-   this.anotar("PiCopilot Lite", "Hola. Pregúntame por tus imágenes o pídeme un paso de procesado. Cuando proponga un " +
-               "script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»). Los enlaces «Siguiente paso» " +
-               "ejecutan ese paso con un clic.\nGuía: " + aj.guia, "asst");
+   this.bienvenida = function () {   // no entra en el dossier ni en el informe
+      this.anotar("PiCopilot Lite", plBienvenida(aj), "asst");
+      this.entradas[this.entradas.length - 1].bienvenida = true;
+   };
+   this.bienvenida();
+}
+
+// Mensaje de inicio del Prompt (texto de Rafael, 9 nov 2026); también tras «Limpiar» y «Nueva conversación».
+function plBienvenida(aj) {
+   return "**PiCopilot Lite** es un asistente de inteligencia artificial especializado en astrofotografía que funciona " +
+          "dentro de PixInsight.\n\n" +
+          "Mi objetivo es guiarte y ejecutar pasos concretos de la guía de procesado, tanto en la **fase lineal** " +
+          "(calibración, alineación, correcciones) como en la **no lineal** (estirado, color, nitidez, exportación).\n\n" +
+          "### ¿Qué hago exactamente?\n\n" +
+          "- **Analizo:** identifico el objeto (SIMBAD/Wikipedia), reviso cabeceras, mido estadísticas y detecto " +
+          "problemas (bordes, gradiente, ruido).\n" +
+          "- **Ejecuto:** puedo lanzar procesos de PixInsight (WBPP, BXT, SPCC, StarXTerminator, etc.) mediante scripts " +
+          "PJSR seguros, siempre trabajando sobre copias y midiendo resultados antes y después.\n" +
+          "- **Recomiendo:** te propongo el siguiente paso lógico según la guía, comparando métodos cuando sea posible " +
+          "(ej. GraXpert vs. MGC para gradiente) y mostrándote las métricas.\n\n" +
+          "### ¿Cómo se usa?\n\n" +
+          "- Tú me dices qué imagen tienes (o simplemente «la imagen en pantalla») y qué objeto es.\n" +
+          "- Yo te respondo con información, análisis o un script que ejecuto en PixInsight.\n" +
+          "- Siempre trabajo sobre copias: no modifico tus vistas originales sin que lo pidas explícitamente.\n" +
+          "- Cuando proponga un script, pulsa «Ejecutar script» (o marca «Ejecutar sin preguntar»). Los enlaces " +
+          "«Siguiente paso» ejecutan ese paso con un clic.\n\n" +
+          "Guía: `" + aj.guia + "`";
 }
 
 // ---------------------------------------------------------------------------------------------------------------
