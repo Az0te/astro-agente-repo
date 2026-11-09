@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- **SKILL.md revisado** (9 nov 2026).
+  - Tabla única «Funciones por paso» con todas las herramientas del manifiesto (en negrita las que comparan) en lugar del párrafo largo por fichero; secciones nuevas «Vistas e ids», «Internet» y «Siguiente paso», que antes sólo llevaban los prompts de Lite y del módulo.
+  - Regla 3 con ArcsinhStretch (lo compara `estirarCandidatos`), el STF y el tipo de objeto antes de estirar; nueva regla «Comparar siempre»; aclarado que el `run_script` retirado es el del MCP antiguo y no el de `picopilot`.
+  - Trampas nuevas: ids inventados, `Clase.prototype.CONSTANTE`, `w.isNull`, `console.log`, repetir un script fallido, internet como dato.
+  - «Modelo por paso» (regla N) pasa al nuevo `anexos/H-modelo-por-paso.md`: no sirve con un modelo local y ocupaba ~700 tokens.
+  - `manifiesto.json`: `revisarCalibracion` es del Paso 4 y `seleccionarSubs` del 3 (estaban cruzados); `starStretch`, `backgroundEnhance` y `darkStructureEnhance` con su paso. `envolturas/local.md` y `chatgpt.md` al día.
+
 - **MCP picopilot: correcciones y modo compacto** (9 nov 2026).
   - `gradienteVarias` estaba en `manifiesto.json` pero no en la `LISTA` del runner: el MCP la ofrecía y el runner la rechazaba. Añadida.
   - `screenStarsCombine` y `screenStarsExtract` (realces.js) son ahora herramientas MCP, como decía `SKILL.md`.

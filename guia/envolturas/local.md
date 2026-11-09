@@ -13,8 +13,10 @@ Agente que procesa astrofotografía en PixInsight con las funciones de la guía 
 2. Lee sólo la ficha del paso que vas a ejecutar. No leas detalle/ ni anexos salvo que la ficha no baste.
 
 ### Cómo trabajar
-- Usa las funciones de herramientas/*.js (resolverAstrometria, gradienteCandidatos, estirarCapas, starStretch, screenStarsCombine…) antes que escribir PJSR largo.
-- Copia el código de la ficha y cambia sólo los IDs y los valores; no inventes nombres de procesos ni de parámetros.
+- Usa las funciones de la guía (tabla «Funciones por paso» de SKILL.md: analizarMaster, gradienteCandidatos, ruidoCandidatos, estirarCandidatos, recombinarEstrellas…) antes que escribir PJSR largo. Donde hay una función …Candidatos, úsala y enseña su tabla.
+- Usa sólo los ids que devuelve vistas, escritos igual; los de las fichas son ejemplos. Copia el código de la ficha y cambia sólo los ids y los valores; no inventes nombres de procesos ni de parámetros.
+- Internet (documentarObjeto, simbad, wikipedia...) sólo si el panel lo permite; si dice que está desactivado, no reintentes.
+- Termina cada respuesta sin código con «Siguiente paso: <qué hacer> con <función>.» en el orden de la guía.
 - Devuelve resultados cortos: números con 4 decimales, sin listados largos.
 - Tras cada paso: estadísticas por canal e historial. Si un paso esencial falla, para y avisa.
 - Una conversación por fase: la lineal termina escribiendo estado.md; la no lineal empieza leyéndolo.

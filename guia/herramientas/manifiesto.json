@@ -199,9 +199,9 @@
    "fichero": "preproceso.js",
    "nivel": "lectura",
    "timeout_s": 300,
-   "descripcion": "Paso 3 lineal: comprueba con las cabeceras que darks, flats y darks de flats casan con los lights (exposición, temperatura, gain, offset, binning, tamaño, telescopio, filtro) y mide el nivel de los flats (saturados o subexpuestos). No abre ventanas.",
-   "resumen": "Paso 3 lineal: comprueba con las cabeceras que darks y flats casan con los lights y mide el nivel de los flats.",
-   "paso": "lineal/03-blink-subframeselector.md",
+   "descripcion": "Paso 4 lineal (antes de lanzarWBPP): comprueba con las cabeceras que darks, flats y darks de flats casan con los lights (exposición, temperatura, gain, offset, binning, tamaño, telescopio, filtro) y mide el nivel de los flats (saturados o subexpuestos). No abre ventanas.",
+   "resumen": "Paso 4 lineal (antes de lanzarWBPP): comprueba con las cabeceras que darks y flats casan con los lights y mide el nivel de los flats.",
+   "paso": "lineal/04-preprocesado.md",
    "params": {
     "type": "object",
     "properties": {
@@ -220,8 +220,8 @@
    "fichero": "preproceso.js",
    "nivel": "lectura",
    "timeout_s": 1800,
-   "descripcion": "Paso 4 lineal: mide los subs con ImageAnalysis y rechaza por FWHM, excentricidad y nubes dentro de cada grupo (carpeta, filtro, exposición). Devuelve tabla, aprobados, dudosos, rechazados con motivo, pesos y un fichero de lista de aprobados para lanzarWBPP. Puede tardar varios minutos: devuelve un trabajo.",
-   "resumen": "Paso 4 lineal: mide subs (FWHM, excentricidad, nubes), rechaza por grupo y deja la lista para lanzarWBPP. Devuelve un trabajo.",
+   "descripcion": "Paso 3 lineal: mide los subs con ImageAnalysis y rechaza por FWHM, excentricidad y nubes dentro de cada grupo (carpeta, filtro, exposición). Devuelve tabla, aprobados, dudosos, rechazados con motivo, pesos y un fichero de lista de aprobados para lanzarWBPP. Puede tardar varios minutos: devuelve un trabajo.",
+   "resumen": "Paso 3 lineal: mide subs (FWHM, excentricidad, nubes), rechaza por grupo y deja la lista para lanzarWBPP. Devuelve un trabajo.",
    "paso": "lineal/03-blink-subframeselector.md",
    "params": {
     "type": "object",
@@ -1332,6 +1332,7 @@
    "nivel": "vista",
    "timeout_s": 300,
    "descripcion": "Star Stretch (algoritmo de SetiAstro) sobre la propia vista de estrellas LINEAL (con historial, se puede deshacer).",
+   "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",
     "properties": {
@@ -1380,6 +1381,7 @@
    "nivel": "vista",
    "timeout_s": 300,
    "descripcion": "DarkStructureEnhance sobre la propia vista NO lineal (con historial).",
+   "paso": "no-lineal/05-boost.md",
    "params": {
     "type": "object",
     "properties": {
@@ -1403,6 +1405,7 @@
    "nivel": "vista",
    "timeout_s": 300,
    "descripcion": "BackgroundEnhance sobre la propia vista NO lineal (con historial).",
+   "paso": "no-lineal/05-boost.md",
    "params": {
     "type": "object",
     "properties": {
