@@ -95,8 +95,6 @@ var PL_TR = {
    "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet."]:
       "Allow external lookups. Claude: WebSearch and WebFetch. All models: SIMBAD, Wikipedia, web pages and catalog " +
       "images (web.js). Unchecked, nothing goes out to the internet.",
-   "Pedir corrección": "Ask for a fix",
-   "Reenvía el error al modelo para que corrija las llamadas.": "Sends the error back to the model so it fixes the calls.",
    "Nueva conversación": "New conversation",
    "Limpiar": "Clear",
    "Vacía la ventana y borra las miniaturas temporales. El modelo conserva el contexto de la conversación.":
@@ -170,9 +168,9 @@ var PL_TR = {
    "Llamadas ejecutadas.": "Calls run.",
    "Cumple": "Pass", "No cumple": "Fail", "Resultado de las llamadas": "Calls result",
    "Cancelado.": "Cancelled.",
-   "Llamadas repetidas. Puedes pedir otra corrección.": "Repeated calls. You can ask for another fix.",
+   "Llamadas repetidas. Pido otra corrección.": "Repeated calls. Asking for another fix.",
    "Llamadas repetidas; revisa la petición.": "Repeated calls; check the request.",
-   "Las llamadas han fallado. Puedes pedir una corrección al modelo.": "The calls failed. You can ask the model for a fix.",
+   "Las llamadas han fallado. Pido la corrección al modelo.": "The calls failed. Asking the model for a fix.",
    "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar.":
       "macOS dictation: click in the prompt and press the Fn key (or 🌐) twice; speak and press Send.",
    "Dictado: no hay dictado del sistema en Linux; escribe el prompt.": "Dictation: there is no system dictation on Linux; type the prompt.",
@@ -1465,17 +1463,12 @@ function plConstruirDialogo(aj) {
                             "e imágenes de catálogo (web.js). Sin marcar, nada sale a internet.";
    this.cInternet.checked = aj.internet;
    this.cInternet.onCheck = function (c) { aj.internet = c; aj.guardar(); };
-   this.bCorregir = new PushButton(pPrompt);
-   this.bCorregir.text = "Pedir corrección";
-   this.bCorregir.toolTip = "Reenvía el error al modelo para que corrija las llamadas.";
-   this.bCorregir.enabled = false;
-   this.bCorregir.onClick = function () { self.pedirCorreccion(); };
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
       self.mensajes = []; self.registro = ""; self.entradas = []; plBorrarTemporales();
       self.bienvenida(); self.ponerPendiente(null);
-      self.ultimoError = null; self.correcciones = 0; self.bCorregir.enabled = false;
+      self.ultimoError = null; self.correcciones = 0;
       self.usoSesion = null; self.actualizarUso();
    };
    this.bVaciar = new PushButton(pPrompt);
@@ -1503,7 +1496,7 @@ function plConstruirDialogo(aj) {
    var filaB = new HorizontalSizer;
    filaB.spacing = 6;
    filaB.add(this.bEnviar); filaB.add(this.bCancelar); filaB.addSpacing(12);
-   filaB.add(this.cInternet); filaB.add(this.bCorregir);
+   filaB.add(this.cInternet);
    filaB.addStretch(); filaB.add(this.bVaciar); filaB.add(this.bLimpiar);
    pPrompt.sizer = new VerticalSizer;
    pPrompt.sizer.margin = 6; pPrompt.sizer.spacing = 6;
@@ -1924,7 +1917,7 @@ function plConstruirDialogo(aj) {
    };
 
    this.ocupado = function (si) {
-      this.bEnviar.enabled = !si; this.bCancelar.enabled = si; this.bCorregir.enabled = false;
+      this.bEnviar.enabled = !si; this.bCancelar.enabled = si;
       this.cProv.enabled = !si;
    };
 
@@ -1975,8 +1968,7 @@ function plConstruirDialogo(aj) {
          this.repetido = true;
          this.anotar("Aviso", "El modelo ha devuelto las mismas llamadas que ya fallaron; no las ejecuto.", "err");
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
-         this.bCorregir.enabled = quedan;
-         this.estadoLbl.text = plT(quedan ? "Llamadas repetidas. Puedes pedir otra corrección." : "Llamadas repetidas; revisa la petición.");
+         this.estadoLbl.text = plT(quedan ? "Llamadas repetidas. Pido otra corrección." : "Llamadas repetidas; revisa la petición.");
          if (quedan) this.pedirCorreccion();
          return;
       }
@@ -2038,8 +2030,7 @@ function plConstruirDialogo(aj) {
          this.ultimoError = r.texto;
          this.scriptFallido = s;
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
-         this.bCorregir.enabled = quedan;
-         this.estadoLbl.text = plT(quedan ? "Las llamadas han fallado. Puedes pedir una corrección al modelo." :
+         this.estadoLbl.text = plT(quedan ? "Las llamadas han fallado. Pido la corrección al modelo." :
                                "Las llamadas han fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.");
          if (quedan) this.pedirCorreccion();
       }
