@@ -2,7 +2,7 @@
 
 PiCopilot Lite es la forma más sencilla de usar el asistente: un **script** de PixInsight. No es un módulo ni una DLL, así que **no hay que compilar ni firmar nada**. Abre una ventana con el chat, el modelo propone scripts que usan las funciones de la guía y tú decides si se ejecutan.
 
-*English: PiCopilot Lite is a plain PixInsight script (no build, no signing). Run `picopilot/script/PiCopilotLite.js` from Script > Execute Script File. It works with Ollama (local), Claude Code or Codex.*
+*English: see [README.en.md](README.en.md). La ventana y las respuestas se pueden poner en inglés en Ajustes > Idioma.*
 
 ## Requisitos
 
@@ -27,7 +27,7 @@ No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio 
 
 1. Abre tu imagen en PixInsight.
 2. Lanza **Script > PiCopilot > PiCopilotLite** (o **Script > Execute Script File…** y elige `picopilot/script/PiCopilotLite.js`).
-3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code o Codex) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola).
+3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code o Codex) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola), y elige el **Idioma** (español o inglés).
 4. En **Prompt** escribe lo que quieres, por ejemplo «hazme un análisis de la imagen». Cuando el modelo proponga un script, pulsa **Ejecutar script** (o marca **Ejecutar sin preguntar**). Las líneas «Siguiente paso» del chat son enlaces: púlsalos para hacer ese paso.
 5. Para procesar la imagen entera, pulsa **Procesado completo**: el modelo dice qué pasos aplican y los hace uno a uno, parando en cada uno hasta que escribas «sigue» o pulses el enlace del siguiente.
 
@@ -61,6 +61,6 @@ Prueba automática (abre otra instancia de PixInsight sin tocar la tuya):
 PixInsight.exe -n --automation-mode --no-focus-stealing -r=<ruta>/PiCopilotLite.js,--prueba,<salida.json>[,claude|codex] --force-exit
 ```
 
-Abre y cierra el diálogo simulando una pregunta y un clic en un enlace, carga la guía, comprueba el motor de BlindSolver, la voz y el bloqueo de internet, pregunta a Ollama y ejecuta scripts de prueba. El resultado va a `<salida.json>`.
+Abre y cierra el diálogo simulando una pregunta, un clic en un enlace y un cambio de idioma, carga la guía, comprueba el motor de BlindSolver, la voz y el bloqueo de internet, pregunta a Ollama y ejecuta scripts de prueba. El resultado va a `<salida.json>`.
 
 Trampas del preprocesador de PJSR: no escribir barra-asterisco, asterisco-barra ni doble barra seguidas dentro de cadenas o regex (se toman como comentarios); con `#engine v8` no incluir `<pjsr/Sizer.jsh>` y heredar de `Dialog` con `class … extends`; los `.js` sin BOM.

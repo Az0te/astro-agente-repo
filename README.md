@@ -1,6 +1,6 @@
 # Agente de astrofotografía para PixInsight (Windows)
 
-> **English summary.** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The first bridge (a file watcher plus MCP server, retired in November 2026) was derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT); the current bridge is the `picopilot` MCP server (`mcp/`), which runs the guide's functions in PixInsight through IPC. **Easiest start: [PiCopilot Lite](picopilot/script/README.md)**, a plain PixInsight script (no build, no signing) that chats with Ollama, Claude Code or Codex and runs the guide's functions. Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
+> **English summary.** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The first bridge (a file watcher plus MCP server, retired in November 2026) was derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT); the current bridge is the `picopilot` MCP server (`mcp/`), which runs the guide's functions in PixInsight through IPC. **Easiest start: [PiCopilot Lite](picopilot/script/README.en.md)**, a plain PixInsight script (no build, no signing) that chats with Ollama, Claude Code or Codex and runs the guide's functions; its window and replies can be switched to English in Settings > Language. Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
 
 Este proyecto permite que un asistente de IA (Claude, a través del protocolo MCP) controle PixInsight para procesar astrofotografías de cielo profundo, **trabajando contigo**: tú decides y supervisas, la IA ejecuta, mide y propone.
 
@@ -37,6 +37,7 @@ Es lo que usará la mayoría: no necesita Node.js, servidor MCP ni compilar nada
 2. Ten un modelo: [Ollama](https://ollama.com) con un modelo descargado (local y gratis, p. ej. `ollama pull qwen3:32b`), o Claude Code / Codex instalados y con sesión iniciada.
 3. En PixInsight 1.9.6 o superior: **Script > Feature Scripts… > Add**, elige la carpeta `picopilot\script` y pulsa **Done**.
 4. Abre tu imagen y lanza **Script > PiCopilot > PiCopilotLite**. Elige el modelo en la pestaña **Modelo** y escribe en **Prompt**, por ejemplo «hazme un análisis de la imagen».
+5. Opcional: en **Ajustes > Idioma** elige español o inglés (ventana y respuestas del modelo; se aplica al momento).
 
 Detalles, opciones y problemas frecuentes en [`picopilot/script/README.md`](picopilot/script/README.md). Lo de abajo es para el servidor MCP y el módulo.
 
