@@ -29,11 +29,14 @@ No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio 
 2. Lanza **Script > PiCopilot > PiCopilotLite** (o **Script > Execute Script File…** y elige `picopilot/script/PiCopilotLite.js`).
 3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code o Codex) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola).
 4. En **Prompt** escribe lo que quieres, por ejemplo «hazme un análisis de la imagen». Cuando el modelo proponga un script, pulsa **Ejecutar script** (o marca **Ejecutar sin preguntar**). Las líneas «Siguiente paso» del chat son enlaces: púlsalos para hacer ese paso.
+5. Para procesar la imagen entera, pulsa **Procesado completo**: el modelo dice qué pasos aplican y los hace uno a uno, parando en cada uno hasta que escribas «sigue» o pulses el enlace del siguiente.
 
 ## Qué hace
 
 - **Chat en HTML** con tablas, colores y enlaces, como el módulo. Los resultados de los scripts salen como fichas («Cumple / No cumple», medidas, JSON plegado) y el modelo los interpreta y recomienda el paso siguiente.
-- **Funciones de la guía** ya cargadas: análisis, astrometría (motor de BlindSolver), gradiente, ruido, estirado, contraste local, núcleos, saturación, estrellas, exportación… Donde hay varios métodos, **compara candidatos** y se queda con el mejor medido (gradiente: GraXpert, GradientCorrection, MGC, polinomio; ruido: NXT, MLDenoise, MultiscaleTGVDenoise; estirado: GHS, MAS, Arcsinh).
+- **Funciones de la guía** ya cargadas: análisis, astrometría (motor de BlindSolver), gradiente, ruido, estirado, contraste local, núcleos, saturación, estrellas, exportación… Donde hay varios métodos, **compara candidatos** y se queda con el mejor medido (gradiente: GraXpert, GradientCorrection, MGC, polinomio; ruido: NXT, MLDenoise, MultiscaleTGVDenoise y el híbrido ML + NXT; estirado: GHS, MAS, Arcsinh; contraste: LHE, HDRMT, DarkStructureEnhance; núcleo: HDRMT, GradientHDRCompression). Cada candidato sale con su **miniatura** en el chat (en el gradiente, con el modelo quitado al lado).
+- En imágenes de más de 8 MP, ruido, estirado y contraste **comparan en un recorte** de 2000 px y aplican sólo el ganador a la imagen entera. MLDenoise sólo usa la GPU con NVIDIA; en AMD o Intel va por CPU (~13 s por megapíxel).
+- **Tokens**: cada respuesta lleva su consumo (y el coste con Claude) y arriba del prompt se ve el total de la conversación.
 - **Internet** (casilla «Internet»): ficha del objeto (tipo, emisión esperada, estrellas brillantes que darán problemas) con SIMBAD y Wikipedia, e imágenes de catálogo. Con Claude, además, búsqueda web. Desmarcada, nada sale a internet.
 - **Voz**: «Dictar» abre el dictado de Windows (Win + H) en el prompt y «Leer en voz alta» lee las respuestas con la voz de Windows.
 - **Pesos N**: con Claude o Codex en «auto (pesos N)», elige un modelo más barato (sonnet) o más capaz (opus), como el módulo.
