@@ -24,7 +24,6 @@ Las fichas de la guía (`*.md`, salvo `perfil.md`) se ofrecen como recursos MCP 
 | copias | Crea vistas nuevas; no toca las de entrada | `desmezclarDualBand`, `gradienteCandidatos`, `gradienteVarias`, `screenStarsCombine`, `screenStarsExtract`, `graxpertBGE`, `graxpertDenoise`, `combinarMasters`, `combinarMismoCanal`, `inyectarHa`, `bxtCorrectOnly`, `calibrarColor`, `bxtCandidatos`, `bxtAplicar`, `reducirRuido`, `separarEstrellas`, `restarContinuo`, `estirarCapas`, `estirarStarless`, `estirarEstrellas`, `quitarVerde`, `crearMascara`, `saturarAlFallo`, `prepararEstrellas`, `recombinarEstrellas` |
 | vista | Cambia la vista indicada, con historial | `resolverAstrometria`, `starStretch`, `darkStructureEnhance`, `backgroundEnhance` |
 | disco | Lee o escribe ficheros | `abrirImagen`, `guardarImagen` (no sobrescribe), `cerrarVista` (no cierra con cambios), `alinearMasters`, `componerHDR`, `lanzarWBPP`, `checkpointLineal`, `previsualizarPaletas`, `exportarFinal` |
-| libre | PJSR arbitrario | `run_script`: solo aparece si existe `~/.picopilot/permitir_libre` |
 
 ## Instalar
 

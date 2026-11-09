@@ -14,28 +14,35 @@
 
 **Núcleo de galaxias, antes de saturar** (`herramientas/nucleo.js`). Si el estirado da `meseta_nucleo.radio_px` > 3 (o el núcleo se ve plano), `comprimirNucleo("Starless_st", { nuevaVista: "Starless_nucleo" })` aplica HDRMultiscaleTransform de 7 capas y lo mezcla al 60 % sólo dentro de una máscara de bulbo (luminancia de gran escala > 0,35, rampa de 0,25). Mide la meseta antes y después, anillos oscuros nuevos en el perfil radial y cuánto brillo pierde el bulbo. Receta de Opus en una galaxia grande: HDRMT a pleno o LHE de radio 200 sobre el bulbo dieron anillo oscuro y bulbo plano. Sin este paso (galaxia grande con Qwen, 7 nov 2026) el núcleo y la galaxia satélite quedaron como una meseta de 22 px; con él, 1 px. `medirMeseta(vista)` sólo mide. El LHE del disco, si se usa, va después y con máscara galaxia × (1 − bulbo): no es "LHE + HDRMT juntos" porque no tocan la misma zona.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/nucleo.js"));   // en el nivel superior del script
-var r = comprimirNucleo("Starless_st", { nuevaVista: "Starless_nucleo" });   // capas 7, mezcla 0.6, mascaraDesde 0.35
-JSON.stringify(r);   // meseta_antes, meseta_despues, brillo_bulbo, anillos_nuevos_px, no_cumple, control
+```json
+{"llamadas": [
+  {"funcion": "comprimirNucleo", "parametros": {"vista": "Starless_st", "opciones": {"nuevaVista": "Starless_nucleo"}}}
+]}
 ```
+
+Por defecto: capas 7, mezcla 0,6, mascaraDesde 0,35. Devuelve meseta antes y después, brillo del bulbo, anillos nuevos, `no_cumple` y el control.
 
 **Comparar HDRMT con GradientHDRCompression** (`nucleoCandidatos`, mismo fichero): aplica los dos con la misma máscara de bulbo y la misma mezcla (`comprimirNucleo` con `metodo: "hdrmt"` y `metodo: "ghc"`, exponente del gradiente 0,6; < 1 comprime) y se queda con el que deja menos meseta sin anillos nuevos ni bulbo plano. En una prueba de 8 nov 2026 GradientHDRCompression bajó la meseta de 6,4 a 0,6 px sin anillo y HDRMT dejó 7,7 px con un anillo oscuro (una sola imagen: las medidas deciden en cada caso).
 
-```javascript
-var r = nucleoCandidatos("Starless_st", { nuevaVista: "Starless_nucleo" });   // { exponentes: [0.6, 0.4], mascaraDesde, cerrar }
-JSON.stringify(r.comparados);
+```json
+{"llamadas": [
+  {"funcion": "nucleoCandidatos", "parametros": {"vista": "Starless_st", "opciones": {"nuevaVista": "Starless_nucleo"}}}
+]}
 ```
+
+Opciones: `exponentes` ([0.6, 0.4]), `mascaraDesde`, `cerrar`. La tabla está en `comparados`.
 
 **Saturación al fallo en una llamada** (`herramientas/boost.js`): `saturarAlFallo("Starless_st", { tipo: "nebulosa" })` prueba 0,58 → 0,78 sobre copias y se queda la última sin fallo medido (canales > 0,98, fondo teñido: dominante del cielo > 8 % o +4 puntos, ruido de color del cielo × 1,5). Si ni la primera pasa, no satura. Pruebas de nov 2026: galaxia grande → 0,63 (para por ruido de color); nebulosa dual band → no satura (dominante azul del cielo sin resolver). Los umbrales de tinte son provisionales.
 
 **Más color en la nebulosa sin teñir el cielo:** `saturarAlFallo(vista, { tipo: "nebulosa", mascara: true })` satura a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante) y prueba 0,63 → 0,88. Úsalo cuando el usuario pida más color o cuando la versión sin máscara pare por «fondo teñido»; siempre sobre la misma entrada, no sobre la ya saturada.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/boost.js"));   // en el nivel superior del script
-var r = saturarAlFallo("Starless_st", { tipo: "nebulosa", nuevaVista: "Starless_sat" });   // "galaxia": 0,63–0,70
-JSON.stringify(r);   // pruebas, punto_medio_elegido, parada, no_cumple, control
+```json
+{"llamadas": [
+  {"funcion": "saturarAlFallo", "parametros": {"vista": "Starless_st", "opciones": {"tipo": "nebulosa", "nuevaVista": "Starless_sat"}}}
+]}
 ```
+
+En galaxia, 0,63–0,70. Devuelve las pruebas, el punto medio elegido, por qué paró, `no_cumple` y el control.
 
 **Realces de los scripts BackgroundEnhance y DarkStructureEnhance** (`herramientas/realces.js`, también como herramientas del MCP; mismo resultado que los scripts)
 
@@ -53,27 +60,13 @@ JSON.stringify(r);   // pruebas, punto_medio_elegido, parada, no_cumple, control
 - Radios: "Radio de LHE de NOVA: ~1/12 del lado corto de la imagen (32–128 px), amount 0,5, slope 1,5 en nebulosas y 2,0–2,5 en galaxias". Galaxias aescaffre: "LHE radio 64, amount 0,25 (de canto) a 0,35 (de cara), slopeLimit 1,3–1,5".
 - "Radios de LHE pequeños crean anillos oscuros alrededor de estrellas: aplicar siempre sobre la starless o con máscara de estrellas. HDRMT con 'median transform' activado evita anillos oscuros en campos ricos en estrellas."
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-// LHE sobre la starless, con la máscara de fondo de la receta v4B ya aplicada a la vista.
-var v = View.viewById("Starless");
-if (!v || v.isNull) throw new Error("No existe Starless");
-var LHE = new LocalHistogramEqualization;
-LHE.radius = 256;          // 96 para detalle fino; ~1/12 del lado corto en NOVA
-LHE.amount = 0.35;         // > 0,5 parece artificial
-LHE.slopeLimit = 2.0;      // 1,3-1,8 recomendado por aescaffre; ≥2,0 artefactos
-if (!LHE.executeOn(v)) throw new Error("LHE falló");
-"Núcleos/estrellas protegidos por mask_L_g20";
-```
+- LocalHistogramEqualization sobre la starless, con la máscara de fondo de la receta v4B ya aplicada.
+- `radius` 256 (96 para detalle fino; ~1/12 del lado corto en NOVA); `amount` 0,35 (> 0,5 parece artificial); `slopeLimit` 2,0 (1,3–1,8 recomendado por aescaffre; ≥ 2,0 da artefactos).
 
 Para las curvas, `CurvesTransformation`: cada curva es una lista de pares `[x, y]` en `R`, `G`, `B`, `K` (RGB/K, todos los canales), `A` (alfa), `L`, `a`, `b`, `c` (CIE L*a*b* y croma), `H` (tono) y `S` (saturación), con su interpolación en `Rt`, `Gt`, `Bt`, `Kt`… (`CurvesTransformation.AkimaSubsplines` en v8). Comprobado en PixInsight 1.9.6.
 
-```javascript
-var C = new CurvesTransformation;
-C.K = [[0, 0.04], [0.04, 0.12], [0.10, 0.16], [0.20, 0.24], [0.50, 0.50], [1, 1]];   // levantar sombras
-C.Kt = CurvesTransformation.AkimaSubsplines;
-if (!C.executeOn(View.viewById("Starless"))) throw new Error("Curvas fallaron");
-```
+- CurvesTransformation en K para levantar sombras: (0, 0,04), (0,04, 0,12), (0,10, 0,16), (0,20, 0,24), (0,50, 0,50), (1, 1), interpolación Akima.
 
 **Control.** 100 % y en negativo (imagen invertida): bandas de color, anillos alrededor de estrellas, ruido moteado, bordes de máscara. Porcentaje de píxeles > 0,98 antes y después. Textura en altas luces: "conservar ≥ 60 %; < 40 % = textura aplastada". "Señales de sobreprocesado: aspecto 'diseñado' en vez de 'observado', transiciones nebulosa–fondo demasiado limpias, bordes 'ilustrados', pérdida de grano en zonas débiles → bajar LHE, quitar HDRMT, curvas más suaves."

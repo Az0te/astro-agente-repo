@@ -78,10 +78,9 @@ Con PixInsight abierto, pide al asistente el paso que quieras (o usa los botones
 
 ## ⚠️ Seguridad
 
-El servidor MCP picopilot no ejecuta código arbitrario: cada petición lleva solo el nombre de una función y sus parámetros, y el runner comprueba un token (`~/.picopilot/token`) y una lista blanca antes de ejecutarla. La herramienta libre `run_script` solo aparece si creas tú el fichero `~/.picopilot/permitir_libre`. Aun así:
+El servidor MCP picopilot no ejecuta código arbitrario: cada petición lleva solo el nombre de una función y sus parámetros, y el runner comprueba un token (`~/.picopilot/token`) y una lista blanca antes de ejecutarla. No hay ninguna herramienta que ejecute código libre. Aun así:
 
 - no compartas ni sincronices la carpeta `~/.picopilot` con servicios en la nube;
-- no crees `permitir_libre` si otras personas o programas pueden usar tu cliente MCP;
 - revisa lo que hace la IA, sobre todo antes de guardar o sobrescribir ficheros.
 
 ## Cómo contribuir

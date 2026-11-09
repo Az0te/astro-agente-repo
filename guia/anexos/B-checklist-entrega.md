@@ -1,6 +1,6 @@
 # Anexo B: Controles de calidad y checklist de entrega
 
-[← Índice](../SKILL.md) · Anterior: [Anexo A: Contrato de API (PJSR)](A-contrato-api-pjsr.md) · Siguiente: [Anexo C: Pendiente de documentar](C-pendiente-documentar.md)
+[← Índice](../SKILL.md) · Anterior: [Anexo A: Equivalentes de scripts](A-equivalentes-scripts.md) · Siguiente: [Anexo C: Pendiente de documentar](C-pendiente-documentar.md)
 
 Medir con PJSR sobre la imagen final (o tras cada paso arriesgado) y usarlos junto a la revisión visual, no en su lugar. Umbrales de aescaffre, a ajustar con datos propios.
 

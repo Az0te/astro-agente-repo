@@ -53,8 +53,8 @@ static void CopilotLog( const String& text )
    Console().WriteLn( u"<end><cbr>[PiCopilot] " + text );
 }
 
-// Rafael (8 nov 2026): los errores de los scripts se guardan también en <repo>/tmp_logs/picopilot-errores.log (las
-// carpetas tmp_* no van a git), para revisarlos después sin copiar la consola. Fecha, vista, error y el script.
+// Rafael (8 nov 2026): los errores de las llamadas se guardan también en <repo>/tmp_logs/picopilot-errores.log (las
+// carpetas tmp_* no van a git), para revisarlos después sin copiar la consola. Fecha, vista, error y las llamadas.
 static void LogScriptError( const String& guideDir, const String& viewId, const String& message, const String& code )
 {
    try
@@ -87,7 +87,7 @@ static void LogScriptError( const String& guideDir, const String& viewId, const 
             old = old.Right( 1000000 );
       }
       String entry = u"=== " + String( when ) + u" · vista " + (viewId.IsEmpty() ? String( u"—" ) : viewId) + u"\n"
-                   + u"Error: " + message + u"\n--- script ---\n" + code.Left( 6000 ) + u"\n\n";
+                   + u"Error: " + message + u"\n--- llamadas ---\n" + code.Left( 6000 ) + u"\n\n";
       File::WriteTextFile( path, old + entry.ToUTF8() );
    }
    catch ( ... )
@@ -468,12 +468,12 @@ void PiCopilotInterface::UpdateStatus()
    }
    else if ( m_scriptRunning )
    {
-      GUI->Status_Label.SetText( Tr( u"Ejecutando el script en PixInsight… (progreso en la consola)" ) );
+      GUI->Status_Label.SetText( Tr( u"Ejecutando las llamadas en PixInsight… (progreso en la consola)" ) );
       GUI->Cancel_Button.Hide();
    }
    else
    {
-      GUI->Status_Label.SetText( m_scriptWaiting ? String( Tr( u"Plan listo: PULSE «Ejecutar script» para continuar." ) )
+      GUI->Status_Label.SetText( m_scriptWaiting ? String( Tr( u"Plan listo: PULSE «Ejecutar llamadas» para continuar." ) )
                                                  : String( Tr( u"Listo." ) ) );
       GUI->Cancel_Button.Hide();
    }
@@ -578,140 +578,25 @@ void PiCopilotInterface::StopAutoChain( const String& why )
    m_autoPaused = false;
    m_autoScript.Clear();
    if ( was )
-      Chat().AppendInfo( Tr( u"Serie de pasos terminada (" ) + why + String().Format( "; %d scripts).", m_autoSteps ) );
+      Chat().AppendInfo( Tr( u"Serie de pasos terminada (" ) + why + String().Format( "; %d pasos).", m_autoSteps ) );
 }
 
 // ----------------------------------------------------------------------------
-// Funciones de la guía (herramientas/manifiesto.json): nombre -> fichero. Qwen se inventa ficheros (denoise.js,
-// checkpoint.js, no_lineal.js) y funciones (estiradoInicial) cuando la conversación es larga (Rafael, 7 nov 2026):
-// el panel corrige la carga de ficheros y le recuerda la lista.
-static std::vector<std::pair<String, String>> GuideFunctions( const String& guideDir )
-{
-   std::vector<std::pair<String, String>> fns;
-   try
-   {
-      String path = guideDir + u"/herramientas/manifiesto.json";
-      if ( !File::Exists( path ) )
-         return fns;
-      JsonValue root;
-      String why;
-      if ( !JsonValue::Parse( File::ReadTextFile( path ), root, why ) )
-         return fns;
-      const JsonValue& list = root["funciones"];
-      for ( size_t i = 0; i < list.Size(); ++i )
-      {
-         const JsonValue& f = list[i];
-         if ( f["nombre"].type == JsonValue::Str && f["fichero"].type == JsonValue::Str )
-            fns.push_back( { f["nombre"].s, f["fichero"].s } );
-      }
-   }
-   catch ( ... ) {}
-   return fns;
-}
-
-static String GuideFunctionList( const std::vector<std::pair<String, String>>& fns )
-{
-   // "estirado.js: estirarCapas, estirarStarless; ruido.js: reducirRuido, ..." en el orden del manifiesto.
-   String out, file;
-   for ( const auto& f : fns )
-   {
-      if ( f.second != file )
-      {
-         if ( !out.IsEmpty() ) out << u"; ";
-         out << f.second << u": ";
-         file = f.second;
-      }
-      else
-         out << u", ";
-      out << f.first;
-   }
-   return out;
-}
-
-static bool CallsFunction( const String& code, const String& name )
-{
-   for ( size_type p = code.Find( name ); p != String::notFound; p = code.Find( name, p + 1 ) )
-   {
-      char16_t c = (p > 0) ? char16_t( code[p-1] ) : u' ';
-      bool startOk = !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '$' || c == '.');
-      size_type e = p + name.Length();
-      while ( e < code.Length() && (code[e] == ' ' || code[e] == '\t') ) ++e;
-      if ( startOk && e < code.Length() && code[e] == '(' )
-         return true;
-   }
-   return false;
-}
-
-// Quita las cargas de ficheros de herramientas/ que no existen y añade las de las funciones de la guía que el script
-// llama sin cargar su fichero. 'notes' cuenta lo que se ha cambiado (vacío si nada).
-static String FixGuideLoads( const String& code, const String& guideDir, String& notes )
-{
-   std::vector<std::pair<String, String>> fns = GuideFunctions( guideDir );
-   StringList lines;
-   code.Break( lines, '\n' );
-   String out;
-   for ( size_type i = 0; i < lines.Length(); ++i )
-   {
-      String line = lines[i];
-      size_type r = line.Find( u"readTextFile(" );
-      if ( r != String::notFound && line.Contains( u"herramientas" ) )
-      {
-         size_type q1 = line.Find( '"', r );
-         if ( q1 == String::notFound ) q1 = line.Find( '\'', r );
-         size_type q2 = (q1 != String::notFound) ? line.Find( line[q1], q1 + 1 ) : String::notFound;
-         if ( q2 != String::notFound )
-         {
-            String p = line.Substring( q1 + 1, q2 - q1 - 1 );
-            if ( p.EndsWith( u".js" ) && !File::Exists( p ) )
-            {
-               notes << (notes.IsEmpty() ? u"" : u"; ") << File::ExtractNameAndSuffix( p ) << u" no existe (se quita)";
-               line = u"// [PiCopilot] " + line;
-            }
-         }
-      }
-      out << line;
-      if ( i + 1 < lines.Length() ) out << '\n';
-   }
-   String guia = guideDir;
-   guia.ReplaceString( u"\\", u"/" );
-   String pre;
-   std::set<String> added;
-   for ( const auto& f : fns )
-      if ( CallsFunction( out, f.first ) && added.count( f.second ) == 0 )
-      {
-         // ¿Ya se carga ese fichero (sin comentar)?
-         bool loaded = false;
-         StringList ls;
-         out.Break( ls, '\n' );
-         for ( const String& l : ls )
-            if ( !l.Trimmed().StartsWith( u"//" ) && l.Contains( u"readTextFile(" ) && l.Contains( u"/" + f.second ) )
-               loaded = true;
-         if ( !loaded )
-         {
-            pre << u"eval(File.readTextFile(\"" << guia << u"/herramientas/" << f.second << u"\"));\n";
-            notes << (notes.IsEmpty() ? u"" : u"; ") << u"cargo " << f.second << u" (" << f.first << u")";
-         }
-         added.insert( f.second );
-      }
-   return pre + out;
-}
 
 String PiCopilotInterface::AutoNextText() const
 {
-   return u"\n\nSERIE DE PASOS EN MARCHA. Lo que pidió el usuario: «" + m_autoGoal + u"». Scripts ya ejecutados en la serie: " +
+   return u"\n\nSERIE DE PASOS EN MARCHA. Lo que pidió el usuario: «" + m_autoGoal + u"». Pasos ya ejecutados en la serie: " +
           String().Format( "%d", m_autoSteps ) + u".\n"
-          u"Haz el resumen del paso CORTO (como mucho 10 líneas). Después, en la misma respuesta, escribe el script del "
-          u"SIGUIENTE paso que falte (UNO solo, en el orden de la guía) en un único bloque ```javascript, con los ids de vista "
-          u"que acaba de devolver este resultado: PiCopilot lo ejecutará sin esperar al usuario, así que no le preguntes si "
+          u"Haz el resumen del paso CORTO (como mucho 10 líneas). Después, en la misma respuesta, pide las llamadas del "
+          u"SIGUIENTE paso que falte (UNO solo, en el orden de la guía) en un único bloque ```json, con los ids de vista "
+          u"que acaba de devolver este resultado: PiCopilot las ejecutará sin esperar al usuario, así que no le preguntes si "
           u"quiere seguir. Si ya están hechos todos los pasos pedidos, o una medida indica un problema que el usuario tiene "
-          u"que decidir (no algo que se arregla repitiendo el paso con otros parámetros), NO escribas script: escribe una "
+          u"que decidir (no algo que se arregla repitiendo el paso con otros parámetros), NO pidas llamadas: escribe una "
           u"línea que empiece por «PARO:» con el motivo.\n"
-          u"Usa SÓLO estas funciones de la guía (fichero: funciones): " + GuideFunctionList( GuideFunctions( m_cfg.guideDir ) ) + u". "
-          u"No inventes ficheros ni funciones, y no uses procesos sueltos (new HistogramTransformation, new LocalHistogramEqualization...) "
-          u"para un paso que tiene función. Orden no lineal: estirarCapas(starless, estrellas, { tipo }) (1) → en galaxias "
-          u"comprimirNucleo (5) → saturarAlFallo (5) → prepararEstrellas (8) → recombinarEstrellas (9) → exportarFinal (10). "
-          u"Antes de estirarCapas, si no sabes el tipo de objeto (galaxia, nebulosa oscura, de emisión, de reflexión...), "
-          u"escribe «PARO:» y pregunta el tipo al usuario.";
+          u"Pide SÓLO funciones de la guía, con sus parámetros:\n" + PiCopilotPrompts::FunctionList( m_cfg.guideDir, false ) +
+          u"Orden no lineal: estirarCapas (1) → en galaxias comprimirNucleo (5) → saturarAlFallo (5) → prepararEstrellas (8) → "
+          u"recombinarEstrellas (9) → exportarFinal (10). Antes de estirarCapas, si no sabes el tipo de objeto (galaxia, "
+          u"nebulosa oscura, de emisión, de reflexión...), escribe «PARO:» y pregunta el tipo al usuario.";
 }
 
 void PiCopilotInterface::LaunchStep( const PiCopilotStep& step )
@@ -825,7 +710,7 @@ void PiCopilotInterface::LaunchFull()
          m_autoRunPending = false;
          m_autoSteps = 0;
          m_autoGoal = u"Resolución completa de la vista " + m_viewId + u", de principio a fin.";
-         Chat().AppendInfo( Tr( u"Serie de pasos: PiCopilot ejecutará cada script y pedirá el siguiente sin esperar. "
+         Chat().AppendInfo( Tr( u"Serie de pasos: PiCopilot ejecutará las llamadas de cada paso y pedirá el siguiente sin esperar. "
                                 u"Pulsa «Cancelar» mientras el modelo piensa para pararla." ) );
       }
    }
@@ -845,19 +730,19 @@ void PiCopilotInterface::SetInternet( bool on )
    m_cfg.Save();
 }
 
-// Rafael (8 nov 2026): con «Ejecutar sin preguntar» marcado, pulsar «Ejecutar script» sobre un plan suelto (una interpretación
+// Rafael (8 nov 2026): con «Ejecutar sin preguntar» marcado, pulsar «Ejecutar llamadas» sobre un plan suelto (una interpretación
 // fuera de serie) reanuda la serie: se ejecuta sin diálogo y, al acabar, se pide el paso siguiente. Antes había que escribir
 // «sigue hasta el final» después de cada paso.
-void PiCopilotInterface::RunScriptButton( const String& code )
+void PiCopilotInterface::RunCallsButton( const String& code )
 {
    if ( !m_cfg.autoRun || m_cfg.Current().IsAgent() || m_history.empty() )
    {
-      RunScript( code, !m_cfg.autoRun );
+      RunCalls( code, !m_cfg.autoRun );
       return;
    }
    if ( m_busy || m_scriptRunning || m_autoRunPending )
    {
-      Chat().AppendInfo( Tr( u"Espera a que termine lo que está en marcha antes de ejecutar otro script." ) );
+      Chat().AppendInfo( Tr( u"Espera a que termine lo que está en marcha antes de ejecutar otras llamadas." ) );
       return;
    }
    if ( m_autoGoal.IsEmpty() )
@@ -871,22 +756,22 @@ void PiCopilotInterface::RunScriptButton( const String& code )
    m_autoRunPending = true;
    m_autoRunAt = NowSeconds() + 0.3;
    m_interpretPending = true;
-   Chat().AppendInfo( Tr( u">>> Serie de pasos reanudada: ejecuto este script y pediré el siguiente sin esperar "
+   Chat().AppendInfo( Tr( u">>> Serie de pasos reanudada: ejecuto estas llamadas y pediré el paso siguiente sin esperar "
                           u"(pulsa «Cancelar» mientras el modelo piensa para parar)." ) );
 }
 
-void PiCopilotInterface::StepLinkClicked( const String& text, bool lastMessage, const String& lastScript )
+void PiCopilotInterface::StepLinkClicked( const String& text, bool lastMessage, const String& lastCalls )
 {
    if ( m_busy || m_scriptRunning || m_autoRunPending )
    {
       Chat().AppendInfo( Tr( u"Espera a que termine lo que está en marcha antes de pulsar otro paso." ) );
       return;
    }
-   // El enlace del último mensaje con un script sin ejecutar es ese script: se ejecuta tal cual, desde el temporizador.
-   if ( lastMessage && m_scriptWaiting && !lastScript.IsEmpty() )
+   // El enlace del último mensaje con llamadas sin ejecutar son esas llamadas: se ejecutan tal cual, desde el temporizador.
+   if ( lastMessage && m_scriptWaiting && !lastCalls.IsEmpty() )
    {
       m_autoChain = false;
-      m_autoScript = lastScript;
+      m_autoScript = lastCalls;
       m_autoSingle = true;
       m_autoRunPending = true;
       m_autoRunAt = NowSeconds() + 0.3;
@@ -894,7 +779,7 @@ void PiCopilotInterface::StepLinkClicked( const String& text, bool lastMessage, 
       Chat().AppendInfo( Tr( u">>> Ejecuto el paso: " ) + text );
       return;
    }
-   // Si no, se le pide al modelo (y su script se ejecuta solo si la casilla está marcada).
+   // Si no, se le pide al modelo (y sus llamadas se ejecutan solas si la casilla está marcada).
    String ask = Tr( u"Haz ahora este paso: " ) + text;
    SubmitChat( ask );
 }
@@ -920,17 +805,17 @@ bool PiCopilotInterface::SubmitChat( const String& text )
    String prompt = PiCopilotPrompts::Free( m_cfg, m_cfg.Current(), text, m_viewId, firstTurn );
    bool series = !m_cfg.Current().IsAgent() && WantsSeries( text );
    // La serie paró para preguntar (el tipo de objeto, 7 nov 2026): la respuesta del usuario la reanuda; antes cada paso
-   // siguiente se quedaba esperando a «Ejecutar script».
+   // siguiente se quedaba esperando a «Ejecutar llamadas».
    bool resume = !series && m_autoPaused && !m_cfg.Current().IsAgent() && !m_autoGoal.IsEmpty();
    m_autoPaused = false;
    if ( resume )
    {
       series = true;
-      prompt << u"\n\n(Es la respuesta del usuario a tu «PARO:». La serie sigue: escribe ahora el script del paso que "
+      prompt << u"\n\n(Es la respuesta del usuario a tu «PARO:». La serie sigue: pide ahora las llamadas del paso que "
                 u"quedó pendiente, con lo que acaba de decir el usuario.)" << AutoNextText();
    }
    else if ( series )
-      prompt << u"\n\n(PiCopilot ejecutará tus scripts uno tras otro sin esperar al usuario: escribe ahora sólo el script "
+      prompt << u"\n\n(PiCopilot ejecutará tus llamadas paso a paso sin esperar al usuario: pide ahora sólo las llamadas "
                 u"del PRIMER paso; después de cada resultado te pediré el siguiente.)";
    if ( !StartJob( JobKind::Chat, Tr( u"Prompt" ), prompt, false ) )
       return false;
@@ -1174,29 +1059,35 @@ std::vector<std::pair<String, String>> PiCopilotInterface::CandidatePreviews( co
    return imgs;
 }
 
-void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
+// Ejecuta las llamadas ```json que propone un modelo sin herramientas. Son datos, no código: el runner de picopilot
+// (pprEjecutarLlamadas) las comprueba contra el manifiesto de la guía y su lista blanca antes de ejecutar ninguna.
+void PiCopilotInterface::RunCalls( const String& calls, bool ask )
 {
-   String code = codeIn;
-   int lines = 1;
-   for ( String::const_iterator i = code.Begin(); i != code.End(); ++i )
-      if ( *i == '\n' )
-         ++lines;
-   if ( ask && MessageBox( Tr( u"Se va a ejecutar en PixInsight el script de la respuesta (" ) + String().Format( "%d", lines ) + Tr( u" líneas).\n\n"
-                    u"Revísalo antes en la ventana de Prompt. ¿Ejecutarlo ahora?" ), "PiCopilot",
-                    StdIcon::Warning, StdButton::Yes, StdButton::No ).Execute() != StdButton::Yes )
-      return;
-
-   CopilotLog( u"Ejecutando el script de la respuesta..." );
-   m_scriptWaiting = false;
-   if ( !m_cfg.guideDir.IsEmpty() && code.Contains( u"herramientas" ) )
+   const String& code = calls;   // para el registro de errores y la detección de repeticiones
+   if ( ask )
    {
-      String notes;
-      code = FixGuideLoads( codeIn, m_cfg.guideDir, notes );
-      if ( !notes.IsEmpty() )
-         Chat().AppendInfo( Tr( u"Corrijo la carga de ficheros de la guía: " ) + notes + u"." );
+      String list;
+      JsonValue v;
+      String why;
+      if ( JsonValue::Parse( calls.ToUTF8(), v, why ) )
+      {
+         const JsonValue& ll = v["llamadas"];
+         for ( size_t i = 0; i < ll.Size() && i < 12; ++i )
+         {
+            String args = ll[i]["parametros"].ToJson();
+            list << u"\n• " << ll[i]["funcion"].ToText() << u" " << (args.Length() > 160 ? args.Left( 159 ) + u"…" : args);
+         }
+      }
+      if ( MessageBox( Tr( u"Se van a ejecutar en PixInsight estas llamadas a funciones de la guía:" ) + list +
+                       Tr( u"\n\n¿Ejecutarlas ahora?" ), "PiCopilot",
+                       StdIcon::Warning, StdButton::Yes, StdButton::No ).Execute() != StdButton::Yes )
+         return;
    }
-   // El script corre en este mismo hilo: el estado se pinta antes y se fuerza el repintado, si no el panel seguía en
-   // "Listo." hasta el final (Rafael, 6 nov 2026). El guard lo devuelve a su estado aunque el script falle.
+
+   CopilotLog( u"Ejecutando las llamadas de la respuesta..." );
+   m_scriptWaiting = false;
+   // Las funciones corren en este mismo hilo: el estado se pinta antes y se fuerza el repintado, si no el panel seguía en
+   // "Listo." hasta el final (Rafael, 6 nov 2026). El guard lo devuelve a su estado aunque fallen.
    m_scriptRunning = true;
    struct RunningGuard { PiCopilotInterface* p; ~RunningGuard() { p->m_scriptRunning = false; p->UpdateStatus(); } } runningGuard{ this };
    UpdateStatus();
@@ -1205,34 +1096,18 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
    Module->ProcessEvents();
    try
    {
-      // Los modelos sin MCP escriben a menudo console.log, que no existe en
-      // PJSR y aborta el script en la primera línea (prueba del 3 nov 2026).
-      // PICOPILOT_GUIA: carpeta de la guía, para que las funciones de herramientas/ carguen lo que necesiten
-      // (recombinacion.js carga realces.js si screenStarsCombine no existe).
+      // PICOPILOT_GUIA: carpeta de la guía (el manifiesto y lo que carguen las funciones).
       String guia = m_cfg.guideDir;
       guia.ReplaceString( u"\\", u"/" );
       String previas = PiCopilotUtil::JoinPath( m_cfg.TempDir(), "previas_chat" );
       previas.ReplaceString( u"\\", u"/" );
-      String prelude = u"if (typeof console.log !== \"function\") console.log = function (m) { console.writeln(m); };\n"
-                       u"var PICOPILOT_GUIA = \"" + guia + u"\";\n"
+      String prelude = u"PICOPILOT_GUIA = " + JsonValue::Quote( guia ) + u";\n"
+                       u"GUIA_HERRAMIENTAS = PICOPILOT_GUIA + \"/herramientas\";\n"
                        // Carpeta de miniaturas de las comparaciones (pxPrevia): se vacía con CleanTemp, como las demás previas.
-                       u"var PICOPILOT_PREVIAS = \"" + previas + u"\";\n"
-                       u"if (!File.directoryExists(PICOPILOT_PREVIAS)) File.createDirectory(PICOPILOT_PREVIAS, true);\n"
-                       // Qwen se inventó herramientas/checkpoint.js (6 nov 2026) y el script entero abortó: con las funciones
-                       // ya cargadas, un fichero de herramientas/ que no existe se avisa y se salta.
-                       u"(function () { if (File.__pcLeer) return; var leer = File.readTextFile; try { File.__pcLeer = leer; File.readTextFile = function (p) { var s = String(p);\n"
-                       u"  if (s.indexOf(\"herramientas\") >= 0 && s.substring(s.length - 3) == \".js\" && !File.exists(s)) {\n"
-                       u"    console.warningln(\"[PiCopilot] \" + s + \" no existe; las funciones de la guía ya están cargadas: lo salto.\"); return \"\"; }\n"
-                       u"  return leer.call(File, p); }; } catch (e) {} })();\n";
-      // El script va dentro de un eval con try/catch: así los errores (también los de sintaxis, como un return en el
-      // nivel superior) llegan con su mensaje y su línea, en vez del "API function error" de PixInsight, con el que
-      // Qwen repetía el mismo script sin saber qué corregir (prueba del 5 nov 2026).
-      String wrapped = prelude +
-         u"var __pcRes;\ntry { __pcRes = eval(" + JsonValue::Quote( code ) + u"); }\n"
-         u"catch (__pcErr) { __pcRes = \"PICOPILOT_ERROR: \" + ((__pcErr && __pcErr.message) ? __pcErr.message : String(__pcErr)) + "
-         u"((__pcErr && __pcErr.lineNumber) ? \" (línea \" + __pcErr.lineNumber + \" del script)\" : \"\"); }\n__pcRes;";
+                       u"var PICOPILOT_PREVIAS = " + JsonValue::Quote( previas ) + u";\n"
+                       u"if (!File.directoryExists(PICOPILOT_PREVIAS)) File.createDirectory(PICOPILOT_PREVIAS, true);\n";
       String out;
-      // Vistas abiertas antes del script, para enseñar después las que haya creado (petición de Rafael, 5 nov 2026).
+      // Vistas abiertas antes de las llamadas, para enseñar después las que hayan creado (petición de Rafael, 5 nov 2026).
       String viewsBefore;
       try
       {
@@ -1241,25 +1116,14 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
             viewsBefore = vb.ToString();
       }
       catch ( ... ) {}
-      // blindSolve, también a través de las funciones de lineal.js que lo usan.
-      // alinearMasters también resuelve la astrometría (6 nov 2026: sin esto la dejaba sin resolver en silencio).
-      // Build 80: con el runner de picopilot, todos los scripts corren sobre él (todas las funciones de la guía ya
-      // cargadas por #include). Build 100: el watcher antiguo ya no existe; sin runner, los que necesitan blindSolve
-      // devuelven un error que dice dónde falta.
-      if ( !m_cfg.PicopilotRunner().IsEmpty() ||
-           code.Contains( u"blindSolve" ) || code.Contains( u"resolverAstrometria" ) || code.Contains( u"bxtCorrectOnly" ) ||
-           code.Contains( u"alinearMasters" ) )
-         out = RunWithRunner( code, prelude ).Trimmed();   // necesita el motor de BlindSolver (#include)
-      else
-      {
-         Variant result = Module->EvaluateScript( wrapped, "JavaScript" );
-         out = result.IsValid() ? result.ToString().Trimmed() : String();
-      }
-      CopilotLog( u"Script terminado." );
+      // Siempre con el runner de picopilot: tiene todas las funciones de la guía cargadas por #include, su lista blanca
+      // y el validador de llamadas.
+      out = RunWithRunner( calls, prelude ).Trimmed();
+      CopilotLog( u"Llamadas terminadas." );
       if ( out.StartsWith( u"PICOPILOT_ERROR: " ) )
          throw Error( out.Substring( 17 ) );
       m_lastFailedScript.Clear();
-      m_scriptFixes = 0;   // "veces seguidas": un script que funciona reinicia la cuenta (7 nov 2026: tras 3 fallos ya corregidos, el siguiente fallo paraba sin intentar corregirlo)
+      m_scriptFixes = 0;   // "veces seguidas": unas llamadas que funcionan reinician la cuenta (7 nov 2026: tras 3 fallos ya corregidos, el siguiente fallo paraba sin intentar corregirlo)
       // Enseña las vistas nuevas: las muestra (algunas funciones las crean ocultas), pone un STF automático a las
       // lineales que no lo tengan (sólo visual) y deja delante la última. Las ya estiradas se ven tal cual.
       try
@@ -1297,10 +1161,10 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
          previews = GuidePreviews( out );   // las que ya trae el resultado (comparaciones de la guía)
       if ( previews.empty() && out.Contains( u"\"candidatos\"" ) )
          previews = CandidatePreviews( out );
-      Chat().AppendInfo( Tr( u"Script ejecutado." ) + (out.IsEmpty() ? String( Tr( u" Mira la consola de PixInsight para ver su salida." ) )
+      Chat().AppendInfo( Tr( u"Llamadas ejecutadas." ) + (out.IsEmpty() ? String( Tr( u" Mira la consola de PixInsight para ver su salida." ) )
                                                                : Tr( u" Resultado:\n" ) + out.Left( 20000 )), previews );
 
-      // Segunda fase para modelos sin herramientas: se les devuelve lo que ha medido el script para que lo
+      // Segunda fase para modelos sin herramientas: se les devuelve lo que han medido las funciones para que lo
       // interpreten según la ficha. En el análisis del objeto, Qwen medía bien pero nunca veía los números;
       // con esta vuelta su análisis pasó de ~18/40 a ~32/40 (banco de pruebas del 4 nov 2026).
       if ( !m_cfg.Current().IsAgent() && m_interpretPending && !out.IsEmpty() && !m_history.empty() && !m_busy )
@@ -1327,54 +1191,54 @@ void PiCopilotInterface::RunScript( const String& codeIn, bool ask )
          QueueJob( JobKind::Interpret, Tr( u"Interpretar el resultado" ),
                    // 12000 cortaba el gradiente de 4 vistas y Qwen dio una por "truncada" (6 nov 2026): 30000 (~8.500
                    // tokens) cabe en los 32k del modelo local; si aun así se corta, se le dice.
-                   u"El script ha terminado sin errores. Resultado:\n" + out.Left( 30000 ) +
+                   u"Las llamadas han terminado sin errores. Resultado:\n" + out.Left( 30000 ) +
                    (out.Length() > 30000 ? String().Format( "\n(Resultado recortado para el contexto: faltan %d caracteres. "
-                        "No es un fallo del script: interpreta lo que hay y di qué partes no has visto.)", int( out.Length() - 30000 ) )
+                        "No es un fallo de las funciones: interpreta lo que hay y di qué partes no has visto.)", int( out.Length() - 30000 ) )
                                          : String()) +
-                   u"\nAhora, sin escribir ningún script, interpreta estos datos según la ficha (controles y checklist) y da "
+                   u"\nAhora, sin pedir más llamadas, interpreta estos datos según la ficha (controles y checklist) y da "
                    u"el resumen final del paso. No inventes datos que no estén en el resultado. Separa los controles en dos "
                    u"listas: «Medido» (sólo lo que el resultado demuestra, con su valor) y «Revisar a ojo» (lo que pide la "
                    u"ficha y el resultado no mide, como halos, anillos o manchas); nunca des por bueno algo de la segunda." +
                    extra + (m_autoChain ? AutoNextText() : String()) );
       }
       else if ( m_autoChain )
-         StopAutoChain( out.IsEmpty() ? String( Tr( u"el script no ha devuelto ningún resultado que interpretar" ) )
+         StopAutoChain( out.IsEmpty() ? String( Tr( u"las llamadas no han devuelto ningún resultado que interpretar" ) )
                                       : String( Tr( u"no se ha podido pedir el paso siguiente" ) ) );
    }
    catch ( const Error& e )
    {
-      CopilotLog( u"Error en el script: " + e.Message() );
+      CopilotLog( u"Error en las llamadas: " + e.Message() );
       LogScriptError( m_cfg.guideDir, m_viewId, e.Message(), code );
 
-      // Bucle de errores para modelos sin herramientas: se le devuelve el error para que corrija el script
+      // Bucle de errores para modelos sin herramientas: se le devuelve el error para que corrija las llamadas
       // (Claude no lo necesita: ve los errores por el MCP). En la prueba del Paso 9 (4 nov 2026) Qwen
-      // arregló así los dos scripts rotos en 1 y 2 vueltas. El límite es el de "Intentos fallidos seguidos".
+      // arregló así dos fallos en 1 y 2 vueltas. El límite es el de "Intentos fallidos seguidos".
       int limit = (m_cfg.maxRetries > 0) ? m_cfg.maxRetries : 3;
       bool repeated = !m_lastFailedScript.IsEmpty() && code.Trimmed() == m_lastFailedScript;
       m_lastFailedScript = code.Trimmed();
       if ( m_autoChain && (repeated || m_cfg.Current().IsAgent() || m_history.empty() || m_busy || m_scriptFixes >= limit) )
-         StopAutoChain( Tr( u"el script ha fallado y no se puede corregir solo" ) );
+         StopAutoChain( Tr( u"las llamadas han fallado y no se pueden corregir solas" ) );
       if ( repeated )
-         Chat().AppendInfo( Tr( u"El script ha fallado otra vez con el mismo código que la vez anterior (" ) + e.Message() +
+         Chat().AppendInfo( Tr( u"Las llamadas han fallado otra vez igual que la vez anterior (" ) + e.Message() +
                             Tr( u"): el modelo no sabe corregirlo; paro aquí. Prueba con el botón del paso o con otro modelo." ) );
       else if ( !m_cfg.Current().IsAgent() && !m_history.empty() && !m_busy && m_scriptFixes < limit )
       {
          ++m_scriptFixes;
-         Chat().AppendInfo( Tr( u"El script ha fallado: " ) + e.Message() + Tr( u"\nLe paso el error al modelo para que lo corrija "
+         Chat().AppendInfo( Tr( u"Las llamadas han fallado: " ) + e.Message() + Tr( u"\nLe paso el error al modelo para que lo corrija "
                             u"(intento " ) + String().Format( "%d de %d", m_scriptFixes, limit ) + Tr( u")..." ) );
-         QueueJob( JobKind::Fix, String().Format( "Corregir script (%d/%d)", m_scriptFixes, limit ),
-                   u"Lo he ejecutado en PixInsight y ha fallado con este error:\n" + e.Message() +
-                   u"\nLas vistas que se crearon antes del error siguen abiertas. Corrige el script y devuélvelo completo "
-                   u"en un único bloque ```javascript, sin explicaciones largas." +
-                   ((e.Message().Contains( u"is not defined" ) || e.Message().Contains( u"not a function" ) || e.Message().Contains( u"Unable to open file" ))
-                    ? u"\nEsa función o fichero no existe. Las funciones de la guía son (fichero: funciones): " +
-                      GuideFunctionList( GuideFunctions( m_cfg.guideDir ) ) + u". Usa una de ellas; no inventes otras."
+         QueueJob( JobKind::Fix, String().Format( "Corregir llamadas (%d/%d)", m_scriptFixes, limit ),
+                   u"Las he ejecutado en PixInsight y han fallado con este error:\n" + e.Message() +
+                   u"\nLas vistas que se crearon antes del error siguen abiertas. Corrige las llamadas (función, ids o "
+                   u"parámetros) y devuélvelas en un único bloque ```json, sin explicaciones largas. Nunca escribas código." +
+                   ((e.Message().Contains( u"no es una función de la guía" ) || e.Message().Contains( u"parámetro desconocido" ))
+                    ? u"\nLas funciones de la guía y sus parámetros son:\n" + PiCopilotPrompts::FunctionList( m_cfg.guideDir, false ) +
+                      u"Usa una de ellas; no inventes otras. Si ninguna sirve, dilo."
                     : String()) );
       }
       else
          Chat().AppendInfo( m_cfg.Current().IsAgent() || m_history.empty()
-                            ? String( Tr( u"El script ha fallado. Mira la consola de PixInsight." ) )
-                            : Tr( u"El script ha fallado " ) + String().Format( "%d", m_scriptFixes + 1 ) +
+                            ? String( Tr( u"Las llamadas han fallado. Mira la consola de PixInsight." ) )
+                            : Tr( u"Las llamadas han fallado " ) + String().Format( "%d", m_scriptFixes + 1 ) +
                               Tr( u" veces seguidas; paro aquí (límite de intentos de Configurar IA). Mira la consola de PixInsight." ) );
    }
 }
@@ -1399,7 +1263,7 @@ bool PiCopilotInterface::StartJob( JobKind kind, const String& title, const Stri
    if ( kind == JobKind::Step || kind == JobKind::Full )
    {
       m_scriptFixes = 0;         // tarea nueva: el contador de correcciones empieza de cero
-      m_interpretPending = true; // cuando su script funcione, se le devuelve el resultado al modelo
+      m_interpretPending = true; // cuando sus llamadas funcionen, se le devuelve el resultado al modelo
    }
 
    m_job = Job();
@@ -2012,33 +1876,33 @@ void PiCopilotInterface::FinishJob( const String& response, bool error )
          if ( !imgs.empty() )
             chat.AppendInfo( Tr( u"Imágenes de esta respuesta:" ), imgs );
       }
-      // Los modelos sin herramientas sólo proponen un script: hasta que el usuario lo ejecuta no se ha hecho nada.
-      m_scriptWaiting = !m_job.model.IsAgent() && !PiCopilotPrompts::ExtractScript( response ).IsEmpty();
-      // Corrección que repite el script que acaba de fallar: no se ofrece (prueba de Rafael, 5 nov 2026: Qwen devolvió
+      // Los modelos sin herramientas sólo proponen llamadas: hasta que el usuario las ejecuta no se ha hecho nada.
+      m_scriptWaiting = !m_job.model.IsAgent() && !PiCopilotPrompts::ExtractCalls( response ).IsEmpty();
+      // Corrección que repite las llamadas que acaban de fallar: no se ofrece (prueba de Rafael, 5 nov 2026: Qwen devolvió
       // el mismo script con File.listFiles y el usuario tenía que ejecutarlo para descubrirlo).
       if ( m_scriptWaiting && m_job.kind == JobKind::Fix && !m_lastFailedScript.IsEmpty() &&
-           PiCopilotPrompts::ExtractScript( response ).Trimmed() == m_lastFailedScript )
+           PiCopilotPrompts::ExtractCalls( response ).Trimmed() == m_lastFailedScript )
       {
          m_scriptWaiting = false;
-         chat.AppendInfo( Tr( u"El modelo ha devuelto el mismo script que acaba de fallar: no sabe corregirlo; paro aquí. Prueba con el botón del paso o con otro modelo." ) );
+         chat.AppendInfo( Tr( u"El modelo ha devuelto las mismas llamadas que acaban de fallar: no sabe corregirlo; paro aquí. Prueba con el botón del paso o con otro modelo." ) );
       }
       if ( m_scriptWaiting )
       {
          // Desde el Prompt también se le devuelve el resultado para que lo interprete (antes sólo en los botones de
          // paso: en la cadena SPCC → StarX del 5 nov 2026 el resultado se quedaba sin comentar). En una serie, la
-         // interpretación trae el script del paso siguiente, y su resultado también se interpreta.
+         // interpretación trae las llamadas del paso siguiente, y su resultado también se interpreta.
          if ( m_job.kind == JobKind::Chat || m_job.kind == JobKind::Interpret )
             m_interpretPending = true;
          if ( m_autoChain && !m_job.model.IsAgent() )
          {
             if ( m_autoSteps >= AutoMaxSteps )
-               StopAutoChain( String().Format( "ya se han ejecutado %d scripts en esta serie", m_autoSteps ) );
+               StopAutoChain( String().Format( "ya se han ejecutado %d pasos en esta serie", m_autoSteps ) );
             else
             {
-               m_autoScript = PiCopilotPrompts::ExtractScript( response );
+               m_autoScript = PiCopilotPrompts::ExtractCalls( response );
                m_autoRunPending = true;   // se ejecuta desde el temporizador, fuera de este evento
                m_autoRunAt = NowSeconds() + 1.5;
-               chat.AppendInfo( Tr( u">>> Serie de pasos: ejecuto el script " ) + String().Format( "%d", m_autoSteps + 1 ) +
+               chat.AppendInfo( Tr( u">>> Serie de pasos: ejecuto el paso " ) + String().Format( "%d", m_autoSteps + 1 ) +
                                 Tr( u" sin esperar (pulsa «Cancelar» mientras el modelo piensa para parar)." ) );
             }
          }
@@ -2046,17 +1910,17 @@ void PiCopilotInterface::FinishJob( const String& response, bool error )
          // 2026). Las interpretaciones fuera de una serie no se ejecutan solas: traen el paso siguiente como enlace.
          if ( !m_autoRunPending && m_cfg.autoRun && (m_job.kind == JobKind::Chat || m_job.kind == JobKind::Step) && !m_job.model.IsAgent() )
          {
-            m_autoScript = PiCopilotPrompts::ExtractScript( response );
+            m_autoScript = PiCopilotPrompts::ExtractCalls( response );
             m_autoSingle = true;
             m_autoRunPending = true;
             m_autoRunAt = NowSeconds() + 1.0;
             chat.AppendInfo( Tr( u">>> Ejecuto el plan sin esperar (casilla «Ejecutar sin preguntar» de la ventana de Prompt)." ) );
          }
          if ( !m_autoRunPending )
-            chat.AppendInfo( Tr( u">>> Plan listo, todavía sin aplicar. PULSE «Ejecutar script» para llevarlo a cabo en PixInsight." ) );
+            chat.AppendInfo( Tr( u">>> Plan listo, todavía sin aplicar. PULSE «Ejecutar llamadas» para llevarlo a cabo en PixInsight." ) );
       }
       else if ( m_autoChain && !m_job.model.IsAgent() && m_autoSteps == 0 && m_job.kind == JobKind::Chat )
-         m_autoChain = false;   // una pregunta o una respuesta sin script: no había serie que parar
+         m_autoChain = false;   // una pregunta o una respuesta sin llamadas: no había serie que parar
       else if ( m_autoChain && !m_job.model.IsAgent() )
       {
          bool paro = response.Contains( u"PARO" );
@@ -2177,28 +2041,27 @@ void PiCopilotInterface::e_ProcessFinished( ExternalProcess& sender, int exitCod
    }
    if ( res["choices"][size_t( 0 )]["finish_reason"].ToText() == "length" )
       content = Tr( u"AVISO: la respuesta se ha cortado por falta de contexto (finish_reason = length). "
-                u"El script puede estar incompleto: no lo ejecutes sin revisarlo.\n\n" ) + content;
+                u"Las llamadas pueden estar incompletas: no las ejecutes sin revisarlas.\n\n" ) + content;
 
    // Los modelos locales a veces devuelven el dossier ya relleno (con métricas
-   // inventadas) en lugar del script que lo calcula. Se les pide una vez más,
-   // explicándoles el error: en las pruebas del 4 nov, los dos reintentos
-   // dieron un script correcto.
+   // inventadas) en lugar de pedir las funciones que lo calculan. Se les pide una vez más,
+   // explicándoles el error: en las pruebas del 4 nov, los dos reintentos salieron bien.
    if ( (m_job.kind == JobKind::Step || m_job.kind == JobKind::Full || m_job.kind == JobKind::Fix) && !m_job.retried &&
-        PiCopilotPrompts::ExtractScript( content ).IsEmpty() &&
+        PiCopilotPrompts::ExtractCalls( content ).IsEmpty() &&
         !content.Contains( u"¿" ) )   // una pregunta al usuario (p. ej. qué vista usar) no se reintenta
    {
       m_history.push_back( { "assistant", content } );
       m_history.push_back( { "user",
          u"Eso no es lo que necesito: has escrito el resultado sin haberlo medido. No tienes acceso a PixInsight; "
-         u"tu respuesta debe ser un único bloque ```javascript con el script PJSR que crea las copias, ejecuta los "
-         u"procesos, mide y escribe el resultado (y el dossier, si se pide) con File.writeTextFile(). "
-         u"Responde ahora sólo con el plan breve y el script." } );
+         u"tu respuesta debe ser un único bloque ```json con las llamadas a las funciones de la guía que hacen el "
+         u"paso y lo miden (el dossier, si se pide, lo escribe la función con su opción \"dossier\"). Nunca escribas "
+         u"código. Responde ahora sólo con el plan breve y las llamadas." } );
       m_job.retried = true;
       m_job.out.Clear();
       m_job.err.Clear();
       m_retryPending = true;   // se relanza desde el temporizador, fuera de este evento
-      Chat().AppendInfo( Tr( u"La respuesta no traía script (sólo un resultado inventado). Se lo pido otra vez..." ) );
-      CopilotLog( m_job.title + u": respuesta sin script, se repite la petición." );
+      Chat().AppendInfo( Tr( u"La respuesta no traía llamadas (sólo un resultado inventado). Se lo pido otra vez..." ) );
+      CopilotLog( m_job.title + u": respuesta sin llamadas, se repite la petición." );
       return;
    }
    // Contexto usado por el modelo local, con la cifra que da el servidor (usage de Ollama / OpenAI): así se ve cuánto
@@ -2239,8 +2102,6 @@ void PiCopilotInterface::e_ProcessError( ExternalProcess& sender, ExternalProces
 // Eventos de la interfaz
 // ----------------------------------------------------------------------------
 
-// Ejecuta un script de modelo como fichero (con preprocesador) sobre la biblioteca del runner de picopilot, para que
-// tenga blindSolve y todas las funciones de la guía. El valor final se escribe en un fichero y se devuelve (o "PICOPILOT_ERROR: ...").
 // El runner del MCP picopilot como biblioteca: trae el motor de BlindSolver, blindSolve y todas las funciones de
 // la guía por #include. Se quita la llamada final pprMain() y los #include relativos pasan a rutas absolutas.
 static bool RunnerLibrary( const String& runner, String& lib, String& whyNot )
@@ -2288,14 +2149,16 @@ static bool RunnerLibrary( const String& runner, String& lib, String& whyNot )
    return true;
 }
 
-String PiCopilotInterface::RunWithRunner( const String& code, const String& prelude )
+String PiCopilotInterface::RunWithRunner( const String& calls, const String& prelude )
 {
-   // La biblioteca es el runner de picopilot (mcp/pjsr/picopilot-runner.js, junto a la guía).
+   // La biblioteca es el runner de picopilot (mcp/pjsr/picopilot-runner.js, junto a la guía). El script temporal es
+   // siempre el mismo: carga el runner y le pasa las llamadas como TEXTO a pprEjecutarLlamadas, que las valida contra
+   // el manifiesto y la lista blanca. Nada de lo que escribe el modelo se ejecuta como código.
    String lib, whyNot;
    String runner = m_cfg.PicopilotRunner();
    if ( runner.IsEmpty() )
       return u"PICOPILOT_ERROR: no se encuentra el runner de picopilot (mcp/pjsr/picopilot-runner.js en el repo de la guía); "
-             u"sin él no hay blindSolve ni alinearMasters";
+             u"sin él no se pueden ejecutar las funciones de la guía";
    if ( !RunnerLibrary( runner, lib, whyNot ) )
       return u"PICOPILOT_ERROR: " + whyNot;
    String id = PiCopilotUtil::NewId();
@@ -2304,13 +2167,12 @@ String PiCopilotInterface::RunWithRunner( const String& code, const String& prel
    String outJs = outPath;
    outJs.ReplaceString( u"\\", u"/" );
    // El preprocesador de PixInsight quita los comentarios "//" y "/*" aunque estén dentro de un texto entre comillas
-   // (5 nov 2026: el código del modelo empezaba con un comentario y el script se cortaba): se escapan las barras.
-   String quoted = JsonValue::Quote( code );
+   // (5 nov 2026): se escapan las barras (una ruta o una URL en los parámetros).
+   String quoted = JsonValue::Quote( calls );
    quoted.ReplaceString( u"/", u"\\/" );
    String script = lib + u"\n" + prelude +
-      u"var __pcRes;\ntry { __pcRes = eval(" + quoted + u"); }\n"
-      u"catch (__pcErr) { __pcRes = \"PICOPILOT_ERROR: \" + ((__pcErr && __pcErr.message) ? __pcErr.message : String(__pcErr)) + "
-      u"((__pcErr && __pcErr.lineNumber) ? \" (línea \" + __pcErr.lineNumber + \" del script)\" : \"\"); }\n"
+      u"var __pcRes;\ntry { __pcRes = pprEjecutarLlamadas(" + quoted + u"); }\n"
+      u"catch (__pcErr) { __pcRes = \"PICOPILOT_ERROR: \" + ((__pcErr && __pcErr.message) ? __pcErr.message : String(__pcErr)); }\n"
       u"File.writeTextFile(\"" + outJs + u"\", (__pcRes === undefined || __pcRes === null) ? \"\" : String(__pcRes));\n";
    if ( !PiCopilotUtil::WriteText( scriptPath, script ) )
       return u"PICOPILOT_ERROR: No se pudo escribir " + scriptPath;
@@ -2321,8 +2183,8 @@ String PiCopilotInterface::RunWithRunner( const String& code, const String& prel
       console.ExecuteScript( scriptPath );
       if ( File::Exists( outPath ) )
          out = PiCopilotUtil::ReadText( outPath );
-      else   // no llegó al final: error de sintaxis o de PixInsight, que sale en la consola
-         out = u"PICOPILOT_ERROR: el script no llegó a terminar (error de sintaxis o de PixInsight; el detalle está en la consola)";
+      else   // no llegó al final: error de PixInsight, que sale en la consola
+         out = u"PICOPILOT_ERROR: las llamadas no llegaron a terminar (error de PixInsight; el detalle está en la consola)";
    }
    catch ( const Error& e )
    {
@@ -2330,7 +2192,7 @@ String PiCopilotInterface::RunWithRunner( const String& code, const String& prel
    }
    catch ( ... )
    {
-      out = u"PICOPILOT_ERROR: error al ejecutar el script con el runner";
+      out = u"PICOPILOT_ERROR: error al ejecutar las llamadas con el runner";
    }
    try { File::Remove( scriptPath ); } catch ( ... ) {}
    try { if ( File::Exists( outPath ) ) File::Remove( outPath ); } catch ( ... ) {}
@@ -2351,7 +2213,7 @@ void PiCopilotInterface::e_Timer( Timer& )
          FinishJob( Tr( u"No se pudo repetir la petición al modelo." ), true );
    }
 
-   // Interpretación / corrección pendiente de un script: se lanza aquí, fuera de RunScript y de cualquier evento.
+   // Interpretación / corrección pendiente: se lanza aquí, fuera de RunCalls y de cualquier evento.
    if ( m_queued.pending && !m_busy && !m_scriptRunning && !m_inTimer && !m_inProcessEvent )
    {
       m_queued.pending = false;
@@ -2360,8 +2222,8 @@ void PiCopilotInterface::e_Timer( Timer& )
          StopAutoChain( Tr( u"no se ha podido pedir el paso siguiente" ) );
    }
 
-   // Serie de pasos: el script que trajo la última respuesta se ejecuta aquí, fuera del evento que la terminó, nunca
-   // dentro de otro tic (los scripts procesan eventos y el temporizador se reentra) ni de un evento del proceso.
+   // Serie de pasos: las llamadas que trajo la última respuesta se ejecutan aquí, fuera del evento que la terminó, nunca
+   // dentro de otro tic (las funciones procesan eventos y el temporizador se reentra) ni de un evento del proceso.
    if ( m_autoRunPending && !m_queued.pending && !m_busy && !m_scriptRunning && !m_inTimer && !m_inProcessEvent && NowSeconds() >= m_autoRunAt )
    {
       m_autoRunPending = false;
@@ -2377,13 +2239,13 @@ void PiCopilotInterface::e_Timer( Timer& )
          size_type nl = first.Find( '\n' );
          if ( nl != String::notFound )
             first = first.Left( nl );
-         CopilotLog( String().Format( "Serie de pasos: script %d: ", m_autoSteps ) + first.Left( 120 ) );
+         CopilotLog( String().Format( "Serie de pasos: paso %d: ", m_autoSteps ) + first.Left( 120 ) );
          struct TimerGuard { bool& f; TimerGuard( bool& x ) : f( x ) { f = true; } ~TimerGuard() { f = false; } } tg( m_inTimer );
-         RunScript( code, false );
+         RunCalls( code, false );
       }
    }
 
-   // Dossiers pendientes: se abren en cuanto el modelo (o el script) los escribe.
+   // Dossiers pendientes: se abren en cuanto el modelo (o la función) los escribe.
    double now = NowSeconds();
    for ( size_t i = 0; i < m_pendingDossiers.size(); )
    {
@@ -2651,7 +2513,7 @@ PiCopilotInterface::GUIData::GUIData( PiCopilotInterface& w )
                               u"ejecuta los pasos sobre la imagen.<br/>"
                               u"<b>Codex</b>: Codex CLI de OpenAI con el MCP de PixInsight (npm install -g @openai/codex y codex login).<br/>"
                               u"<b>Modelos locales</b>: API OpenAI-compatible (Strata, Ollama, LM Studio).</p>"
-                              u"<p>Con los modelos locales la respuesta incluye un script PJSR que puedes "
+                              u"<p>Con los modelos locales la respuesta propone llamadas a funciones de la guía que puedes "
                               u"revisar y ejecutar desde la ventana de Prompt.</p>" ) );
    Model_ComboBox.OnItemSelected( (ComboBox::item_event_handler)&PiCopilotInterface::e_ItemSelected, w );
 

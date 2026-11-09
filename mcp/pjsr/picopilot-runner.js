@@ -27,11 +27,8 @@
 #include <pjsr/astrometry/AstrometricMetadata.js>
 #include <pjsr/astrometry/UtilityControls.js>
 #include <pjsr/utility/ScriptErrors.js>
-#ifeq __PI_PLATFORM__ MACOSX
-#include "/Applications/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
-#else
-#include "C:/Program Files/PixInsight/src/scripts/BlindSolver/BlindSolverEngine.js"
-#endif
+// Ruta relativa a include/ de la instalación (vale en cualquier sistema y carpeta de instalación).
+#include <../src/scripts/BlindSolver/BlindSolverEngine.js>
 
 // Funciones de la guía (mismo repositorio), en orden de dependencias.
 // Ojo: con #include el preprocesador toma "//" dentro de un regex (p. ej. /^\//) como comentario: usar [\/].
@@ -304,13 +301,6 @@ function pprCerrar(ids, descartar) {
    return r;
 }
 
-function pprLibre(codigo) {
-   if (!File.exists(PPR_DIR + "/permitir_libre"))
-      throw new Error("run_script está desactivado. Para permitirlo, el usuario debe crear el fichero ~/.picopilot/permitir_libre.");
-   if (typeof codigo !== "string" || !codigo) throw new Error("Falta el código.");
-   return (0, eval)(codigo);
-}
-
 // ---------------------------------------------------------------------------------------------------------------
 // Lista blanca: nombre de herramienta -> función que recibe el objeto args de la petición.
 // Nada que no esté aquí se puede ejecutar.
@@ -326,7 +316,6 @@ var LISTA = {
    abrirImagen:          function (a) { return pprAbrir(a.fichero); },
    guardarImagen:        function (a) { return pprGuardar(a.vista, a.fichero, a.sobrescribir === true); },
    cerrarVista:          function (a) { return pprCerrar(a.vista, a.descartar === true); },
-   run_script:           function (a) { return pprLibre(a.codigo); },
    // Fase lineal
    analizarMaster:       function (a) { return analizarMaster(a.vista); },
    bordesSinDatos:       function (a) { return bordesSinDatos(a.vista); },
@@ -386,6 +375,75 @@ var LISTA = {
    darkStructureEnhance: function (a) { return darkStructureEnhance(a.vista, a.opciones || {}); },
    backgroundEnhance:    function (a) { return backgroundEnhance(a.vista, a.opciones || {}); }
 };
+
+// ---------------------------------------------------------------------------------------------------------------
+// Llamadas propuestas por un modelo sin herramientas (módulo PiCopilot): {"llamadas":[{"funcion","parametros"}]}.
+// Son DATOS, no código: cada llamada se comprueba contra el manifiesto de la guía y la lista blanca antes de
+// ejecutar ninguna. Devuelve el texto del resultado, o "PICOPILOT_ERROR: …".
+// ---------------------------------------------------------------------------------------------------------------
+
+function pprTipoJson(v) { return v === null ? "null" : v instanceof Array ? "array" : typeof v; }
+
+function pprManifiesto() {
+   var porNombre = {};
+   (JSON.parse(File.readTextFile(GUIA_HERRAMIENTAS + "/manifiesto.json")).funciones || []).forEach(function (x) {
+      if (x.nivel !== "libre") porNombre[x.nombre] = x;
+   });
+   return porNombre;
+}
+
+function pprValidarLlamada(ll, man) {
+   if (!ll || pprTipoJson(ll) !== "object") return "cada llamada debe ser un objeto {funcion, parametros}";
+   var n = ll.funcion, x = (typeof n === "string" && man.hasOwnProperty(n)) ? man[n] : null;
+   if (!x) return "«" + n + "» no es una función de la guía";
+   if (!LISTA.hasOwnProperty(n)) return "«" + n + "» no está en la lista blanca del runner";
+   var p = ll.parametros === undefined ? {} : ll.parametros;
+   if (pprTipoJson(p) !== "object") return n + ": \"parametros\" debe ser un objeto";
+   var pr = (x.params && x.params.properties) || {}, req = (x.params && x.params.required) || [];
+   for (var k in p) if (p.hasOwnProperty(k)) {
+      if (!pr.hasOwnProperty(k)) return n + ": parámetro desconocido «" + k + "» (admite: " + (Object.keys(pr).join(", ") || "ninguno") + ")";
+      var t = pr[k].type, tv = pprTipoJson(p[k]);
+      if (t && !(t == tv || (t == "integer" && tv == "number"))) return n + ": «" + k + "» debe ser " + t + " y es " + tv;
+   }
+   for (var i = 0; i < req.length; ++i) if (p[req[i]] === undefined) return n + ": falta el parámetro obligatorio «" + req[i] + "»";
+   return null;
+}
+
+function pprVistasTexto() {
+   try { return pprVistas().vistas.map(function (v) { return v.id; }).join(", ") || "ninguna"; } catch (e) { return "?"; }
+}
+
+function pprEjecutarLlamadas(texto) {
+   var lista, man;
+   try {
+      var o = JSON.parse(texto);
+      lista = o && o.llamadas;
+      if (!(lista instanceof Array) || !lista.length) throw new Error("falta la lista \"llamadas\"");
+   } catch (e) {
+      return "PICOPILOT_ERROR: el bloque ```json no es válido (" + (e.message || e) + "). Formato: " +
+             "{\"llamadas\": [{\"funcion\": \"…\", \"parametros\": {…}}]}";
+   }
+   try { man = pprManifiesto(); } catch (e) { return "PICOPILOT_ERROR: no se puede leer el manifiesto de la guía (" + (e.message || e) + ")"; }
+   // Todas se validan antes de ejecutar ninguna.
+   for (var i = 0; i < lista.length; ++i) {
+      var err = pprValidarLlamada(lista[i], man);
+      if (err) return "PICOPILOT_ERROR: llamada " + (i + 1) + ": " + err + ". No se ha ejecutado nada. Vistas abiertas (ids exactos): " + pprVistasTexto();
+   }
+   var salida = [];
+   for (var j = 0; j < lista.length; ++j) {
+      var ll = lista[j], p = ll.parametros || {}, s;
+      console.noteln("[picopilot] " + ll.funcion + " " + JSON.stringify(p));
+      try {
+         var v = LISTA[ll.funcion](p);
+         try { s = typeof v === "string" ? v : JSON.stringify(v === undefined ? null : v); } catch (x) { s = String(v); }
+      } catch (e) {
+         return "PICOPILOT_ERROR: " + (salida.length ? "(antes: " + salida.join(" | ").substring(0, 4000) + ") " : "") + ll.funcion + ": " +
+                (e && e.message ? e.message : String(e)) + ". Vistas abiertas (ids exactos): " + pprVistasTexto();
+      }
+      salida.push(lista.length == 1 ? s : ll.funcion + ": " + s);
+   }
+   return salida.join("\n\n");
+}
 
 // ---------------------------------------------------------------------------------------------------------------
 

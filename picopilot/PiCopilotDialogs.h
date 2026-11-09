@@ -86,7 +86,7 @@ private:
          TextBox           Prompt_TextBox;
          HorizontalSizer   Buttons_Sizer;
             PushButton        Send_Button;
-            PushButton        RunScript_Button;
+            PushButton        RunCalls_Button;
             CheckBox          AutoRun_CheckBox;
             CheckBox          Internet_CheckBox;
             PushButton        Clear_Button;
@@ -105,7 +105,7 @@ private:
 
    String m_context;
    std::vector<PiCopilotChatEntry> m_entries;
-   String m_lastScript;
+   String m_lastCalls;
    bool   m_busy = false;
 
    void Refresh();

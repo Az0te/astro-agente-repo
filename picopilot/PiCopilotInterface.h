@@ -63,16 +63,16 @@ public:
 
    // Llamadas desde la ventana de Prompt.
    bool SubmitChat( const String& text );
-   // Enlace de paso pulsado en el chat: ejecuta el script pendiente (si es del último mensaje) o pide el paso al modelo.
-   void StepLinkClicked( const String& text, bool lastMessage, const String& lastScript );
+   // Enlace de paso pulsado en el chat: ejecuta las llamadas pendientes (si son del último mensaje) o pide el paso al modelo.
+   void StepLinkClicked( const String& text, bool lastMessage, const String& lastCalls );
    bool AutoRunEnabled() const { return m_cfg.autoRun; }
    void SetAutoRun( bool on );
    bool InternetEnabled() const { return m_cfg.internet; }
    void SetInternet( bool on );
    void ResetChat();
    void CleanTempFiles();   // previas y scripts temporales (también al pulsar Limpiar)
-   void RunScript( const String& code, bool ask = true );
-   void RunScriptButton( const String& code );   // botón «Ejecutar script»: con la casilla marcada reanuda la serie
+   void RunCalls( const String& calls, bool ask = true );   // llamadas ```json a funciones de la guía (nunca código)
+   void RunCallsButton( const String& calls );  // botón «Ejecutar llamadas»: con la casilla marcada reanuda la serie
 
    bool IsBusy() const { return m_busy; }
 
@@ -92,7 +92,7 @@ private:
 
    // Serie de pasos con modelos sin herramientas (Rafael, 7 nov 2026): si el usuario pide varios pasos o la resolución
    // completa, el panel ejecuta cada script y pide el siguiente sin esperar; si pide que espere o que le recomiende el
-   // siguiente paso, se queda como antes (un script cada vez y el usuario pulsa «Ejecutar script»).
+   // siguiente paso, se queda como antes (unas llamadas cada vez y el usuario pulsa «Ejecutar llamadas»).
    bool   m_autoChain = false;       // la serie está en marcha
    bool   m_autoPaused = false;      // la serie paró con «PARO:» (pregunta al usuario): su respuesta la reanuda
    bool   m_autoSingle = false;      // m_autoScript es un solo plan (sin serie): respuesta a un Prompt o enlace de paso
@@ -240,7 +240,7 @@ private:
    void UpdateStatus();
    void UpdateView();
 
-   String RunWithRunner( const String& code, const String& prelude );
+   String RunWithRunner( const String& calls, const String& prelude );
 
    PiCopilotChatDialog& Chat();
    void ShowDossier( const String& path );

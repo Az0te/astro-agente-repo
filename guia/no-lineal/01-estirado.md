@@ -31,25 +31,8 @@ En una galaxia con mucho cielo alrededor, 0,10 deja el fondo gris: galaxia grand
 
 Modo color ("Col") conserva el tono; RGB/K por canal puede desplazarlo. Histograma con dos cúpulas = exceso de b con D alto: deshacer y bajar b ~40 % o D ~50 %.
 
-```javascript
-var v = View.viewById("Starless");
-if (!v || v.isNull) throw new Error("No existe Starless");
-var img = v.image;
-img.selectedChannel = 0;
-var med = img.median();
-img.resetSelections();
-if (med > 0.05) throw new Error("La imagen parece estirada: no repetir la fase 1 (mirar el historial)");
-var P = new GeneralizedHyperbolicStretch;
-P.stretchType = GeneralizedHyperbolicStretch.ST_GeneralisedHyperbolic;
-P.stretchChannel = GeneralizedHyperbolicStretch.SC_RGB;
-P.stretchFactor = 2.5;           // D
-P.localIntensity = 12;           // b
-P.symmetryPoint = med;           // SP
-P.shadowProtection = 0;          // LP
-P.highlightProtection = 0.95;    // HP
-if (!P.executeOn(v)) throw new Error("GHS fase 1 falló");
-"GHS fase 1: mediana previa " + med;
-```
+- Antes: si la mediana pasa de 0,05, la imagen ya está estirada (no repetir la fase 1; mirar el historial).
+- GeneralizedHyperbolicStretch, tipo hiperbólico generalizado, canal RGB: D (stretchFactor) 2,5; b (localIntensity) 12; SP (symmetryPoint) = mediana previa; LP 0; HP 0,95.
 
 **Estirar al fallo, en pasadas cortas** (método por defecto). Varias pasadas cortas son mejores que una larga: se estira hasta que algo falla y se queda la pasada anterior. Tras la fase 1, pasadas cortas de GHS (D ≈ 1, b 6, SP = cielo, HP 0,92), cada una seguida de un punto negro que devuelve el cielo a ~0,10; se mide tras cada pasada. **Fallo:** ruido del cielo > 15 % del cielo, > 0,05 % de píxeles a 0 o > 0,95. Si una pasada falla, se deshace y se prueba la mitad de corta; cuando ni la más corta cabe, se queda la anterior. Con galaxia grande (nov 2026) da lo mismo que el arcsinh elegido (bulbo 0,75, disco 0,24, ruido del cielo ~12–14 %), mientras que llevar sólo la mediana a 0,10 dejaba la galaxia apagada (bulbo 0,45, disco 0,13).
 
@@ -61,29 +44,26 @@ if (!P.executeOn(v)) throw new Error("GHS fase 1 falló");
 
 **Comparar métodos** (`estirarCandidatos(starless, { cielo })`, mismo fichero): prueba sobre copias GHS al fallo, MultiscaleAdaptiveStretch (sin su saturación, que va después) y ArcsinhStretch (factor por bisección y punto negro bajo el cielo del canal más bajo), y los lleva todos al mismo cielo para comparar en igualdad. Gana, entre los que no fallan (ruido del cielo, recortes, dominante), el que más separa la señal débil del fondo: `senal_debil_en_ruidos` = (p90 − cielo) / ruido del cielo. La tabla va en `comparados`; con `cerrar: false` se conservan todos para mirarlos. La capa de estrellas va aparte (`estirarEstrellas`).
 
-```javascript
-var r = estirarCandidatos("Starless", { cielo: 0.10, nuevaVista: "Starless_st" });   // { metodos: ["ghs", "mas", "arcsinh"], mas: {...} }
-JSON.stringify(r.comparados);
+```json
+{"llamadas": [
+  {"funcion": "estirarCandidatos", "parametros": {"vista": "Starless", "opciones": {"cielo": 0.1, "nuevaVista": "Starless_st"}}}
+]}
 ```
+
+Opciones: `metodos` ("ghs", "mas", "arcsinh"), `mas`. La tabla está en `comparados`.
 
 **Meseta del núcleo.** `meseta_nucleo.radio_px` es el radio equivalente de lo que queda por encima de 0,95 alrededor del punto más brillante. Con estructura: 0–3 px; galaxia grande con Qwen, 22 px (núcleo y la galaxia satélite planos). Si pasa de 3, `no_cumple` lo dice y el siguiente paso es `comprimirNucleo` (Paso 5), **no** volver a estirar ni encadenar más GHS.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/estirado.js"));   // en el nivel superior del script
-var r = estirarCapas("Starless", "Stars", { cielo: 0.10, nuevaStarless: "Starless_st_v1", nuevasEstrellas: "Stars_st_v1" });
-// Galaxia: { tipo: "galaxia", nuevaStarless: ..., nuevasEstrellas: ... }   (cielo 0,07, ruidoMax 0,12, estrellas "extraer", saturación 1,3)
-JSON.stringify(r);   // { starless: {pasadas, parada, medidas, dominante, control}, estrellas: {amount, p90, control} }
+```json
+{"llamadas": [
+  {"funcion": "estirarCapas", "parametros": {"starless": "Starless", "estrellas": "Stars", "opciones": {"cielo": 0.1, "nuevaStarless": "Starless_st_v1", "nuevasEstrellas": "Stars_st_v1"}}}
+]}
 ```
+
+Galaxia: `{"tipo": "galaxia", "nuevaStarless": …, "nuevasEstrellas": …}` (cielo 0,07, ruidoMax 0,12, estrellas "extraer", saturación 1,3). Devuelve `{ starless: {pasadas, parada, medidas, dominante, control}, estrellas: {amount, p90, control} }`.
 **MAS.** Parámetros (por defecto): `targetBackground` (0,15), `aggressiveness` (0,70), `dynamicRangeCompression` (0,40), `contrastRecovery` (true), `scaleSeparation` (1024), `contrastRecoveryIntensity` (1,0), `saturationEnabled` (true), `saturationAmount` (0,75), `backgroundROIEnabled` y `backgroundROIX0/Y0/Width/Height` (imprescindible si el objeto llena el campo). Orden de ajuste: ROI de fondo → fondo objetivo → agresividad → DRC → scale separation → contrast recovery (0,25 sutil, 0,5 moderado, 1 completo) → saturación. Más señal débil: subir un poco el fondo y bajar la agresividad. DRC protege núcleos durante el estirado; no sustituye a HDRMT.
 
-```javascript
-var M = new MultiscaleAdaptiveStretch;
-M.targetBackground = 0.15;
-M.aggressiveness = 0.6;
-M.contrastRecoveryIntensity = 0.5;
-M.saturationEnabled = false;          // Hα o capas que se combinarán después
-if (!M.executeOn(View.viewById("Starless"))) throw new Error("MAS falló");
-```
+- MultiscaleAdaptiveStretch: `targetBackground` 0,15; `aggressiveness` 0,6; `contrastRecoveryIntensity` 0,5; saturación desactivada en Hα o capas que se combinarán después.
 
 **Capa de estrellas: `starStretch`** (Star Stretch de SetiAstro, mismo resultado que el script)
 

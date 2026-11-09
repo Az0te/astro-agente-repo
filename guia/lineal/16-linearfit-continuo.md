@@ -24,44 +24,28 @@
 3. Cociente `(N − B_N)/(C − B_C)` por estrella; **mediana** de los cocientes.
 4. Comprobar simetría de residuos: si quedan estrellas positivas, k baja; si quedan agujeros negros, k alta.
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
 La fórmula es `Ha_sub = Hα − k·R − c`. En nebulosa de emisión y reflexión, k = 0,293 y c = 0,00155; con la R de la HDR y fotometría de apertura, k = 0,332. Cambiar k con cada combinación de cámara y filtro. En PixelMath la R se usa por el id de su vista:
 
-```javascript
-var PM = new PixelMath;
-PM.useSingleExpression = true;
-PM.symbols = "k, c";
-PM.expression = "k = 0.293;\nc = 0.00155;\n$T - k*RGB_starless[0] - c";
-PM.createNewImage = true;
-PM.newImageId = "Ha_CS";
-// con executeOn(view) basta: el resultado hereda color space y formato (newImageColorSpace = PixelMath.SameAsTarget)
-if (!PM.executeOn(View.viewById("Ha_starless"))) throw new Error("Resta de continuo falló");
-"Ha_CS creada";
-```
+- PixelMath en una imagen nueva `Ha_CS`: `$T − k·RGB_starless[0] − c` sobre la starless de Hα (k y c medidos antes; ej. k = 0,293, c = 0,00155).
 
-
-```javascript
-// Comprobación del resultado de la resta, sin tocar la imagen:
-var v = View.viewById("Ha_CS");
-if (!v || v.isNull) throw new Error("No existe Ha_CS");
-var img = v.image, out = [];
-for (var c = 0; c < img.numberOfChannels; ++c) {
-   img.selectedChannel = c;
-   out.push("canal " + c + ": mediana " + img.median() + "  min " + img.minimum());
-}
-img.resetSelections();
-if (img.minimum() < -0.001) throw new Error("Fondo negativo: k o c mal medidos");
-out.join("\n");
-```
+- Comprobación sin tocar la imagen: mediana y mínimo por canal de `Ha_CS`; un mínimo por debajo de −0,001 indica fondo negativo (k o c mal medidos).
 
 **En una llamada** (`herramientas/bandaestrecha.js`): `medirContinuo(nbConEstrellas, rgbConEstrellas, { canal: 0 })` mide k con el procedimiento de arriba (centroide, apertura 7 px, anillo 10–14 px, mediana de ~3000 estrellas); `restarContinuo(nbStarless, rgbStarless, { k })` resta y mide los negativos y el brillo de emisión conservado. nebulosa de emisión y reflexión (nov 2026): k = 0,316 (la medida a mano fue 0,332) y la emisión conserva el 95 %.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en el nivel superior del script
-var k = medirContinuo("Ha_raw", "RGB_spcc", { canal: 0 });          // OIII: canal 1 (G)
-var r = restarContinuo("Ha_starless", "RGB_starless", { k: k.k, nuevaVista: "Ha_CS" });
-JSON.stringify({ k: k, resta: r });
+```json
+{"llamadas": [
+  {"funcion": "medirContinuo", "parametros": {"nb": "Ha_raw", "continuo": "RGB_spcc", "opciones": {"canal": 0}}}
+]}
+```
+
+OIII: canal 1 (G). Con el `k` que devuelva, en otra respuesta:
+
+```json
+{"llamadas": [
+  {"funcion": "restarContinuo", "parametros": {"nb": "Ha_starless", "continuo": "RGB_starless", "opciones": {"k": "<k medido>", "nuevaVista": "Ha_CS"}}}
+]}
 ```
 
 **Control.** Residuos simétricos alrededor de las estrellas; sin discos oscuros en zonas de continuo fuerte (enmascarar o cubrir con la estrella); sin fondo negativo. Comparar el Hα original y el restado en una zona dominada por emisión: debe conservar casi todo el brillo (en una nebulosa de emisión y reflexión el continuo sólo quitaba un 2–5 %).

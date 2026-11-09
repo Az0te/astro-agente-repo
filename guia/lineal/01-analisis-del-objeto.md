@@ -27,44 +27,37 @@
 6. Régimen de muestreo: submuestreado / bien muestreado / sobremuestreado (drizzle 2x), que condiciona BXT, NXT y nitidez.
 7. **¿Bordes sin datos?** (`bordes_sin_datos` de `analizarMaster`). Un master registrado sin recortar tiene cuñas en los bordes; WBPP las rellena con un valor constante, no con 0, y a ojo se confunden con cielo oscuro. Con varios masters, lo primero es el [Paso 5: alinear y recortar](05-staralignment-crop.md); con uno solo, recortar los bordes. Gradiente, BXT, SPCC o desmezcla con cuñas dan resultados falsos (`gradienteCandidatos` se niega).
 
-**Código: estado de partida del master**
+**Estado de partida del master**
 
-```javascript
-// Estado del master: canales, bits, astrometría y estadísticas por canal.
-var w = ImageWindow.windowById("MasterLight");
-if (!w || w.isNull) throw new Error("No existe MasterLight");
-var v = w.mainView, img = v.image, out = [];
-out.push("id=" + v.id + "  canales=" + img.numberOfChannels +
-         "  bits=" + img.bitsPerSample + "  color=" + img.isColor);
-out.push("astrometria=" + w.hasAstrometricSolution);
-for (var c = 0; c < img.numberOfChannels; ++c) {
-   img.selectedChannel = c;
-   out.push("canal " + c + ": mediana " + img.median() +
-            "  max " + img.maximum() + "  MAD " + img.MAD());
-}
-img.resetSelections();
-out.join("\n");
-```
+- Por canal: mediana, máximo y MAD; además canales, bits por muestra, si es color y si tiene solución astrométrica.
+- Todo eso lo devuelve `analizarMaster` (abajo); `estadisticas {vista}` da sólo las estadísticas por canal.
 
 **Datos de la checklist en una llamada** (`herramientas/analisis.js`): cabecera (objeto, filtro, cámara), escala (de la cabecera o de la astrometría), estadísticas y píxeles saturados por canal, estrella más brillante, si es lineal y qué fracción del campo tiene señal extensa. Devuelve los datos; la interpretación de la checklist se hace después con ellos.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/analisis.js"));   // en el nivel superior del script
-JSON.stringify(analizarMaster("MasterLight"));
+```json
+{"llamadas": [
+  {"funcion": "analizarMaster", "parametros": {"vista": "MasterLight"}}
+]}
 ```
 
 **Ficha del objeto en una llamada** (`documentarObjeto(vista)`, `herramientas/web.js`): junto a `analizarMaster`, siempre que haya internet. Identifica el objeto por `OBJECT` (aunque lleve texto de más, como «IC 1396 sin filtro») o, si no, por la astrometría o el RA/DEC de la cabecera, y devuelve su tipo (SIMBAD), un resumen (Wikipedia en español o inglés), la emisión esperada (rayas y filtros según el tipo, completada con el resumen: IC 1396 sale en SIMBAD como cúmulo abierto pero el resumen dice nebulosa de emisión), las estrellas de V < 6 del campo y alrededores, y los problemas que pueden dar (γ Cas, V 2,4 a 20' de IC 63: halo, reflejos, gradiente, HDR). El análisis junta las medidas con esa ficha.
 
-```javascript
-JSON.stringify({ medidas: analizarMaster("MasterLight"), objeto: documentarObjeto("MasterLight") });
+```json
+{"llamadas": [
+  {"funcion": "analizarMaster", "parametros": {"vista": "MasterLight"}},
+  {"funcion": "documentarObjeto", "parametros": {"vista": "MasterLight"}}
+]}
 ```
 
 **Documentarse en internet** (`herramientas/web.js`): qué es el objeto y qué señal tiene antes de decidir nada. `simbad("IC 63")` da el tipo según SIMBAD (región HII, nebulosa de reflexión, oscura, galaxia...), coordenadas, tamaño e identificadores; `wikipedia("IC 63")` el resumen del artículo (español y, si no hay, inglés), también para cámaras, telescopios y filtros; `leerWeb(url)` el texto de una página concreta (ficha del filtro o de la cámara); `imagenCatalogo("IC 63", { survey: "H-Alpha Comp", campo: 2 })` abre una imagen de catálogo de SkyView (DSS2 Red/Blue/IR, mapa Hα, WISE, 2MASS, GALEX) para saber qué Hα u otras señales esperar y distinguir estructura débil real de gradiente. Con una vista con astrometría, `imagenCatalogo("<vista>")` usa su centro y su campo. Citar siempre la fuente que devuelven. Con Claude Code el modelo tiene además WebSearch y WebFetch.
 
-```javascript
-var s = simbad("IC 63");                     // { tipo: "región HII (nebulosa de emisión)", ra_grados, dec_grados, ... }
-var w = wikipedia("IC 63");                  // { titulo, resumen, url }
-var c = imagenCatalogo("IC 63", { survey: "H-Alpha Comp", campo: 2 });   // abre Cat_H_Alpha_Comp
-JSON.stringify({ simbad: s, wikipedia: w, catalogo: c });
+```json
+{"llamadas": [
+  {"funcion": "simbad", "parametros": {"objeto": "IC 63"}},
+  {"funcion": "wikipedia", "parametros": {"texto": "IC 63"}},
+  {"funcion": "imagenCatalogo", "parametros": {"posicion": "IC 63", "opciones": {"survey": "H-Alpha Comp", "campo": 2}}}
+]}
 ```
+
+`simbad` devuelve `{ tipo, ra_grados, dec_grados, … }`; `wikipedia`, `{ titulo, resumen, url }`; `imagenCatalogo` abre `Cat_H_Alpha_Comp`.
 **Control.** La mediana de un master lineal está en torno a 0,001–0,02 (con pedestal puede pasar de 0,01: el de una nebulosa oscura da 0,0102). Si es mucho mayor (> 0,05), la imagen ya está estirada y no es la entrada correcta. Máximos por canal muy distintos = saturación desigual, no fallo de color.

@@ -25,16 +25,17 @@
 | Gradientes | Los aditivos deben ser parecidos entre tomas o corregirse antes (DBE/MGC en cada master lineal); si son similares, se corrigen después sobre la HDR |
 | Máscara | Conservar la primera máscara (zonas sustituidas): sirve para proteger o tratar núcleos |
 
-**Caso medido (nebulosa de emisión y reflexión).** Se lanza desde un script con `P.images = [[true, ruta120],[true, ruta30]]` y `executeGlobal()` (crea las ventanas `HDR` y `HDR_mask01`; tarda > 60 s). **Con LocalNormalization los masters no saturan a 1**: el verde de 120 s se quedaba en 0,89–0,92 y R/B en 0,93–0,96; medir la meseta por canal y poner el umbral por debajo (**se usó 0,80, suavizado 7, crecimiento 1**). La salida queda reescalada (HDR ≈ 0,275 × M120, sin pedestal): normal, es lineal. La razón 120/30 en estrellas fue 3,66–3,93, pero en las alas de la estrella brillante ≈ 4,1, lo que dejó un escalón del −6 % a 28 px dentro del núcleo saturado: invisible tras estirar, pero comprobarlo con el perfil HDR/M120 y HDR/M30.
+**Caso medido (nebulosa de emisión y reflexión).** HDRComposition en modo global con las rutas de los masters de 120 s y 30 s (crea las ventanas `HDR` y `HDR_mask01`; tarda > 60 s). **Con LocalNormalization los masters no saturan a 1**: el verde de 120 s se quedaba en 0,89–0,92 y R/B en 0,93–0,96; medir la meseta por canal y poner el umbral por debajo (**se usó 0,80, suavizado 7, crecimiento 1**). La salida queda reescalada (HDR ≈ 0,275 × M120, sin pedestal): normal, es lineal. La razón 120/30 en estrellas fue 3,66–3,93, pero en las alas de la estrella brillante ≈ 4,1, lo que dejó un escalón del −6 % a 28 px dentro del núcleo saturado: invisible tras estirar, pero comprobarlo con el perfil HDR/M120 y HDR/M30.
 
 **En una llamada** (`herramientas/hdr.js`): `componerHDR([larga, corta] o carpeta, { nuevaVista })` trabaja con los masters ya alineados (Paso 5, `alinearMasters`) y hace esto:
 - Los ordena por exposición (`EXPTIME`, o el número del nombre: "L120", "S30").
 - Mide la meseta de saturación por canal de la larga y pone el umbral en 0,9 × la más baja. Así sustituye en cuanto satura cualquier canal, como pide OSC.
 - Lanza HDRComposition (suavizado 7, crecimiento 1) y comprueba el resultado: n−1 máscaras, % del campo sustituido, razón de flujo larga/corta, escalón en la transición (HDR frente a la corta escalada, aviso si pasa del 3 %) y si la corta también satura.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/hdr.js"));   // en el nivel superior del script
-JSON.stringify(componerHDR(["<master 120 s alineado>", "<master 30 s alineado>"], { nuevaVista: "HDR" }));
+```json
+{"llamadas": [
+  {"funcion": "componerHDR", "parametros": {"masters": ["<master 120 s alineado>", "<master 30 s alineado>"], "opciones": {"nuevaVista": "HDR"}}}
+]}
 ```
 
 Comprobado con una nebulosa de emisión y reflexión (nov 2026; L120 y S30 reducidos ×2, 22 s):
@@ -45,20 +46,11 @@ Comprobado con una nebulosa de emisión y reflexión (nov 2026; L120 y S30 reduc
 
 Si los masters tienen astrometría con splines, reducirlos antes con IntegerResample o recortarlos pide confirmación (ver Paso 5): `astrometriaLineal(ventana)`.
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-var HDR = new HDRComposition;
-// De mayor a menor exposición; cada elemento: [enabled, path]
-HDR.images = [[true, carpetaMasters + "/M120.xisf"],
-              [true, carpetaMasters + "/M030.xisf"]];
-// Nombres comprobados en PixInsight 1.9.6:
-HDR.maskBinarizingThreshold = 0.80;   // por debajo de la meseta medida por canal (0,89-0,96)
-HDR.maskSmoothness      = 7;      // suavizado de la transición
-HDR.maskGrowth          = 1;      // crecimiento de la máscara
-if (!HDR.executeGlobal()) throw new Error("HDRComposition falló");
-"creadas HDR y HDR_mask01";
-```
+- HDRComposition con las imágenes de mayor a menor exposición.
+- `maskBinarizingThreshold` 0,80: por debajo de la meseta medida por canal (0,89–0,96).
+- `maskSmoothness` 7 (suavizado de la transición) y `maskGrowth` 1. Crea `HDR` y `HDR_mask01`.
 
 **Control.** n−1 máscaras; perfil de la relación HDR/M120 y HDR/M30 en la estrella brillante (sin escalones); bordes de la sustitución revisados al 100 % en estrellas y núcleos; sin anillos de color en OSC. Alternativa propia si la composición no convence: medir la razón de flujo larga/corta en estrellas no saturadas y mezclar con máscara de saturación dilatada y suavizada (PixelMath), comprobando que no queda escalón ni anillo.
 

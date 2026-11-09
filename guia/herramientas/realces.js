@@ -13,7 +13,7 @@
 // Validación: con los mismos parámetros, el resultado es idéntico píxel a píxel (diferencia máxima 0) al
 // de cada script original, en imágenes RGB lineales y no lineales (PixInsight 1.9.6).
 //
-// Uso: el watcher v8 lo incluye al arrancar, así que las funciones están disponibles en run_script.
+// Uso: el runner del MCP picopilot y los scripts de PiCopilot lo incluyen con #include.
 // Con el watcher clásico:
 //   eval(File.readTextFile("<carpeta del repo>/guia/herramientas/realces.js"));
 //   starStretch("Stars", { amount: 2 });                       // capa de estrellas LINEAL

@@ -407,7 +407,7 @@ static String ResultCard( const JsonValue& r, const String& json )
    bool hasNc = nc.type == JsonValue::Array && !nc.a.empty();
    h << "<div class=\"cardtitle\">" << (hasNc ? "<span class=\"badge bad\">" + String( Tr( u"No cumple" ) ) + "</span>"
                                              : "<span class=\"badge ok\">" + String( Tr( u"Cumple" ) ) + "</span>")
-     << " " << Tr( u"Resultado del script" ) << "</div>";
+     << " " << Tr( u"Resultado de las llamadas" ) << "</div>";
    h << ListHtml( nc, "nc", "&#10007;" );
    h << ListHtml( ctl["medido"], "med", "&#10003;" );
    h << ListHtml( ctl["revisar_a_ojo"], "ojo", "&#128065;" );

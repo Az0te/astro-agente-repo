@@ -59,13 +59,13 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 - Con la elegida: aplicar la misma fórmula con PixelMath a resolución completa. **En una llamada** (`herramientas/bandaestrecha.js`): `componerPaleta({ S, H, O }, { paleta: "SHO", estrellas })`. Devuelve la paleta **sin estrellas** (la `estrellas` sólo se anota para el final): después `saturarAlFallo(paleta)`, `prepararEstrellas(capa de estrellas RGB estirada)` (nunca sobre la paleta: da error) y `recombinarEstrellas(paleta saturada, estrellas preparadas)`. Si G domina (la raya del verde, casi siempre Hα, manda) aplica SCNR Average Neutral 0,8 y da G/max(R,B) antes y después; `verde: 1` lo apura, `verde: false` lo deja. Paletas: SHO, HSO, OHS, HOS, SOH, OSH, HOO (Soft/Neutral/Hard), HOO_NOVA, FORAXX, FORAXX_BICOLOR, las siete familias Foraxx de AutoPalette Studio (FORAXX_SHO, _HOS, _OHS, _HOO, _HSO, _OSH, _SOH) y sus 42 variantes FORAXX_<familia>_<variante>, copiadas del script instalado (`paletasDisponibles()`); sin SII real las de S usan el SII sintético y salen marcadas pseudo. Antes, para cada raya desmezclada (mono): `separarEstrellas` y `estirarStarless(starless, { cielo: 0.10 })`; la RGB, con SPCC, da las estrellas (`estirarCapas(starless RGB, estrellas RGB)` y su `r.estrellas.vista`). Si el usuario ya ha dicho la paleta, no hacen falta previas.
 - Avisos: no hay fórmula Foraxx oficial única (la ficha C10-34 de astro-photographie no coincide con AutoPalette Studio: usar la de AutoPalette); en SHO sin equilibrar sale verde entero porque domina Hα (IC 1396, 8 nov 2026: G/max(R,B) ≈ 1,36); `quitarVerde` no lo corrige porque mira sólo el cielo, por eso lo hace `componerPaleta`.
 
-**NarrowbandNormalization 1.0** (proceso, sí se ejecuta desde un script)
+**NarrowbandNormalization 1.0** (proceso)
 
 - Equilibra la intensidad de los canales con **Hα siempre como referencia**: aplica a cada cana una MTF para que su desviación positiva media sobre la mediana iguale la del Hα, sólo por encima del punto de sombra (**shadowpoint 1 = desde la mediana; 0 = toda la imagen**). "Es un ajuste estético: cambia las proporciones entre rayas (documentarlo)."
 - "Vale en lineal o no lineal, pero con **Lightness = Off en lineal**."
 - Paleta: SHO, HOO, HSO, HOS (dual band OSC → HOO). En HOO toma el OIII del canal verde (más SNR en OSC); R = Hα, B = OIII normalizado y G = (1−amount)·base + amount·mezcla, con Mode1 = Hα original sobre OIII normalizado, Mode2 = OIII normalizado sobre OIII original, Mode3 = Hα original sobre OIII original.
 - Otros: SCNR (`G = min(G, (R+B)/2)`, no en HOO), OIII boost y SII boost, Highlight reduction, Brightness. Orden interno: normalización → SCNR → Lightness → Highlight reduction → Brightness.
-- Nombres PJSR: `palette` (`Palette_SHO/HOO/HSO/HOS`), `lightness` (`Lightness_Off/Preserve/Ha/OIII/SII`), `blendMode` (`Blend_Mode1..3`), `haBlend`, `scnr`, `o3Boost`, `s2Boost`, `shadowpoint`, `highlightReduction`, `brightness`. Comprobados en PixInsight 1.9.6; en v8 las constantes van en el constructor (`NarrowbandNormalization.Palette_HOO`).
+- Parámetros del proceso: `palette` (`Palette_SHO/HOO/HSO/HOS`), `lightness` (`Lightness_Off/Preserve/Ha/OIII/SII`), `blendMode` (`Blend_Mode1..3`), `haBlend`, `scnr`, `o3Boost`, `s2Boost`, `shadowpoint`, `highlightReduction`, `brightness`. Comprobados en PixInsight 1.9.6; en v8 las constantes van en el constructor (`NarrowbandNormalization.Palette_HOO`).
 
 **Qué recomendar**
 
@@ -77,35 +77,17 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 | Planetaria | Colores próximos a los reales (OIII azul-verde, Hα/NII rojo), HOO o RGB + banda estrecha; núcleo con HDR o tomas cortas |
 | OIII débil | Mezcla no lineal o HOS; OIII boost moderado, nunca hasta llenar el campo de cian |
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-// HOO clásico (Blend Soft 60/40) a partir de las capas Ha y OIII, ya estiradas con el MISMO estirado.
-// En PixelMath cada imagen se usa por su id.
-var PM = new PixelMath;
-PM.useSingleExpression = false;
-PM.expression  = "Ha";
-PM.expression1 = "0.6*Ha + 0.4*OIII";
-PM.expression2 = "OIII";
-PM.createNewImage = true;
-PM.newImageId = "HOO";
-PM.newImageColorSpace = PixelMath.RGB;   // PixInsight 1.9.6 (v8); en versiones anteriores, PixelMath.prototype.RGB
-if (!PM.executeGlobal()) throw new Error("HOO falló");   // executeGlobal exige además newImageWidth/Height
-
-// Variante con NarrowbandNormalization sobre la HOO:
-var NBN = new NarrowbandNormalization;
-NBN.palette = NarrowbandNormalization.Palette_HOO;        // v8: constantes en el constructor
-NBN.lightness = NarrowbandNormalization.Lightness_Off;
-NBN.shadowpoint = 1;
-if (!NBN.executeOn(View.viewById("HOO"))) throw new Error("NBN falló");
-"NBN HOO aplicado";
-```
+- HOO clásico (Blend Soft 60/40) con PixelMath en una imagen RGB nueva: R = Ha, G = 0,6·Ha + 0,4·OIII, B = OIII, con las dos capas estiradas con el MISMO estirado.
+- Variante: NarrowbandNormalization sobre la HOO, paleta HOO, lightness desactivada, shadowpoint 1.
 
 **Previews en una llamada** (`herramientas/bandaestrecha.js`): `previsualizarPaletas(ha, oiii, { carpeta })` genera a ~1200 px Classic HOO Soft y Hard, Foraxx Classic bicolor y HOO con límite al OIII (NOVA) desde capas ya estiradas con el mismo estirado, y las guarda como JPG para enseñarlas y preguntar.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en el nivel superior del script
-JSON.stringify(previsualizarPaletas("Ha_st", "OIII_st", { carpeta: "<versión>/prev/paletas" }));
+```json
+{"llamadas": [
+  {"funcion": "previsualizarPaletas", "parametros": {"ha": "Ha_st", "oiii": "OIII_st", "opciones": {"carpeta": "<versión>/prev/paletas"}}}
+]}
 ```
 
 **Control.** Comparar la paleta elegida con la composición natural (Hα/OIII + RGB) como referencia. Vigilar: fondo teñido, OIII que inunda el campo de cian, estrellas de color de paleta (deben venir de la RGB), transiciones de máscara. "Una paleta es una convención, no el color real: decirlo en el dosier."

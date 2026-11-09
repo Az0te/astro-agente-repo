@@ -79,10 +79,9 @@ With PixInsight open, ask the assistant for the step you want (or use the [PiCop
 
 ## ⚠️ Security
 
-The picopilot MCP server does not run arbitrary code: each request carries only the name of a function and its parameters, and the runner checks a token (`~/.picopilot/token`) and a whitelist before running it. The free `run_script` tool only appears if you create the file `~/.picopilot/permitir_libre` yourself. Even so:
+The picopilot MCP server does not run arbitrary code: each request carries only the name of a function and its parameters, and the runner checks a token (`~/.picopilot/token`) and a whitelist before running it. There is no tool that runs free code. Even so:
 
 - do not share or sync the `~/.picopilot` folder with cloud services;
-- do not create `permitir_libre` if other people or programs can use your MCP client;
 - review what the AI does, especially before saving or overwriting files.
 
 ## How to contribute

@@ -22,25 +22,16 @@
 - "Máscaras de gran escala, calculadas binando 8×, suavizando y ampliando de nuevo: polvo = luminancia entre el cielo y ~+0,03 (incluye cirros débiles, señal real); azul = (B − (R+G)/2 > 0,010) × (L > cielo + 0,04), más una versión ancha (gauss σ 25 binado) para ampliar la zona de reflexión; fondo = inversa del polvo."
 - Máscara de fondo para LHE (nebulosa de emisión y reflexión): `1 − clip((L64 − 0,20)/0,25)`, con L64 = luminancia suavizada a ~64 px: "protege la nebulosa brillante y el halo de la estrella brillante".
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-// Máscara de luminancia con gamma 2,0 para LHE (gamma 1,5 para HDRMT).
-var PM = new PixelMath;
-PM.useSingleExpression = true;
-PM.symbols = "g";
-PM.expression = "g = 2.0;\nexp(g*ln(max($T, 1e-5)))";
-PM.createNewImage = true;
-PM.newImageId = "mask_L_g20";
-if (!PM.executeOn(View.viewById("Starless"))) throw new Error("Máscara gamma falló");
-"mask_L_g20 creada";
-```
+- Máscara de luminancia en una imagen nueva: `exp(g·ln(max($T, 1e-5)))` con g = 2,0 para LHE (1,5 para HDRMT).
 
 **En una llamada** (`herramientas/mascaras.js`): `crearMascara(vista, { tipo })` con `tipo` `luminancia` (gamma 2,0 LHE / 1,5 HDRMT), `cielo` (rampa 1,5σ–5σ, suavizada) o `fondo_lhe` (receta v4B). Devuelve la vista de la máscara, su cobertura y la media en el cielo y en lo brillante, y cómo aplicarla.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/mascaras.js"));   // en el nivel superior del script
-JSON.stringify(crearMascara("Starless_st", { tipo: "fondo_lhe" }));
+```json
+{"llamadas": [
+  {"funcion": "crearMascara", "parametros": {"vista": "Starless_st", "opciones": {"tipo": "fondo_lhe"}}}
+]}
 ```
 
 **Control.** Ver la máscara estirada (STF) y comprobar que cubre lo que debe: núcleo protegido, fondo incluido, estrellas cubiertas si el proceso las daña. "Si hay que contenerlas, atenuar brillo en vez de erosionar." Revisar bordes de máscara (escalones, halos, costuras de color) en la imagen final, no sólo en la máscara.

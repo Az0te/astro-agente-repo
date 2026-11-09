@@ -15,28 +15,21 @@
 - "SXT rinde peor con aberraciones fuertes, sobremuestreo (p. ej. drizzle 2x) y estirados extremos tipo GHS/arcsinh (RC-Astro); puede quitar núcleos de galaxias, núcleos de planetarias, comas de cometas y cruces de filamentos (proteger con máscara)."
 - "En galaxias espirales grandes SXT confunde regiones HII y nudos con estrellas: el estirado de estrellas amplifica esos residuos; usar screen, estirado moderado o no separar estrellas."
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-var v = View.viewById("MasterLight");
-if (!v || v.isNull) throw new Error("No existe MasterLight");
-var SXT = new StarXTerminator;
-// nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
-SXT.output_stars = true; // genera la capa de estrellas
-SXT.unscreen = false;    // lineal: suma exacta starless + stars
-// SXT.overlap = 0.20;   // 0,50 solo con estrellas muy grandes / campos densos (x3 tiempo)
-if (!SXT.executeOn(v)) throw new Error("StarX falló");
-"starless + MasterLight_stars";
-```
+- StarXTerminator con `output_stars` (genera la capa de estrellas) y `unscreen` desactivado en lineal (suma exacta starless + estrellas).
+- `overlap` 0,20; 0,50 sólo con estrellas muy grandes o campos densos (×3 de tiempo).
 
 **En una llamada** (`herramientas/ruido.js`): `separarEstrellas` hace SXT sobre una copia (unscreen según sea lineal o no), localiza la capa de estrellas y comprueba que starless + estrellas reproduce el original; la estructura extensa de la capa de estrellas se da como orientación (en campos densos es alta sin fallo). Después, el denoise principal con `reducirRuido` (híbrido en mono con el modelo del perfil; en RGB, NXT 0,70 y mirar `moteado_color_despues`) o, mejor, con `ruidoCandidatos(s.starless, { principal: true })`, que compara NXT, MLDenoise y MultiscaleTGVDenoise y prefiere el que baja el ruido un 50–80 % cumpliendo los controles (ver [Paso 14](14-noisex-suave.md)).
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/ruido.js"));   // en el nivel superior del script
-var s = separarEstrellas("MasterLight_nxt", { nuevaVista: "Starless", nuevasEstrellas: "Stars" });
-var d = reducirRuido(s.starless, { metodo: "hibrido", modelo: "<.xmlm del perfil>", nuevaVista: "Starless_dn" });   // RGB: { denoise: 0.70 } (ver «RGB» abajo)
-JSON.stringify({ separacion: s, denoise: d });
+```json
+{"llamadas": [
+  {"funcion": "separarEstrellas", "parametros": {"vista": "MasterLight_nxt", "opciones": {"nuevaVista": "Starless", "nuevasEstrellas": "Stars"}}},
+  {"funcion": "reducirRuido", "parametros": {"vista": "Starless", "opciones": {"metodo": "hibrido", "modelo": "<.xmlm del perfil>", "nuevaVista": "Starless_dn"}}}
+]}
 ```
+
+En RGB, `reducirRuido` con `{"denoise": 0.70}` (ver «RGB» abajo); mejor aún, `ruidoCandidatos` con `{"principal": true}`.
 
 **Control.** "Una starless 'limpia' no prueba que la separación sea buena: revisar la diferencia original − starless." Esa diferencia debe contener **sólo** estrellas y sus halos, no filamentos, polvo ni núcleos de galaxia. Comprobar el recuento de estrellas de la capa frente al original. Y la suma `starless + stars` debe reproducir el original píxel a píxel (en lineal es exacta).
 
@@ -63,37 +56,11 @@ Es el denoise fuerte del flujo: va aquí, sobre la capa sin estrellas y todavía
 
 Canales mono (Hα, OIII, SII, L). En RGB, el modelo puede rechazar imágenes de color ("cannot process RGB images"): aplicar por canal (sin medir) o usar NXT con separación de color.
 
-```javascript
-var SRC = "MasterLight_starless";             // mono, lineal, sin estrellas
-var MODEL = "<ruta del modelo .xmlm>";        // de perfil.md
-var v = View.viewById(SRC);
-if (!v || v.isNull) throw new Error("No existe la starless");
-if (typeof MLDenoise !== "function") throw new Error("MLDenoise no está cargado: usar NXT 0,95 solo y avisar");
-function boxblur(a, W, H, r) {                // caja separable de radio r
-  var t = new Float32Array(W * H), o = new Float32Array(W * H);
-  for (var y = 0; y < H; y++) { var s = 0, n = 0, b = y * W;
-    for (var x = 0; x < Math.min(r, W); x++) { s += a[b + x]; n++; }
-    for (var x = 0; x < W; x++) { if (x + r < W) { s += a[b + x + r]; n++; } if (x - r - 1 >= 0) { s -= a[b + x - r - 1]; n--; } t[b + x] = s / n; } }
-  for (var x = 0; x < W; x++) { var s = 0, n = 0;
-    for (var y = 0; y < Math.min(r, H); y++) { s += t[y * W + x]; n++; }
-    for (var y = 0; y < H; y++) { if (y + r < H) { s += t[(y + r) * W + x]; n++; } if (y - r - 1 >= 0) { s -= t[(y - r - 1) * W + x]; n--; } o[y * W + x] = s / n; } }
-  return o; }
-function dup(id) { var s = v.image, w = new ImageWindow(s.width, s.height, 1, 32, true, false, id); w.mainView.beginProcess(); w.mainView.image.assign(s); w.mainView.endProcess(); w.show(); return w; }
-function px(w) { var im = w.mainView.image, a = new Float32Array(im.width * im.height); im.getSamples(a, new Rect(0, 0, im.width, im.height), 0); return a; }
-var ml = dup(SRC + "_ml"), nx = dup(SRC + "_nx");
-var ML = new MLDenoise; ML.modelPath = MODEL; ML.amount = 1.0; ML.useCache = false;
-if (!ML.executeOn(ml.mainView)) throw new Error("MLDenoise falló");
-var NXT = new NoiseXTerminator; NXT.denoise = 0.95; NXT.denoise_intensity = 0.95; NXT.detail = 0.15; NXT.iterations = 2;
-if (!NXT.executeOn(nx.mainView)) throw new Error("NXT falló");
-var W = v.image.width, H = v.image.height, m = px(ml), n = px(nx), bm = boxblur(m, W, H, 3), bn = boxblur(n, W, H, 3), o = new Float32Array(W * H);
-for (var i = 0; i < o.length; i++) o[i] = m[i] - bm[i] + bn[i];
-var out = new ImageWindow(W, H, 1, 32, true, false, SRC + "_dn");
-out.mainView.beginProcess(); out.mainView.image.setSamples(o, new Rect(0, 0, W, H), 0); out.mainView.endProcess(); out.show();
-ml.forceClose(); nx.forceClose();
-"híbrido ML + NXT: " + SRC + "_dn";
-```
+- Copia de la starless mono lineal por MLDenoise (amount 1,0, modelo `.xmlm` del perfil, sin caché) y otra por NXT (denoise 0,95, detail 0,15, iterations 2).
+- Resultado = fino de ML + grueso de NXT: `ML − caja₃(ML) + caja₃(NXT)`, con un desenfoque de caja separable de radio 3.
+- Si MLDenoise no está instalado: NXT 0,95 solo y avisar. Lo hace `reducirRuido` con `metodo: "hibrido"`.
 
-MLDenoise tarda ~2 min en 26 MP: pasa de 45 s: el MCP devuelve un id de trabajo (esperar con `estado(trabajo)`), y no encadenar varios canales en un mismo script (con 8+ min seguidos PixInsight dio "Invalid task termination intent" y el watcher dejó de recoger comandos).
+MLDenoise tarda ~2 min en 26 MP: pasa de 45 s: el MCP devuelve un id de trabajo (esperar con `estado(trabajo)`), y no encadenar varios canales en una misma petición (con 8+ min seguidos PixInsight dio "Invalid task termination intent" y dejó de responder).
 
 **Sin MLDenoise (no hay modelo o el módulo no está):** NXT solo, denoise 0,95 (en Hα 0,85 puntuó algo más: 79,2 frente a 78,6), detail 0,15, iterations 2. Con señal fuerte (Hα), sin NXT: MLDenoise 1,0 solo. Sin MLDenoise ni NXT: MultiscaleTGVDenoise (1.9.6) con `scales` 8 y `strength` 0,6; no con los valores por defecto (2 escalas dejan mucho ruido grueso). Borra más detalle que el híbrido y que NXT 0,95 (ver [detalle](../detalle/lineal-15-denoise-mldenoise.md)).
 

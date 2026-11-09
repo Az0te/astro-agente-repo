@@ -12,15 +12,15 @@
 - Tiempo de procesado activo (sin esperas), si el perfil lo pide: horas de inicio y fin de cada tramo.
 - Revisión crítica final (aescaffre), puntuando 0–100: credibilidad del detalle (resuelto o sintético/"gusanos"), calidad del fondo, naturalidad del color, integridad de estrellas, equilibrio tonal, separación objeto–fondo, artefactos (anillos, costuras, manchas, textura sobreafilada) y coherencia estética. "Cada pega con una corrección concreta y accionable (proceso y parámetros), nunca 'mejorar el contraste'."
 
-**Código: volcado del historial**
+**Volcado del historial**
 
-```javascript
-var v = View.viewById("Final");
-if (!v || v.isNull) throw new Error("No existe Final");
-var h = v.processing, out = [];       // contenedor, no array: length y at(i)
-for (var i = 0; i < h.length; ++i) out.push(i + ": " + h.at(i).toSource());
-out.join("\n\n");
+```json
+{"llamadas": [
+  {"funcion": "historial", "parametros": {"vista": "Final"}}
+]}
 ```
+
+Devuelve los pasos de `view.processing` (un contenedor, no un array) con los parámetros de cada uno.
 
 **Con el MCP picopilot** (Claude, Codex):
 

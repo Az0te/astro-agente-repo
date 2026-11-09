@@ -33,34 +33,20 @@ Recortar a ≥ 0 **sólo al final** y vigilar sobre-restas (zonas negras) en se�
 
 **Limitación del modelo:** "supone sólo rayas. El continuo que entra por las bandas de 5 nm (estrellas, nebulosa de reflexión, galaxias) también se reparte como 'Hα' y 'OIII': restar después el continuo con la RGB (sustracción de continuo) y, en objetos de reflexión como una nebulosa de emisión y reflexión, no interpretar ese 'OIII' como emisión."
 
-**Código: una imagen por raya, con pedestal restado**
+**Una imagen por raya, con pedestal restado**
 
-```javascript
-// Una imagen por raya con PixelMath por canal (useSingleExpression = false).
-// Los pedestales (pR, pG, pB) se miden antes como mediana de un ROI de cielo limpio.
-// Ojo: expresiones largas fallan en silencio -> símbolos + comprobar el valor devuelto.
-var PM = new PixelMath;
-PM.useSingleExpression = false;   // expression (R), expression1 (G), expression2 (B)
-PM.symbols = "pR, pG, pB";
-PM.expression  = "pR = 0.0021;\npG = 0.0019;\npB = 0.0025;\n" +
-                 "1.2563*($T[0]-pR) - 0.0293*($T[1]-pG) - 0.0460*($T[2]-pB)";
-PM.expression1 = "0";
-PM.expression2 = "0";
-PM.createNewImage = true;
-PM.newImageId = "Ha_raw";
-// Desde executeOn(view) el resultado hereda color space y formato; para cambiarlos:
-// PM.newImageColorSpace = PixelMath.Gray; PM.newImageSampleFormat = PixelMath.f32;  (v8, comprobado en 1.9.6)
-if (!PM.executeOn(View.viewById("MasterLight"))) throw new Error("Desmezcla Hα falló");
-"Ha_raw: el Hα queda en el canal R";
-```
+- Una imagen por raya con PixelMath por canal; los pedestales (pR, pG, pB) se miden antes como mediana de un trozo de cielo limpio.
+- Ejemplo Hα: `1,2563·(R−pR) − 0,0293·(G−pG) − 0,0460·(B−pB)` en una imagen nueva `Ha_raw` (gris).
+- Las expresiones largas fallan en silencio: usar símbolos y comprobar el valor devuelto.
 
-El mismo bloque con `newImageId = "OIII_raw"` y la expresión `-0.1378*($T[0]-pR) + 0.8370*($T[1]-pG) + 0.4542*($T[2]-pB)`. Con `createNewImage` desde `executeOn(view)` basta color space y formato; `executeGlobal` exige además `newImageWidth/Height`.
+`OIII_raw` igual, con `−0,1378·(R−pR) + 0,8370·(G−pG) + 0,4542·(B−pB)`.
 
 **En una llamada** (`herramientas/bandaestrecha.js`): `desmezclarDualBand(vista, { ponderarG })` mide los pedestales en el cielo, crea `Ha_raw` y `OIII_raw` (gris, con la solución astrométrica), cuenta las sobre-restas antes de recortar a 0 y comprueba los ratios G/R y B/R en la zona de Hα. nebulosa de emisión y reflexión (nov 2026): ratios 0,146 y 0,072, sin sobre-resta; misma estructura que DBXtract (correlación 0,96 en bloques de 16 px; DBXtract escala distinto).
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/bandaestrecha.js"));   // en el nivel superior del script
-JSON.stringify(desmezclarDualBand("MasterLight_NB"));
+```json
+{"llamadas": [
+  {"funcion": "desmezclarDualBand", "parametros": {"vista": "MasterLight_NB"}}
+]}
 ```
 
 **Otros filtros dual band (S2O3, S2Hb).** `desmezclarDualBand` lee la palabra clave FILTER, o `{ filtro: "S2O3" }`, y resuelve las dos rayas con la tabla QE de arriba por mínimos cuadrados. Con HaO3 da los mismos coeficientes de arriba:

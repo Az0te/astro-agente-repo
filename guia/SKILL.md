@@ -5,7 +5,7 @@ description: "Procesado de astrofotografía de cielo profundo en PixInsight cont
 
 # Procesado de astrofotografía en PixInsight
 
-Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) que procese en PixInsight a través del servidor MCP `picopilot` de este repositorio (`mcp/`, PixInsight 1.9.6+) o desde el panel PiCopilot. Con el MCP, cada función de `herramientas/` es una herramienta con su nombre (`mcp__picopilot__analizarMaster`…; parámetros en `herramientas/manifiesto.json`); con poco contexto, el servidor puede ofrecer sólo las de la fase en curso (`PICOPILOT_FASE`). El MCP antiguo `pixinsight` (watcher, `watcher_status`, `describe_process`, `list_open_images` y su `run_script`) está retirado: no usarlo aunque aparezca. El `run_script` de `picopilot` es otra cosa: PJSR libre con las funciones de la guía cargadas, sólo si el usuario lo ha activado y sólo cuando ninguna función sirve.
+Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) que procese en PixInsight a través del servidor MCP `picopilot` de este repositorio (`mcp/`, PixInsight 1.9.6+) o desde el panel PiCopilot. Con el MCP, cada función de `herramientas/` es una herramienta con su nombre (`mcp__picopilot__analizarMaster`…; parámetros en `herramientas/manifiesto.json`); con poco contexto, el servidor puede ofrecer sólo las de la fase en curso (`PICOPILOT_FASE`). El MCP antiguo `pixinsight` (watcher, `watcher_status`, `describe_process`, `list_open_images` y su `run_script`) está retirado: no usarlo aunque aparezca. El agente no escribe ni ejecuta código de PixInsight: sólo llama a las funciones de la guía. Si ninguna sirve, lo dice y propone al usuario qué hacer.
 
 Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carga **sólo cuando hace falta**: la ficha del paso que se va a ejecutar, y nada más.
 
@@ -30,7 +30,6 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carg
 
 - Usar sólo los ids que devuelve `vistas`, escritos exactamente igual. Nunca inventar ni completar un id. Los ids de las fichas (`MasterLight`, `Starless`…) son ejemplos: cambiarlos por uno real. Si el usuario no dice cuál, la activa; si hay dudas, preguntar.
 - Las funciones reciben el id como texto (`analizarMaster("id")`), no una ventana ni una vista.
-- En scripts: `ImageWindow.windowById(id)` nunca devuelve null (comprobar `w.isNull`); `View.viewById(id)` sí (`!v || v.isNull`). El id es `w.mainView.id`.
 - Renombrar las ventanas en la misma llamada que las crea; guardar con rutas absolutas.
 
 ## Funciones por paso
@@ -66,7 +65,7 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carg
 | NL10 Exportación | `exportarFinal` (XISF, TIFF 16 bits, JPG sRGB) |
 | NL11 Dossier | `historial` |
 
-Siempre disponibles: `vistas`, `estadisticas`, `historial`, `previa` (JPG para mirar la imagen), `abrirImagen`, `guardarImagen`, `cerrarVista`, `estado`, `ping`, `graxpertBGE`, `graxpertDenoise`. Sólo en scripts (`run_script` o panel): `pxSPCC`, `pxSPFC`, `pxMGC` (`procesos.js`), `gcStructCopy` (`gradcompare.js`), `astrometriaLineal` (`alineado.js`, antes de recortar o reescalar una imagen con astrometría con splines). En un script del panel se cargan con `eval(File.readTextFile("<guia>/herramientas/<fichero>.js"))`.
+Siempre disponibles: `vistas`, `estadisticas`, `historial`, `previa` (JPG para mirar la imagen), `abrirImagen`, `guardarImagen`, `cerrarVista`, `estado`, `ping`, `graxpertBGE`, `graxpertDenoise`. `pxSPCC`, `pxSPFC`, `pxMGC`, `gcStructCopy` y `astrometriaLineal` son internas: las usan otras funciones y no se llaman directamente.
 
 ## Internet
 
@@ -74,7 +73,7 @@ Siempre disponibles: `vistas`, `estadisticas`, `historial`, `previa` (JPG para m
 
 ## Siguiente paso
 
-Al terminar una respuesta sin código, cerrar con una línea **«Siguiente paso: <qué hacer> con <función>.»** en el **orden de la guía** (tabla de arriba) según lo ya hecho: sin saltar ni reordenar pasos; si uno no aplica, decirlo y pasar al siguiente. Alternativas razonables, en líneas «Paso N: …». El panel las muestra como enlaces.
+Al terminar una respuesta, cerrar con una línea **«Siguiente paso: <qué hacer> con <función>.»** en el **orden de la guía** (tabla de arriba) según lo ya hecho: sin saltar ni reordenar pasos; si uno no aplica, decirlo y pasar al siguiente. Alternativas razonables, en líneas «Paso N: …». El panel las muestra como enlaces.
 
 ## Sesiones por fase
 
@@ -88,9 +87,7 @@ Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en e
 - Una herramienta que tarda más de ~45 s devuelve un **id de trabajo** y sigue ejecutándose: recoger el resultado con `estado(trabajo)`, nunca relanzarla. Si PixInsight está ocupado, la petición espera en cola.
 - **Un solo agente con PixInsight a la vez** (dos en paralelo con imágenes grandes lo cerraron, c0000374).
 - Resultados cortos (números redondeados, listas breves); para ver la imagen, `previa` o recortes al 100 % en `<versión>/prev/`, no capturas de pantalla.
-- `beginProcess()` sin `endProcess()` bloquea la vista: clonarla a una ventana nueva y cerrar la vieja.
-- Bucles largos: tramos de ~50 s que guardan en un CSV y devuelven el índice siguiente.
-- Tras pasos pesados, cerrar vistas temporales (`cerrarVista`) y `window.purge()`.
+- Tras pasos pesados, cerrar vistas temporales con `cerrarVista`.
 
 ## Trampas más frecuentes
 
@@ -98,9 +95,7 @@ Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en e
 |---|---|
 | Fiarse del "success" de un proceso | `estadisticas` e `historial` |
 | Inventar o completar un id de vista | El id exacto de `vistas` |
-| `Clase.prototype.CONSTANTE` (da `undefined` sin error) | `Clase.CONSTANTE` (`PixelMath.RGB`) |
-| `w.image`, `w.id`, `w.name`, `!w`, `P.execute()`, `h[i]`, `console.log` | `w.mainView.image`, `w.mainView.id`, `w.isNull`, `executeOn`, `h.at(i)`, `console.writeln` |
-| Repetir un script que ha fallado | Cambiar lo que causó el error |
+| Repetir una llamada que ha fallado igual | Cambiar lo que causó el error |
 | Aplicar un solo método o valor donde hay `…Candidatos` | La función que compara, y su tabla |
 | Estirar con el STF puesto | Quitarlo antes (`estirado.js` lo hace) |
 | SPCC sobre imagen estirada, sin astrometría o sin las curvas del perfil | Master lineal, `resolverAstrometria`, `calibrarColor` |
@@ -138,6 +133,6 @@ Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias
 
 **No lineal:** [1 Estirado](no-lineal/01-estirado.md) ~1310 · [2 LRGB / paleta](no-lineal/02-lrgb-paleta.md) ~2940 · [3 SCNR](no-lineal/03-scnr.md) ~730 · [4 Máscaras](no-lineal/04-mascaras.md) ~800 · [5 Boost](no-lineal/05-boost.md) ~1660 · [6 NoiseX](no-lineal/06-noisex.md) ~720 · [7 Nitidez](no-lineal/07-nitidez.md) ~500 · [8 Estrellas](no-lineal/08-estrellas.md) ~950 · [9 Recombinación](no-lineal/09-recombinacion.md) ~700 · [10 Recorte y exportación](no-lineal/10-recorte-exportacion.md) ~680 · [11 Dossier](no-lineal/11-dossier.md) ~560
 
-**Anexos (bajo demanda):** [A API de PJSR y equivalentes de scripts](anexos/A-contrato-api-pjsr.md) · [B Controles de calidad y entrega](anexos/B-checklist-entrega.md) · [C Pendiente](anexos/C-pendiente-documentar.md) · [D Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) · [E Parámetros complementarios](anexos/E-parametros-detalle.md) · [F Anti-patrones y parada](anexos/F-anti-patrones.md) · [G Glosario](anexos/G-glosario.md) · [H Modelo por paso](anexos/H-modelo-por-paso.md)
+**Anexos (bajo demanda):** [A Equivalentes de scripts](anexos/A-equivalentes-scripts.md) · [B Controles de calidad y entrega](anexos/B-checklist-entrega.md) · [C Pendiente](anexos/C-pendiente-documentar.md) · [D Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) · [E Parámetros complementarios](anexos/E-parametros-detalle.md) · [F Anti-patrones y parada](anexos/F-anti-patrones.md) · [G Glosario](anexos/G-glosario.md) · [H Modelo por paso](anexos/H-modelo-por-paso.md)
 
 **Detalle de los pasos** (el porqué y las fuentes; sólo si una ficha no basta para decidir): `detalle/`. **Configuración** (crear o completar `perfil.md`, entorno de PixInsight): [00 Perfil y entorno](00-perfil-y-entorno.md). Fuentes: `FUENTES.md`. Instrucciones para ChatGPT y modelos locales: `envolturas/`.

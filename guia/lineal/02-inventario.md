@@ -31,27 +31,18 @@
 
 En `no_cumple` avisa de lights sin flats de su filtro en su noche, sin dark de su exposición, con gain u offset mezclados o con flats de otro telescopio. La biblioteca de darks suele estar fuera de la carpeta del objeto: pasarla en `darks`.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el nivel superior del script
-JSON.stringify(inventario("<carpeta del objeto>", { darks: "<carpeta de master darks>" }));
+```json
+{"llamadas": [
+  {"funcion": "inventario", "parametros": {"carpeta": "<carpeta del objeto>", "opciones": {"darks": "<carpeta de master darks>"}}}
+]}
 ```
 
 Comprobado con una nebulosa dual band (nov 2026; 11 grupos en 10 noches, 1147 ficheros). Detectó que los lights Hα/OIII del 12-9 y del 14-9 no tienen flats de ese filtro en su noche (sí del 20-9, 24-9 y 25-9).
 
-**Código.** Para listar vistas abiertas, la herramienta es `vistas` (MCP picopilot). Para comprobar que un master contiene realmente una integración y con cuántos subs, se lee su historial:
+**Historial.** Para listar vistas abiertas, la herramienta es `vistas`. Para comprobar que un master contiene realmente una integración y con cuántos subs, se lee su historial:
 
-```javascript
-// ¿Este master tiene una integración real y de qué tipo?
-var v = View.viewById("MasterLight");
-if (!v || v.isNull) throw new Error("No existe MasterLight");
-var h = v.processing, out = [], integ = 0;
-for (var i = 0; i < h.length; ++i) {
-   var src = h.at(i).toSource();
-   if (src.indexOf("ImageIntegration") >= 0) { ++integ; out.push("ImageIntegration en paso " + i); }
-}
-out.push("pasos en el historial: " + h.length + "  integraciones: " + integ);
-if (integ === 0) throw new Error("El master no tiene ImageIntegration en el historial: revisar preprocesado");
-out.join("\n");
-```
+- Se recorre `view.processing` (el historial de la vista) y se cuentan los pasos con `ImageIntegration`.
+- Sin ninguno, el master no ha pasado por una integración: revisar el preprocesado.
+- Con las herramientas: `historial {vista}`.
 
 **Control.** Un master sin `ImageIntegration` en `view.processing` no ha pasado por WBPP (o se guardó con `window.saveAs`, que "no guarda el historial de procesos en el XISF"). Número de subs integrados por grupo: se lee del log de WBPP (Anexo C).

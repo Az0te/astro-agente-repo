@@ -18,30 +18,19 @@
 | Ruido | σ de cielo coherente; sin moteado de color |
 | Historial | coincide con lo que se cree haber hecho |
 
-**Código: informe del checkpoint**
+**Informe del checkpoint**
 
-```javascript
-var v = View.viewById("MasterLight_v3");
-if (!v || v.isNull) throw new Error("No existe MasterLight_v3");
-var w = ImageWindow.windowById("MasterLight_v3"), img = v.image, out = [];
-out.push("WCS: " + w.hasAstrometricSolution);
-out.push("bits: " + img.bitsPerSample + "  color: " + img.isColor);
-for (var c = 0; c < img.numberOfChannels; ++c) {
-   img.selectedChannel = c;
-   out.push("canal " + c + ": mediana " + img.median() + "  max " + img.maximum());
-}
-img.resetSelections();
-out.push("pasos en historial: " + v.processing.length);
-out.join("\n");
-```
+- Solución astrométrica, bits por muestra, si es color, mediana y máximo por canal y número de pasos del historial.
 
 **Informe en una llamada** (`herramientas/lineal.js`): `checkpointLineal(vista, { carpeta, objeto, version, notas })` mide la tabla de arriba (lineal, cielo por canal en sigmas, recorte, WCS, FWHM por canal, ringing, núcleos, historial), devuelve `no_cumple` y, con `carpeta`, escribe un borrador de `estado.md` para la fase no lineal.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script
-// carpetaVersion: ruta real (junto al master); nombreObjeto: de OBJECT, del nombre del master o preguntado al usuario.
-JSON.stringify(checkpointLineal("MasterLight_v3", { carpeta: carpetaVersion, objeto: nombreObjeto, version: "v3" }));
+```json
+{"llamadas": [
+  {"funcion": "checkpointLineal", "parametros": {"vista": "MasterLight_v3", "opciones": {"carpeta": "<carpeta de la versión>", "objeto": "<nombre del objeto>", "version": "v3"}}}
+]}
 ```
+
+La carpeta es la real de la versión (junto al master); el nombre del objeto sale de OBJECT, del nombre del master o se pregunta al usuario.
 
 **Guardado.** "Guardar también capas lineales intermedias (incluida la HDR y sus máscaras) para poder rehacer sin repetir todo". Antes de estirar, `window.purge()` de las vistas temporales: "cada imagen RGB f32 de ~11k×7k ocupa ~1 GB y cada paso añade historial de deshacer. Cerrar vistas temporales y usar `window.purge()` tras pasos pesados".
 

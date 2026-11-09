@@ -63,9 +63,8 @@ interface Funcion {
 function leerManifiesto(): Funcion[] {
   const ruta = join(GUIA, "herramientas", "manifiesto.json");
   const m = JSON.parse(readFileSync(ruta, "utf-8"));
-  // run_script (nivel libre) solo si el usuario lo ha permitido creando ~/.picopilot/permitir_libre.
-  const libre = existsSync(join(DATOS, "permitir_libre"));
-  return (m.funciones as Funcion[]).filter((f) => f.nivel !== "libre" || libre);
+  // Solo funciones de la guía: ninguna herramienta ejecuta código libre (licencia PCL y reglas CPD).
+  return (m.funciones as Funcion[]).filter((f) => f.nivel !== "libre");
 }
 
 function herramientasVisibles(): Funcion[] {

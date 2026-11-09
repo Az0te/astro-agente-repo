@@ -70,18 +70,14 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | OIII con B como continuo (lleva Hβ) | OIII con G |
 | Inyectar Hα sin máscara | Máscara de luminancia/nebulosa (clipLow 0,04–0,08) |
 
-## F.6 PJSR
+## F.6 Herramientas
 
 | No hacer | En su lugar |
 |---|---|
-| `w.image`, `w.id`, `P.execute()`, `img.clone()`, `h[i]` | `w.mainView.image`, `w.mainView.id`, `executeOn`, ventana nueva + `assign`, `h.at(i)` |
-| Expresiones largas en PixelMath | Símbolos + comprobar el valor devuelto (fallan en silencio) |
-| `Rect(x0,y0,ancho,alto)` | `Rect` usa esquinas |
-| Crop, Resample, IntegerResample, DynamicCrop o FastRotation desde un script sobre una imagen con astrometría con splines (abre un diálogo de confirmación y el script se queda esperando) | Antes, `astrometriaLineal(ventana)` de `herramientas/alineado.js` (deja sólo la parte lineal, que sí se transforma) |
-| `FastRotation` sobre ventana con astrometría en PixInsight 1.9.5 o anterior (colgó PixInsight) | PixelMath `pixel($T, w()-1-x(), h()-1-y())`; con 1.9.6+ FastRotation va bien y conserva la astrometría |
+| Escribir código de PixInsight o pedir que se ejecute | Las funciones de la guía; si ninguna sirve, decirlo y proponer qué hacer |
 | `saveAs` y creer que conserva el historial | Anotar los parámetros en el dossier |
-| Lanzar scripts o depender de iconos del escritorio | Su equivalente con procesos y PixelMath (Anexo A.9); procesos configurados en código |
-| Suponer nombres de parámetros | La ficha del paso o `(new Proceso).toSource()` |
+| Lanzar scripts o depender de iconos del escritorio | Su función equivalente de la guía (Anexo A) |
+| Suponer nombres de parámetros | La ficha del paso o el manifiesto (`herramientas/manifiesto.json`) |
 
 ## F.7 Criterio de parada
 
