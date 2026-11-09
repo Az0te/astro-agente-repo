@@ -189,8 +189,10 @@ function reducirRuido(viewId, o) {
   var metodo = o.metodo || "nxt", aviso = null, t0 = Date.now();
   var mono = src.image.numberOfChannels === 1;
   if (metodo === "hibrido" && rdModeloML(o)) o.modelo = rdModeloML(o);
-  if (metodo === "hibrido" && (!mono || typeof MLDenoise !== "function" || !o.modelo || !File.exists(o.modelo))) {
-    aviso = "híbrido no disponible (" + (!mono ? "imagen RGB: MLDenoise sólo mono" : typeof MLDenoise !== "function" ?
+  // Híbrido (dosier IC 1396, 4 nov 2026): detalle fino de MLDenoise + lo grueso de NXT, canal a canal (también en RGB
+  // desde el 9 nov; el moteado de color lo vigilan las medidas). Sólo sobre la starless: con estrellas deja puntos negros.
+  if (metodo === "hibrido" && (typeof MLDenoise !== "function" || !o.modelo || !File.exists(o.modelo))) {
+    aviso = "híbrido no disponible (" + (typeof MLDenoise !== "function" ?
             "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,95" : "0,50");
     // RGB: 0,95 deja manchas de color (galaxia grande, 7 nov 2026) y 0,70 tras el NXT suave del Paso 14 subió el moteado
     // de 0,25 a 0,63 (nebulosa oscura, 7 nov 2026): 0,50.
@@ -218,12 +220,16 @@ function reducirRuido(viewId, o) {
     var ml = rdCopy(viewId, "rdTmpML"), nx = rdCopy(viewId, "rdTmpNX");
     var M = new MLDenoise; M.modelPath = o.modelo; M.amount = 1.0; M.useCache = false;
     if (!M.executeOn(ml.mainView)) throw new Error("MLDenoise falló");
-    rdNXT(nx.mainView, { denoise: 0.95, detail: 0.15, iterations: 2 });
+    rdNXT(nx.mainView, { denoise: (o.denoiseGrueso !== undefined) ? o.denoiseGrueso : 0.95, detail: 0.15, iterations: 2 });
     var m = new Float32Array(W * H), x = new Float32Array(W * H), out = new Float32Array(W * H);
-    ml.mainView.image.getSamples(m, R, 0); nx.mainView.image.getSamples(x, R, 0);
-    var bm = rdBox(m, W, H, 3), bx = rdBox(x, W, H, 3);
-    for (var i = 0; i < out.length; ++i) out[i] = m[i] - bm[i] + bx[i];
-    v.beginProcess(); v.image.setSamples(out, R, 0); v.endProcess();
+    v.beginProcess();
+    for (var ch = 0; ch < src.image.numberOfChannels; ++ch) {
+      ml.mainView.image.getSamples(m, R, ch); nx.mainView.image.getSamples(x, R, ch);
+      var bm = rdBox(m, W, H, 3), bx = rdBox(x, W, H, 3);
+      for (var i = 0; i < out.length; ++i) out[i] = m[i] - bm[i] + bx[i];
+      v.image.setSamples(out, R, ch);
+    }
+    v.endProcess();
     ml.forceClose(); nx.forceClose();
   }
   var q = rdQuality(src, v), noCumple = [];
@@ -282,7 +288,9 @@ function reducirRuido(viewId, o) {
 //                            modelo: .xmlm, detail, iterations, principal: true, nuevaVista, cerrar })
 // Por defecto: NXT a 0,30 / 0,50 / 0,70 (estirada 0,15 / 0,30 / 0,45), MLDenoise amount 1,0 (modelo de las opciones o
 // de perfil.md; si no hay, se anota y se sigue) y MultiscaleTGVDenoise strength 0,5 y 1,0 (estirada: 0,25 y 0,5).
-// MLDenoise es lento (~5 min en 22 MP): metodos: ["nxt", "tgv"] para no usarlo.
+// MLDenoise es lento (~5 min en 22 MP): metodos: ["nxt", "tgv"] para no usarlo. Con principal: true (starless) se añade
+// el híbrido ML fino + NXT grueso. Imágenes de más de 8 MP: se compara en un recorte de 2000 px (rdElegirRecorte) y
+// sólo el ganador se aplica a la entera (recorte: false para comparar en la entera).
 // Elección: entre los que cumplen (sin no_cumple), el que más baja el ruido sin pasar del 80 % (con principal: true,
 // preferiblemente en 50–80 %); si ninguno cumple, el de menos avisos y, a igualdad, el más suave. La elegida queda como
 // nuevaVista (<vista>_dn por defecto) y las demás se cierran (cerrar: false para conservarlas). La tabla de la
@@ -307,16 +315,32 @@ function ruidoCandidatos(viewId, o) {
     (o.tgv || (lineal ? [0.5, 1.0] : [0.25, 0.5])).forEach(function (s) {
       pruebas.push({ etiqueta: "MultiscaleTGVDenoise strength " + s, op: { metodo: "tgv", strength: s }, sufijo: "_tgv" + Math.round(100 * s) });
     });
+  // Híbrido ML fino + NXT grueso (el que ganó en el dosier de IC 1396): en el denoise principal de la starless
+  // (principal: true) o si se pide en metodos. Nunca con estrellas.
+  if (metodos.indexOf("hibrido") >= 0 || (o.principal && !o.metodos))
+    pruebas.push({ etiqueta: "Híbrido MLDenoise fino + NXT 0.95 grueso", op: { metodo: "hibrido" }, sufijo: "_hib" });
+
+  // Imagen grande: se compara en un recorte representativo y sólo el ganador se aplica a la imagen entera (MLDenoise
+  // corre en CPU en Radeon: ~13 s por megapíxel; en 89 MP, ~20 min por candidato). recorte: false para comparar entera.
+  var W0 = src.image.width, H0 = src.image.height, rec = null, base = viewId;
+  if (o.recorte !== false && W0 * H0 > (o.recorteMP || 8) * 1e6) {
+    rec = rdElegirRecorte(src, o.ladoRecorte || 2000);
+    var wr = new ImageWindow(rec.width, rec.height, src.image.numberOfChannels, 32, true, src.image.isColor, viewId + "_rec");
+    wr.mainView.beginProcess(); wr.mainView.image.assign(src.image, rec); wr.mainView.endProcess();
+    base = wr.mainView.id;
+  }
   var cands = [];
   pruebas.forEach(function (p, n) {
     var op = {};
-    for (var k in o) if (["metodos", "niveles", "tgv", "nuevaVista", "cerrar", "principal"].indexOf(k) < 0) op[k] = o[k];
+    for (var k in o) if (["metodos", "niveles", "tgv", "nuevaVista", "cerrar", "principal", "recorte", "recorteMP", "ladoRecorte"].indexOf(k) < 0) op[k] = o[k];
     for (var k2 in p.op) op[k2] = p.op[k2];
-    op.nuevaVista = viewId + p.sufijo;
+    op.nuevaVista = base + p.sufijo;
+    p.opCompleta = op;
     var t1 = Date.now();
     try {
-      var rr = reducirRuido(viewId, op);
-      cands.push({ etiqueta: p.etiqueta, orden: n, r: rr, segundos: Math.round((Date.now() - t1) / 1000), previa: pxPrevia(rr.vista, "ruido_" + rr.vista) });
+      var rr = reducirRuido(base, op);
+      cands.push({ etiqueta: p.etiqueta, orden: n, r: rr, op: p.opCompleta, segundos: Math.round((Date.now() - t1) / 1000),
+                   previa: pxPrevia(rr.vista, "ruido_" + rr.vista) });
     }
     catch (e) { cands.push({ etiqueta: p.etiqueta, orden: n, error: String(e && e.message ? e.message : e) }); }
   });
@@ -341,30 +365,76 @@ function ruidoCandidatos(viewId, o) {
              residual_estructura: m.residual_estructura, moteado_color: m.moteado_color_despues,
              cumple: !c.r.no_cumple.length, segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
   });
-  var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn"), vista = null;
+  var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn"), vista = null, completa = null;
   cands.forEach(function (c) {
     if (!c.r) return;
     var w = ImageWindow.windowById(c.r.vista);
     if (w.isNull) return;
-    if (c === best) {
+    if (c === best && !rec) {
       if (c.r.vista !== nombre) {
         var old = ImageWindow.windowById(nombre);
         if (!old.isNull) old.forceClose();
         w.mainView.id = nombre;
       }
       vista = w.mainView.id;
-    } else if (o.cerrar !== false) w.forceClose();
+    } else if (o.cerrar !== false || rec) w.forceClose();
   });
+  // Con recorte: el ganador se aplica ahora a la imagen entera y sus medidas son las de la imagen entera.
+  if (rec) {
+    var wr2 = ImageWindow.windowById(base); if (!wr2.isNull) wr2.forceClose();
+    if (best) {
+      var opF = {}; for (var kf in best.op) opF[kf] = best.op[kf];
+      opF.nuevaVista = nombre;
+      var old2 = ImageWindow.windowById(nombre); if (!old2.isNull) old2.forceClose();
+      var tF = Date.now();
+      completa = reducirRuido(viewId, opF);
+      completa.segundos_imagen_entera = Math.round((Date.now() - tF) / 1000);
+      vista = completa.vista;
+    }
+  }
+  var fin = completa || (best ? best.r : null), avisoRec = null;
+  // El moteado de color es de gran escala: un recorte no siempre lo ve (IC 1396, 9 nov 2026: 0,20 en el recorte y 0,77 en
+  // la entera con MLDenoise). Si en la entera el ganador no cumple, se dice y se propone el siguiente que cumplía.
+  if (completa && completa.no_cumple.length && !best.r.no_cumple.length) {
+    var otros = ok.filter(function (c) { return c !== best; }).sort(function (a, b) { return baja(b) - baja(a); });
+    avisoRec = "En el recorte cumplía, pero en la imagen entera no: " + completa.no_cumple.join("; ") +
+               (otros.length ? ". Siguiente candidato que cumplía en el recorte: " + otros[0].etiqueta +
+                " (repetir con metodos/niveles sólo de ese, o recorte: false para comparar en la imagen entera)." : ".");
+  }
   return {
     vista: vista, original: viewId, comparados: comparados,
+    comparado_en: rec ? { recorte: [rec.x0, rec.y0, rec.x1, rec.y1], nota: "candidatos medidos en un recorte de " + rec.width + "×" + rec.height +
+                          " px (cielo y señal débil); el ganador se aplicó a la imagen entera" + (completa ? " en " + completa.segundos_imagen_entera + " s" : "") }
+                      : "imagen entera",
     recomendado: best ? best.etiqueta : null,
     motivo: !best ? "Ningún candidato se pudo aplicar: ver comparados." :
             (best.r.no_cumple.length ? "Ningún candidato cumple los controles: se queda el de menos avisos y más suave (" + best.etiqueta + ")." :
-             best.etiqueta + ": cumple los controles y baja el ruido un " + baja(best) + " %."),
-    medidas: best ? best.r.medidas : null, no_cumple: best ? best.r.no_cumple : ["ningún candidato se pudo aplicar"],
+             best.etiqueta + ": cumple los controles y baja el ruido un " + baja(best) + " %.") + (avisoRec ? " " + avisoRec : ""),
+    medidas: fin ? fin.medidas : null, no_cumple: fin ? fin.no_cumple : ["ningún candidato se pudo aplicar"],
     segundos: Math.round((Date.now() - t0) / 1000),
-    control: best ? best.r.control : undefined
+    control: fin ? fin.control : undefined
   };
+}
+
+// Recorte representativo para comparar: el bloque de lado×lado con más contraste entre cielo y señal (mayor rango de
+// medianas en sus cuatro cuartos), buscado en una rejilla de medio lado. Sin bordes vacíos (mediana > 0).
+function rdElegirRecorte(view, lado) {
+  var im = view.image, W = im.width, H = im.height, L = Math.min(lado, W, H), h = Math.max(64, Math.floor(L / 2));
+  var nx = Math.floor(W / h), ny = Math.floor(H / h), med = [];
+  for (var j = 0; j < ny; ++j) { med.push([]); for (var i = 0; i < nx; ++i) {
+    im.selectedRect = new Rect(i * h, j * h, (i + 1) * h, (j + 1) * h);
+    var s = 0; for (var c = 0; c < im.numberOfChannels; ++c) { im.selectedChannel = c; s += im.median(); }
+    med[j].push(s / im.numberOfChannels);
+  } }
+  im.resetSelections();
+  var best = null, bv = -1;
+  for (var y = 0; y + 1 < ny; ++y) for (var x = 0; x + 1 < nx; ++x) {
+    var q = [med[y][x], med[y][x + 1], med[y + 1][x], med[y + 1][x + 1]];
+    if (Math.min.apply(null, q) <= 0) continue;
+    var r = Math.max.apply(null, q) - Math.min.apply(null, q);
+    if (r > bv) { bv = r; best = new Rect(x * h, y * h, x * h + 2 * h, y * h + 2 * h); }
+  }
+  return best || new Rect(Math.floor((W - L) / 2), Math.floor((H - L) / 2), Math.floor((W + L) / 2), Math.floor((H + L) / 2));
 }
 
 // StarXTerminator en lineal sobre una copia: starless + capa de estrellas, con las comprobaciones de la ficha.

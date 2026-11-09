@@ -761,7 +761,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodos: [\"nxt\", \"ml\", \"tgv\"], niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
+      "description": "Opcional. { metodos: [\"nxt\", \"ml\", \"tgv\", \"hibrido\"], niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
      }
     },
     "required": [
