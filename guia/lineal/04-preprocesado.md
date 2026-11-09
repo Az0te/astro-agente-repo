@@ -35,7 +35,7 @@
 
 **Diagnóstico de flats en el master** (para no culpar al postprocesado): viñeteo residual = subcorrección (flats sin calibrar o bias y dark restados a la vez); "viñeteo negativo" = lights sin dark; motas de polvo en relieve = rotación movida, polvo desplazado, filtro mal posicionado en la rueda (usar movimiento unidireccional) o luz parásita (probar sky flats).
 
-**Medidas por sub desde un script.** "SubframeSelector sobre los FITS crudos CFA ordena bien, pero los valores absolutos están sesgados (en debayerizado VNG el FWHM sale ~15–20 % mayor y la excentricidad ~0,06 menor). Para umbrales absolutos, debayerizar una muestra. Fondo por sub = mediana − bias (bias con offset 50 ≈ 500 ADU). Gradiente por sub = rejilla 4×4 de medianas; en crudo incluye el viñeteo (~2,4 %). Un velo fino se ve como fondo +5–8 % con 15–18 % menos estrellas respecto a sus vecinos."
+**Medidas por sub.** "SubframeSelector sobre los FITS crudos CFA ordena bien, pero los valores absolutos están sesgados (en debayerizado VNG el FWHM sale ~15–20 % mayor y la excentricidad ~0,06 menor). Para umbrales absolutos, debayerizar una muestra. Fondo por sub = mediana − bias (bias con offset 50 ≈ 500 ADU). Gradiente por sub = rejilla 4×4 de medianas; en crudo incluye el viñeteo (~2,4 %). Un velo fino se ve como fondo +5–8 % con 15–18 % menos estrellas respecto a sus vecinos."
 
 **En una llamada (PixInsight 1.9.6+)** (`herramientas/preproceso.js`):
 
@@ -43,33 +43,33 @@
 2. `lanzarWBPP({ lights, flats, flatDarks, darks, salida })` arranca WBPP en **otra instancia de PixInsight en modo automatización**, que se cierra sola al acabar. No bloquea la sesión. En `lights` se puede pasar `lista_aprobados` de `seleccionarSubs` (Paso 3). La salida tiene que ser una **ruta corta**: Windows no crea ficheros de más de 256 caracteres. El resto de ajustes (drizzle, normalización local, autocrop) son los últimos guardados en WBPP; se cambian con `parametros` (nombres de la ayuda de automatización, Alt+A en la ventana de WBPP).
 3. `estadoWBPP(salida)`: repetir hasta `terminado: true`; entonces abre el master de lights (el recortado si lo hay) con un STF automático. Resume el log: pasos con éxitos y fallos, errores, avisos, ficheros fallidos, masters generados y qué master dark y flat usó cada grupo.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el nivel superior del script
-JSON.stringify(revisarCalibracion({ lights: "<LIGHT>", flats: "<FLAT>", flatDarks: "<DARK de flats>", darks: ["<master dark>"] }));
-// si no_cumple está vacío (o el usuario lo acepta), en otro script:
-JSON.stringify(lanzarWBPP({ lights: "<LIGHT>", flats: "<FLAT>", flatDarks: "<DARK de flats>", darks: ["<master dark>"], salida: "C:/wbpp/objeto" }));
-// y luego, cada minuto o dos:
-JSON.stringify(estadoWBPP("C:/wbpp/objeto"));
+```json
+{"llamadas": [
+  {"funcion": "revisarCalibracion", "parametros": {"calibracion": {"lights": "<LIGHT>", "flats": "<FLAT>", "flatDarks": "<DARK de flats>", "darks": ["<master dark>"]}}}
+]}
+```
+
+Si `no_cumple` está vacío (o el usuario lo acepta), en otra respuesta:
+
+```json
+{"llamadas": [
+  {"funcion": "lanzarWBPP", "parametros": {"wbpp": {"lights": "<LIGHT>", "flats": "<FLAT>", "flatDarks": "<DARK de flats>", "darks": ["<master dark>"], "salida": "C:/wbpp/objeto"}}}
+]}
+```
+
+y luego, cada minuto o dos, hasta que devuelva `terminado: true`:
+
+```json
+{"llamadas": [
+  {"funcion": "estadoWBPP", "parametros": {"salida": "C:/wbpp/objeto"}}
+]}
 ```
 
 Comprobado con una nebulosa oscura (nov 2026). En la noche del 11-9, `revisarCalibracion` encontró sin abrir ninguna imagen lo que en octubre costó una tarde: sin dark de 240 s, flats sin `FILTER`, flats con `TELESCOP` TS65Q (los lights, SQA106) y flats saturados. En la del 19-9 todo casa, con un aviso: el canal R de los flats a 0,94. En galaxia grande (7-9) detectó los flats con el azul saturado y que no había dark de 60 s. En nebulosa dual band (13-9) detectó que los flats llevan el nombre de filtro "Astodon HA 3nn" y los lights "Antlia Dualband S2 Hb 5nm", algo que WBPP no empareja. Era el mismo filtro, renombrado en NINA después de los flats: con `aliasFiltros: { "Astodon HA 3nn": "Antlia Dualband S2 Hb 5nm" }` la revisión los empareja. Para WBPP hay que corregir `FILTER` en copias de esos flats (o añadirlos a mano al grupo). WBPP con 8 lights, 10 flats y 10 darks de flats tardó 2 min.
 
 **Sin WBPP:** el preprocesado es la cadena de procesos equivalente con los ajustes de la tabla: ImageCalibration → CosmeticCorrection → Debayer → ImageAnalysis → StarAlignment → LocalNormalization → ImageIntegration → DrizzleIntegration, todos con ficheros de entrada y carpeta de salida. Con los masters hechos, se audita el resultado:
 
-```javascript
-// Auditoría del master: pasos aplicados y presencia de los procesos clave.
-var v = View.viewById("MasterLight");
-if (!v || v.isNull) throw new Error("No existe MasterLight");
-var h = v.processing, out = [], claves = ["ImageCalibration", "Debayer", "StarAlignment",
-                                          "LocalNormalization", "ImageIntegration", "DrizzleIntegration"];
-for (var k = 0; k < claves.length; ++k) {
-   var hay = false;
-   for (var i = 0; i < h.length; ++i) {
-      if (h.at(i).toSource().indexOf(claves[k]) >= 0) { hay = true; break; }
-   }
-   out.push((hay ? "OK  " : "FALTA ") + claves[k]);
-}
-out.join("\n");
-```
+- En el historial del master (`historial {vista}`) deben estar: ImageCalibration, Debayer (OSC), StarAlignment, LocalNormalization, ImageIntegration y, si se usó, DrizzleIntegration.
+- Si falta alguno, se anota como «FALTA» y se revisa el preprocesado antes de seguir.
 
 **Control.** Si falta `ImageCalibration`, `Debayer` o `ImageIntegration`, el "master" no es un master. Antes de seguir, comprobar el % de píxeles saturados por grupo y que la exposición más corta no esté saturada en lo que debe aportar.

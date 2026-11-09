@@ -29,33 +29,13 @@ El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida
 
 **Revisar el modelo siempre**, antes de aceptarlo: liso, sin la forma del objeto, sin bordes ni anillo oscuro. Medida: `gcStructCopy` (correlación < 0,15 limpio; > 0,5 se come el objeto) y contraste objeto−cielo en cajas de 300 px (≥ 90 % en polvo e IFN). Si no convence, hacer la comparativa de candidatos del detalle.
 
-```javascript
-var G = new GraXpert;
-G.backgroundExtraction = true;
-G.backgroundExtractionSampleFree = true;
-G.sampleFreeScale = 10;                 // 8 si queda gradiente
-G.correction = "Subtraction";
-G.createBackground = true;
-G.replaceImage = false;
-if (!G.executeOn(View.viewById("MasterLight"))) throw new Error("GraXpert falló");
-var wc = ImageWindow.windowById("GraXpert_sample_free_background_extraction");
-if (wc.isNull || !wc.hasAstrometricSolution) throw new Error("Falta la corregida o ha perdido la astrometría");
-eval(File.readTextFile("<ruta de guia>/herramientas/gradcompare.js"));
-var base = gcPrepare("MasterLight", 8);
-gcStructCopy(base, "GraXpert_background");   // corr < 0,15 = limpio
-```
+- GraXpert sample_free, escala 10 (8 si queda gradiente), corrección por sustracción, con el modelo de fondo aparte y sin sustituir la imagen.
+- Crea `GraXpert_sample_free_background_extraction` (corregida, debe conservar la astrometría) y `GraXpert_background` (modelo).
+- Revisión del modelo: estructura copiada del objeto < 0,15 = limpio (lo mide `gradienteCandidatos`).
 
-```javascript
-// MGC: SPFC -> MGC -> SPCC (los tres necesitan WCS).
-var v = View.viewById("MasterLight");
-if (!v || v.isNull) throw new Error("No existe MasterLight");
-if (!ImageWindow.windowById("MasterLight").hasAstrometricSolution) throw new Error("Sin WCS: parar");
-eval(File.readTextFile("<ruta de guia>/herramientas/procesos.js"));
-if (!pxSPFC({ /* filtros y QE del perfil */ }).executeOn(v)) throw new Error("SPFC falló");
-var mgc = pxMGC({ mars: "<base MARS del perfil>", gradientScale: 2048 });   // 1024 / 2048 / 4096
-if (!mgc.executeOn(v)) throw new Error("MGC falló");   // crea <vista>_MGC_gradient_model para revisarlo
-"SPFC + MGC aplicados";
-```
+- Orden: SPFC → MGC → SPCC; los tres necesitan solución astrométrica (sin ella, parar).
+- SPFC con los filtros y la QE del perfil; MGC con la base MARS del perfil y `gradientScale` 1024 / 2048 / 4096.
+- MGC crea `<vista>_MGC_gradient_model` para revisarlo.
 
 **Comparativa en una sola llamada** (`herramientas/gradiente.js`): `gradienteCandidatos(vista, { spfc, dossier })` compara por defecto, sobre copias:
 - GraXpert sample_free 10 y 8, y GraXpert con su modelo de IA (`graxpertIA: false` para quitarlo);
@@ -79,16 +59,13 @@ Comprobado con una galaxia grande (nov 2026, 100 s con los 8 candidatos). Reprod
 
 Antes el gradiente que quedaba se medía en una rejilla 4×3 de toda la imagen. En objetos grandes medía la galaxia y no el gradiente, y daba por bueno a GraXpert.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/gradiente.js"));   // en el nivel superior del script
-var r = gradienteCandidatos("MasterLight", {
-  graxpert: [10, 8], mgc: [2048],
-  spfc: { /* filtros y QE del perfil */ }, mars: "<base MARS del perfil>",
-  mgcOpts: { /* structureSeparation, modelSmoothness del perfil */ },
-  dossier: "<ruta del dossier .json>"
-});
-JSON.stringify(r);   // candidatos (corr, copia, fondoResidual), recomendado, motivo, errores
+```json
+{"llamadas": [
+  {"funcion": "gradienteCandidatos", "parametros": {"vista": "MasterLight", "opciones": {"graxpert": [10, 8], "mgc": [2048], "spfc": {}, "mars": "<base MARS del perfil>", "mgcOpts": {}, "dossier": "<ruta del dossier .json>"}}}
+]}
 ```
+
+`spfc`: filtros y QE del perfil; `mgcOpts`: structureSeparation y modelSmoothness del perfil. Devuelve los candidatos (corr, copia, fondoResidual), el recomendado, el motivo y los errores.
 En MGC, si la nebulosa aparece en el modelo, subir la escala; si aparece en negativo, bajarla.
 
 **MGC en PixInsight 1.9.6+** (medido en una nebulosa oscura binada ×2, nov 2026):

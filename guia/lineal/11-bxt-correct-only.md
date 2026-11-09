@@ -26,31 +26,17 @@
 
 **Astrometría.** "BlurXTerminator elimina la solución astrométrica de la vista (aescaffre): tras BXT, `copyAstrometricSolution` desde el master original antes de SPFC/SPCC". Matiz del mismo archivo: "BXT, en cambio, la conservó en PI 1.9.5: comprobar `hasAstrometricSolution` en vez de suponer". Tras BXT CO, si se ha perdido: volver a resolver con `blindSolve` (Paso 8), sin copiar soluciones. En PixInsight 1.9.6 BXT Correct Only y BXT completo la conservaron (prueba del 31 oct 2026), pero se comprueba igual.
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-var v = View.viewById("MasterLight");
-if (!v || v.isNull) throw new Error("No existe MasterLight");
-var BXT = new BlurXTerminator;
-// nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
-BXT.correct_only = true;
-BXT.auto_nonstellar_psf = true;   // o PSF manual: false y nonstellar_diameter = FWHM medido
-if (!BXT.executeOn(v)) throw new Error("BXT Correct Only falló");
-
-// Comprobar/restaurar la astrometría antes de SPCC
-var w = ImageWindow.windowById("MasterLight");
-if (!w.hasAstrometricSolution) {
-   var r = blindSolve("MasterLight");      // motor de BlindSolver (Paso 8; con el MCP: resolverAstrometria)
-   if (!r) throw new Error("Sin WCS tras BXT: no seguir a SPCC");
-}
-"BXT CO + WCS OK";
-```
+- BlurXTerminator con `correct_only` activado y PSF automática (o manual con `nonstellar_diameter` = FWHM medido).
+- Después, comprobar la solución astrométrica; si se ha perdido, resolverla otra vez (Paso 8) antes de SPCC.
 
 **En una llamada** (`herramientas/lineal.js`): `bxtCorrectOnly(vista, { nuevaVista })` aplica BXT correct only sobre una copia y mide el FWHM por canal antes y después (sobre las mismas estrellas), el ringing de la estrella más brillante y si conserva la solución astrométrica (si no, la recupera con `blindSolve`). nebulosa dual band (nov 2026): diferencia de FWHM entre canales 0,34 → 0,24 px, sin ringing, WCS conservada.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script
-JSON.stringify(bxtCorrectOnly("MasterLight", { nuevaVista: "MasterLight_bxtco" }));
+```json
+{"llamadas": [
+  {"funcion": "bxtCorrectOnly", "parametros": {"vista": "MasterLight", "opciones": {"nuevaVista": "MasterLight_bxtco"}}}
+]}
 ```
 
 **Control.** Comparar el perfil de una estrella brillante antes/después (FWHM por canal más parecido, sin anillos). Ringing = 0 (contar cambios de signo de la derivada del perfil radial con amplitud > 0,01; ver [Anexo B](../anexos/B-checklist-entrega.md)). `hasAstrometricSolution === true` antes de seguir.

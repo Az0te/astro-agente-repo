@@ -9,7 +9,7 @@
 - Banda estrecha + RGB de banda ancha, aunque sea OSC: p. ej. RGB sin filtro + Hα/OIII extraídos del dual band (Paso 7). Con dual band OSC el R ya lleva casi todo el Hα y la inyección aporta poco (nebulosa dual band: el R cambió un 0,6 %).
 - Dos masters del mismo canal (Hα de la mono + Hα del dual band).
 
-**No aplica** con una sola OSC sin filtro (p. ej. galaxia grande), ni con sólo dual band: la paleta HOO/SHO se monta en el Paso 2 no lineal. Si no aplica, decirlo y pasar al Paso 11 sin escribir ningún script.
+**No aplica** con una sola OSC sin filtro (p. ej. galaxia grande), ni con sólo dual band: la paleta HOO/SHO se monta en el Paso 2 no lineal. Si no aplica, decirlo y pasar al Paso 11 sin pedir ninguna llamada.
 
 **Regla previa.** "Antes de procesar: alinear todos los stacks entre sí y recortar bordes negros a la misma dimensión" (flujo OSC5 de astro-photographie). Si los canales vienen de cámaras o noches distintas, **normalizar antes de combinar**: "Cada noche y cámara cambia fondo, transparencia y FWHM: LocalNormalization/LinearFit antes de combinar, ponderar por calidad, flats por configuración, no mezclar filtros ni material incompatible en una integración."
 
@@ -64,42 +64,22 @@ Comprobado con una nebulosa dual band: con RGB + Hα + OIII inyecta el Hα y dej
   - Mide la dominante del cielo antes y después (aviso si enrojece más de un 3 %), el % del campo bajo la máscara y cuánto sube el R donde más cambia (percentil 95).
   - nebulosa dual band (Hα del dual band con la RGB sin filtro): máscara sobre el 60 % del campo, cielo +0,8 %; en el 5 % de la nebulosa donde más cambia, el R sube un 1,6 % en lineal, visible tras estirar.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/combinacion.js"));   // en el nivel superior del script
-JSON.stringify(inyectarHa("RGB_starless", "Ha_CS", { tipo: "nebulosa", nuevaVista: "RGB_Ha" }));
+```json
+{"llamadas": [
+  {"funcion": "inyectarHa", "parametros": {"rgb": "RGB_starless", "ha": "Ha_CS", "opciones": {"tipo": "nebulosa", "nuevaVista": "RGB_Ha"}}}
+]}
 ```
 
-**Código: LinearFit y mezcla en lineal**
+**LinearFit y mezcla en lineal**
 
 La mezcla, en fórmula: `R' = (1−α)·R + α·Hα`, con `α ≈ 0,2–0,6` y siempre bajo máscara. Se hace con PixelMath, con el Hα y la máscara por su id:
 
-```javascript
-// LinearFit del Hα a la R (vista de referencia por su id).
-// Comprobado en PixInsight 1.9.6 (rejectHigh = 0,92 por defecto).
-var vHa = View.viewById("Ha");
-if (!vHa || vHa.isNull) throw new Error("No existe Ha");
-var LF = new LinearFit;
-LF.referenceViewId = "R_starless";
-if (!LF.executeOn(vHa)) throw new Error("LinearFit falló");
-"Ha ajustado a R";
-```
+- LinearFit del Hα a la R (vista de referencia por su id; `rejectHigh` 0,92 por defecto).
 
 En PixelMath cualquier imagen abierta se usa por su id dentro de la expresión (`Ha`, `R_starless[0]` para un canal); no hace falta declararla. Mezcla en el canal R bajo máscara:
 
-```javascript
-var PM = new PixelMath;
-PM.useSingleExpression = false;          // expression = R, expression1 = G, expression2 = B
-PM.symbols = "a";
-PM.expression  = "a = 0.4;\n(1-a)*$T + a*Ha";   // alfa 0,2-0,6
-PM.expression1 = "$T";
-PM.expression2 = "$T";
-var w = ImageWindow.windowById("RGB_starless");
-if (!w || w.isNull) throw new Error("No existe RGB_starless");
-w.mask = ImageWindow.windowById("mask_neb");    // máscara de nebulosa (clipLow 0,04-0,08)
-if (!PM.executeOn(w.mainView)) throw new Error("Mezcla Hα falló");
-w.removeMask();
-"R enriquecido con Hα";
-```
+- Mezcla en R con PixelMath por canal: `(1−a)·R + a·Ha` con a = 0,2–0,6 (G y B sin tocar).
+- Siempre bajo una máscara de nebulosa (clipLow 0,04–0,08), que se quita al terminar.
 
 Comprobar antes `ImageWindow.windowById("mask_neb").isNull`: con un id inexistente `w.mask` no falla y el proceso se aplica **sin máscara**.
 

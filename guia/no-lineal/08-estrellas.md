@@ -28,30 +28,17 @@ La capa de estrellas (original − starless) lleva PSF, halos, aigrettes y resid
 - Atenuar 35–40 % sólo la capa de estrellas en la corona del halo es aceptable y se documenta; nunca tocar la nebulosa de esa zona.
 - Halo dudoso (¿reflejo, nubes, real?), restos de SXT en estrellas muy brillantes o halos instrumentales en la starless: ver el detalle antes de tocar nada.
 
-```javascript
-var PM = new PixelMath;
-PM.useSingleExpression = true;
-PM.expression = "iif($T < 0.005, 0, $T)";
-if (!PM.executeOn(View.viewById("MasterLight_stars"))) throw new Error("Limpieza de estrellas falló");
-
-// Suelo de la capa: mediana + 2*MAD por canal (medir antes; no subir hasta borrar estrellas débiles)
-var v = View.viewById("MasterLight_stars");
-if (!v || v.isNull) throw new Error("No existe MasterLight_stars");
-var img = v.image, out = [];
-for (var c = 0; c < img.numberOfChannels; ++c) {
-   img.selectedChannel = c;
-   out.push("canal " + c + " suelo = " + (img.median() + 2 * img.MAD()).toFixed(5));
-}
-img.resetSelections();
-out.join("\n");
-```
+- Limpieza de residuos: `iif($T < 0,005, 0, $T)` sobre la capa de estrellas.
+- Suelo de la capa por canal = mediana + 2·MAD (medirlo antes; no subirlo hasta borrar estrellas débiles).
 
 **Preparación en una llamada** (`herramientas/estrellas.js`): sobre una copia de la capa ya estirada hace la limpieza de residuos, el suelo por canal (reescalando), la curva de saturación y comprime las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco); opcionales `halosMagenta: true` y `atenuar: 0.35`. Devuelve las medidas antes y después y el control. Recomendado para modelos sin herramientas; el p90 depende del estirado del Paso 1.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/estrellas.js"));   // en el nivel superior del script
-var r = prepararEstrellas("Stars_st", { nuevaVista: "Stars_v1" });
-JSON.stringify(r);   // pasos, antes/despues por canal (mediana, MAD, máximo, pix_098, p90_estrellas), control
+```json
+{"llamadas": [
+  {"funcion": "prepararEstrellas", "parametros": {"vista": "Stars_st", "opciones": {"nuevaVista": "Stars_v1"}}}
+]}
 ```
+
+Devuelve los pasos, antes y después por canal (mediana, MAD, máximo, pix_098, p90_estrellas) y el control.
 
 **Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) ≥ 0,08 (0,08–0,13 con `starStretch`, más con `extraer`); `pix_estrella_pct` (píxeles con luminancia > 0,02) ≥ 0,3 % en campos con estrellas: por debajo, la capa está casi vacía y la final saldrá sin estrellas (galaxia grande con Qwen, nov 2026); `no_cumple` vacío; sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.

@@ -59,7 +59,7 @@ function resolverAstrometria(viewId, o) {
   if (!viewId) throw new Error("resolverAstrometria necesita el id de una vista (texto); ha recibido " + viewId +
                                ". Tras alinearMasters usa r.vista o r.vistas[i] (y alinearMasters ya resuelve y copia la astrometría).");
   if (typeof blindSolve !== "function")
-    throw new Error("blindSolve no está disponible: ejecuta el script desde PiCopilot (botón o «Ejecutar script») o con el watcher v8");
+    throw new Error("blindSolve no está disponible: la función tiene que correr con el runner de picopilot (MCP o panel PiCopilot)");
   var w = ImageWindow.windowById(viewId);
   if (w.isNull) throw new Error("No existe la vista " + viewId);
   var t0 = Date.now(), r = blindSolve(viewId, o.pistas || {});

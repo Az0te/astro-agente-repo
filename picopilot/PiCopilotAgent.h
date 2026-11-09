@@ -8,8 +8,8 @@
 //   - Claude: Claude Code en modo no interactivo (claude -p), que ya tiene el
 //     MCP de PixInsight y puede ejecutar los pasos sobre la imagen.
 //   - ChatGPT y modelos locales: API OpenAI-compatible (chat/completions) por
-//     HTTP con curl.exe. Devuelven texto y, si procede, un script PJSR que el
-//     usuario puede ejecutar desde PiCopilot.
+//     HTTP con curl.exe. Devuelven texto y, si procede, llamadas JSON a funciones
+//     de la guía que el usuario puede ejecutar desde PiCopilot (nunca código).
 // ----------------------------------------------------------------------------
 
 #ifndef __PiCopilotAgent_h

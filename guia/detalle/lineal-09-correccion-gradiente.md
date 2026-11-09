@@ -32,12 +32,13 @@ Material de apoyo de la ficha: medidas, funcionamiento de GraXpert, opciones de 
 - La guía no usa el script de PixInsight (Toolbox/Graxpert.js). Por dentro sólo guarda la imagen, ejecuta `GraXpert -cli` con `ExternalProcess` y reabre el resultado, siempre con IA.
 - `herramientas/graxpert.js` (alternativa: llama al ejecutable por línea de comandos):
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/graxpert.js"));
-var r = graxpertBGE("<vista>");      // sample_free, escala 10 por defecto
-// crea GC_GraXpert_<tag> (corregida) y GC_GraXpert_<tag>_model (modelo),
-// con la astrometría del original copiada; devuelve {corrected, model, seconds, log}
+```json
+{"llamadas": [
+  {"funcion": "graxpertBGE", "parametros": {"vista": "<vista>"}}
+]}
 ```
+
+sample_free, escala 10 por defecto. Crea `GC_GraXpert_<tag>` (corregida) y `GC_GraXpert_<tag>_model` (modelo), con la astrometría del original copiada; devuelve `{corrected, model, seconds, log}`.
 
 - El ejecutable se busca en las rutas habituales; si no está, definir `var GX_EXE = "ruta"` antes del `eval`.
 - Opciones: `method` (sample_free por defecto, AI, RBF, Kriging, Splines), `scale` (sample_free, 1–10, por defecto 10), `smoothing` 0–1, `correction` (Subtraction o Division), `aiVersion`, `gpu: false`, `prefs`, `extra` (`-sample_free_scale`, `-sample_free_smoothness`, `-sample_free_protect`, `-sample_free_protect_threshold`, `-sample_free_protect_amount`, `-sample_free_simplified`, `-sample_free_degree`, `-sample_free_downsample`), `tag`, `keepFiles`, `maxMinutes`.
@@ -52,9 +53,8 @@ var r = graxpertBGE("<vista>");      // sample_free, escala 10 por defecto
 
   Mismo resultado en la práctica, con el modelo igual o algo más limpio. En nebulosa dual band este master da un 4,3 % con graxpert.js, no el 14 % de la tabla de abajo: aquella medida se hizo sobre otra versión del master (Anexo C).
 
-
 - Denoise: `graxpertDenoise("<vista>", {strength: 0.5})`; "es una alternativa a comparar con NXT, no un sustituto".
-- Si cambia la versión de GraXpert, confirmar las opciones de `graxpert.js` con `GraXpert -cli -cmd background-extraction -h` y las del proceso con `(new GraXpert).toSource()`.
+- Si cambia la versión de GraXpert, confirmar las opciones de `graxpert.js` con `GraXpert -cli -cmd background-extraction -h` y las del proceso en su ventana.
 
 **Ajustes de partida (medidos el 29 oct 2026 en galaxia grande, nebulosa oscura, nebulosa dual band y nebulosa de emisión y reflexión)**
 
@@ -118,49 +118,18 @@ En imágenes grandes GraXpert puede pasar de 45 s: el MCP devuelve un id de trab
 - "Confirmarlo a la vista con el modelo menos su gradiente liso: cualquier forma reconocible del objeto es señal perdida."
 - Revisar siempre el modelo que devuelve GraXpert: "liso, sin la forma del objeto y sin anillo oscuro".
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-// Gradiente por defecto: proceso GraXpert, sample_free escala 10, sustracción.
-var G = new GraXpert;
-G.backgroundExtraction = true;
-G.backgroundExtractionSampleFree = true;
-G.sampleFreeScale = 10;
-G.correction = "Subtraction";
-G.createBackground = true;
-G.replaceImage = false;
-if (!G.executeOn(View.viewById("MasterLight"))) throw new Error("GraXpert falló");
-var wc = ImageWindow.windowById("GraXpert_sample_free_background_extraction");
-if (wc.isNull || !wc.hasAstrometricSolution) throw new Error("Falta la corregida o ha perdido la astrometría");
-// Revisión del modelo antes de aceptarlo (GraXpert_background):
-//   eval(File.readTextFile("<ruta de guia>/herramientas/gradcompare.js"));
-//   var base = gcPrepare("MasterLight", 8); gcStructCopy(base, "GraXpert_background");   // corr < 0,15 = limpio
-```
+- GraXpert sample_free, escala 10, sustracción, con el modelo de fondo aparte y sin sustituir la imagen.
+- La corregida (`GraXpert_sample_free_background_extraction`) debe conservar la astrometría.
+- Revisar el modelo (`GraXpert_background`) antes de aceptarlo: estructura copiada < 0,15 = limpio.
 
-```javascript
-// Variante medida cuando el modelo no convence: sample_free escala 8 (proceso) o IA (graxpert.js).
-var G8 = new GraXpert;
-G8.backgroundExtraction = true; G8.backgroundExtractionSampleFree = true; G8.sampleFreeScale = 8;
-G8.correction = "Subtraction"; G8.createBackground = true; G8.replaceImage = false;
-if (!G8.executeOn(View.viewById("MasterLight"))) throw new Error("GraXpert escala 8 falló");
-// Renombrar las ventanas que crea antes de lanzar otra variante.
-eval(File.readTextFile("<ruta de guia>/herramientas/graxpert.js"));
-var rAI = graxpertBGE("MasterLight", { method: "AI", tag: "ai" });
-```
+- Si el modelo no convence: sample_free escala 8, o IA (`graxpertBGE` con `{"method": "AI", "tag": "ai"}`).
+- Renombrar las ventanas que crea cada variante antes de lanzar la siguiente.
 
-```javascript
-// MGC: SPFC -> MGC -> SPCC (los tres necesitan WCS). Nombres comprobados en PixInsight 1.9.6.
-var v = View.viewById("MasterLight");
-if (!v || v.isNull) throw new Error("No existe MasterLight");
-if (!ImageWindow.windowById("MasterLight").hasAstrometricSolution) throw new Error("Sin WCS: Parar");
-eval(File.readTextFile("<ruta de guia>/herramientas/procesos.js"));
-var spfc = pxSPFC({ /* filtros y QE del perfil */ });
-if (!spfc.executeOn(v)) throw new Error("SPFC falló");
-var mgc = pxMGC({ mars: "<base MARS del perfil>", gradientScale: 2048 });   // 1024 / 2048 / 4096 en la comparativa
-if (!mgc.executeOn(v)) throw new Error("MGC falló");   // crea <vista>_MGC_gradient_model para revisarlo
-// Probado el 31 oct 2026: SPFC 2,7 s y MGC 5,6 s en 3008×3222.
-"SPFC + MGC aplicados";
-```
+- Orden: SPFC → MGC → SPCC; los tres necesitan solución astrométrica (sin ella, parar).
+- SPFC con los filtros y la QE del perfil; MGC con la base MARS del perfil y `gradientScale` 1024 / 2048 / 4096 en la comparativa.
+- MGC crea `<vista>_MGC_gradient_model` para revisarlo. Probado el 31 oct 2026: SPFC 2,7 s y MGC 5,6 s en 3008×3222.
 
 **Control.** Modelo liso, sin objeto fantasma, sin bordes, fondo no aplastado, mismo STF antes/después. Medir el contraste objeto−cielo en cajas de 300 px (no debe bajar del 90 % en polvo/IFN). Comprobar `hasAstrometricSolution` al terminar. Si aparece un anillo oscuro alrededor de un objeto extenso, el extractor se ha comido el halo: volver atrás y usar plano robusto o muestras manuales.
 

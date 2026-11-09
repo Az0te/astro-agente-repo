@@ -30,18 +30,9 @@
 | Halos oscuros en estrellas | detail alto |
 | Aspecto de cera / plástico | una pasada fuerte |
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-var v = View.viewById("Starless");
-if (!v || v.isNull) throw new Error("No existe Starless");
-var NXT = new NoiseXTerminator;
-NXT.denoise = 0.30;        // pasada final suave
-NXT.detail = 0.15;
-NXT.iterations = 2;        // nombres comprobados en PixInsight 1.9.6 (módulo RCAstroSuite)
-if (!NXT.executeOn(v)) throw new Error("NXT final falló");
-"NXT final 0,30 sobre starless";
-```
+- NoiseXTerminator: `denoise` 0,30 (pasada final suave), `detail` 0,15, `iterations` 2.
 
 **En una llamada** (`herramientas/ruido.js`): `reducirRuido("Starless", { denoise: 0.30, detail: 0.15, nuevaVista: "Starless_nxt" })` (con `croma: 0.90, denoise: 0.40` para la separación de color) aplica NXT sobre una copia y mide σ del cielo, contraste de la zona débil y estructura de la residual. Recomendado para modelos sin herramientas. Mejor aún, `ruidoCandidatos("Starless")`: sobre una imagen estirada compara NXT 0,15 / 0,30 / 0,45, MLDenoise y MultiscaleTGVDenoise 0,25 / 0,5 (en modo general, sin el de cielo profundo) y se queda con el mejor que cumpla (ver [Paso 14 lineal](../lineal/14-noisex-suave.md)).
 

@@ -24,9 +24,10 @@ Escala del sub = 206,265·píxel(µm)/focal(mm).
 
 **En una llamada (PixInsight 1.9.6+, ImageAnalysis)** (`herramientas/preproceso.js`): `seleccionarSubs(carpeta o lista, { csv })` mide los subs con ImageAnalysis (sin abrir ventanas, ~1 s por sub) y, dentro de cada grupo de carpeta, filtro y exposición, rechaza por FWHM > cuartil inferior + 50 %, excentricidad > mediana + 0,10 o extinción por nubes con z robusto > 2,5. Con FWHM entre +35 y +50 % , excentricidad entre +0,07 y +0,10 o nubes con z entre 1,5 y 2,5 los aprueba, pero los lista en `dudosos` para que decida el usuario. En subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas: en una galaxia grande los subs de mejor FWHM tenían +0,08. Devuelve el número de aprobados y `lista_aprobados` (fichero con una ruta por línea, para WBPP), rechazados con su motivo, pesos (PSF Signal Weight relativo) y los subs con trazos (sólo anotados). ImageAnalysis sustituye a SubframeSelector.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/preproceso.js"));   // en el nivel superior del script
-JSON.stringify(seleccionarSubs("<carpeta LIGHT de una noche>", { csv: "<carpeta>/seleccion.csv" }));
+```json
+{"llamadas": [
+  {"funcion": "seleccionarSubs", "parametros": {"subs": "<carpeta LIGHT de una noche>", "opciones": {"csv": "<carpeta>/seleccion.csv"}}}
+]}
 ```
 
 Comprobado con subs crudos CFA (nov 2026):
@@ -61,28 +62,10 @@ En dual band la estrella es débil y la detección falla: usar el **cielo del su
 
 **Expectativa realista, literal:** "WBPP con pesos PSF Signal Weight ya daba poco peso a los subs nublados. Al reintegrar sin ellos, el halo de la estrella brillante bajó sólo un 5 % a 6′ y un 35 % a 15′. El halo que queda está en todos los subs limpios (dispersión de óptica/atmósfera + reflexión real): se trata en el procesado, no quitando más subs."
 
-**Código: estadístico de anillo (media recortada p20–p60)**
+**Estadístico de anillo (media recortada p20–p60)**
 
-```javascript
-// Media recortada entre los percentiles 20 y 60 de un anillo.
-// img: luminancia ya binada; (cx,cy) centroide; radios en píxeles de esa imagen.
-function ringTrimmedMean(img, cx, cy, r0, r1) {
-   var vals = [], x, y, d2, r0sq = r0 * r0, r1sq = r1 * r1;
-   var fila = new Float32Array(img.width);
-   for (y = Math.max(0, Math.floor(cy - r1)); y <= Math.min(img.height - 1, Math.ceil(cy + r1)); ++y) {
-      img.getSamples(fila, new Rect(0, y, img.width, y + 1), 0);
-      for (x = 0; x < img.width; ++x) {
-         d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
-         if (d2 >= r0sq && d2 < r1sq) vals.push(fila[x]);
-      }
-   }
-   if (vals.length < 20) throw new Error("Anillo con muy pocos píxeles");
-   vals.sort(function (a, b) { return a - b; });
-   var i0 = Math.floor(vals.length * 0.20), i1 = Math.floor(vals.length * 0.60), s = 0;
-   for (var i = i0; i <= i1; ++i) s += vals[i];
-   return s / (i1 - i0 + 1);
-}
-// indice = (ring(externo) - ring(cielo)) / (ring(interno) - ring(cielo))
-```
+- Sobre la luminancia binada y con el centroide de la estrella, se toman los píxeles de un anillo entre dos radios.
+- Se ordenan y se promedian los que quedan entre los percentiles 20 y 60 (con menos de 20 píxeles el anillo no vale).
+- `índice = (anillo externo − anillo de cielo) / (anillo interno − anillo de cielo)`.
 
 **Control.** Comparar los dudosos con una plancha de recortes de la estrella con el mismo estirado. En los subs cortos (30 s), que son los que darán las estrellas, ser especialmente exigente con halos y FWHM. Revisar en el log de WBPP cuántos subs integró cada grupo: "el SubframeSelector descartó por su cuenta ~65 de 204 subs del dual band".

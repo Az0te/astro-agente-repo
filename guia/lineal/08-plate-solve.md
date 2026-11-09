@@ -6,19 +6,19 @@
 
 **Orden: alinear primero (Paso 5), resolver después.** Con varios masters, resolver antes de alinear no sirve:
 - StarAlignment escribe ficheros nuevos y la solución no pasa a los alineados.
-- Una solución con splines (corrección de distorsión) antes del recorte abre el diálogo "irreversible" que deja el script parado.
+- Una solución con splines (corrección de distorsión) antes del recorte abre el diálogo "irreversible" que deja el proceso parado.
 
 Tras alinear, todos comparten la rejilla: basta resolver la referencia y copiar la solución a las demás. `alinearMasters` ya lo hace (`r.astrometria`). Este paso queda para un master suelto o para volver a resolver si BXT o GraXpert quitan la solución.
 
-**Método único: `resolverAstrometria` / `blindSolve`** (motor de BlindSolver portado a la guía, PixInsight 1.9.6+). Con el MCP, la herramienta `resolverAstrometria`; en un script del panel, `blindSolve` o `resolverAstrometria`; no se usan ImageSolver, el script BlindSolver ni copias de otras ventanas.
+**Método único: `resolverAstrometria` / `blindSolve`** (motor de BlindSolver portado a la guía, PixInsight 1.9.6+). Con el MCP o desde el panel, la función `resolverAstrometria`; no se usan ImageSolver, el script BlindSolver ni copias de otras ventanas.
 
-```javascript
-var r = blindSolve("MasterLight");                                  // a ciegas
-// var r = blindSolve("MasterLight", { minScale: 1.8, maxScale: 2.3 }); // con la escala del perfil
-// var r = blindSolve("MasterLight", { regionRA: 332.6, regionDec: 73.1, regionRadius: 5 });
-if (!ImageWindow.windowById("MasterLight").hasAstrometricSolution) throw new Error("Sin solución");
-JSON.stringify(r);   // ra, dec (grados), scale (″/px), rotation, flipped, matches, solution
+```json
+{"llamadas": [
+  {"funcion": "resolverAstrometria", "parametros": {"vista": "MasterLight"}}
+]}
 ```
+
+Con pistas: `"opciones": {"pistas": {"minScale": 1.8, "maxScale": 2.3}}` (escala del perfil) o `{"regionRA": 332.6, "regionDec": 73.1, "regionRadius": 5}`. Devuelve ra, dec (grados), escala (″/px), rotación, si está volteada y las estrellas casadas.
 
 - Necesita el índice astrométrico de Gaia configurado en las preferencias del proceso Gaia; si falta, el error lo dice.
 - Resolver la imagen **con estrellas**, nunca la capa sin estrellas.
@@ -27,14 +27,9 @@ JSON.stringify(r);   // ra, dec (grados), scale (″/px), rotation, flipped, mat
 
 **Si falla**
 
-- Repetir `blindSolve` con la pista de escala del perfil (`minScale`/`maxScale`) y, si se conoce el centro (cabecera `RA`/`DEC` o el objeto), con `regionRA`/`regionDec`/`regionRadius`.
-- Si da `blindSolve is not defined` en un script, usar `resolverAstrometria` (carga `lineal.js`) o la herramienta MCP; si tampoco va, parar y avisar. No sustituirlo por ImageSolver, por copias de solución ni por traslados manuales.
+- Repetir `resolverAstrometria` con la pista de escala del perfil (`minScale`/`maxScale`) y, si se conoce el centro (cabecera `RA`/`DEC` o el objeto), con `regionRA`/`regionDec`/`regionRadius`.
+- Si dice que `blindSolve` no está disponible, la función no está corriendo con el runner de picopilot: parar y avisar. No sustituirlo por ImageSolver, por copias de solución ni por traslados manuales.
 
-**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Funciona igual desde el MCP `picopilot` y desde los scripts del panel PiCopilot.
+**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Funciona igual desde el MCP `picopilot` y desde el panel PiCopilot.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));   // en el nivel superior del script
-JSON.stringify(resolverAstrometria("MasterLight"));
-```
-
-**Control.** `hasAstrometricSolution === true` **después** de cada paso que pueda romperla (BXT, GraXpert; crop y rotación sólo antes de 1.9.6); si se ha perdido, volver a ejecutar `blindSolve`.
+**Control.** `hasAstrometricSolution === true` **después** de cada paso que pueda romperla (BXT, GraXpert; crop y rotación sólo antes de 1.9.6); si se ha perdido, volver a pedir `resolverAstrometria`.

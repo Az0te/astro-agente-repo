@@ -10,34 +10,25 @@
 - "Guardar cada versión con nuevo nombre: XISF 32 bits con astrometría, TIFF 16 bits, JPG y capas separadas (nebulosa sin estrellas y estrellas). Guardar también capas lineales intermedias (incluida la HDR y sus máscaras)."
 - "Antes de exportar JPG/TIFF para web o impresión: **ICCProfileTransformation a sRGB** (perfil incrustado), para que los colores se vean igual fuera de PixInsight. Redimensionar sólo al final."
 
-**Cuidados de PJSR**
+**Cuidados**
 
 - "`window.saveAs` no guarda el historial de procesos en el XISF: anotar los parámetros en el dossier".
-- Desde PixInsight 1.9.6, Crop, DynamicCrop (también girado), Resample y FastRotation **conservan la astrometría** y la ajustan al nuevo marco. Comprobado (nebulosa dual band, nov 2026): tras Crop + Resample 0,5 + DynamicCrop de 10°, una nueva resolución coincide con la heredada a 0,05 px; tras FastRotation 180°, igual que el original. Con 1.9.5 o anterior se perdía y `FastRotation` sobre una ventana con astrometría llegó a colgar el watcher: girar con PixelMath `pixel($T, w()-1-x(), h()-1-y())`.
+- Desde PixInsight 1.9.6, Crop, DynamicCrop (también girado), Resample y FastRotation **conservan la astrometría** y la ajustan al nuevo marco. Comprobado (nebulosa dual band, nov 2026): tras Crop + Resample 0,5 + DynamicCrop de 10°, una nueva resolución coincide con la heredada a 0,05 px; tras FastRotation 180°, igual que el original. Con 1.9.5 o anterior se perdía y `FastRotation` sobre una ventana con astrometría llegó a colgar PixInsight: girar con PixelMath `pixel($T, w()-1-x(), h()-1-y())`.
 
-**Código**
+**A mano en PixInsight (valores de referencia)**
 
-```javascript
-// Perfil de salida y guardado de la versión final.
-var v = View.viewById("Final");
-if (!v || v.isNull) throw new Error("No existe Final");
-var icc = new ICCProfileTransformation;
-icc.targetProfile = "sRGB IEC61966-2.1";   // comprobado en PixInsight 1.9.6
-icc.toDefaultProfile = false;
-if (!icc.executeOn(v)) throw new Error("ICC sRGB falló");
-var w = ImageWindow.windowById("Final");
-if (!w.saveAs(carpetaVersion + "/final.xisf"   /* carpetaVersion: la carpeta real de la versión */, false, false, false, false))
-   throw new Error("No se pudo guardar el XISF");
-"guardado: sin historial en el XISF, anotar los parámetros en el dossier";
-```
+- ICCProfileTransformation a «sRGB IEC61966-2.1» y guardado del XISF en la carpeta real de la versión.
+- `saveAs` no guarda el historial en el XISF: anotar los parámetros en el dossier.
 
 **En una llamada** (`herramientas/exportar.js`): `exportarFinal("Final", { carpeta, nombre, girar180 })` comprueba saturados y bordes negros, guarda el XISF 32 bits con astrometría y, sobre una copia en sRGB (y girada 180° con FastRotation si se pide), el TIFF 16 bits y el JPG. Crea la carpeta antes de guardar y no sobrescribe (añade _2). Recomendado para modelos sin herramientas.
 
-```javascript
-eval(File.readTextFile("<ruta de guia>/herramientas/exportar.js"));   // en el nivel superior del script
-var r = exportarFinal("Final", { carpeta: carpetaVersion + "/final", nombre: nombreObjeto + "_v1", girar180: false });
-JSON.stringify(r);   // ficheros (con tamaño), controles, no_cumple
+```json
+{"llamadas": [
+  {"funcion": "exportarFinal", "parametros": {"vista": "Final", "opciones": {"carpeta": "<carpeta de la versión>/final", "nombre": "<objeto>_v1", "girar180": false}}}
+]}
 ```
+
+Devuelve los ficheros (con su tamaño), los controles y `no_cumple`.
 
 **Control.** Abrir el JPG/TIFF exportado en un visor externo y comparar con PixInsight (si cambia, el ICC no está incrustado). Comprobar dimensiones y que el recorte no deja bordes negros ni bandas de máscara.
 

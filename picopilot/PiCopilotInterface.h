@@ -92,7 +92,7 @@ private:
 
    // Serie de pasos con modelos sin herramientas (Rafael, 7 nov 2026): si el usuario pide varios pasos o la resolución
    // completa, el panel ejecuta cada script y pide el siguiente sin esperar; si pide que espere o que le recomiende el
-   // siguiente paso, se queda como antes (un script cada vez y el usuario pulsa «Ejecutar script»).
+   // siguiente paso, se queda como antes (unas llamadas cada vez y el usuario pulsa «Ejecutar llamadas»).
    bool   m_autoChain = false;       // la serie está en marcha
    bool   m_autoPaused = false;      // la serie paró con «PARO:» (pregunta al usuario): su respuesta la reanuda
    bool   m_autoSingle = false;      // m_autoScript es un solo plan (sin serie): respuesta a un Prompt o enlace de paso
