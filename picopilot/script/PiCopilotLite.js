@@ -118,6 +118,7 @@ function PLAjustes() {
    this.voz = false;                      // leer en voz alta cada respuesta del modelo
    this.vozVelocidad = 0;                 // -10 (lenta) … 10 (rápida)
    this.dictadoAntiguo = false;           // true = reconocedor antiguo de Windows (SAPI, sin internet); false = Win + H
+   this.carpetaInformes = File.homeDirectory + "/PiCopilotLite/dossiers";   // dossieres PDF e informes .md
 
    var CAMPOS = { proveedor: DataType_UCString, modeloOllama: DataType_UCString, modeloClaude: DataType_UCString,
                   modeloCodex: DataType_UCString, ollamaUrl: DataType_UCString, temperatura: DataType_UCString,
@@ -125,7 +126,8 @@ function PLAjustes() {
                   guia: DataType_UCString, ejecutarSinPreguntar: DataType_Boolean, umbralN: DataType_Int32,
                   claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
                   codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean,
-                  voz: DataType_Boolean, vozVelocidad: DataType_Int32, dictadoAntiguo: DataType_Boolean };
+                  voz: DataType_Boolean, vozVelocidad: DataType_Int32, dictadoAntiguo: DataType_Boolean,
+                  carpetaInformes: DataType_UCString };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -1049,10 +1051,24 @@ function plInfo(texto, error) {
    return "<div class=\"info" + (error ? " err" : "") + "\">" + plEsc(texto).replace(/\n/g, "<br>") + "</div>";
 }
 
-function plPagina(entradas) {
-   var h = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" + PL_CSS + "</style><script>var plClick='';" +
+// Colores claros para el dossier en PDF (se imprime mejor que el tema oscuro del chat).
+var PL_CSS_CLARO =
+   "body{background:#ffffff;color:#1d2125}.who{color:#5f6770}.who b{color:#1d2125}" +
+   ".user .bubble{background:#e7f0fb;color:#0e2a47}.asst .bubble{background:#f7f8fa;border:1px solid #d6dbe0;border-left:3px solid #2f6fb7}" +
+   "h2,h3,h4,h5{color:#1f5394}b{color:#000}i{color:#6b5300}a{color:#1f5394}a.step{color:#1f5394}" +
+   "code{background:#eef1f4;color:#7a3e00}pre.code{background:#f3f5f7;border-color:#d6dbe0}pre.code code{color:#1d2125}" +
+   "th,td{border-color:#cfd5db}th{background:#e9edf1;color:#1d2125}tr:nth-child(even) td{background:#f6f8fa}" +
+   ".num{color:#0b6b4a}.info{color:#5f6770}.info.err{color:#b3261e}.card{background:#fbfcfd;border-color:#d6dbe0}" +
+   ".cardtitle{color:#1d2125}ul.nc li{color:#b3261e}ul.med li{color:#1b7a3d}ul.ojo li{color:#8a5a00}" +
+   "figure{background:#f3f5f7;border-color:#d6dbe0}figcaption{color:#333}.portada{border-bottom:2px solid #2f6fb7;margin-bottom:12px;padding-bottom:8px}" +
+   ".portada h1{font-size:20px;margin:0 0 4px;color:#1f5394}.portada p{margin:2px 0;color:#444}details{display:none}" +
+   ".msg,.card,figure,table{page-break-inside:avoid}";
+
+function plPagina(entradas, op) {
+   op = op || {};
+   var h = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" + PL_CSS + (op.claro ? PL_CSS_CLARO : "") + "</style><script>var plClick='';" +
            "function plPaso(a){plClick=a.getAttribute('data-m')+'|'+a.getAttribute('data-paso');a.className='step done';return false;}" +
-           "</script></head><body>";
+           "</script></head><body>" + (op.cabecera || "");
    entradas.forEach(function (e, indice) {
       var quien = "<div class=\"who\">" + plEsc(e.hora) + " &middot; <b>" + plEsc(e.titulo) + "</b></div>";
       if (e.tipo == "user") h += "<div class=\"msg user\">" + quien + "<div class=\"bubble\">" + plEsc(e.texto) + "</div></div>";
@@ -1060,7 +1076,68 @@ function plPagina(entradas) {
                                       plMarkdown(e.texto).split("data-m=\"@M@\"").join("data-m=\"" + indice + "\"") + "</div></div>";
       else h += "<div class=\"msg\">" + quien + plInfo(e.texto, e.tipo == "err") + "</div>";
    });
-   return h + "<div id=\"fin\"></div><script>window.scrollTo(0, document.body.scrollHeight);</script></body></html>";
+   return h + "<div id=\"fin\"></div>" + (op.claro ? "" : "<script>window.scrollTo(0, document.body.scrollHeight);</script>") + "</body></html>";
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Dossier (PDF) e informe (Markdown) de la conversación (Rafael, 9 nov 2026): el dossier para guardar el procesado; el
+// informe, con lo útil y los errores, para recopilar procesados y mejorar la guía.
+// ---------------------------------------------------------------------------------------------------------------
+
+function plDosDig(n) { return ("0" + n).slice(-2); }
+function plSello() { var d = new Date(); return d.getFullYear() + "-" + plDosDig(d.getMonth() + 1) + "-" + plDosDig(d.getDate()) + "_" + plDosDig(d.getHours()) + plDosDig(d.getMinutes()); }
+
+// Objeto y vista principal para el nombre y la portada: OBJECT de la vista activa (o la primera), si lo hay.
+function plDatosImagen() {
+   var w = ImageWindow.activeWindow;
+   if (w.isNull && ImageWindow.windows.length) w = ImageWindow.windows[0];
+   if (w.isNull) return { vista: "", objeto: "" };
+   var obj = "";
+   try { w.keywords.forEach(function (k) { if (k.name == "OBJECT") obj = k.strippedValue; }); } catch (e) {}
+   return { vista: w.mainView.id, objeto: obj };
+}
+
+// Funciones de la guía que aparecen en los scripts de la conversación (por el manifiesto).
+function plFuncionesUsadas(entradas, guia) {
+   var nombres = [], usadas = {};
+   try { JSON.parse(File.readTextFile(guia + "/herramientas/manifiesto.json")).funciones.forEach(function (f) { nombres.push(f.nombre); }); } catch (e) {}
+   entradas.forEach(function (e) {
+      if (e.tipo != "asst") return;
+      var s = plExtraerScript(e.texto);
+      if (s) nombres.forEach(function (n) { if (new RegExp("\\b" + n + "\\s*\\(").test(s)) usadas[n] = (usadas[n] || 0) + 1; });
+   });
+   return usadas;
+}
+
+function plInformeMd(entradas, aj, uso) {
+   var di = plDatosImagen(), usadas = plFuncionesUsadas(entradas, aj.guia), errores = [], md = [];
+   var ok = entradas.filter(function (e) { return e.tipo == "info" && /^Resultado/.test(e.titulo); }).length;
+   for (var i = 0; i < entradas.length; ++i) if (entradas[i].tipo == "err" && /^Error al ejecutar/.test(entradas[i].titulo)) {
+      var script = null;
+      for (var j = i - 1; j >= 0 && !script; --j) if (entradas[j].tipo == "asst") script = plExtraerScript(entradas[j].texto);
+      errores.push({ error: entradas[i].texto, script: script });
+   }
+   md.push("# Informe de procesado — PiCopilot Lite", "",
+           "- Fecha: " + plSello().replace("_", " "), "- Objeto (OBJECT): " + (di.objeto || "—") + " · vista: " + (di.vista || "—"),
+           "- Modelo: " + aj.proveedor + " · " + (aj.modelo() || "por defecto"), "- Scripts correctos: " + ok + " · con error: " + errores.length,
+           "- Tokens: " + (uso ? plUsoTexto(uso.entrada || uso.salida ? uso : { total: uso.total, coste: uso.coste }) : "—"), "",
+           "## Funciones de la guía usadas", "");
+   var ks = Object.keys(usadas);
+   md.push(ks.length ? ks.map(function (k) { return "- `" + k + "` ×" + usadas[k]; }).join("\n") : "(ninguna)", "");
+   md.push("## Errores (para mejorar la guía)", "");
+   if (!errores.length) md.push("(ninguno)", "");
+   errores.forEach(function (e, n) {
+      md.push("### Error " + (n + 1), "", "```", plRecortar(e.error, 1500), "```", "");
+      if (e.script) md.push("Script que lo provocó:", "", "```javascript", plRecortar(e.script, 3000), "```", "");
+   });
+   md.push("## Conversación", "");
+   entradas.forEach(function (e) {
+      if (e.tipo == "user") md.push("### " + e.hora + " · Tú", "", e.texto, "");
+      else if (e.tipo == "asst") md.push("### " + e.hora + " · " + e.titulo, "", e.texto, "");
+      else md.push("### " + e.hora + " · " + e.titulo, "", "```", plRecortar(e.texto, 4000), "```", "");
+   });
+   md.push("## Notas del usuario", "", "(qué salió bien, qué hubo que corregir a mano, qué cambiarías en la guía)", "");
+   return md.join("\n");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1307,6 +1384,17 @@ function plConstruirDialogo(aj) {
    var lVel = new Label(pPrompt); lVel.text = "Velocidad:"; lVel.textAlignment = TextAlign_Right | TextAlign_VertCenter;
    filaV.add(this.bDictar); filaV.addSpacing(12); filaV.add(this.cVoz); filaV.add(this.bLeer); filaV.add(this.bParar);
    filaV.addSpacing(8); filaV.add(lVel); filaV.add(this.sVel); filaV.addStretch();
+   // Dossier e informe de la conversación.
+   this.bDossier = new PushButton(pPrompt);
+   this.bDossier.text = "Dossier PDF";
+   this.bDossier.toolTip = "Guarda la conversación (respuestas, fichas de resultados y miniaturas) como PDF en la carpeta de dossieres (Ajustes).";
+   this.bDossier.onClick = function () { self.crearDossier(); };
+   this.bInforme = new PushButton(pPrompt);
+   this.bInforme.text = "Informe .md";
+   this.bInforme.toolTip = "Guarda un informe Markdown con las funciones usadas, los errores con su script y la conversación, para " +
+                           "recopilar procesados y mejorar la guía.";
+   this.bInforme.onClick = function () { self.crearInforme(); };
+   filaV.add(this.bDossier); filaV.add(this.bInforme);
    pPrompt.sizer.add(filaV);
    pPrompt.sizer.add(this.estadoLbl);
 
@@ -1414,6 +1502,7 @@ function plConstruirDialogo(aj) {
    this.eClaude = fila("Ejecutable claude:", aj.rutaClaude);
    this.eCodex = fila("Ejecutable codex:", aj.rutaCodex);
    this.eGuia = fila("Carpeta de la guía:", aj.guia, "Carpeta guia/ del repositorio (con herramientas/ y manifiesto.json).");
+   this.eInformes = fila("Carpeta de dossieres:", aj.carpetaInformes, "Donde se guardan el dossier PDF y el informe .md de la conversación.");
    this.bGuardar = new PushButton(pAj);
    this.bGuardar.text = "Guardar ajustes";
    this.bGuardar.onClick = function () { self.leerAjustes(); aj.guardar(); self.estadoLbl.text = "Ajustes guardados."; };
@@ -1451,6 +1540,8 @@ function plConstruirDialogo(aj) {
       aj.rutaCodex = this.eCodex.text.trim() || "codex";
       var g = this.eGuia.text.trim().replace(/\\/g, "/").replace(/[\/]+$/, "");
       if (g) aj.guia = g;
+      var ci = this.eInformes.text.trim().replace(/\\/g, "/").replace(/[\/]+$/, "");
+      if (ci) aj.carpetaInformes = ci;
       var m = this.cModelo.editText.trim();
       if (m || aj.proveedor != "ollama") aj.ponerModelo(m);
       aj.umbralN = this.sN.value;
@@ -1534,6 +1625,43 @@ function plConstruirDialogo(aj) {
       this.entradas.push({ tipo: tipo || "info", titulo: quien, texto: String(texto), hora: hora });
       plMostrarPagina(this.historialBox, plPagina(this.entradas));
       plEventos();
+   };
+
+   // --- Dossier e informe ---
+   this.baseInforme = function () {
+      this.leerAjustes();
+      var di = plDatosImagen(), nombre = plSello() + "_" + (di.objeto || di.vista || "picopilot").replace(/[^A-Za-z0-9_-]+/g, "_");
+      return plCarpeta(aj.carpetaInformes) + "/" + nombre;
+   };
+   this.crearInforme = function () {
+      if (!this.entradas.length) { this.estadoLbl.text = "No hay conversación que guardar."; return null; }
+      var f = this.baseInforme() + ".md";
+      try { File.writeTextFile(f, plInformeMd(this.entradas, aj, this.usoSesion)); this.estadoLbl.text = "Informe guardado: " + f; return f; }
+      catch (e) { this.estadoLbl.text = "No se pudo guardar el informe: " + (e.message || e); return null; }
+   };
+   this.crearDossier = function (alTerminar) {
+      if (!this.entradas.length) { this.estadoLbl.text = "No hay conversación que guardar."; return; }
+      var base = this.baseInforme(), di = plDatosImagen(), S = this.usoSesion;
+      var cab = "<div class=\"portada\"><h1>Dossier de procesado" + (di.objeto ? " — " + plEsc(di.objeto) : "") + "</h1>" +
+                "<p>" + plEsc(plSello().replace("_", " ")) + " · vista " + plEsc(di.vista || "—") + " · modelo " + plEsc(aj.proveedor + " " + (aj.modelo() || "")) +
+                (S && S.respuestas ? " · " + plEsc(plUsoTexto(S.entrada || S.salida ? S : { total: S.total, coste: S.coste })) : "") + "</p>" +
+                "<p>PiCopilot Lite " + PL_VERSION + " · guía " + plEsc(aj.guia) + "</p></div>";
+      var html = plPagina(this.entradas, { claro: true, cabecera: cab }), fh = base + ".html", fp = base + ".pdf";
+      File.writeTextFile(fh, html);
+      // Un visor aparte (oculto) carga la página desde fichero, para que salgan las miniaturas, y la guarda en PDF.
+      if (!this.wvPdf) { this.wvPdf = new WebView(this); this.wvPdf.setFixedSize(900, 1200); this.wvPdf.hide(); }
+      var wv = this.wvPdf;
+      this.estadoLbl.text = "Generando el dossier en PDF…";
+      wv.onLoadFinished = function () {
+         var t = new Timer; t.interval = 1; t.periodic = false;
+         t.onTimeout = function () {
+            try { wv.saveAsPDF(fp); self.estadoLbl.text = "Dossier guardado: " + fp + " (y la página en .html)"; }
+            catch (e) { self.estadoLbl.text = "No se pudo crear el PDF (" + (e.message || e) + "); queda la página en " + fh; }
+            if (alTerminar) alTerminar(fp);
+         };
+         t.start();
+      };
+      wv.loadContent(fh);
    };
 
    // --- Voz ---
@@ -1838,10 +1966,15 @@ function plPrueba(salida, cli) {
             try { d.entrada.hasFocus = true; } catch (e) { out.foco2 = String(e); }
             d.enviarTexto = function (t) { out.clic = t; };
             d.bSerie.onClick(); out.serie = out.clic.substring(0, 60);   // el botón manda el prompt de la serie
+            // Informe .md y dossier PDF de la conversación de la prueba (en la carpeta temporal, no en la del usuario).
+            var ciAntes = aj.carpetaInformes; d.eInformes.text = plCarpeta(PL_TMP) + "/dossiers";
+            out.informe = d.crearInforme();
+            d.crearDossier(function (fp) { out.dossier = fp; });   // saveAsPDF escribe el fichero un poco después
+            d.eInformes.text = ciAntes;
             d.historialBox.evaluateScript("plClick='999|Paso de prueba';");
          } catch (e) { out.error = String(e); }
-         var t2 = new Timer; t2.interval = 2; t2.periodic = false;
-         t2.onTimeout = function () { d.ok(); };
+         var t2 = new Timer; t2.interval = 6; t2.periodic = false;   // tiempo para el clic simulado y el PDF
+         t2.onTimeout = function () { if (out.dossier) out.dossierExiste = File.exists(out.dossier); d.ok(); };
          t2.start();
       };
       tm.start();
