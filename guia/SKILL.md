@@ -1,11 +1,11 @@
 ---
 name: "astro-procesado-pixinsight"
-description: "Procesado de astrofotografía de cielo profundo en PixInsight controlado por un agente de IA a través del MCP picopilot (las funciones de la guía como herramientas), paso a paso desde el análisis del objeto hasta la entrega: OSC + dual band, HDR con tomas cortas, gradientes, BXT/NXT/SXT, SPCC, estrellas y halos, paletas de banda estrecha y controles objetivos de calidad. Compara métodos en vez de fijar uno. Fiel a los datos."
+description: "Procesado de astrofotografía de cielo profundo en PixInsight controlado por un agente de IA a través del MCP piastropilot (las funciones de la guía como herramientas), paso a paso desde el análisis del objeto hasta la entrega: OSC + dual band, HDR con tomas cortas, gradientes, BXT/NXT/SXT, SPCC, estrellas y halos, paletas de banda estrecha y controles objetivos de calidad. Compara métodos en vez de fijar uno. Fiel a los datos."
 ---
 
 # Procesado de astrofotografía en PixInsight
 
-Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) que procese en PixInsight a través del servidor MCP `picopilot` de este repositorio (`mcp/`, PixInsight 1.9.6+) o desde el panel PiCopilot. Con el MCP, cada función de `herramientas/` es una herramienta con su nombre (`mcp__picopilot__analizarMaster`…; parámetros en `herramientas/manifiesto.json`); con poco contexto, el servidor puede ofrecer sólo las de la fase en curso (`PICOPILOT_FASE`). El MCP antiguo `pixinsight` (watcher, `watcher_status`, `describe_process`, `list_open_images` y su `run_script`) está retirado: no usarlo aunque aparezca. El agente no escribe ni ejecuta código de PixInsight: sólo llama a las funciones de la guía. Si ninguna sirve, lo dice y propone al usuario qué hacer.
+Núcleo de la guía para cualquier agente (Claude, ChatGPT o un modelo local) que procese en PixInsight a través del servidor MCP `piastropilot` de este repositorio (`mcp/`, PixInsight 1.9.6+) o desde el panel PiAstroPilot. Con el MCP, cada función de `herramientas/` es una herramienta con su nombre (`mcp__piastropilot__analizarMaster`…; parámetros en `herramientas/manifiesto.json`); con poco contexto, el servidor puede ofrecer sólo las de la fase en curso (`PIASTROPILOT_FASE`). El MCP antiguo `pixinsight` (watcher, `watcher_status`, `describe_process`, `list_open_images` y su `run_script`) está retirado: no usarlo aunque aparezca. El agente no escribe ni ejecuta código de PixInsight: sólo llama a las funciones de la guía. Si ninguna sirve, lo dice y propone al usuario qué hacer.
 
 Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carga **sólo cuando hace falta**: la ficha del paso que se va a ejecutar, y nada más.
 
@@ -69,7 +69,7 @@ Siempre disponibles: `vistas`, `estadisticas`, `historial`, `previa` (JPG para m
 
 ## Internet
 
-`documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` e `imagenCatalogo` sólo funcionan con la casilla **Internet** del panel marcada (o sin el fichero `~/.picopilot/sin-internet`). Si responden que está desactivada, no reintentar ni buscar otra vía: seguir sólo con `analizarMaster` o pedírselo al usuario. Con Internet, al analizar la imagen llamar a `analizarMaster` y `documentarObjeto` juntos y cruzar las medidas con la ficha: qué objeto es, qué emite (y si el filtro lo capta), qué estrellas darán halos y qué pasos vigilar. Lo de internet es orientativo: citar la fuente y no añadir nada que no traiga. Las búsquedas web propias del cliente (WebSearch, WebFetch) también sólo con Internet activado.
+`documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` e `imagenCatalogo` sólo funcionan con la casilla **Internet** del panel marcada (o sin el fichero `~/.piastropilot/sin-internet`). Si responden que está desactivada, no reintentar ni buscar otra vía: seguir sólo con `analizarMaster` o pedírselo al usuario. Con Internet, al analizar la imagen llamar a `analizarMaster` y `documentarObjeto` juntos y cruzar las medidas con la ficha: qué objeto es, qué emite (y si el filtro lo capta), qué estrellas darán halos y qué pasos vigilar. Lo de internet es orientativo: citar la fuente y no añadir nada que no traiga. Las búsquedas web propias del cliente (WebSearch, WebFetch) también sólo con Internet activado.
 
 ## Siguiente paso
 

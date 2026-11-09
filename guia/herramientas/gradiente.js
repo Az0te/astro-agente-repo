@@ -9,7 +9,7 @@
 //     mars: "<ruta .xmars del perfil>",                    // opcional en 1.9.6+: sin ella, la base configurada en MGC
 //     mgcOpts: { structureSeparation: 2, modelSmoothness: 2.5 },
 //     mgcBorde: true,                                      // 1.9.6+: cada escala también con edgeCorrection (false = no)
-//     dossier: "C:/ruta/dossier.json"                      // opcional: escribe el dossier de PiCopilot
+//     dossier: "C:/ruta/dossier.json"                      // opcional: escribe el dossier de PiAstroPilot
 //   });
 //   JSON.stringify(r);   // { vista, candidatos: [{vista, modelo, metodo, parametros, metricas, notas}],
 //                        //   intermedias, recomendado, motivo, errores }

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// picopilot-mcp — Servidor MCP de PiCopilot: ofrece las funciones de la guía como herramientas.
+// piastropilot-mcp — Servidor MCP de PiAstroPilot: ofrece las funciones de la guía como herramientas.
 // Copyright (c) 2026 Rafael Vidal. Licencia MIT.
 //
-// Cómo llega a PixInsight: escribe ~/.picopilot/peticiones/<id>.json y lanza
-//   PixInsight.exe -x=<mcp>/pjsr/picopilot-runner.js,<id>
+// Cómo llega a PixInsight: escribe ~/.piastropilot/peticiones/<id>.json y lanza
+//   PixInsight.exe -x=<mcp>/pjsr/piastropilot-runner.js,<id>
 // en la instancia abierta (IPC de PixInsight). El runner ejecuta solo funciones de su lista blanca y deja
-// ~/.picopilot/resultados/<id>.json. No hay carpeta vigilada ni watcher.
+// ~/.piastropilot/resultados/<id>.json. No hay carpeta vigilada ni watcher.
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -29,23 +29,23 @@ const VERSION = "0.3.0";
 const AQUI = dirname(fileURLToPath(import.meta.url));          // mcp/dist
 const MCP_DIR = resolve(AQUI, "..");                           // mcp/
 const REPO = resolve(MCP_DIR, "..");                           // raíz del repo
-const GUIA = process.env.PICOPILOT_GUIA ?? join(REPO, "guia");
-const RUNNER = (process.env.PICOPILOT_RUNNER ?? join(MCP_DIR, "pjsr", "picopilot-runner.js")).replace(/\\/g, "/");
+const GUIA = process.env.PIASTROPILOT_GUIA ?? join(REPO, "guia");
+const RUNNER = (process.env.PIASTROPILOT_RUNNER ?? join(MCP_DIR, "pjsr", "piastropilot-runner.js")).replace(/\\/g, "/");
 const PIXINSIGHT = process.env.PIXINSIGHT_EXE ??
   (process.platform === "win32" ? "C:/Program Files/PixInsight/bin/PixInsight.exe"
     : process.platform === "darwin" ? "/Applications/PixInsight/PixInsight.app/Contents/MacOS/PixInsight"
     : "/opt/PixInsight/bin/PixInsight");
-const DATOS = join(homedir(), ".picopilot");
+const DATOS = join(homedir(), ".piastropilot");
 const PETICIONES = join(DATOS, "peticiones");
 const RESULTADOS = join(DATOS, "resultados");
 // Tiempo máximo de espera dentro de una llamada: por debajo del límite de ~60 s de los clientes MCP.
-const ESPERA_MAX_S = Number(process.env.PICOPILOT_ESPERA_S ?? 45);
+const ESPERA_MAX_S = Number(process.env.PIASTROPILOT_ESPERA_S ?? 45);
 const RECOGER_S = 60;   // si el runner no ha empezado en este tiempo, la petición se da por perdida
-// Para clientes con poco contexto (modelos locales a 32K): PICOPILOT_COMPACTO=1 usa el "resumen" de cada herramienta
-// en vez de la descripción larga, y PICOPILOT_FASE=lineal | no-lineal ofrece sólo las herramientas de esa fase
+// Para clientes con poco contexto (modelos locales a 32K): PIASTROPILOT_COMPACTO=1 usa el "resumen" de cada herramienta
+// en vez de la descripción larga, y PIASTROPILOT_FASE=lineal | no-lineal ofrece sólo las herramientas de esa fase
 // (más las que no son de ningún paso: vistas, estadisticas, previa, abrir/guardar...). Sin ellas, todo como antes.
-const COMPACTO = /^(1|true|si|sí|yes)$/i.test(process.env.PICOPILOT_COMPACTO ?? "");
-const FASE = (process.env.PICOPILOT_FASE ?? "").trim().toLowerCase();
+const COMPACTO = /^(1|true|si|sí|yes)$/i.test(process.env.PIASTROPILOT_COMPACTO ?? "");
+const FASE = (process.env.PIASTROPILOT_FASE ?? "").trim().toLowerCase();
 
 // --- Manifiesto ---------------------------------------------------------------------------------------------
 
@@ -210,7 +210,7 @@ function fichasGuia(): string[] {
 
 async function main() {
   const token = prepararDatos();
-  const server = new Server({ name: "picopilot", version: VERSION }, { capabilities: { tools: {}, resources: {} } });
+  const server = new Server({ name: "piastropilot", version: VERSION }, { capabilities: { tools: {}, resources: {} } });
 
   const herramientaEstado = {
     name: "estado",
@@ -253,10 +253,10 @@ async function main() {
   });
 
   await server.connect(new StdioServerTransport());
-  console.error(`picopilot-mcp ${VERSION} listo. Guía: ${GUIA}. Runner: ${RUNNER}. PixInsight: ${PIXINSIGHT}`);
+  console.error(`piastropilot-mcp ${VERSION} listo. Guía: ${GUIA}. Runner: ${RUNNER}. PixInsight: ${PIXINSIGHT}`);
 }
 
 main().catch((e) => {
-  console.error("picopilot-mcp no ha podido arrancar:", e);
+  console.error("piastropilot-mcp no ha podido arrancar:", e);
   process.exit(1);
 });

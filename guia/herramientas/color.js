@@ -10,7 +10,7 @@
 // Opciones:
 //   spcc        opciones de pxSPCC tal como las da el perfil (r, g, b, qe, narrowband...). Vacío = OSC sin filtro.
 //   nuevaVista  copia donde se calibra (por defecto <vista>_spcc). La original no se toca.
-//   guia        carpeta de la guía, si procesos.js no está cargado y no hay PICOPILOT_GUIA.
+//   guia        carpeta de la guía, si procesos.js no está cargado y no hay PIASTROPILOT_GUIA.
 //   fondoAuto   false (por defecto): referencia de fondo = toda la imagen, como SPCC. true = el bloque de 512 px más
 //               oscuro (EXPERIMENTAL: en una nebulosa dual band, nov 2026, empeoró el cielo de 1 a 17 sigmas; no usar sin comprobar).
 // Comprueba antes: que exista la solución astrométrica (si no, Paso 8: blindSolve) y que la imagen sea lineal.
@@ -92,7 +92,7 @@ function calibrarColor(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   if (typeof pxSPCC !== "function") {
-    var g = o.guia || (typeof PICOPILOT_GUIA === "string" ? PICOPILOT_GUIA : null);
+    var g = o.guia || (typeof PIASTROPILOT_GUIA === "string" ? PIASTROPILOT_GUIA : null);
     if (!g) throw new Error("Falta herramientas/procesos.js: cárgalo con eval antes de color.js");
     eval.call(null, File.readTextFile(g + "/herramientas/procesos.js"));
   }

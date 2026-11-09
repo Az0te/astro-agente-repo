@@ -87,7 +87,7 @@ function componerHDR(lista, o) {
   r.umbral = umbral;
 
   // HDRComposition trabaja con ficheros: los de vistas (o ya abiertos) se guardan en temporales.
-  var tmpDir = File.systemTempDirectory + "/picopilot_hdr", paths = [];
+  var tmpDir = File.systemTempDirectory + "/piastropilot_hdr", paths = [];
   if (!File.directoryExists(tmpDir)) File.createDirectory(tmpDir, true);
   ins.forEach(function (a, i) {
     if (a.path) { paths.push(a.path); return; }

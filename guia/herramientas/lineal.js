@@ -1,11 +1,11 @@
 // lineal.js — Pasos cortos de la guía en una sola llamada, con sus controles. PJSR, ECMAScript 5.
 //   resolverAstrometria (Paso 8 lineal), bxtCorrectOnly (Paso 11), checkpointLineal (Paso 17), quitarVerde (Paso 3
-//   no lineal). Usan funciones de color.js y deconvolucion.js, que se cargan solas desde la guía (PICOPILOT_GUIA u
+//   no lineal). Usan funciones de color.js y deconvolucion.js, que se cargan solas desde la guía (PIASTROPILOT_GUIA u
 //   opción guia) si no están cargadas.
 //
 // Uso (en el nivel superior del script):
 //   eval(File.readTextFile("<ruta de guia>/herramientas/lineal.js"));
-//   var a = resolverAstrometria("MasterLight");                       // necesita blindSolve (watcher v8 o PiCopilot)
+//   var a = resolverAstrometria("MasterLight");                       // necesita blindSolve (watcher v8 o PiAstroPilot)
 //   var b = bxtCorrectOnly("MasterLight", { nuevaVista: "MasterLight_bxtco" });
 //   var c = checkpointLineal("MasterLight_dn", { carpeta: carpetaVersion, objeto: nombreObjeto, version: "v1" });
 //   var d = quitarVerde("Starless_st", { nuevaVista: "Starless_sinverde" });
@@ -14,7 +14,7 @@ function lnNeed(fnName, file, o) {
   var ok = false;
   try { ok = (typeof eval(fnName) === "function"); } catch (e) { ok = false; }
   if (ok) return;
-  var g = (o && o.guia) || (typeof PICOPILOT_GUIA === "string" ? PICOPILOT_GUIA : null);
+  var g = (o && o.guia) || (typeof PIASTROPILOT_GUIA === "string" ? PIASTROPILOT_GUIA : null);
   if (!g) throw new Error("Falta herramientas/" + file + ": cárgalo con eval antes de lineal.js");
   eval.call(null, File.readTextFile(g + "/herramientas/" + file));
 }
@@ -59,7 +59,7 @@ function resolverAstrometria(viewId, o) {
   if (!viewId) throw new Error("resolverAstrometria necesita el id de una vista (texto); ha recibido " + viewId +
                                ". Tras alinearMasters usa r.vista o r.vistas[i] (y alinearMasters ya resuelve y copia la astrometría).");
   if (typeof blindSolve !== "function")
-    throw new Error("blindSolve no está disponible: la función tiene que correr con el runner de picopilot (MCP o panel PiCopilot)");
+    throw new Error("blindSolve no está disponible: la función tiene que correr con el runner de piastropilot (MCP o panel PiAstroPilot)");
   var w = ImageWindow.windowById(viewId);
   if (w.isNull) throw new Error("No existe la vista " + viewId);
   var t0 = Date.now(), r = blindSolve(viewId, o.pistas || {});

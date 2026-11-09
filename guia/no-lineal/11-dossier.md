@@ -22,7 +22,7 @@
 
 Devuelve los pasos de `view.processing` (un contenedor, no un array) con los parámetros de cada uno.
 
-**Con el MCP picopilot** (Claude, Codex):
+**Con el MCP piastropilot** (Claude, Codex):
 
 - Historial: `historial(vista)` (con `parametros: true` si hacen falta los valores). Las funciones de la guía trabajan sobre copias, así que el historial de la vista final sólo tiene lo aplicado sobre ella: el resto de la cadena sale del resultado de cada función (vista de entrada, vista nueva, parámetros y medidas). Reconstruirla con eso y decir de dónde sale cada paso.
 - Revisión crítica: mirar la imagen antes de puntuar, nunca puntuar sin verla. `previa(vista)` da el JPG entero y `previa(vista, { rect: [x0, y0, x1, y1] })` recortes al 100 % (mínimo: el centro del objeto, una esquina con estrellas y la estrella más brillante). Leer cada JPG y puntuar con lo que se ve; si algo no se puede juzgar en el JPG, decirlo.

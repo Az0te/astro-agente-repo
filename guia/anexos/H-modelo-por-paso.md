@@ -1,6 +1,6 @@
 # Anexo H. Modelo por paso: rápido o potente
 
-Sólo hace falta si la plataforma ofrece varios modelos o niveles de razonamiento y nadie ha elegido ya el modelo (el módulo PiCopilot y PiCopilot Lite en «auto (pesos N)» lo eligen solos: entonces no preguntar por N). Con un modelo local no aplica.
+Sólo hace falta si la plataforma ofrece varios modelos o niveles de razonamiento y nadie ha elegido ya el modelo (el módulo PiAstroPilot y PiAstroPilot Lite en «auto (pesos N)» lo eligen solos: entonces no preguntar por N). Con un modelo local no aplica.
 
 Cada paso se puede hacer con un modelo **rápido** (más barato) o uno **potente**. El % de cada paso es la calidad del rápido respecto al potente haciendo ese paso, **medida con Claude** (Sonnet 5.5 frente a Opus 5.5; nebulosa dual band, noviembre de 2026; rúbrica de 40 puntos: exactitud, completitud, verificación y utilidad).
 

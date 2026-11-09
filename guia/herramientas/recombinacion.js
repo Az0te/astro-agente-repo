@@ -74,10 +74,10 @@ function recombinarEstrellas(starlessId, starsId, o) {
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
   var metodo = o.metodo || "auto", k = (o.k !== undefined) ? o.k : 1.0, usado;
 
-  // Fuera del watcher v8 (p. ej. scripts ejecutados por PiCopilot) screenStarsCombine no existe: se carga realces.js
-  // de la misma guía, que PiCopilot indica en la variable global PICOPILOT_GUIA.
-  if (metodo === "auto" && typeof screenStarsCombine !== "function" && typeof PICOPILOT_GUIA === "string") {
-    try { eval.call(null, File.readTextFile(PICOPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
+  // Fuera del watcher v8 (p. ej. scripts ejecutados por PiAstroPilot) screenStarsCombine no existe: se carga realces.js
+  // de la misma guía, que PiAstroPilot indica en la variable global PIASTROPILOT_GUIA.
+  if (metodo === "auto" && typeof screenStarsCombine !== "function" && typeof PIASTROPILOT_GUIA === "string") {
+    try { eval.call(null, File.readTextFile(PIASTROPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
   }
   if (metodo === "auto" && typeof screenStarsCombine === "function") {
     var r = screenStarsCombine(starlessId, starsId, { newId: id });

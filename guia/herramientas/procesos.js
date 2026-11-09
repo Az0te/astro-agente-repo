@@ -53,13 +53,13 @@ function pxFilter(name) {
 function pxDefault(o, k, v) { return (o && o[k] !== undefined) ? o[k] : v; }
 
 // Miniatura JPG de una vista para el chat (Rafael, 8 nov 2026: ver cada candidato de una comparación). Sólo si el panel
-// ha definido la carpeta PICOPILOT_PREVIAS (PiCopilot Lite) y está la función de previas del runner (pprPrevia, STF
+// ha definido la carpeta PIASTROPILOT_PREVIAS (PiAstroPilot Lite) y está la función de previas del runner (pprPrevia, STF
 // automático enlazado si la vista es lineal). Devuelve la ruta o null; nunca falla la comparación por una miniatura.
 function pxPrevia(viewId, nombre, o) {
-  if (typeof PICOPILOT_PREVIAS !== "string" || !PICOPILOT_PREVIAS || typeof pprPrevia !== "function") return null;
+  if (typeof PIASTROPILOT_PREVIAS !== "string" || !PIASTROPILOT_PREVIAS || typeof pprPrevia !== "function") return null;
   try {
     o = o || {};
-    var f = PICOPILOT_PREVIAS + "/" + String(nombre || viewId).replace(/[^A-Za-z0-9_.-]+/g, "_") + ".jpg";
+    var f = PIASTROPILOT_PREVIAS + "/" + String(nombre || viewId).replace(/[^A-Za-z0-9_.-]+/g, "_") + ".jpg";
     // STF enlazado si los canales están equilibrados (máx/mín de medianas < 1,25); si no, por canal (como el módulo,
     // build61): con un master sin calibrar, el enlazado lo dejaba todo verde y no se veía nada.
     var enl = o.enlazado;

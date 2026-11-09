@@ -1,5 +1,5 @@
-name: "⚖️ Comparativa manual vs PiCopilot / Manual vs PiCopilot"
-description: "Tu procesado manual al lado del de PiCopilot con los mismos datos. / Your manual processing next to PiCopilot's on the same data."
+name: "⚖️ Comparativa manual vs PiAstroPilot / Manual vs PiAstroPilot"
+description: "Tu procesado manual al lado del de PiAstroPilot con los mismos datos. / Your manual processing next to PiAstroPilot's on the same data."
 title: "[Comparativa] <tipo de objeto> – <paso o procesado completo>"
 labels: ["comparativa"]
 body:
@@ -43,7 +43,7 @@ body:
     id: imagenes
     attributes:
       label: "Imágenes / Images"
-      description: "Manual y PiCopilot, a ser posible lado a lado y un recorte al 100 %. / Side by side plus a 100% crop."
+      description: "Manual y PiAstroPilot, a ser posible lado a lado y un recorte al 100 %. / Side by side plus a 100% crop."
     validations:
       required: true
   - type: textarea
@@ -67,7 +67,7 @@ body:
   - type: input
     id: modelo
     attributes:
-      label: "Modelo usado en PiCopilot / Model used in PiCopilot"
+      label: "Modelo usado en PiAstroPilot / Model used in PiAstroPilot"
       placeholder: "Claude Opus, Qwen3 27B local…"
   - type: input
     id: enlace

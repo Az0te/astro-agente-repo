@@ -9,15 +9,15 @@
 // No hay buscador general sin clave: para buscar, wikipedia (es / en) y, con una URL conocida, leerWeb.
 // Ojo: el preprocesador de PJSR toma la doble barra como comentario aunque esté en una cadena: las URL se trocean.
 
-var WB_UA = "PiCopilot/1.0 (astro-agente-repo; PixInsight)";
+var WB_UA = "PiAstroPilot/1.0 (astro-agente-repo; PixInsight)";
 var WB_HTTPS = "https:" + "/" + "/";
 
 function wbGet(url, o) {
   o = o || {};
-  // El panel puede prohibir las consultas externas (casilla «Internet» de PiCopilot Lite).
-  // PiCopilot Lite pone la variable global; el módulo deja el fichero ~/.picopilot/sin-internet (también vale por el MCP).
-  var prohibido = (typeof PICOPILOT_INTERNET !== "undefined") ? PICOPILOT_INTERNET === false
-                                                              : File.exists(File.homeDirectory + "/.picopilot/sin-internet");
+  // El panel puede prohibir las consultas externas (casilla «Internet» de PiAstroPilot Lite).
+  // PiAstroPilot Lite pone la variable global; el módulo deja el fichero ~/.piastropilot/sin-internet (también vale por el MCP).
+  var prohibido = (typeof PIASTROPILOT_INTERNET !== "undefined") ? PIASTROPILOT_INTERNET === false
+                                                              : File.exists(File.homeDirectory + "/.piastropilot/sin-internet");
   if (prohibido)
     throw new Error("Las búsquedas en internet están desactivadas (casilla «Internet» del panel): no consultes fuera; pídeselo al usuario");
   var datos = new ByteArray, t = new NetworkTransfer;
@@ -297,7 +297,7 @@ function imagenCatalogo(posicion, o) {
   var r = wbGet(url, { timeout: 60 });
   if (!r.ok) throw new Error("SkyView no devolvió la imagen (" + (r.error || "HTTP " + r.codigo) + ")");
   if (r.datos.length < 3000) throw new Error("SkyView no tiene esa zona en " + survey + " o no conoce la posición: " + r.datos.utf8ToString().substring(0, 200));
-  var dir = File.systemTempDirectory + "/PiCopilotCatalogo";
+  var dir = File.systemTempDirectory + "/PiAstroPilotCatalogo";
   if (!File.directoryExists(dir)) File.createDirectory(dir, true);
   var f = dir + "/" + (survey + "_" + pos).replace(/[^A-Za-z0-9_.-]+/g, "_") + ".fits";
   var fh = new File; fh.createForWriting(f); fh.write(r.datos); fh.close();

@@ -27,7 +27,7 @@ Fuentes: `opus_memoria_m31-procesado.md`, `opus_log_*.txt` y `opus_tool_*.js`.
 8. **v7** responde a lo que pidió Rafael: fondo más oscuro (cielo ≈ 0,11), más detalle, brazos más saturados y estrellas más estiradas. Se entregó también girada 180°.
 
 ### Qwen (7-nov)
-Fuentes: `qwen_estado.md` y el historial de las 35 vistas abiertas en PixInsight. Los scripts `run_*.js` ya no están en `PiCopilot\tmp`.
+Fuentes: `qwen_estado.md` y el historial de las 35 vistas abiertas en PixInsight. Los scripts `run_*.js` ya no están en `PiAstroPilot\tmp`.
 1. **Degradado**: probó GraXpert (GX8, GX10), MGC 1024/2048 (con y sin borde) y polinomio 1/2 (vistas `GC_*`). No hay constancia de cuál eligió.
 2. **BXT correct only** → **SPCC** → **BXT** (estrellas 0,30, halos 0, no estelar 0,65) → NXT → **StarX** → **NXT 0,70 sobre la starless lineal**. El checkpoint lineal dio FWHM 8,8 px y cielo verde 0,67 σ.
 3. **Estirado de la starless con GHS en modo RGB** (no en modo color): D2,5 b12 SP0,000344 HP0,95; D1 b6 SP0,0107; D1 b6 SP0,0493. Después, **seis rondas más** de GHS (D1, 1, 0,5, 0,25, 0,125, 0,125 a SP0,1 y HP0,92), cada una seguida de una resta de punto negro por PixelMath `($T-k)/(1-k)` con k de 0,031 a 0,174.

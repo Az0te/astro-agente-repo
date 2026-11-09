@@ -1,5 +1,5 @@
 name: "🧪 Prueba con otro modelo o equipo / Other model or hardware"
-description: "Resultado de probar PiCopilot o la guía con otro modelo de IA, otra GPU, otro sistema o versión de PixInsight. / Results with another AI model, GPU, OS or PixInsight version."
+description: "Resultado de probar PiAstroPilot o la guía con otro modelo de IA, otra GPU, otro sistema o versión de PixInsight. / Results with another AI model, GPU, OS or PixInsight version."
 title: "[Prueba] <modelo o equipo>"
 labels: ["prueba"]
 body:
@@ -26,14 +26,14 @@ body:
     id: entorno
     attributes:
       label: "Entorno / Environment"
-      description: "Modelo exacto (y cuantización, contexto, temperatura), cliente (Claude Code, Codex, Ollama, LM Studio…), GPU y RAM, sistema operativo, PixInsight, build de PiCopilot."
+      description: "Modelo exacto (y cuantización, contexto, temperatura), cliente (Claude Code, Codex, Ollama, LM Studio…), GPU y RAM, sistema operativo, PixInsight, build de PiAstroPilot."
       placeholder: |
         Modelo: …
         Cliente: …
         GPU / RAM: …
         SO: …
         PixInsight: …
-        PiCopilot: build…
+        PiAstroPilot: build…
     validations:
       required: true
   - type: textarea

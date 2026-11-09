@@ -384,7 +384,7 @@ function lanzarWBPP(o) {
   for (var k2 in par) r.push(k2 + "=" + par[k2]);
   files.forEach(function (f) { r.push("file=" + f.replace(/\\/g, "/")); });
   var inicio = new Date();
-  File.writeTextFile(salida + "/picopilot_wbpp.json", JSON.stringify({ inicio: inicio.toISOString(), ficheros: files.length, parametros: par }));
+  File.writeTextFile(salida + "/piastropilot_wbpp.json", JSON.stringify({ inicio: inicio.toISOString(), ficheros: files.length, parametros: par }));
   if (!ExternalProcess.startDetached(CoreApplication.filePath, ["-n", "--automation-mode", "--no-focus-stealing", "-r=" + r.join(","), "--force-exit"]))
     throw new Error("No se pudo arrancar la segunda instancia de PixInsight");
   return { salida: salida, ficheros: files.length, lights: ppList(o.lights).length, inicio: inicio.toISOString(), parametros: par,

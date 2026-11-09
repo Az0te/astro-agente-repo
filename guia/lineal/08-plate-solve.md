@@ -28,8 +28,8 @@ Con pistas: `"opciones": {"pistas": {"minScale": 1.8, "maxScale": 2.3}}` (escala
 **Si falla**
 
 - Repetir `resolverAstrometria` con la pista de escala del perfil (`minScale`/`maxScale`) y, si se conoce el centro (cabecera `RA`/`DEC` o el objeto), con `regionRA`/`regionDec`/`regionRadius`.
-- Si dice que `blindSolve` no está disponible, la función no está corriendo con el runner de picopilot: parar y avisar. No sustituirlo por ImageSolver, por copias de solución ni por traslados manuales.
+- Si dice que `blindSolve` no está disponible, la función no está corriendo con el runner de piastropilot: parar y avisar. No sustituirlo por ImageSolver, por copias de solución ni por traslados manuales.
 
-**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Funciona igual desde el MCP `picopilot` y desde el panel PiCopilot.
+**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Funciona igual desde el MCP `piastropilot` y desde el panel PiAstroPilot.
 
 **Control.** `hasAstrometricSolution === true` **después** de cada paso que pueda romperla (BXT, GraXpert; crop y rotación sólo antes de 1.9.6); si se ha perdido, volver a pedir `resolverAstrometria`.

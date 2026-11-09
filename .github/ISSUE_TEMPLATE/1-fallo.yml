@@ -1,5 +1,5 @@
 name: "🐞 Fallo / Bug"
-description: "Un paso de PiCopilot, de la guía o del puente MCP falla o da un resultado raro. / A step fails or gives an odd result."
+description: "Un paso de PiAstroPilot, de la guía o del puente MCP falla o da un resultado raro. / A step fails or gives an odd result."
 title: "[Fallo] "
 labels: ["fallo"]
 body:
@@ -13,7 +13,7 @@ body:
     attributes:
       label: "Parte del proyecto / Component"
       options:
-        - "PiCopilot (módulo / module)"
+        - "PiAstroPilot (módulo / module)"
         - "Guía / Guide (guia/)"
         - "Funciones de la guía / Guide functions (guia/herramientas)"
         - "Servidor MCP / watcher"
@@ -64,7 +64,7 @@ body:
     id: version
     attributes:
       label: "Versiones / Versions"
-      description: "PixInsight, sistema operativo, build de PiCopilot o commit de la guía."
+      description: "PixInsight, sistema operativo, build de PiAstroPilot o commit de la guía."
       placeholder: "PixInsight 1.9.6, Windows 11, build99"
     validations:
       required: true

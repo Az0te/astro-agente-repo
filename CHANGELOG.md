@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+- **PiCopilot pasa a llamarse PiAstroPilot** (9 nov 2026): ya existe otro producto «PI Copilot». Cambian la carpeta (`piastropilot/`), los ficheros y clases del módulo (`PiAstroPilot*.cpp`, `PiAstroPilot-pxm`), el script (`PiAstroPilotLite.js`, menú *Script > PiAstroPilot*), el servidor MCP (`piastropilot-mcp`, herramientas `mcp__piastropilot__*`, runner `piastropilot-runner.js`, datos en `~/.piastropilot`), las variables `PIASTROPILOT_*` y las claves de ajustes (los ajustes guardados con el nombre antiguo no se leen).
+
+- **Sin código generado por el modelo** (9 nov 2026, licencia PCL cláusula c): los modelos sólo proponen llamadas a funciones de la guía, validadas contra el manifiesto; fuera `run_script`, el contrato de la API PJSR y los bloques PJSR de las fichas. En Lite, fuera «Ejecutar sin preguntar» y «Procesado completo».
+
 - **SKILL.md revisado** (9 nov 2026).
   - Tabla única «Funciones por paso» con todas las herramientas del manifiesto (en negrita las que comparan) en lugar del párrafo largo por fichero; secciones nuevas «Vistas e ids», «Internet» y «Siguiente paso», que antes sólo llevaban los prompts de Lite y del módulo.
   - Regla 3 con ArcsinhStretch (lo compara `estirarCandidatos`), el STF y el tipo de objeto antes de estirar; nueva regla «Comparar siempre»; aclarado que el `run_script` retirado es el del MCP antiguo y no el de `picopilot`.

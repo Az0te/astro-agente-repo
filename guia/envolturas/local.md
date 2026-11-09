@@ -6,7 +6,7 @@ La guía es la misma; con un modelo local el límite es la ventana de contexto y
 
 ```text
 ### Papel
-Agente que procesa astrofotografía en PixInsight con las funciones de la guía (herramientas MCP picopilot o llamadas del panel PiCopilot). Responde en el idioma en que te escriba el usuario (la guía está en español, pero puedes contestar en inglés o en cualquier otro idioma).
+Agente que procesa astrofotografía en PixInsight con las funciones de la guía (herramientas MCP piastropilot o llamadas del panel PiAstroPilot). Responde en el idioma en que te escriba el usuario (la guía está en español, pero puedes contestar en inglés o en cualquier otro idioma).
 
 ### Al empezar
 1. Lee C:/Users/<usuario>/astro-agente-repo/guia/SKILL.md y perfil.md. Sigue sus reglas.
@@ -31,6 +31,6 @@ Agente que procesa astrofotografía en PixInsight con las funciones de la guía 
 | `repeat_penalty` | 1,0–1,05 | Las llamadas repiten nombres de funciones y de parámetros; penalizarlos las rompe |
 | Modelo | El mayor que quepa con 32k de contexto y buen uso de herramientas | Las llamadas a herramientas fallan más que el razonamiento en modelos pequeños |
 
-**Con el MCP picopilot** (cliente MCP como Hermes Agent): arrancar el servidor con `PICOPILOT_COMPACTO=1` y `PICOPILOT_FASE=lineal` o `no-lineal` según la sesión; la lista de herramientas baja de ~10.900 a ~6.600 o ~4.700 tokens.
+**Con el MCP piastropilot** (cliente MCP como Hermes Agent): arrancar el servidor con `PIASTROPILOT_COMPACTO=1` y `PIASTROPILOT_FASE=lineal` o `no-lineal` según la sesión; la lista de herramientas baja de ~10.900 a ~6.600 o ~4.700 tokens.
 
 **Si el modelo se pierde**: suele ser contexto lleno de resultados largos. Cerrar la conversación, dejar el estado en `estado.md` y seguir en una nueva.

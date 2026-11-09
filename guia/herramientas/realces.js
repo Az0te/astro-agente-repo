@@ -13,7 +13,7 @@
 // Validación: con los mismos parámetros, el resultado es idéntico píxel a píxel (diferencia máxima 0) al
 // de cada script original, en imágenes RGB lineales y no lineales (PixInsight 1.9.6).
 //
-// Uso: el runner del MCP picopilot y los scripts de PiCopilot lo incluyen con #include.
+// Uso: el runner del MCP piastropilot y los scripts de PiAstroPilot lo incluyen con #include.
 // Con el watcher clásico:
 //   eval(File.readTextFile("<carpeta del repo>/guia/herramientas/realces.js"));
 //   starStretch("Stars", { amount: 2 });                       // capa de estrellas LINEAL

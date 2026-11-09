@@ -538,8 +538,8 @@ function estirarEstrellas(viewId, o) {
   o = o || {};
   var sat = o.saturacion || 1;
   var metodo = String(o.metodo || (o.amount !== undefined ? "starstretch" : "asinh")).toLowerCase();
-  if (metodo === "starstretch" && typeof starStretch !== "function" && typeof PICOPILOT_GUIA === "string")
-    try { eval.call(null, File.readTextFile(PICOPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
+  if (metodo === "starstretch" && typeof starStretch !== "function" && typeof PIASTROPILOT_GUIA === "string")
+    try { eval.call(null, File.readTextFile(PIASTROPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
   if (metodo === "starstretch" && typeof starStretch !== "function") throw new Error("starStretch no está cargado (herramientas/realces.js)");
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
@@ -644,8 +644,8 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   o = o || {};
   var rec = ES_OPS[starlessStId];
   if (!rec) throw new Error("no hay registro del estirado de " + starlessStId + " (sólo con el modo al fallo)");
-  if (typeof screenStarsExtract !== "function" && typeof PICOPILOT_GUIA === "string")
-    try { eval.call(null, File.readTextFile(PICOPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
+  if (typeof screenStarsExtract !== "function" && typeof PIASTROPILOT_GUIA === "string")
+    try { eval.call(null, File.readTextFile(PIASTROPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
   if (typeof screenStarsExtract !== "function") throw new Error("screenStarsExtract no está cargado (herramientas/realces.js)");
   var stv = View.viewById(starsLinId);
   if (!stv || stv.isNull) throw new Error("No existe la vista " + starsLinId);

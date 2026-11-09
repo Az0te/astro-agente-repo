@@ -1,6 +1,6 @@
 {
  "version": 1,
- "nota": "resumen: versión corta de la descripción para clientes con poco contexto (PICOPILOT_COMPACTO=1, modelos locales). Funciones de la guía que el MCP picopilot ofrece como herramientas. El runner (mcp/pjsr/picopilot-runner.js) solo ejecuta las que tiene en su lista blanca (LISTA); este fichero describe sus parámetros para el modelo. Niveles: lectura (no cambia nada), copias (crea vistas nuevas, no toca las de entrada), vista (cambia la vista indicada, con historial), disco (lee o escribe ficheros), libre (código arbitrario, apagado por defecto).",
+ "nota": "resumen: versión corta de la descripción para clientes con poco contexto (PIASTROPILOT_COMPACTO=1, modelos locales). Funciones de la guía que el MCP piastropilot ofrece como herramientas. El runner (mcp/pjsr/piastropilot-runner.js) solo ejecuta las que tiene en su lista blanca (LISTA); este fichero describe sus parámetros para el modelo. Niveles: lectura (no cambia nada), copias (crea vistas nuevas, no toca las de entrada), vista (cambia la vista indicada, con historial), disco (lee o escribe ficheros), libre (código arbitrario, apagado por defecto).",
  "funciones": [
   {
    "nombre": "ping",
@@ -100,7 +100,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { lado: 1600, rect: [x0, y0, x1, y1] (recorte; al 100 % si cabe en lado), estirar: \"auto\" | true | false, enlazado: true (false = STF por canal), fichero: ruta .jpg (por defecto ~/.picopilot/previas/<vista>[_x0_y0].jpg) }"
+      "description": "Opcional. { lado: 1600, rect: [x0, y0, x1, y1] (recorte; al 100 % si cabe en lado), estirar: \"auto\" | true | false, enlazado: true (false = STF por canal), fichero: ruta .jpg (por defecto ~/.piastropilot/previas/<vista>[_x0_y0].jpg) }"
      }
     },
     "required": [

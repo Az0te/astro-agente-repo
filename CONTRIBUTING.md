@@ -2,13 +2,13 @@
 
 *[English version below](#how-to-contribute)*
 
-Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y el módulo PiCopilot) ha crecido a partir de sesiones reales de procesado, casi todas con un solo equipo. Lo que más falta ahora son **datos y resultados de otros equipos, otros cielos y otros tipos de objeto**. No hace falta saber programar para aportar mucho.
+Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y el módulo PiAstroPilot) ha crecido a partir de sesiones reales de procesado, casi todas con un solo equipo. Lo que más falta ahora son **datos y resultados de otros equipos, otros cielos y otros tipos de objeto**. No hace falta saber programar para aportar mucho.
 
 ## Qué aportar, de más útil a menos
 
 1. **Casos de prueba reales.** Masters (o recortes) de tipos de objeto que aún no se han probado, con su equipo, filtro y cámara. La guía mejora por tipo de objeto, y cada caso nuevo sirve para comprobar o corregir sus valores de partida.
-2. **Fallos con su registro.** Cuando un paso de PiCopilot o de la guía falle o dé un resultado raro, el registro del panel (o de la consola de PixInsight) y una captura valen más que cualquier descripción.
-3. **Comparativas.** Tu procesado manual al lado del de PiCopilot con los mismos datos. Sirven para calibrar los umbrales: nivel de cielo, ruido, moteado de color, aporte de estrellas, etc.
+2. **Fallos con su registro.** Cuando un paso de PiAstroPilot o de la guía falle o dé un resultado raro, el registro del panel (o de la consola de PixInsight) y una captura valen más que cualquier descripción.
+3. **Comparativas.** Tu procesado manual al lado del de PiAstroPilot con los mismos datos. Sirven para calibrar los umbrales: nivel de cielo, ruido, moteado de color, aporte de estrellas, etc.
 4. **Pruebas con otros modelos y equipos.** Codex, otros modelos locales, otras GPU, Seestar u otros telescopios inteligentes, OSC frente a mono, macOS o Linux, otra versión de PixInsight.
 5. **Correcciones y mejoras de la guía**, por *pull request* (ver las reglas más abajo).
 6. **Traducciones** y, más adelante, **código** del módulo o del servidor MCP.
@@ -35,7 +35,7 @@ Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y
 
 ## Reglas para código
 
-- PiCopilot es un módulo PCL en C++; el servidor MCP está en TypeScript; los scripts y las funciones de la guía (`guia/herramientas/*.js`) son PJSR. Sigue el estilo del fichero que toques.
+- PiAstroPilot es un módulo PCL en C++; el servidor MCP está en TypeScript; los scripts y las funciones de la guía (`guia/herramientas/*.js`) son PJSR. Sigue el estilo del fichero que toques.
 - Prueba el cambio en PixInsight antes de abrir la *pull request* y di con qué versión (por ejemplo, 1.9.6 en Windows 11).
 - El módulo y la guía van juntos: si cambias la firma de una función de `guia/herramientas/`, actualiza `manifiesto.json` y lo que la use.
 - **Reglas CPD de PixInsight.** PixInsight endurece sus reglas para módulos y scripts de terceros (en vigor el 12 de diciembre de 2026), entre ellas la firma de código. Léelas en el foro oficial de PixInsight. No propongas cambios que dependan de saltarse esas reglas. Si tienes dudas sobre si algo las cumple, pregúntalo en *Discussions* antes de programarlo.
@@ -45,7 +45,7 @@ Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y
 
 Al aportar aceptas que tu contribución se publique con la licencia de la parte del proyecto que tocas:
 
-- Código (`mcp/`, `picopilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). El puente anterior (`watcher/`, `servidor-mcp/`), ya retirado y solo en el historial de Git, era MIT de Alain Escaffre (original) y Rafael Vidal (modificaciones).
+- Código (`mcp/`, `piastropilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). El puente anterior (`watcher/`, `servidor-mcp/`), ya retirado y solo en el historial de Git, era MIT de Alain Escaffre (original) y Rafael Vidal (modificaciones).
 - Guía (`guia/`): **CC BY-SA 4.0** ([`guia/LICENSE.md`](guia/LICENSE.md)).
 
 Las imágenes y datos que enlaces siguen siendo tuyos; solo se usarán como digas en la *issue*.
@@ -58,13 +58,13 @@ Sé amable y concreto. Aquí se aprende de los fallos, también de los de la gu�
 
 # How to contribute
 
-Thanks for wanting to help. This project (the processing guide, the MCP bridge and the PiCopilot module) grew out of real processing sessions, almost all with a single rig. What it needs most now is **data and results from other rigs, other skies and other object types**. You do not need to code to make a big contribution.
+Thanks for wanting to help. This project (the processing guide, the MCP bridge and the PiAstroPilot module) grew out of real processing sessions, almost all with a single rig. What it needs most now is **data and results from other rigs, other skies and other object types**. You do not need to code to make a big contribution.
 
 ## What to contribute, most useful first
 
 1. **Real test cases.** Masters (or crops) of object types that have not been tested yet, with telescope, filter and camera. The guide improves per object type, and each new case checks or corrects its starting values.
-2. **Bugs with their log.** When a PiCopilot or guide step fails or gives an odd result, the panel log (or the PixInsight console) and a screenshot are worth more than any description.
-3. **Comparisons.** Your manual processing next to PiCopilot's on the same data. They are used to calibrate thresholds: sky level, noise, colour mottle, star contribution, etc.
+2. **Bugs with their log.** When a PiAstroPilot or guide step fails or gives an odd result, the panel log (or the PixInsight console) and a screenshot are worth more than any description.
+3. **Comparisons.** Your manual processing next to PiAstroPilot's on the same data. They are used to calibrate thresholds: sky level, noise, colour mottle, star contribution, etc.
 4. **Tests with other models and hardware.** Codex, other local models, other GPUs, Seestar or other smart telescopes, OSC vs mono, macOS or Linux, other PixInsight versions.
 5. **Guide fixes and improvements** by pull request (see the rules below).
 6. **Translations** and, later on, **code** for the module or the MCP server.
@@ -93,7 +93,7 @@ Issues can be written in English or Spanish.
 
 ## Rules for code
 
-- PiCopilot is a C++ PCL module; the MCP server is TypeScript; the guide's scripts and functions (`guia/herramientas/*.js`) are PJSR. Follow the style of the file you touch.
+- PiAstroPilot is a C++ PCL module; the MCP server is TypeScript; the guide's scripts and functions (`guia/herramientas/*.js`) are PJSR. Follow the style of the file you touch.
 - Test the change in PixInsight before opening the pull request and say which version (e.g. 1.9.6 on Windows 11).
 - The module and the guide go together: if you change the signature of a function in `guia/herramientas/`, update `manifiesto.json` and its callers.
 - **PixInsight CPD rules.** PixInsight is tightening its rules for third-party modules and scripts (in force from 12 December 2026), including code signing. Read them on the official PixInsight forum. Do not propose changes that rely on getting around those rules. If unsure, ask in Discussions before coding.
@@ -103,7 +103,7 @@ Issues can be written in English or Spanish.
 
 By contributing you agree that your contribution is published under the licence of the part of the project you change:
 
-- Code (`mcp/`, `picopilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). The previous bridge (`watcher/`, `servidor-mcp/`), now retired and only in the Git history, was MIT by Alain Escaffre (original) and Rafael Vidal (modifications).
+- Code (`mcp/`, `piastropilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). The previous bridge (`watcher/`, `servidor-mcp/`), now retired and only in the Git history, was MIT by Alain Escaffre (original) and Rafael Vidal (modifications).
 - Guide (`guia/`): **CC BY-SA 4.0** ([`guia/LICENSE.md`](guia/LICENSE.md)).
 
 Images and data you link to remain yours; they will only be used as you state in the issue.

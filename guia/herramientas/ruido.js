@@ -170,7 +170,7 @@ function rdModeloML(o) {
   var m = o && (o.modeloML || o.modelo);
   if (m && File.exists(m)) return m;
   try {
-    var g = (typeof PICOPILOT_GUIA === "string") ? PICOPILOT_GUIA : null;
+    var g = (typeof PIASTROPILOT_GUIA === "string") ? PIASTROPILOT_GUIA : null;
     if (g && File.exists(g + "/perfil.md")) {
       var x = /[A-Za-z]:[\\\/][^\s`"'<>|*?]*\.xmlm/.exec(File.readTextFile(g + "/perfil.md"));
       if (x && File.exists(x[0].replace(/\\/g, "/"))) return x[0].replace(/\\/g, "/");
