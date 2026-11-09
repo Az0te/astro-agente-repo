@@ -9,7 +9,7 @@ It includes these parts:
 - **[PiCopilot Lite](picopilot/script/README.en.md)** (`picopilot/script/PiCopilotLite.js`): **the easiest way to start**. It is a PixInsight script, with nothing to build or sign: chat with the assistant (local Ollama, Claude Code or Codex), the guide's functions already loaded, method comparison, object information from the internet, and voice. Its window and replies can be switched to English (Settings > Language). See [Getting started with PiCopilot Lite](#getting-started-with-picopilot-lite).
 - **[PiCopilot](picopilot/README.md)** (`picopilot/`): a native PixInsight module that docks an AI assistant in a side panel without blocking PixInsight. It has one button per guide step, a chat with tables and previews, and works with Claude Code, Codex or a local model (Ollama). It comes with this repository's guide; for now you have to build it and sign it with your own developer keys.
 - **picopilot MCP server** (`mcp/`): the bridge between the AI and PixInsight. It offers the guide's functions as tools and runs them in the PixInsight instance you have open (IPC `PixInsight.exe -x=`), with no watched folder and no `eval`. Details in [`mcp/README.md`](mcp/README.md).
-- **Processing guide** (`guia/`): a detailed manual, in Spanish, that Claude loads as a *skill*. The assistant answers in the language you ask in (English or any other), even though the guide is in Spanish. It follows the workflow: 17 steps of the linear phase, 11 of the non-linear phase and appendices (PJSR API, quality checks, anti-patterns, workflows by object type, glossary); each step is a file with the why, the parameters, the code and the check to verify it. It is the main part: it gathers techniques, traps, starting values and quality checks learned in real processing sessions.
+- **Processing guide** (`guia/`): a detailed manual, in Spanish, that Claude loads as a *skill*. The assistant answers in the language you ask in (English or any other), even though the guide is in Spanish. It follows the workflow: 17 steps of the linear phase, 11 of the non-linear phase and appendices (script equivalents, quality checks, anti-patterns, workflows by object type, glossary); each step is a file with the why, the parameters, the guide function that does it and the check to verify it. It is the main part: it gathers techniques, traps, starting values and quality checks learned in real processing sessions.
 
 ## Principle
 
@@ -79,7 +79,7 @@ With PixInsight open, ask the assistant for the step you want (or use the [PiCop
 
 ## ⚠️ Security
 
-The picopilot MCP server does not run arbitrary code: each request carries only the name of a function and its parameters, and the runner checks a token (`~/.picopilot/token`) and a whitelist before running it. There is no tool that runs free code. Even so:
+The picopilot MCP server does not run arbitrary code: each request carries only the name of a function and its parameters, and the runner checks a token (`~/.picopilot/token`) and a whitelist before running it. There is no tool that runs free code. The same goes for PiCopilot and PiCopilot Lite: **no model writes or runs PixInsight code**; with local models, the model proposes calls to guide functions (name and parameters), which are checked against the manifest (`guia/herramientas/manifiesto.json`) before any of them runs. Even so:
 
 - do not share or sync the `~/.picopilot` folder with cloud services;
 - review what the AI does, especially before saving or overwriting files.
