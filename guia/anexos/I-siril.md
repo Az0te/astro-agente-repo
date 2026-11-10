@@ -55,7 +55,7 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 | 9 Gradiente | `gradienteCandidatos` → `aplicarCandidato` | `subsky` polinomio 1 y 2, `subsky -rbf`, GraXpert IA | `copia_objeto`, `objeto_quitado_pct`, `gradiente_restante`, `irregularidad_cielo`, `objeto_campo_pct` |
 | 11/13 Deconvolución | `nitidezLineal` | BlurX por `rc-astro bxt` (solo corregir o completa) | FWHM y redondez antes y después |
 | 12 Color | `listaSPCC`, `calibrarColor` | `spcc` (sensor, filtro y blanco del perfil con los nombres que da `listaSPCC`) | cielo por canal antes y después, `dominante_cielo_pct` |
-| 14 Ruido suave | `reducirRuidoCandidatos` | `denoise` a 0,5 / 0,7 / 1,0 (DA3D sólo si es rápido o se pide) y NoiseX 0,3 / 0,5 / 0,7 / 0,9 por `rc-astro nxt` (si está) | `ruido_rel`, `ruido_grueso_rel`, `detalle_perdido_pct`; ★ = la que más ruido quita con ≤ 2 % de detalle perdido y sin recortes |
+| 14 Ruido suave | `reducirRuidoCandidatos` | `denoise` a 0,5 / 0,7 / 1,0 (DA3D sólo si es rápido o se pide) y NoiseX 0,5, 0,3 ×2 y 0,5 ×2 por `rc-astro nxt` (si está) | `ruido_rel`, `ruido_grueso_rel`, `detalle_perdido_pct`; ★ = la que más ruido quita con ≤ 2 % de detalle perdido y sin recortes |
 | 15 Estrellas | `estrellasCandidatos` → `aplicarCandidato` | StarNet2 (ejecutable directo) y StarX (`rc-astro sxt`) | `restos_estrellas_pct`, `agujeros_pct`, `objeto_quitado_pct`; ruta de la capa de estrellas |
 | 15 Estrellas (uno solo) | `separarEstrellas` | `starnet` de Siril o StarNet2 directo | starless cargada, capa de estrellas en fichero |
 
@@ -69,7 +69,7 @@ Notas de la fase lineal:
 
 | Paso | Herramienta | Con qué en Siril | Medidas que devuelve |
 |---|---|---|---|
-| 1 Estirado | `estirarCandidatos` → `aplicarCandidato` | `ght` por pasadas cortas (suave y medio: al 60 y 80 % del ruido límite; fuerte: al fallo), `asinh` al fallo, `autostretch`; punto negro por canal | `cielo`, `ruido_rel`, `separacion`, `dominante_cielo_pct`, `cero_pct`, `alto_pct`, `no_cumple` |
+| 1 Estirado | `estirarCandidatos` → `aplicarCandidato` | `ght -even` (conserva el color) por pasadas cortas (suave y medio: al 60 y 80 % del ruido límite; fuerte: al fallo; y con la simetría en la señal débil), `asinh` al fallo, `autostretch`; punto negro por canal | `cielo`, `ruido_rel`, `separacion`, `dominante_cielo_pct`, `cero_pct`, `alto_pct`, `no_cumple` |
 | 2 Paleta | `paletasCandidatos` → `aplicarCandidato` | desde la dual band cargada (Hα = R, OIII = media de G y B) o desde ficheros de capas estiradas: HOO, HOO suave, HOO con OIII realzado, HOO dinámica, SHO con SII | `separacion_tonos_grados`, `verde_residual_pct`, `sat_objeto`, `dominante_cielo_pct` |
 | 3 SCNR | `quitarVerde` | `rmgreen` (sólo si el verde del cielo sobra) | cielo RGB antes y después |
 | 5 Contraste | `contrasteCandidatos` → `aplicarCandidato` | `clahe` 1,5 y 2,5; `wavelet` + `wrecons` (escalas medias); `unsharp` | `contraste_ganado_pct`, `ruido_rel`, recortes |
