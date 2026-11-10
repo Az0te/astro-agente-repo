@@ -5,6 +5,7 @@ Copia este fichero como `perfil.md` y rellénalo. El agente lo lee antes de proc
 ## Equipo
 - Telescopio y focal: _(p. ej. refractor 106 mm, FOCALLEN ≈ 509 mm)_
 - Cámara(s): _(modelo, sensor, tamaño de píxel, OSC o mono, Bayer)_
+- Captura: _(gain y offset habituales; e⁻/ADU, ruido de lectura y pozo a ese gain, de la ficha del fabricante o medidos con bias y flats; los usan los cálculos de SNR y de exposición óptima)_
 - Escala de muestreo: _(″/px nativa y con drizzle si lo usas)_
 - Montura:
 - Filtros: _(sin filtro, dual band Hα/OIII, tribanda, LRGB, banda estrecha… y su anchura)_
