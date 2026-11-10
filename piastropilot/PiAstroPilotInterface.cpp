@@ -990,8 +990,11 @@ static void CollectGuidePreviews( const JsonValue& o, std::vector<std::pair<Stri
          if ( come.type == JsonValue::Number )
             label << Tr( u" · come " ) << come.ToText() << u" %";
       }
+      // Ruido y contraste: nombres neutros (ruido_rel = después/antes, contraste_ganado_pct) con los antiguos de respaldo.
       if ( o["ruido_baja_pct"].type == JsonValue::Number ) label << Tr( u" · ruido −" ) << o["ruido_baja_pct"].ToText() << u" %";
-      if ( o["contraste_x"].type == JsonValue::Number ) label << Tr( u" · contraste ×" ) << o["contraste_x"].ToText();
+      else if ( o["ruido_rel"].type == JsonValue::Number ) label << Tr( u" · ruido ×" ) << o["ruido_rel"].ToText();
+      if ( o["contraste_ganado_pct"].type == JsonValue::Number ) label << Tr( u" · contraste +" ) << o["contraste_ganado_pct"].ToText() << u" %";
+      else if ( o["contraste_x"].type == JsonValue::Number ) label << Tr( u" · contraste ×" ) << o["contraste_x"].ToText();
       {
          const JsonValue& sep = o["separacion"].type == JsonValue::Number ? o["separacion"] : o["senal_debil_en_ruidos"];
          if ( sep.type == JsonValue::Number ) label << Tr( u" · señal débil " ) << sep.ToText();

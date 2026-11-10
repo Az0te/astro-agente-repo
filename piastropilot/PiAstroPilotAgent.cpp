@@ -891,14 +891,19 @@ String PiAstroPilotPrompts::Step( const PiAstroPilotConfig& cfg, const PiAstroPi
                            : String( u" Lee también el estado.md que dejó el checkpoint lineal (Paso 17) en la "
                                      u"carpeta de la versión; si no lo encuentras, dilo y sigue con lo que veas abierto." ))
            << u"\n";
-      s << u"\n1) Lee el núcleo de la guía (" << PiAstroPilotUtil::JoinPath( cfg.guideDir, "SKILL.md" )
-        << u") y perfil.md si aún no los has leído en esta sesión, y la ficha del paso (" << guideFile
-        << u") y su apartado del Anexo J (anexos/J-pixinsight.md: funciones y procesos de PixInsight del paso). "
+      s << u"\n1) Lee el núcleo común de la guía (" << PiAstroPilotUtil::JoinPath( cfg.guideDir, "SKILL.md" )
+        << u", skill astro-procesado, neutra para PixInsight y Siril), el arranque del Anexo J ("
+        << PiAstroPilotUtil::JoinPath( cfg.guideDir, "anexos/J-pixinsight.md" )
+        << u", sección «Arranque en PixInsight»: funciones por paso y nombres de PixInsight de las técnicas neutras) y perfil.md "
+           u"si aún no los has leído en esta sesión; después la ficha del paso (" << guideFile
+        << u") y su apartado del Anexo J ("
+        << PiAstroPilotUtil::JoinPath( cfg.guideDir, step.linear ? "anexos/J-pixinsight/lineal.md" : "anexos/J-pixinsight/no-lineal.md" )
+        << u": funciones y procesos de PixInsight del paso). "
            u"Los ficheros de detalle/ y los demás anexos, sólo si la ficha no basta. "
            u"Sigue su método predeterminado y sus ajustes de partida.\n"
         << u"2) Ejecuta el paso sobre la vista indicada con las herramientas MCP de PiAstroPilot (mcp__piastropilot__*): "
            u"cada función de la guía es una herramienta con el mismo nombre (analizarMaster, gradienteCandidatos, "
-           u"estirarAlFallo...). Si una tarda más de 45 s devuelve un trabajo: recógelo con estado(trabajo). "
+           u"estirarCandidatos...). Si una tarda más de 45 s devuelve un trabajo: recógelo con estado(trabajo). "
            u"Trabaja sobre una copia cuando la guía lo aconseje y no cierres ni sobrescribas la original sin decirlo.\n"
         << u"3) Mide antes y después (estadisticas, previa y las métricas que pida la guía) y comprueba el resultado.\n"
         << u"4) Termina con un resumen breve: qué hiciste, con qué parámetros, qué mediste y qué vistas nuevas existen."
@@ -1014,6 +1019,7 @@ String PiAstroPilotPrompts::Full( const PiAstroPilotConfig& cfg, const PiAstroPi
    s << u"Tarea de PiAstroPilot: RESOLUCIÓN COMPLETA.\n"
      << u"Imagen objetivo en PixInsight: vista " << ViewText( viewId ) << u".\n\n"
      << u"Procesa la imagen de principio a fin siguiendo la guía (" << PiAstroPilotUtil::JoinPath( cfg.guideDir, "SKILL.md" )
+     << u", con el arranque del Anexo J: " << PiAstroPilotUtil::JoinPath( cfg.guideDir, "anexos/J-pixinsight.md" )
      << u"): primero los pasos de la fase lineal que apliquen y después los de la fase no lineal, en orden.\n"
      << u"- Antes de empezar analiza el objeto y los datos y di qué pasos aplican y cuáles no (y por qué).\n"
      << u"- Mide antes y después de cada paso y para si una medida indica un problema.\n"

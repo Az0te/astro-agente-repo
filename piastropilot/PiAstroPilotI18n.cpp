@@ -201,6 +201,8 @@ static const std::map<String, String>& Table()
       { u"Gradiente quitado (modelo)", u"Removed gradient (model)" },
       { u" · ruido −", u" · noise −" },
       { u" · contraste ×", u" · contrast ×" },
+      { u" · ruido ×", u" · noise ×" },
+      { u" · contraste +", u" · contrast +" },
       { u" · señal débil ", u" · faint signal " },
       { u"Escuchando… (parar)", u"Listening… (stop)" },
       { u"<p>Abre el dictado de Windows (Win + H) con el cursor en el Prompt: lo que dices se escribe ahí. "
