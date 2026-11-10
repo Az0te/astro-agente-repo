@@ -13,7 +13,7 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 
 | Paso | Herramientas |
 |---|---|
-| L1 Análisis | `analizarMaster`, `estrellas` |
+| L1 Análisis | `analizarMaster`, `estrellas`; con internet `documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` |
 | L5 Recorte | `recortarBordes` |
 | L8 Astrometría | `resolverAstrometria` |
 | L9 Gradiente | **`gradienteCandidatos`** → `aplicarCandidato` |
@@ -22,23 +22,26 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 | L14 Ruido suave | **`reducirRuidoCandidatos`** → `aplicarCandidato` |
 | L15 Estrellas | **`estrellasCandidatos`** → `aplicarCandidato`, o `separarEstrellas` |
 | NL1 Estirado | **`estirarCandidatos`** → `aplicarCandidato` |
+| NL2 Paleta (banda estrecha) | **`paletasCandidatos`** → `aplicarCandidato` |
 | NL3 Verde | `quitarVerde` |
 | NL5 Realces | **`contrasteCandidatos`**, **`saturacionCandidatos`** → `aplicarCandidato` |
 | NL6 Ruido final | **`reducirRuidoCandidatos`** → `aplicarCandidato` |
 | NL9 Recombinación | `recombinarEstrellas` |
 | NL10 Exportación | `exportarFinal` |
-| Sin herramienta | L2–L4, L6, L7, L10, L16, L17, NL2, NL4, NL7, NL8, NL11: la ficha, con `comandoSiril` para lo que esté en la lista blanca |
+| Sin herramienta | L2–L4, L6, L7, L10, L16, L17, NL4, NL7, NL8, NL11: la ficha, con `comandoSiril` para lo que esté en la lista blanca |
 
 **Siempre disponibles:** `ping`, `imagen` (datos de la imagen cargada), `estadisticas`, `previa`, `registro` (consola de Siril), `abrirImagen`, `guardarImagen`, `deshacer`, `rehacer`, `comandoSiril`, `estado` (trabajos largos), `medirRendimiento`.
 
-**Internet.** Siril no tiene herramientas de internet propias: la ficha del objeto, sólo con las búsquedas del cliente y con Internet activado en el chat.
+**Internet.** `documentarObjeto` (identifica el objeto por OBJECT o por la astrometría y junta tipo, señal esperada, resumen y estrellas brillantes del campo), `simbad`, `wikipedia` y `leerWeb` (sólo https). Sólo con la casilla Internet del chat marcada; si no, se niegan: no reintentar.
+
+**Guardar.** Siril abre XISF pero no lo guarda: las versiones van en `.fit` (32 bits en coma flotante, como el master).
 
 ## Cómo funciona
 
 - Siril tiene **una sola imagen cargada**: no hay vistas ni ids. Las herramientas trabajan siempre sobre ella; valores en 0–1, coordenadas como en pantalla.
-- Las herramientas **…Candidatos** comparan sin tocar la imagen: aplican cada candidato, lo miden, lo guardan aparte y dejan la imagen como estaba. El elegido se pone con `aplicarCandidato(id)` (exactamente el que se midió, con deshacer). Si la imagen cambió entre medias, se niega.
+- Las herramientas **…Candidatos** comparan sin tocar la imagen: aplican cada candidato, lo miden, lo guardan aparte (con una miniatura del resultado y otra de lo que quita, para la galería del chat) y dejan la imagen como estaba. El elegido se pone con `aplicarCandidato(id)` (exactamente el que se midió, con deshacer). Si la imagen cambió entre medias, se niega.
 - Las que cambian la imagen dejan deshacer (`deshacer`, `rehacer`). Guardar cada versión con `guardarImagen` (nunca sobre el master) antes del paso siguiente.
-- `previa` da un JPG con el autoestirado de Siril (o un recorte al 100 % con `rect`) para mirar; `estadisticas` mide; `registro` enseña la consola de Siril cuando algo falla.
+- `previa` da un JPG con el autoestirado de Siril (o un recorte al 100 % con `rect`) para mirar; en lineal, por canal (un master sin calibrar sale azul o verde con el enlazado); `estadisticas` mide; `registro` enseña la consola de Siril cuando algo falla.
 - `comandoSiril` ejecuta un comando de procesado de una lista blanca (nada que cargue, guarde o lance scripts). Sólo para lo que no tenga herramienta.
 - Programas externos que se usan si están instalados: GraXpert (fondo), StarNet2 y StarX (estrellas), y la IA de RC Astro por su programa de línea de comandos (`rc-astro`: StarX, NoiseX, BlurX, con la licencia que ya se tenga).
 
@@ -66,7 +69,8 @@ Notas de la fase lineal:
 
 | Paso | Herramienta | Con qué en Siril | Medidas que devuelve |
 |---|---|---|---|
-| 1 Estirado | `estirarCandidatos` → `aplicarCandidato` | `ght` por pasadas cortas al fallo, `asinh` al fallo, `autostretch`; punto negro por canal | `cielo`, `ruido_rel`, `separacion`, `dominante_cielo_pct`, `cero_pct`, `alto_pct`, `no_cumple` |
+| 1 Estirado | `estirarCandidatos` → `aplicarCandidato` | `ght` por pasadas cortas (suave y medio: al 60 y 80 % del ruido límite; fuerte: al fallo), `asinh` al fallo, `autostretch`; punto negro por canal | `cielo`, `ruido_rel`, `separacion`, `dominante_cielo_pct`, `cero_pct`, `alto_pct`, `no_cumple` |
+| 2 Paleta | `paletasCandidatos` → `aplicarCandidato` | desde la dual band cargada (Hα = R, OIII = media de G y B) o desde ficheros de capas estiradas: HOO, HOO suave, HOO con OIII realzado, HOO dinámica, SHO con SII | `separacion_tonos_grados`, `verde_residual_pct`, `sat_objeto`, `dominante_cielo_pct` |
 | 3 SCNR | `quitarVerde` | `rmgreen` (sólo si el verde del cielo sobra) | cielo RGB antes y después |
 | 5 Contraste | `contrasteCandidatos` → `aplicarCandidato` | `clahe` 1,5 y 2,5; `wavelet` + `wrecons` (escalas medias); `unsharp` | `contraste_ganado_pct`, `ruido_rel`, recortes |
 | 5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | `satu` 0,25 / 0,5 / 0,75 con factor de fondo 1 | `sat_objeto`, `sat_cielo`, `dominante_cielo_pct`, recortes |
@@ -82,4 +86,4 @@ Notas de la fase no lineal:
 
 ## Pasos sin herramienta propia en Siril
 
-Preprocesado y apilado (fase lineal 2–4, 6–7), combinación de canales y paletas (lineal 10, no lineal 2), HDR, máscaras (no lineal 4), núcleo de galaxias y dossier: con los scripts y comandos de Siril a mano (`comandoSiril` para lo que esté en la lista blanca), siguiendo los criterios de la ficha.
+Preprocesado y apilado (fase lineal 2–4, 6–7), combinación de canales (lineal 10), HDR, máscaras (no lineal 4), núcleo de galaxias y dossier: con los scripts y comandos de Siril a mano (`comandoSiril` para lo que esté en la lista blanca), siguiendo los criterios de la ficha.
