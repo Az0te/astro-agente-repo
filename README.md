@@ -25,10 +25,6 @@ El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para
 - **Trabajos largos sin bloquear**: las llamadas de más de 45 s devuelven un id y el resultado se recoge con `estado(trabajo)`.
 - **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC.
 
-## Ejemplo: IC 63
-
-El caso práctico [IC 63, el Fantasma de Cassiopeia](docs/casos/IC63/README.md) muestra el proceso completo con imágenes: selección de subs con índice de halo, HDR con tomas cortas para γ Cas, gradiente urbano, Hα de un dual band con sustracción de continuo y acabado.
-
 ## Empezar con PiAstroPilot Lite
 
 Es lo que usará la mayoría: no necesita Node.js, servidor MCP ni compilar nada.

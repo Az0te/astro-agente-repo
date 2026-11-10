@@ -25,10 +25,6 @@ Alain Escaffre's original project is an **autonomous** pipeline designed for mac
 - **Long jobs without blocking**: calls longer than 45 s return an id and the result is collected with `estado(trabajo)`.
 - **Processing guide** aimed at OSC + dual band from urban skies, HDR with short exposures, bright star halos, DBXtract emulation with PixelMath, continuum subtraction and mixing mono and OSC cameras.
 
-## Example: IC 63
-
-The case study [IC 63, the Ghost of Cassiopeia](docs/casos/IC63/README.md) (in Spanish) shows the full process with images: sub selection with a halo index, HDR with short exposures for γ Cas, urban gradient, Hα from a dual band with continuum subtraction, and finishing.
-
 ## Getting started with PiAstroPilot Lite
 
 This is what most people will use: it needs no Node.js, MCP server or building.
