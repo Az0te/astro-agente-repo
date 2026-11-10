@@ -169,8 +169,11 @@ function grMeasure(base, modelId, correctedId, range0) {
   if (!isFinite(fr) && range0 > 0) {
     try { fr = grGridRange(correctedId) / range0; fuente = "rejilla 4x3 de toda la imagen (el objeto llena el campo)"; } catch (e) { }
   }
-  return { gcStructCopy: +m.corr.toFixed(3), copia: m.copy, fondoResidual: isFinite(fr) ? +fr.toFixed(3) : NaN,
-           fondo_medido_en: fuente, come_objeto_pct: +(100 * s.eat).toFixed(1) };
+  // Nombres neutros de la guía (los mismos en todos los programas): copia_objeto, objeto_quitado_pct, gradiente_restante.
+  // gcStructCopy, fondoResidual y come_objeto_pct se mantienen como alias durante una versión (nov 2026).
+  var corr = +m.corr.toFixed(3), resto = isFinite(fr) ? +fr.toFixed(3) : NaN, come = +(100 * s.eat).toFixed(1);
+  return { copia_objeto: corr, objeto_quitado_pct: come, gradiente_restante: resto, fondo_medido_en: fuente, copia: m.copy,
+           gcStructCopy: corr, fondoResidual: resto, come_objeto_pct: come };
 }
 
 // 8 nov 2026: con dos masters abiertos, Qwen desmezcló y corrigió el gradiente sin pasar por alinearMasters (Paso 5).
@@ -371,10 +374,11 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
-  r.leyenda = "gcStructCopy: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
-              "negativo = infla el objeto). come_objeto_pct: % de la señal del objeto que se lleva el modelo (menor = mejor). " +
-              "fondoResidual: fracción del gradiente del cielo que queda, medido fuera del objeto (menor = más plano). " +
-              "Mejor: el que deja poco gradiente sin comerse el objeto.";
+  r.leyenda = "copia_objeto: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
+              "negativo = infla el objeto). objeto_quitado_pct: % de la señal del objeto que se lleva el modelo (menor = mejor). " +
+              "gradiente_restante: fracción del gradiente del cielo que queda, medido fuera del objeto (menor = más plano). " +
+              "Mejor: el que deja poco gradiente sin comerse el objeto. (gcStructCopy, come_objeto_pct y fondoResidual: " +
+              "nombres antiguos de lo mismo, se quitarán.)";
 
   // Recomendación. Un buen modelo cumple dos cosas: quita el gradiente (fondoResidual = rango del fondo
   // corregido / rango del original) y no copia el objeto (|corr| pequeño; negativo = el modelo infla el objeto).
@@ -399,7 +403,7 @@ function gradienteCandidatos(viewId, o) {
     r.recomendado = best.vista;
     r.motivo = best.metodo + " " + best.parametros + ": deja " +
                (isFinite(best.metricas.fondoResidual) ? Math.round(100 * best.metricas.fondoResidual) + " %" : "(sin medir)") +
-               " del gradiente del cielo, se lleva el " + best.metricas.come_objeto_pct + " % del objeto, corr " + bc.toFixed(3) + " (" +
+               " del gradiente del cielo, se lleva el " + best.metricas.come_objeto_pct + " % del objeto, copia_objeto " + bc.toFixed(3) + " (" +
                (Math.abs(bc) < 0.15 ? "modelo limpio" : Math.abs(bc) > 0.5 ? "copia el objeto: revisar o probar plano robusto"
                                                                    : "intermedio: revisar el modelo a la vista") + ").";
   } else {
@@ -445,9 +449,10 @@ function grCompactar(g, o) {
   // Tabla corta de la comparación (una fila por candidato): sin ella no se veía qué se había comparado (8 nov 2026).
   g.comparados = g.candidatos.map(function (c) {
     var m = c.metricas || {}, f = m.fondoResidual;
+    var come = isFinite(m.come_objeto_pct) ? m.come_objeto_pct : null, corr = isFinite(m.gcStructCopy) ? m.gcStructCopy : null;
     return { metodo: c.metodo + " " + c.parametros, deja_gradiente_pct: isFinite(f) ? Math.round(100 * f) : null,
-             come_objeto_pct: isFinite(m.come_objeto_pct) ? m.come_objeto_pct : null,
-             corr: isFinite(m.gcStructCopy) ? m.gcStructCopy : null, elegido: c === best,
+             gradiente_restante: isFinite(f) ? f : null, objeto_quitado_pct: come, copia_objeto: corr,
+             come_objeto_pct: come, corr: corr, elegido: c === best,
              previa: c.previa, previa_modelo: c.previa_modelo };
   });
   g.compacto = true;
@@ -456,6 +461,8 @@ function grCompactar(g, o) {
   g.metodo = best ? best.metodo + " " + best.parametros : "—";
   g.deja_gradiente_pct = best && isFinite(best.metricas.fondoResidual) ? Math.round(100 * best.metricas.fondoResidual) : null;
   g.come_objeto_pct = best ? best.metricas.come_objeto_pct : null;
+  g.objeto_quitado_pct = g.come_objeto_pct;
+  g.gradiente_restante = best && isFinite(best.metricas.fondoResidual) ? best.metricas.fondoResidual : null;
   delete g.candidatos; delete g.intermedias; delete g.leyenda;
   if (!g.errores || !g.errores.length) delete g.errores;
   return g;

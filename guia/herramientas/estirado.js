@@ -480,7 +480,8 @@ function estirarCandidatos(viewId, o) {
   var comparados = cands.map(function (c) {
     if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
     return { metodo: c.etiqueta, clave: c.clave, cielo: c.medidas.cielo, ruido_cielo_rel: c.medidas.ruido_rel, p90: c.medidas.p90, p99: c.medidas.p99,
-             senal_debil_en_ruidos: c.senal_debil_en_ruidos, sombras_a_0_pct: c.medidas.cero_pct, luces_095_pct: c.medidas.alto_pct,
+             separacion: c.senal_debil_en_ruidos, senal_debil_en_ruidos: c.senal_debil_en_ruidos,   // alias antiguo, se quitará
+             sombras_a_0_pct: c.medidas.cero_pct, luces_095_pct: c.medidas.alto_pct,
              dominante_cielo_pct: c.dominante_cielo_pct, cumple: !c.fallos.length, segundos: c.segundos, elegido: c === best,
              previa: c.previa || undefined };
   });
@@ -497,7 +498,7 @@ function estirarCandidatos(viewId, o) {
     control: {
       revisar_a_ojo: ["aspecto de la nebulosa débil y del fondo en cada candidato (cerrar: false para conservarlos y mirarlos)",
                       "posterización o dientes de sierra en el histograma", "halos o anillos alrededor de zonas brillantes (MAS)"],
-      nota: "senal_debil_en_ruidos = (p90 − cielo) / ruido del cielo, con el cielo igual en todos: mayor = la nebulosa débil se " +
+      nota: "separacion (antes senal_debil_en_ruidos) = (p90 − cielo) / ruido del cielo, con el cielo igual en todos: mayor = la nebulosa débil se " +
             "separa más del fondo sin subir el ruido. Lo de revisar_a_ojo no lo mide esta función."
     }
   };

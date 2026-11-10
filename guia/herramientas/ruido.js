@@ -124,7 +124,7 @@ function rdQuality(before, after) {
   if (faint.length < 20) faint = sorted.slice(Math.floor(sorted.length * 0.3), Math.floor(sorted.length * 0.6));
   var ca = rdContrast(a, faint), cb = rdContrast(b, faint);
   return { ruido_antes: +na.toPrecision(3), ruido_despues: +nb.toPrecision(3),
-           ruido_baja_pct: +(100 * (1 - nb / na)).toFixed(1),
+           ruido_baja_pct: +(100 * (1 - nb / na)).toFixed(1), ruido_rel: +(nb / na).toFixed(3),   // ruido_rel: nombre neutro de la guía
            contraste_zona_debil_pct: +(100 * (cb / ca - 1)).toFixed(1),
            residual_estructura: +rdResidual(a, b).toFixed(2), celdas_zona_debil: faint.length,
            moteado_color_antes: rdMoteado(before, sky, na), moteado_color_despues: rdMoteado(after, sky, nb) };
@@ -361,7 +361,7 @@ function ruidoCandidatos(viewId, o) {
   var comparados = cands.map(function (c) {
     if (!c.r) return { metodo: c.etiqueta, error: c.error, elegido: false };
     var m = c.r.medidas;
-    return { metodo: c.etiqueta, ruido_baja_pct: m.ruido_baja_pct, contraste_zona_debil_pct: m.contraste_zona_debil_pct,
+    return { metodo: c.etiqueta, ruido_rel: m.ruido_rel, ruido_baja_pct: m.ruido_baja_pct, contraste_zona_debil_pct: m.contraste_zona_debil_pct,
              residual_estructura: m.residual_estructura, moteado_color: m.moteado_color_despues,
              cumple: !c.r.no_cumple.length, segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
   });

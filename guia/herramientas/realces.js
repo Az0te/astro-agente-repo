@@ -470,7 +470,8 @@ function contrasteCandidatos(viewId, o) {
     vista: vista, original: viewId, entrada: base,
     comparados: cands.map(function (c) {
       if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
-      return { metodo: c.etiqueta, sel: c.sel, contraste_x: c.contraste_x, ruido_cielo_x: c.ruido_x, cielo: c.medidas.cielo,
+      return { metodo: c.etiqueta, sel: c.sel, contraste_ganado_pct: +(100 * (c.contraste_x - 1)).toFixed(1), ruido_rel: c.ruido_x,
+               contraste_x: c.contraste_x, ruido_cielo_x: c.ruido_x, cielo: c.medidas.cielo,
                quemados_pct: c.medidas.quemados_pct, cumple: !c.fallos.length, fallos: c.fallos.join("; ") || undefined,
                segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
     }),
