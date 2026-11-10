@@ -60,7 +60,7 @@ Detalles, opciones y problemas frecuentes en [`piastropilot/script/README.md`](p
    Con Codex u otro cliente, ver [`mcp/README.md`](mcp/README.md#instalar).
 3. Si PixInsight no está en `C:/Program Files/PixInsight`, define la variable `PIXINSIGHT_EXE` con la ruta de `PixInsight.exe`.
 4. Abre PixInsight. No hay que lanzar ningún script: cada llamada llega a la instancia abierta y, si está ocupada, espera en cola.
-5. Carga la guía en tu agente. El punto de entrada es `guia/SKILL.md` (núcleo de reglas e índice, ~2.300 tokens); el resto se lee paso a paso.
+5. Carga la guía en tu agente. El punto de entrada es `guia/SKILL.md` (núcleo común de reglas e índice, neutro para PixInsight y Siril, ~4.000 tokens; skill `astro-procesado`) junto con el arranque del anexo del programa (Anexo J para PixInsight, Anexo I para Siril); el resto se lee paso a paso.
    - Claude: la carpeta `guia/` como *skill*.
    - ChatGPT u otro cliente con MCP: [`guia/envolturas/chatgpt.md`](guia/envolturas/chatgpt.md).
    - Modelo local (Ollama): [`guia/envolturas/local.md`](guia/envolturas/local.md).

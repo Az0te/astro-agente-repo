@@ -2,6 +2,11 @@
 
 ## Sin publicar
 
+- **Skill neutra `astro-procesado`** (10 nov 2026), válida igual para PixInsight y Siril (antes `astro-procesado-pixinsight`).
+  - `SKILL.md` reescrito sin nombres propios de un programa: reglas, «Imágenes e ids», tabla «Qué se compara en cada paso» (paso → qué se decide → medidas), Internet, Siguiente paso, Entorno y Trampas en neutro. Se lee junto con el **arranque** del anexo del programa.
+  - Anexo J: sección «Arranque en PixInsight» con la tabla «Funciones por paso» (antes en `SKILL.md`), «Siempre disponibles», entorno MCP/panel/Lite, Internet, trabajos largos, tabla de nombres de PixInsight de las técnicas neutras y trampas propias. Anexo I: «Arranque en Siril» con las herramientas por paso de SirilAstroPilot y las siempre disponibles.
+  - Fichas lineales y no lineales sin nombres exclusivos de PixInsight (PixelMath, STF, MAS, LHE, HDRMT, MGC, WBPP, LinearFit, ScreenStars, funciones JS…): lo específico pasa a la sección del paso en `J-pixinsight/lineal.md` y `no-lineal.md` (nueva sección del Paso 11 no lineal). Títulos neutros en los pasos 3, 5, 6, 14, 15 y 16 lineales (los ficheros no cambian de nombre).
+  - Sin objetos concretos en reglas y ejemplos (por tipo de objeto). Anexos B, D, F y G revisados con el mismo criterio.
 - **Una sola guía para varios programas** (10 nov 2026). Las fichas (`lineal/`, `no-lineal/`) dicen qué hacer, por qué y con qué criterios, con nombres neutros; el cómo de cada programa pasa a anexos bajo demanda.
   - Nuevo **Anexo J (PixInsight)**: `anexos/J-pixinsight.md` (índice y tabla de nombres neutros ↔ nombres de PixInsight) y `anexos/J-pixinsight/lineal.md` y `no-lineal.md` con lo que antes iba en las fichas: los bloques «A mano en PixInsight», «En una llamada» con sus ejemplos de llamada y los párrafos de funciones concretas. En las fichas queda una línea «Cómo hacerlo» con los enlaces a los anexos.
   - Nuevo **Anexo I (Siril)**: herramientas de sirilastropilot y comandos de Siril por paso.

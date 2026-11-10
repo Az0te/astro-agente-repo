@@ -61,7 +61,7 @@ Details, options and common problems in [`piastropilot/script/README.en.md`](pia
    With Codex or another client, see [`mcp/README.md`](mcp/README.md#instalar).
 3. If PixInsight is not in `C:/Program Files/PixInsight`, set the `PIXINSIGHT_EXE` variable to the path of `PixInsight.exe`.
 4. Open PixInsight. There is no script to launch: each call reaches the open instance and, if it is busy, waits in a queue.
-5. Load the guide in your agent. The entry point is `guia/SKILL.md` (core rules and index, ~2,300 tokens); the rest is read step by step.
+5. Load the guide in your agent. The entry point is `guia/SKILL.md` (common core of rules and index, neutral for PixInsight and Siril, ~4,000 tokens; skill `astro-procesado`) together with the start-up section of the program's annex (Annex J for PixInsight, Annex I for Siril); the rest is read step by step.
    - Claude: the `guia/` folder as a *skill*.
    - ChatGPT or another MCP client: [`guia/envolturas/chatgpt.md`](guia/envolturas/chatgpt.md).
    - Local model (Ollama): [`guia/envolturas/local.md`](guia/envolturas/local.md).

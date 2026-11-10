@@ -1,5 +1,5 @@
 {
-  "descripcion": "Por proceso de la skill astro-procesado-pixinsight (nebulosa dual band, nov 2026). sonnet_vs_opus = calidad de Sonnet en % de la de Opus. Regla: el usuario elige un nivel N; si sonnet_vs_opus > N el proceso se ejecuta con Sonnet; si es <= N, con Opus.",
+  "descripcion": "Por proceso de la skill astro-procesado (nebulosa dual band, nov 2026). sonnet_vs_opus = calidad de Sonnet en % de la de Opus. Regla: el usuario elige un nivel N; si sonnet_vs_opus > N el proceso se ejecuta con Sonnet; si es <= N, con Opus.",
   "procesos": {
     "lineal/01-analisis-del-objeto": {
       "sonnet_vs_opus": 86
