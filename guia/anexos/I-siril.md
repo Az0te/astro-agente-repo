@@ -4,6 +4,35 @@
 
 Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Siril 1.4 con el script SirilAstroPilot lanzado). Las fichas dicen **qué** hacer y con **qué criterios**; aquí sólo está **con qué herramienta o comando de Siril**. Los nombres de las medidas son los mismos que en las fichas.
 
+<a id="arranque"></a>
+## Arranque en Siril (leer con SKILL.md)
+
+**Entorno.** Siril 1.4 con el script SirilAstroPilot lanzado (puente) y el servidor MCP `sirilastropilot`, o el chat de SirilAstroPilot. Cada herramienta es una entrada del manifiesto de Siril, con sus parámetros. El agente no escribe comandos de Siril salvo con `comandoSiril` (lista blanca).
+
+**Herramientas por paso** (en negrita las que comparan; el elegido se pone con `aplicarCandidato`)
+
+| Paso | Herramientas |
+|---|---|
+| L1 Análisis | `analizarMaster`, `estrellas` |
+| L5 Recorte | `recortarBordes` |
+| L8 Astrometría | `resolverAstrometria` |
+| L9 Gradiente | **`gradienteCandidatos`** → `aplicarCandidato` |
+| L11 / L13 Deconvolución | `nitidezLineal` (solo corregir o completa) |
+| L12 Color | `listaSPCC` → `calibrarColor` |
+| L14 Ruido suave | **`reducirRuidoCandidatos`** → `aplicarCandidato` |
+| L15 Estrellas | **`estrellasCandidatos`** → `aplicarCandidato`, o `separarEstrellas` |
+| NL1 Estirado | **`estirarCandidatos`** → `aplicarCandidato` |
+| NL3 Verde | `quitarVerde` |
+| NL5 Realces | **`contrasteCandidatos`**, **`saturacionCandidatos`** → `aplicarCandidato` |
+| NL6 Ruido final | **`reducirRuidoCandidatos`** → `aplicarCandidato` |
+| NL9 Recombinación | `recombinarEstrellas` |
+| NL10 Exportación | `exportarFinal` |
+| Sin herramienta | L2–L4, L6, L7, L10, L16, L17, NL2, NL4, NL7, NL8, NL11: la ficha, con `comandoSiril` para lo que esté en la lista blanca |
+
+**Siempre disponibles:** `ping`, `imagen` (datos de la imagen cargada), `estadisticas`, `previa`, `registro` (consola de Siril), `abrirImagen`, `guardarImagen`, `deshacer`, `rehacer`, `comandoSiril`, `estado` (trabajos largos), `medirRendimiento`.
+
+**Internet.** Siril no tiene herramientas de internet propias: la ficha del objeto, sólo con las búsquedas del cliente y con Internet activado en el chat.
+
 ## Cómo funciona
 
 - Siril tiene **una sola imagen cargada**: no hay vistas ni ids. Las herramientas trabajan siempre sobre ella; valores en 0–1, coordenadas como en pantalla.
@@ -29,7 +58,7 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 
 Notas de la fase lineal:
 
-- **Gradiente.** `gradiente_restante` es la inclinación del plano del cielo que queda (después / antes). Cuando la nebulosa ocupa casi todo el campo, el cielo más oscuro también es nebulosa y la cifra no es fiable (IC 1396: 0,55–0,75 con modelos limpios): decide por `copia_objeto` y mirando la previa.
+- **Gradiente.** `gradiente_restante` es la inclinación del plano del cielo que queda (después / antes). Cuando la nebulosa ocupa casi todo el campo, el cielo más oscuro también es nebulosa y la cifra no es fiable (en una nebulosa de emisión grande: 0,55–0,75 con modelos limpios): decide por `copia_objeto` y mirando la previa.
 - **Color.** SPCC necesita la astrometría. Si el catálogo en línea no responde, instalar el catálogo local con el script de instalación de catálogos de Siril.
 - **Estrellas.** En campos de Vía Láctea `objeto_quitado_pct` sale alto en todos los motores (quitan también estrellas débiles sin resolver): compara motores entre sí y mira un recorte.
 
@@ -47,9 +76,9 @@ Notas de la fase lineal:
 
 Notas de la fase no lineal:
 
-- **Estirado.** El punto negro por canal (`negro_por_canal`, por defecto) evita que una dominante pequeña del lineal se haga grande al restar mucho fondo (IC 1396: de 1,5 % a 8,7 % con un punto negro común; 0,0 % por canal).
+- **Estirado.** El punto negro por canal (`negro_por_canal`, por defecto) evita que una dominante pequeña del lineal se haga grande al restar mucho fondo (nebulosa de emisión grande: de 1,5 % a 8,7 % con un punto negro común; 0,0 % por canal).
 - **Recombinación.** La capa de estrellas sale lineal del Paso 15: con la starless ya estirada, `recombinarEstrellas` avisa y, con `estirar_estrellas: true`, la estira con arcsinh hasta que el p90 de los píxeles de estrella sea ≈ 0,10.
-- **Contraste.** CLAHE da mucho contraste pero sube el ruido del cielo (IC 1396: ×1,3–1,55); el límite por defecto es ×1,25.
+- **Contraste.** CLAHE da mucho contraste pero sube el ruido del cielo (nebulosa de emisión grande: ×1,3–1,55); el límite por defecto es ×1,25.
 
 ## Pasos sin herramienta propia en Siril
 

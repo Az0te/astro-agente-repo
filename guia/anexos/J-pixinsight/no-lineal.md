@@ -14,6 +14,28 @@ Ficha: [no-lineal/01-estirado.md](../../no-lineal/01-estirado.md)
 
 **Comparar métodos** (`estirarCandidatos(starless, { cielo })`, mismo fichero): prueba sobre copias GHS al fallo, MultiscaleAdaptiveStretch (sin su saturación, que va después) y ArcsinhStretch (factor por bisección y punto negro bajo el cielo del canal más bajo), y los lleva todos al mismo cielo para comparar en igualdad. Gana, entre los que no fallan (ruido del cielo, recortes, dominante), el que más separa la señal débil del fondo: `senal_debil_en_ruidos` = (p90 − cielo) / ruido del cielo. La tabla va en `comparados`; con `cerrar: false` se conservan todos para mirarlos. La capa de estrellas va aparte (`estirarEstrellas`).
 
+```json
+{"llamadas": [
+  {"funcion": "estirarCandidatos", "parametros": {"vista": "Starless", "opciones": {"cielo": 0.1, "nuevaVista": "Starless_st"}}}
+]}
+```
+
+Opciones: `metodos` ("ghs", "mas", "arcsinh"), `mas`.
+
+```json
+{"llamadas": [
+  {"funcion": "estirarCapas", "parametros": {"starless": "Starless", "estrellas": "Stars", "opciones": {"cielo": 0.1, "nuevaStarless": "Starless_st_v1", "nuevasEstrellas": "Stars_st_v1"}}}
+]}
+```
+
+Galaxia: `{"tipo": "galaxia", "nuevaStarless": …, "nuevasEstrellas": …}` (cielo 0,07, `ruidoMax` 0,12, estrellas "extraer", saturación 1,3); nebulosa oscura: `tipo: "nebulosa_oscura"` (cielo 0,12); lo que se pase explícito manda. Modo antiguo a mediana fija: `modo: "fondo"`. Devuelve `{ starless: {pasadas, parada, medidas, dominante, control}, estrellas: {amount, p90, control} }`. Si `meseta_nucleo.radio_px` > 3, el siguiente paso es `comprimirNucleo` (Paso 5).
+
+**Nombres de PixInsight.** Visualización automática = STF (las funciones de `estirado.js` lo quitan de la vista de entrada). `stretch_image` con "stf" aplica un autoestirado real y se niega si la imagen ya no es lineal. Transformación de histograma = HistogramTransformation. GHS = GeneralizedHyperbolicStretch, tipo hiperbólico generalizado, canal RGB, modo color "Col": D (`stretchFactor`) 2,5; b (`localIntensity`) 12; SP (`symmetryPoint`) = mediana previa; LP 0; HP 0,95. Arcsinh = ArcsinhStretch.
+
+**MAS (MultiscaleAdaptiveStretch).** Parámetros (por defecto): `targetBackground` (0,15), `aggressiveness` (0,70), `dynamicRangeCompression` (0,40), `contrastRecovery` (true), `scaleSeparation` (1024), `contrastRecoveryIntensity` (1,0), `saturationEnabled` (true), `saturationAmount` (0,75), `backgroundROIEnabled` y `backgroundROIX0/Y0/Width/Height`. Valores de referencia: `targetBackground` 0,15; `aggressiveness` 0,6; `contrastRecoveryIntensity` 0,5; saturación desactivada en Hα o capas que se combinarán después. DRC no sustituye a HDRMT.
+
+**`starStretch`** (Star Stretch de SetiAstro, mismo resultado que el script): `starStretch("Stars_v1", { amount: 2, saturation: 1, removeGreen: false })` sobre una copia, sólo si se pide (`metodoEstrellas: "starstretch"` o pasando `amount`). Alternativa: ArcsinhStretch.
+
 <a id="no-lineal-02"></a>
 ### Fase no lineal · Paso 2: LRGB / Paleta
 
@@ -22,7 +44,10 @@ Ficha: [no-lineal/02-lrgb-paleta.md](../../no-lineal/02-lrgb-paleta.md)
 **A mano en PixInsight (valores de referencia)**
 
 - HOO clásico (Blend Soft 60/40) con PixelMath en una imagen RGB nueva: R = Ha, G = 0,6·Ha + 0,4·OIII, B = OIII, con las dos capas estiradas con el MISMO estirado.
-- Variante: NarrowbandNormalization sobre la HOO, paleta HOO, lightness desactivada, shadowpoint 1.
+- Variante: NarrowbandNormalization sobre la HOO, paleta HOO, lightness desactivada, shadowpoint 1. Parámetros del proceso: `palette` (`Palette_SHO/HOO/HSO/HOS`), `lightness` (`Lightness_Off/Preserve/Ha/OIII/SII`), `blendMode` (`Blend_Mode1..3`), `haBlend`, `scnr`, `o3Boost`, `s2Boost`, `shadowpoint`, `highlightReduction`, `brightness`. Comprobados en PixInsight 1.9.6; en v8 las constantes van en el constructor (`NarrowbandNormalization.Palette_HOO`).
+- LRGB: LinearFit de L a la luminancia de la RGB y LRGBCombination (R, G y B desactivados y la L en su casilla). Estirados comparables con MAS.
+- Previas a mano: reducir con IntegerResample (Average) y PixelMath con símbolos, comprobando el valor devuelto. Plancha: copiar cada preview en su casilla de una ImageWindow grande con `setSamples`; si los rótulos con Bitmap/Graphics fallan, numerar las casillas.
+- Foraxx: copiadas de las funciones `foraxSHO`…`foraxSOH` de AutoPalette Studio v1.2.0 (fuente "DBXtract / Mono" para dual band, nunca "OSC Dualband"). En SHO sin equilibrar `quitarVerde` no corrige el verde porque mira sólo el cielo: lo hace `componerPaleta`.
 
 **Previews en una llamada** (`herramientas/bandaestrecha.js`): `previsualizarPaletas(ha, oiii, { carpeta })` genera a ~1200 px Classic HOO Soft y Hard, Foraxx Classic bicolor y HOO con límite al OIII (NOVA) desde capas ya estiradas con el mismo estirado, y las guarda como JPG para enseñarlas y preguntar.
 
@@ -61,6 +86,7 @@ Ficha: [no-lineal/04-mascaras.md](../../no-lineal/04-mascaras.md)
 **A mano en PixInsight (valores de referencia)**
 
 - Máscara de luminancia en una imagen nueva: `exp(g·ln(max($T, 1e-5)))` con g = 2,0 para LHE (1,5 para HDRMT).
+- Máscara de estrellas con StarMask: "Subir Noise threshold para no coger ruido, subir Scale para incluir estrellas grandes, subir Midtones y bajar algo Truncation para proteger centros grandes, subir Smoothness para cubrir halos de forma uniforme." Mapa de estructuras con estrellas agrandadas por MorphologicalTransformation y suavizadas quitando capas 1–3 con MultiscaleLinearTransform. La máscara de fondo para contraste local es `fondo_lhe`.
 
 **En una llamada** (`herramientas/mascaras.js`): `crearMascara(vista, { tipo })` con `tipo` `luminancia` (gamma 2,0 LHE / 1,5 HDRMT), `cielo` (rampa 1,5σ–5σ, suavizada) o `fondo_lhe` (receta v4B). Devuelve la vista de la máscara, su cobertura y la media en el cielo y en lo brillante, y cómo aplicarla.
 
@@ -90,6 +116,32 @@ Ficha: [no-lineal/05-boost.md](../../no-lineal/05-boost.md)
 
 **Saturación al fallo en una llamada** (`herramientas/boost.js`): `saturarAlFallo("Starless_st", { tipo: "nebulosa" })` prueba 0,58 → 0,78 sobre copias y se queda la última sin fallo medido (canales > 0,98, fondo teñido: dominante del cielo > 8 % o +4 puntos, ruido de color del cielo × 1,5). Si ni la primera pasa, no satura. Pruebas de nov 2026: galaxia grande → 0,63 (para por ruido de color); nebulosa dual band → no satura (dominante azul del cielo sin resolver). Los umbrales de tinte son provisionales.
 
+```json
+{"llamadas": [
+  {"funcion": "saturarAlFallo", "parametros": {"vista": "Starless_st", "opciones": {"tipo": "nebulosa", "nuevaVista": "Starless_sat"}}}
+]}
+```
+
+Más color sin teñir el cielo: `saturarAlFallo(vista, { tipo: "nebulosa", mascara: true })` satura a través de una máscara de luminancia y prueba 0,63 → 0,88. Devuelve las pruebas, el punto medio elegido, por qué paró, `no_cumple` y el control.
+
+```json
+{"llamadas": [
+  {"funcion": "comprimirNucleo", "parametros": {"vista": "Starless_st", "opciones": {"nuevaVista": "Starless_nucleo"}}}
+]}
+```
+
+Por defecto: capas 7, mezcla 0,6, mascaraDesde 0,35. Devuelve meseta antes y después, brillo del bulbo, anillos nuevos, `no_cumple` y el control.
+
+```json
+{"llamadas": [
+  {"funcion": "nucleoCandidatos", "parametros": {"vista": "Starless_st", "opciones": {"nuevaVista": "Starless_nucleo"}}}
+]}
+```
+
+Opciones de `nucleoCandidatos`: `exponentes` ([0.6, 0.4]), `mascaraDesde`, `cerrar`. La tabla está en `comparados`.
+
+**Nombres de PixInsight.** Contraste local por ecualización adaptativa = LocalHistogramEqualization (LHE; `radius`, `amount`, `slopeLimit`); compresión multiescala = HDRMultiscaleTransform (HDRMT, con 'median transform' para campos ricos en estrellas); compresión por gradiente = GradientHDRCompression; realces del fondo débil y de estructuras oscuras = BackgroundEnhance y DarkStructureEnhance (DSE). La máscara de fondo para contraste local es `crearMascara(..., { tipo: "fondo_lhe" })`.
+
 **A mano en PixInsight (valores de referencia)**
 
 - LocalHistogramEqualization sobre la starless, con la máscara de fondo de la receta v4B ya aplicada.
@@ -110,7 +162,7 @@ Para las curvas, `CurvesTransformation`: cada curva es una lista de pares `[x, y
 
 - *Cómo: primero `darkStructureEnhance("SL_v3", { keepMask: true })` y mirar la máscara: si sigue estructuras reales, vale; si es ruido moteado o rodea bordes brillantes (lo que pasó en una nebulosa de emisión y reflexión, ver abajo), deshacer y usar LHE con máscara. `median` 0,6–0,7 (0,5 no cambia nada; más alto oscurece más), `iterations` 1, `layers` 8 (6 para estructuras menores).
 
-- **Comparar en una llamada** (`contrasteCandidatos("Starless_st")`, `herramientas/realces.js`): sobre copias, LHE radio 64 (pendiente 1,5, amount 0,35) y radio 128 (pendiente 2,0, amount 0,35), HDRMT de 6 capas sobre la luminosidad mezclado al 50 % y DarkStructureEnhance (median 0,7). Mide en todos el contraste local (rango p10–p90 en celdas de 64 px con señal), el ruido y el nivel del cielo y los píxeles quemados. Gana el que más sube el contraste sin subir el ruido del cielo más de un 25 % (`ruidoMax`), sin mover el cielo más de 0,03 ni quemar; si ninguno cumple, recomienda no tocar la imagen. En IC 63 sin calibrar (8 nov 2026) ganó LHE radio 64 (contraste ×1,15, ruido ×1,18); el radio 128 subía el ruido ×1,35 y HDRMT bajaba el cielo de 0,10 a 0,07. Las recetas de abajo valen como candidatos a mano (`lhe: [{ radius, slopeLimit, amount }]`).
+- **Comparar en una llamada** (`contrasteCandidatos("Starless_st")`, `herramientas/realces.js`): sobre copias, LHE radio 64 (pendiente 1,5, amount 0,35) y radio 128 (pendiente 2,0, amount 0,35), HDRMT de 6 capas sobre la luminosidad mezclado al 50 % y DarkStructureEnhance (median 0,7). Mide en todos el contraste local (rango p10–p90 en celdas de 64 px con señal), el ruido y el nivel del cielo y los píxeles quemados. Gana el que más sube el contraste sin subir el ruido del cielo más de un 25 % (`ruidoMax`), sin mover el cielo más de 0,03 ni quemar; si ninguno cumple, recomienda no tocar la imagen. En una nebulosa de emisión y reflexión sin calibrar (8 nov 2026) ganó LHE radio 64 (contraste ×1,15, ruido ×1,18); el radio 128 subía el ruido ×1,35 y HDRMT bajaba el cielo de 0,10 a 0,07. Las recetas de abajo valen como candidatos a mano (`lhe: [{ radius, slopeLimit, amount }]`).
 
 <a id="no-lineal-06"></a>
 ### Fase no lineal · Paso 6: NoiseX
@@ -136,7 +188,14 @@ Ficha: [no-lineal/08-estrellas.md](../../no-lineal/08-estrellas.md)
 ]}
 ```
 
-Devuelve los pasos, antes y después por canal (mediana, MAD, máximo, pix_098, p90_estrellas) y el control.
+Devuelve los pasos, antes y después por canal (mediana, MAD, máximo, pix_098, p90_estrellas) y el control. Si la limpieza se llevaría más del 10 % del brillo, `prepararEstrellas` no limpia y lo dice en `no_cumple`.
+
+**A mano en PixInsight (valores de referencia)**
+
+- Limpieza de residuos: `iif($T < 0.005, 0, $T)`; atenuar: `iif($T > 0.02, $T*0.65, $T)`; halos magenta: `G = iif(min(R,B) > G, min(R,B), G)`. Nunca MorphologicalTransformation para contener estrellas (anillos).
+- Capa con el mismo estirado: `estrellas: "extraer"` en el Paso 1; si no, `starStretch`. Nunca STF auto-stretch en la capa.
+- Extracción en no lineal: SXT con `unscreen=true` sobre el clon estirado.
+- **`screenStarsExtract`** (ScreenStars, mismo resultado que el script): `screenStarsExtract("Original_st", "Starless_st")` crea la capa nueva, inversa exacta de `screenStarsCombine`; mismo `method` que al recombinar.
 
 <a id="no-lineal-09"></a>
 ### Fase no lineal · Paso 9: Recombinación
@@ -169,6 +228,7 @@ Ficha: [no-lineal/10-recorte-exportacion.md](../../no-lineal/10-recorte-exportac
 
 - ICCProfileTransformation a «sRGB IEC61966-2.1» y guardado del XISF en la carpeta real de la versión.
 - `saveAs` no guarda el historial en el XISF: anotar los parámetros en el dossier.
+- Desde PixInsight 1.9.6, Crop, DynamicCrop (también girado), Resample y FastRotation **conservan la astrometría** y la ajustan al nuevo marco. Comprobado (nebulosa dual band, nov 2026): tras Crop + Resample 0,5 + DynamicCrop de 10°, una nueva resolución coincide con la heredada a 0,05 px; tras FastRotation 180°, igual que el original. Con 1.9.5 o anterior se perdía y `FastRotation` sobre una ventana con astrometría llegó a colgar PixInsight: girar con PixelMath `pixel($T, w()-1-x(), h()-1-y())`.
 
 **En una llamada** (`herramientas/exportar.js`): `exportarFinal("Final", { carpeta, nombre, girar180 })` comprueba saturados y bordes negros, guarda el XISF 32 bits con astrometría y, sobre una copia en sRGB (y girada 180° con FastRotation si se pide), el TIFF 16 bits y el JPG. Crea la carpeta antes de guardar y no sobrescribe (añade _2). Recomendado para modelos sin herramientas.
 
@@ -179,3 +239,22 @@ Ficha: [no-lineal/10-recorte-exportacion.md](../../no-lineal/10-recorte-exportac
 ```
 
 Devuelve los ficheros (con su tamaño), los controles y `no_cumple`.
+
+<a id="no-lineal-11"></a>
+### Fase no lineal · Paso 11: Dossier
+
+Ficha: [no-lineal/11-dossier.md](../../no-lineal/11-dossier.md)
+
+**Volcado del historial**
+
+```json
+{"llamadas": [
+  {"funcion": "historial", "parametros": {"vista": "Final"}}
+]}
+```
+
+Devuelve los pasos de `view.processing` (un contenedor, no un array) con los parámetros de cada uno (con `parametros: true` si hacen falta los valores).
+
+**Con el MCP piastropilot** (Claude, Codex): las funciones de la guía trabajan sobre copias, así que el historial de la vista final sólo tiene lo aplicado sobre ella; el resto sale del resultado de cada función. Para la revisión crítica, `previa(vista)` da el JPG entero y `previa(vista, { rect: [x0, y0, x1, y1] })` recortes al 100 %.
+
+El historial mínimo, con nombres de PixInsight: calibración/integración (del master), corrección de gradiente, BXT CO, SPCC, BXT, SXT, NXT, GHS/MAS, LHE, SCNR, recombinación.

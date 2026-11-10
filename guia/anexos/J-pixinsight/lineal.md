@@ -15,7 +15,7 @@ Ficha: [lineal/01-analisis-del-objeto.md](../../lineal/01-analisis-del-objeto.md
 ]}
 ```
 
-**Ficha del objeto en una llamada** (`documentarObjeto(vista)`, `herramientas/web.js`): junto a `analizarMaster`, siempre que haya internet. Identifica el objeto por `OBJECT` (aunque lleve texto de más, como «IC 1396 sin filtro») o, si no, por la astrometría o el RA/DEC de la cabecera, y devuelve su tipo (SIMBAD), un resumen (Wikipedia en español o inglés), la emisión esperada (rayas y filtros según el tipo, completada con el resumen: IC 1396 sale en SIMBAD como cúmulo abierto pero el resumen dice nebulosa de emisión), las estrellas de V < 6 del campo y alrededores, y los problemas que pueden dar (γ Cas, V 2,4 a 20' de IC 63: halo, reflejos, gradiente, HDR). El análisis junta las medidas con esa ficha.
+**Ficha del objeto en una llamada** (`documentarObjeto(vista)`, `herramientas/web.js`): junto a `analizarMaster`, siempre que haya internet. Identifica el objeto por `OBJECT` (aunque lleve texto de más, como «<objeto> sin filtro») o, si no, por la astrometría o el RA/DEC de la cabecera, y devuelve su tipo (SIMBAD), un resumen (Wikipedia en español o inglés), la emisión esperada (rayas y filtros según el tipo, completada con el resumen: una nebulosa de emisión con cúmulo puede salir en SIMBAD como cúmulo abierto y el resumen decir nebulosa de emisión), las estrellas de V < 6 del campo y alrededores, y los problemas que pueden dar (una estrella de V 2,4 a 20' del objeto: halo, reflejos, gradiente, HDR). El análisis junta las medidas con esa ficha.
 
 ```json
 {"llamadas": [
@@ -24,17 +24,19 @@ Ficha: [lineal/01-analisis-del-objeto.md](../../lineal/01-analisis-del-objeto.md
 ]}
 ```
 
-**Documentarse en internet** (`herramientas/web.js`): qué es el objeto y qué señal tiene antes de decidir nada. `simbad("IC 63")` da el tipo según SIMBAD (región HII, nebulosa de reflexión, oscura, galaxia...), coordenadas, tamaño e identificadores; `wikipedia("IC 63")` el resumen del artículo (español y, si no hay, inglés), también para cámaras, telescopios y filtros; `leerWeb(url)` el texto de una página concreta (ficha del filtro o de la cámara); `imagenCatalogo("IC 63", { survey: "H-Alpha Comp", campo: 2 })` abre una imagen de catálogo de SkyView (DSS2 Red/Blue/IR, mapa Hα, WISE, 2MASS, GALEX) para saber qué Hα u otras señales esperar y distinguir estructura débil real de gradiente. Con una vista con astrometría, `imagenCatalogo("<vista>")` usa su centro y su campo. Citar siempre la fuente que devuelven. Con Claude Code el modelo tiene además WebSearch y WebFetch.
+**Documentarse en internet** (`herramientas/web.js`): qué es el objeto y qué señal tiene antes de decidir nada. `simbad("<objeto>")` da el tipo según SIMBAD (región HII, nebulosa de reflexión, oscura, galaxia...), coordenadas, tamaño e identificadores; `wikipedia("<objeto>")` el resumen del artículo (español y, si no hay, inglés), también para cámaras, telescopios y filtros; `leerWeb(url)` el texto de una página concreta (ficha del filtro o de la cámara); `imagenCatalogo("<objeto>", { survey: "H-Alpha Comp", campo: 2 })` abre una imagen de catálogo de SkyView (DSS2 Red/Blue/IR, mapa Hα, WISE, 2MASS, GALEX) para saber qué Hα u otras señales esperar y distinguir estructura débil real de gradiente. Con una vista con astrometría, `imagenCatalogo("<vista>")` usa su centro y su campo. Citar siempre la fuente que devuelven. Con Claude Code el modelo tiene además WebSearch y WebFetch.
 
 ```json
 {"llamadas": [
-  {"funcion": "simbad", "parametros": {"objeto": "IC 63"}},
-  {"funcion": "wikipedia", "parametros": {"texto": "IC 63"}},
-  {"funcion": "imagenCatalogo", "parametros": {"posicion": "IC 63", "opciones": {"survey": "H-Alpha Comp", "campo": 2}}}
+  {"funcion": "simbad", "parametros": {"objeto": "<objeto>"}},
+  {"funcion": "wikipedia", "parametros": {"texto": "<objeto>"}},
+  {"funcion": "imagenCatalogo", "parametros": {"posicion": "<objeto>", "opciones": {"survey": "H-Alpha Comp", "campo": 2}}}
 ]}
 ```
 
 `simbad` devuelve `{ tipo, ra_grados, dec_grados, … }`; `wikipedia`, `{ titulo, resumen, url }`; `imagenCatalogo` abre `Cat_H_Alpha_Comp`.
+
+**Bordes sin datos y estadísticas.** `analizarMaster` devuelve `bordes_sin_datos`. WBPP rellena las cuñas del registro con un valor constante, no con 0; con cuñas, `gradienteCandidatos` se niega. `estadisticas {vista}` da sólo las estadísticas por canal.
 
 <a id="lineal-02"></a>
 ### Fase lineal · Paso 2: Inventario
@@ -46,8 +48,18 @@ Ficha: [lineal/02-inventario.md](../../lineal/02-inventario.md)
 - un grupo de lights por noche, filtro, exposición, gain, offset, binning y telescopio, con horas, temperaturas, rotador y cuántos flats y darks compatibles tiene;
 - la calibración disponible y las horas por filtro y exposición.
 
+La biblioteca de darks suele estar fuera de la carpeta del objeto: pasarla en `darks`.
+
+```json
+{"llamadas": [
+  {"funcion": "inventario", "parametros": {"carpeta": "<carpeta del objeto>", "opciones": {"darks": "<carpeta de master darks>"}}}
+]}
+```
+
+**Historial del master.** Para listar vistas abiertas, `vistas`. Para ver si un master contiene una integración: `historial {vista}` recorre `view.processing` y cuenta los pasos con `ImageIntegration`. Sin ninguno, no ha pasado por WBPP o se guardó con `window.saveAs`, que no guarda el historial de procesos en el XISF. Los subs integrados por grupo se leen del log de WBPP.
+
 <a id="lineal-03"></a>
-### Fase lineal · Paso 3: Blink / SubframeSelector
+### Fase lineal · Paso 3: Selección de subs (Blink / SubframeSelector)
 
 Ficha: [lineal/03-blink-subframeselector.md](../../lineal/03-blink-subframeselector.md)
 
@@ -58,6 +70,8 @@ Ficha: [lineal/03-blink-subframeselector.md](../../lineal/03-blink-subframeselec
   {"funcion": "seleccionarSubs", "parametros": {"subs": "<carpeta LIGHT de una noche>", "opciones": {"csv": "<carpeta>/seleccion.csv"}}}
 ]}
 ```
+
+**Nombres de PixInsight.** La revisión visual es Blink; las métricas, SubframeSelector o ImageAnalysis. Los descartes van fuera de las carpetas LIGHT porque WBPP añade directorios de forma recursiva. En el índice de halo, el binado ×2 es `IntegerResample −2 (Average)`. WBPP con pesos 'PSF Signal Weight' ya da poco peso a los subs nublados, y su SubframeSelector llegó a descartar por su cuenta ~65 de 204 subs de un dual band: revisarlo en el log de WBPP.
 
 <a id="lineal-04"></a>
 ### Fase lineal · Paso 4: Preprocesado
@@ -76,8 +90,30 @@ Ficha: [lineal/04-preprocesado.md](../../lineal/04-preprocesado.md)
 ]}
 ```
 
+Si `no_cumple` está vacío (o el usuario lo acepta), en otra respuesta:
+
+```json
+{"llamadas": [
+  {"funcion": "lanzarWBPP", "parametros": {"wbpp": {"lights": "<LIGHT>", "flats": "<FLAT>", "flatDarks": "<DARK de flats>", "darks": ["<master dark>"], "salida": "C:/wbpp/objeto"}}}
+]}
+```
+
+y luego, cada minuto o dos, hasta que devuelva `terminado: true`:
+
+```json
+{"llamadas": [
+  {"funcion": "estadoWBPP", "parametros": {"salida": "C:/wbpp/objeto"}}
+]}
+```
+
+Comprobado (nov 2026): en una nebulosa oscura `revisarCalibracion` detectó flats con `TELESCOP` TS65Q (los lights, SQA106); en la noche del 19-9 todo casaba, con un aviso: el canal R de los flats a 0,94. En una nebulosa dual band los flats llevaban el filtro "Astodon HA 3nn" y los lights "Antlia Dualband S2 Hb 5nm", algo que WBPP no empareja: con `aliasFiltros: { "Astodon HA 3nn": "Antlia Dualband S2 Hb 5nm" }` la revisión los empareja; para WBPP hay que corregir `FILTER` en copias de esos flats (o añadirlos a mano al grupo). WBPP con 8 lights, 10 flats y 10 darks de flats tardó 2 min.
+
+**Nombres de PixInsight de la tabla de la ficha.** Integración = ImageIntegration ('Subtract pedestals' off en bias/dark; 'Equalize fluxes' en flats; 'PSF Signal Weight'; mapa `rejection_high`; 'Large-scale pixel rejection'); 'Separate CFA flat scaling factors' (por defecto); Output pedestal 'Automatic'; CosmeticCorrection con 'CFA' y Hot Sigma; 'Separate RGB channels' + StarAlignment con 'Two-dimensional surface splines' y 'DDM Thin Plate Spline'; 'Noise reduction' de detección; LocalNormalization; DrizzleIntegration (mapa `drizzle_weights`); Autocrop y 'Reuse last reference frames' en WBPP para añadir noches; grouping keywords. Un master dark con `IMAGETYP='Dark'` se añade con Add Custom como master. La lista de subs integrados está en el historial del XISF (`ImageIntegration` dentro de `PixInsight:ProcessingHistory`). Las métricas por sub sobre CFA son las de SubframeSelector.
+
+**Sin WBPP:** ImageCalibration → CosmeticCorrection → Debayer → ImageAnalysis → StarAlignment → LocalNormalization → ImageIntegration → DrizzleIntegration; después `historial {vista}` del master debe listar ImageCalibration, Debayer (OSC), StarAlignment, LocalNormalization, ImageIntegration y, si se usó, DrizzleIntegration.
+
 <a id="lineal-05"></a>
-### Fase lineal · Paso 5: StarAlignment + crop común
+### Fase lineal · Paso 5: Alineado y recorte común (StarAlignment + Crop)
 
 Ficha: [lineal/05-staralignment-crop.md](../../lineal/05-staralignment-crop.md)
 
@@ -94,9 +130,23 @@ Ficha: [lineal/05-staralignment-crop.md](../../lineal/05-staralignment-crop.md)
 - StarAlignment en modo fichero (`executeOn` sobre una vista NO registra): cada objetivo como fichero y una sola referencia común para todo el proyecto.
 - Carpeta de salida sin espacios si falla en silencio.
 - `distortionCorrection` activado, con surface splines (thin plate).
+- Estructura de `targets`: `[[enabled, isFile, path]]`; `executeOn(view)` no registra.
+- Escalas distintas (×2): escalar antes con Resample (Lanczos-3).
+
+**Astrometría con splines.** No se puede transformar: Crop, Resample y los demás abren el diálogo "Some of these side effects could be irreversible. Proceed?", que **deja el proceso parado** esperando a que alguien pulse. Antes de recortar o reescalar hay que reducir la solución a su parte lineal (`astrometriaLineal`; lo hace `alinearMasters` por dentro): en una nebulosa de emisión y reflexión, tras IntegerResample ×2 coincidía con una resolución nueva a 0,11 px. Desde PixInsight 1.9.6, Crop, DynamicCrop, Resample, IntegerResample y FastRotation conservan la solución y la ajustan (0,05 px frente a una resolución nueva). Con 1.9.5 o anterior se perdía: trasladarla copiando las propiedades `AstrometricSolution:*` con el offset y `regenerateAstrometricSolution()` (residuos 0,2–0,3 px), o volver a resolver (Paso 8).
+
+Al terminar, `alinearMasters` abre los alineados con un STF automático, con la referencia delante (`abrir: false` para no abrirlos; `franjas: false` para no buscar franjas). Devuelve el rectángulo, el % del campo que se conserva, las estrellas emparejadas, los bordes a 0 y si cada uno conserva la astrometría.
+
+```json
+{"llamadas": [
+  {"funcion": "alinearMasters", "parametros": {"masters": ["<Hα>", "<OIII>", "<RGB>"], "opciones": {"referencia": "<Hα>", "salida": "<carpeta>/alineados"}}}
+]}
+```
+
+Control: `bordesSinDatos(vista)` (también en `analizarMaster`) debe dar `hay: false`; el relleno de WBPP no es 0. Tras recortar, `hasAstrometricSolution`.
 
 <a id="lineal-06"></a>
-### Fase lineal · Paso 6: HDRComposition
+### Fase lineal · Paso 6: Composición HDR (HDRComposition)
 
 Ficha: [lineal/06-hdr-composition.md](../../lineal/06-hdr-composition.md)
 
@@ -115,7 +165,10 @@ Ficha: [lineal/06-hdr-composition.md](../../lineal/06-hdr-composition.md)
 
 - HDRComposition con las imágenes de mayor a menor exposición.
 - `maskBinarizingThreshold` 0,80: por debajo de la meseta medida por canal (0,89–0,96).
-- `maskSmoothness` 7 (suavizado de la transición) y `maskGrowth` 1. Crea `HDR` y `HDR_mask01`.
+- `maskSmoothness` 7 (suavizado de la transición) y `maskGrowth` 1. Crea `HDR` y `HDR_mask01` (tarda > 60 s en modo global con las rutas de los masters).
+- El resultado lineal se ve muy oscuro: STF de 24 bits para verlo. "cannot integrate further images" = falta una máscara → bajar `maskBinarizingThreshold`. 'Fitting region' acelera y mejora el ajuste si hay bordes malos. Gradientes distintos entre tomas: DBE/MGC en cada master antes.
+- Astrometría con splines: reducirla antes con `astrometriaLineal(ventana)`; IntegerResample o recortar sin eso pide confirmación (Paso 5).
+- Alternativa propia: mezcla con máscara de saturación dilatada y suavizada con PixelMath. HDR sólo en el núcleo: HDRMultiscaleTransform bajo máscara (Paso 5 no lineal).
 
 <a id="lineal-07"></a>
 ### Fase lineal · Paso 7: Extracción de canales (OSC dual band)
@@ -130,12 +183,30 @@ Ficha: [lineal/07-extraccion-canales.md](../../lineal/07-extraccion-canales.md)
 ]}
 ```
 
+- Suma a la salida la media de los pedestales de entrada (`pedestal_salida`). Lee FILTER o `{ filtro: "S2O3" }`; crea `SII_raw` / `OIII_raw` / `Hb_raw` y devuelve en `lineas` qué vista es cada raya.
+- A mano: una imagen por raya con PixelMath, con R, G, B como `$T[0]`, `$T[1]`, `$T[2]` y los pedestales medidos antes (Hα: `1.2563*($T[0]-pR) - 0.0293*($T[1]-pG) - 0.0460*($T[2]-pB)` en una imagen nueva gris `Ha_raw`). Las expresiones largas fallan en silencio: usar símbolos y comprobar el valor devuelto.
+- Dos medidas de la misma raya se combinan en el Paso 10 con `combinarMismoCanal` (LinearFit y pesos 1/σ²). Con DBXtract, fuente "DBXtract / Mono" en AutoPalette Studio, nunca "OSC Dualband".
+
 <a id="lineal-08"></a>
 ### Fase lineal · Paso 8: Plate solve
 
 Ficha: [lineal/08-plate-solve.md](../../lineal/08-plate-solve.md)
 
-**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` y comprueba la solución. Funciona igual desde el MCP `piastropilot` y desde el panel PiAstroPilot.
+**En una llamada** (`herramientas/lineal.js`): `resolverAstrometria(vista, { pistas })` llama a `blindSolve` (motor de BlindSolver portado a la guía, PixInsight 1.9.6+) y comprueba la solución. Funciona igual desde el MCP `piastropilot` y desde el panel PiAstroPilot. No se usan ImageSolver, el script BlindSolver ni copias de otras ventanas.
+
+```json
+{"llamadas": [
+  {"funcion": "resolverAstrometria", "parametros": {"vista": "MasterLight"}}
+]}
+```
+
+- Pistas: `"opciones": {"pistas": {"minScale": 1.8, "maxScale": 2.3}}` (escala del perfil) o `{"regionRA": 332.6, "regionDec": 73.1, "regionRadius": 5}`.
+- Necesita el índice astrométrico de Gaia configurado en las preferencias del proceso Gaia.
+- Si la imagen ya tenía solución, la conserva (`solution: "existing"`) y devuelve la comparación (`centerOffsetArcsec`, `resolutionDifference`, `rotationDifference`, `parityMatch`).
+- Con varios masters, `alinearMasters` copia la solución de la referencia (`r.astrometria`). StarAlignment no la pasa a los alineados, y una solución con splines antes del recorte abre el diálogo "irreversible" que deja el proceso parado (Paso 5).
+- Desde 1.9.6, Crop, DynamicCrop, Resample y FastRotation conservan y ajustan la solución (0,05 px); con 1.9.5 o anterior se perdía.
+- Si dice que `blindSolve` no está disponible, la función no está corriendo con el runner de piastropilot: parar y avisar.
+- Control: `hasAstrometricSolution === true` tras cada paso que pueda romperla.
 
 <a id="lineal-09"></a>
 ### Fase lineal · Paso 9: Corrección de Gradiente
@@ -176,7 +247,7 @@ El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida
 - MGC 1024 y 2048, con y sin corrección de bordes;
 - polinomio robusto de grado 1 y 2 por canal, ajustado fuera del objeto.
 
-Sin astrometría, MGC no se puede probar, pero quedan 6 candidatos. En IC 63 sin calibrar (8 nov 2026) ganó GradientCorrection: dejó el 62 % del gradiente y se llevó el 2 % del objeto; los tres GraXpert se llevaban entre el 4 y el 6 %. `gradienteVarias` (varias vistas) conserva la tabla de la comparación en `comparados` (una fila por candidato, con `elegido`). Si el objeto llena el campo y no quedan celdas de cielo, `fondoResidual` se mide en la rejilla 4×3 de toda la imagen (lo dice `fondo_medido_en`); una medida imposible cuenta como la peor.
+Sin astrometría, MGC no se puede probar, pero quedan 6 candidatos. En una nebulosa de emisión y reflexión sin calibrar (8 nov 2026) ganó GradientCorrection: dejó el 62 % del gradiente y se llevó el 2 % del objeto; los tres GraXpert se llevaban entre el 4 y el 6 %. `gradienteVarias` (varias vistas) conserva la tabla de la comparación en `comparados` (una fila por candidato, con `elegido`). Si el objeto llena el campo y no quedan celdas de cielo, `fondoResidual` se mide en la rejilla 4×3 de toda la imagen (lo dice `fondo_medido_en`); una medida imposible cuenta como la peor.
 
 Mide cada uno así:
 - `copia_objeto` (antes `gcStructCopy`): cuánto se parece el modelo al objeto.
@@ -221,6 +292,27 @@ Ficha: [lineal/10-combinacion-rgb-nb.md](../../lineal/10-combinacion-rgb-nb.md)
   - la RGB con el Hα con `inyectarHa`.
 - Deja abiertos la L y la banda estrecha sin RGB para el Paso 2 no lineal (LRGB y paletas).
 
+Comprobado con una nebulosa dual band: con RGB + Hα + OIII inyecta el Hα y deja el OIII; con R, G y B mono los junta en `RGB_comb`.
+
+**Las piezas, sobre vistas** (sobre copias):
+
+- `combinarMismoCanal(a, b, { nuevaVista })`: dos masters del mismo canal, alineados. LinearFit del segundo al primero y suma pesada por 1/σ² (ruido MRS); avisa si el ruido apenas baja (< 2 %) o si las estrellas empeoran más de un 10 %.
+- `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, clipLow })`: RGB y Hα lineales, sin estrellas y alineados. LinearFit del Hα al R y máscara de nebulosa referida al cielo. Modo "suma" por defecto; la fórmula clásica queda como `modo: "mezcla"`.
+
+```json
+{"llamadas": [
+  {"funcion": "inyectarHa", "parametros": {"rgb": "RGB_starless", "ha": "Ha_CS", "opciones": {"tipo": "nebulosa", "nuevaVista": "RGB_Ha"}}}
+]}
+```
+
+**A mano en PixInsight (valores de referencia)**
+
+- Mezcla de dos masters del mismo canal: ImageIntegration con los dos, sin rechazo, pesos por estimación de ruido; o PixelMath con los pesos medidos. Normalizar antes con LocalNormalization/LinearFit.
+- LinearFit del Hα a la R (vista de referencia por su id; `rejectHigh` 0,92 por defecto).
+- Mezcla en R con PixelMath por canal: `(1−a)·R + a·Ha` con a = 0,2–0,6 (G y B sin tocar), bajo una máscara de nebulosa (clipLow 0,04–0,08) que se quita al terminar. En PixelMath cualquier imagen abierta se usa por su id dentro de la expresión (`Ha`, `R_starless[0]` para un canal).
+- Comprobar antes `ImageWindow.windowById("mask_neb").isNull`: con un id inexistente `w.mask` no falla y el proceso se aplica **sin máscara**.
+- La astrometría de cada master se resuelve con `resolverAstrometria` (`blindSolve`).
+
 <a id="lineal-11"></a>
 ### Fase lineal · Paso 11: BlurX correct only
 
@@ -229,7 +321,9 @@ Ficha: [lineal/11-bxt-correct-only.md](../../lineal/11-bxt-correct-only.md)
 **A mano en PixInsight (valores de referencia)**
 
 - BlurXTerminator con `correct_only` activado y PSF automática (o manual con `nonstellar_diameter` = FWHM medido).
-- Después, comprobar la solución astrométrica; si se ha perdido, resolverla otra vez (Paso 8) antes de SPCC.
+- Después, comprobar la solución astrométrica; si se ha perdido, resolverla otra vez (Paso 8) antes de SPCC. aescaffre: "BlurXTerminator elimina la solución astrométrica de la vista: tras BXT, `copyAstrometricSolution` desde el master original antes de SPFC/SPCC"; en PI 1.9.5 la conservó, y en 1.9.6 BXT Correct Only y BXT completo la conservaron (31 oct 2026). Se comprueba `hasAstrometricSolution` igual y, si falta, `resolverAstrometria` (no copiar soluciones).
+- Correct Only por canal: ChannelExtraction, BXT a cada canal, ChannelCombination.
+- SPFC deja en la vista `PCL:SPFC:FWHMx/FWHMy` por canal (diagnóstico de blue bloat).
 
 **En una llamada** (`herramientas/lineal.js`): `bxtCorrectOnly(vista, { nuevaVista })` aplica BXT correct only sobre una copia y mide el FWHM por canal antes y después (sobre las mismas estrellas), el ringing de la estrella más brillante y si conserva la solución astrométrica (si no, la recupera con `blindSolve`). nebulosa dual band (nov 2026): diferencia de FWHM entre canales 0,34 → 0,24 px, sin ringing, WCS conservada.
 
@@ -250,7 +344,11 @@ Ficha: [lineal/12-spcc.md](../../lineal/12-spcc.md)
 - OSC sin filtro con ventana UV/IR-cut: Sony Color Sensor R/G/B-UVIRcut y «Ideal QE curve» (valores por defecto).
 - Dual band Hα/OIII 5 nm: modo narrowband con [656,3 nm, 5], [500,7, 5], [500,7, 5] y la QE del sensor.
 - Probado el 31 oct 2026 (PixInsight 1.9.6): 2,4 s en 3008×3222; deja PCL:SPCC:WhiteBalanceFactors en la vista.
-- Verificación: medianas del cielo por canal parecidas tras SPCC.
+- Verificación: medianas del cielo por canal parecidas tras SPCC (Statistics en previews de cielo limpio).
+- Curvas: `pxSPCC()` de `herramientas/procesos.js` las carga por su nombre desde la base de filtros de PixInsight (`filters.xspd`). "Un `new SpectrophotometricColorCalibration` sin más usa curvas genéricas, no las de la cámara".
+- Referencia de blanco: `P.whiteReferenceName` ("Average Spiral Galaxy" por defecto). `P.whiteReferenceSpectrum` es la tabla de datos (longitud de onda, valor), **no** el nombre: da "Parsing 32-bit floating point expression: conversion error".
+- Narrowband dual band: `SPCC_HA_O3_5nn`.
+- Sin SPCC: BackgroundNeutralization + ColorCalibration.
 
 **SPCC en una llamada** (`herramientas/color.js`, necesita `procesos.js`): comprueba la solución astrométrica y que la imagen sea lineal, aplica `pxSPCC` con los filtros del perfil sobre una copia y mide el cielo por canal antes y después, en las zonas más oscuras, comparando la diferencia con el ruido. Devuelve los filtros usados, los factores de balance de blancos, `no_cumple` y el control. Una diferencia de más de 0,5 sigmas en el cielo sale como dominante al estirar (nebulosa dual band, nov 2026: 1,1 sigmas en lineal → 19 % azul estirada). Recomendado para modelos sin herramientas.
 
@@ -264,6 +362,14 @@ Ficha: [lineal/12-spcc.md](../../lineal/12-spcc.md)
 
 
 **Cielo descompensado tras SPCC** (`neutralizarCielo`, en `color.js`). Si `calibrarColor` da el cielo por encima de 0,5 sigmas, o el estirado sale con dominante en el cielo (> 5 %), se neutraliza el fondo en lineal: BackgroundNeutralization aditiva, que suma a cada canal lo que le falta para igualar su cielo al del canal más alto (no resta, no recorta sombras y no cambia el balance de SPCC más que ese desplazamiento constante). Mide en las mismas zonas que el control del estirado (el 10 % de celdas de 64 px más oscuras); si esas zonas son polvo o nebulosa oscura con color propio, pasar `rect` con un trozo de cielo limpio. Vale sobre la starless lineal, sin rehacer BXT ni SXT. No es un apaño de color: es la neutralización de fondo que la guía ya admite junto a SPCC.
+
+```json
+{"llamadas": [
+  {"funcion": "neutralizarCielo", "parametros": {"vista": "Starless_dn", "opciones": {"nuevaVista": "Starless_bn"}}}
+]}
+```
+
+Devuelve el cielo antes y después por canal, lo sumado a cada canal, `no_cumple` y el control.
 
 <a id="lineal-13"></a>
 ### Fase lineal · Paso 13: BlurX completo
@@ -293,13 +399,22 @@ Ficha: [lineal/13-bxt-completo.md](../../lineal/13-bxt-completo.md)
 ```
 
 <a id="lineal-14"></a>
-### Fase lineal · Paso 14: NoiseX suave (opcional)
+### Fase lineal · Paso 14: Reducción de ruido suave (NoiseX, opcional)
 
 Ficha: [lineal/14-noisex-suave.md](../../lineal/14-noisex-suave.md)
 
 **A mano en PixInsight (valores de referencia)**
 
-- NoiseXTerminator: `denoise` 0,50 (pasada ligera antes de SXT), `detail` 0,15, `iterations` 2.
+- NoiseXTerminator: `denoise` 0,50 (pasada ligera antes de SXT), `detail` 0,15, `iterations` 2. Parámetros comprobados en 1.9.6: `iterations`, `enable_frequency_separation`, `denoise_high_freq`, `denoise_low_freq`, `frequency_scale`, `overlap`.
+- BXT con PSF manual: SPFC deja `PCL:SPFC:FWHMx/FWHMy` para `nonstellar_diameter` (Paso 13).
+
+```json
+{"llamadas": [
+  {"funcion": "ruidoCandidatos", "parametros": {"vista": "MasterLight_bxt", "opciones": {"nuevaVista": "MasterLight_nxt"}}}
+]}
+```
+
+Opciones de `ruidoCandidatos`: `metodos`, `niveles`, `tgv`, `amount`, `modelo`. La tabla está en `comparados`.
 
 **En una llamada** (`herramientas/ruido.js`): `reducirRuido` aplica NXT sobre una copia y mide los controles de abajo: σ del cielo antes y después, contraste de la zona débil y estructura de la imagen residual (~1–2 = sólo ruido). En nebulosa dual band (nov 2026), NXT 0,50 bajó el ruido del cielo un 43 % con el contraste intacto (−0,5 %). Recomendado para modelos sin herramientas.
 
@@ -312,10 +427,10 @@ Ficha: [lineal/14-noisex-suave.md](../../lineal/14-noisex-suave.md)
 Devuelve las medidas (ruido_baja_pct, contraste_zona_debil_pct, residual_estructura), `no_cumple` y el control.
 
 
-**Comparar en vez de fijar el valor** (`ruidoCandidatos`, mismo fichero): prueba sobre la misma entrada NXT 0,30 / 0,50 / 0,70, MLDenoise (amount 1,0, con el modelo `.xmlm` del perfil) y MultiscaleTGVDenoise (strength 0,5 y 1,0), con las mismas medidas de `reducirRuido`, y se queda con el que más baja el ruido sin pasar del 80 % entre los que cumplen. Devuelve la tabla en `comparados`. MLDenoise es lento (~7 min en 22 MP; en un drizzle 2x de la 2600MC, mucho más): `metodos: ["nxt", "tgv"]` para dejarlo fuera. En IC 63 sin calibrar (8 nov 2026) ganó NXT 0,70 (−57 %); MLDenoise (−76 %) y TGV (−63 % y −75 %) quitaban más ruido, pero subían el moteado de color más de 0,3.
+**Comparar en vez de fijar el valor** (`ruidoCandidatos`, mismo fichero): prueba sobre la misma entrada NXT 0,30 / 0,50 / 0,70, MLDenoise (amount 1,0, con el modelo `.xmlm` del perfil) y MultiscaleTGVDenoise (strength 0,5 y 1,0), con las mismas medidas de `reducirRuido`, y se queda con el que más baja el ruido sin pasar del 80 % entre los que cumplen. Devuelve la tabla en `comparados`. MLDenoise es lento (~7 min en 22 MP; en un drizzle 2x de la 2600MC, mucho más): `metodos: ["nxt", "tgv"]` para dejarlo fuera. En una nebulosa de emisión y reflexión sin calibrar (8 nov 2026) ganó NXT 0,70 (−57 %); MLDenoise (−76 %) y TGV (−63 % y −75 %) quitaban más ruido, pero subían el moteado de color más de 0,3.
 
 <a id="lineal-15"></a>
-### Fase lineal · Paso 15: StarX y NXT de la starless
+### Fase lineal · Paso 15: Separación de estrellas y ruido de la starless (StarX, MLDenoise, NXT)
 
 Ficha: [lineal/15-starx.md](../../lineal/15-starx.md)
 
@@ -323,6 +438,10 @@ Ficha: [lineal/15-starx.md](../../lineal/15-starx.md)
 
 - StarXTerminator con `output_stars` (genera la capa de estrellas) y `unscreen` desactivado en lineal (suma exacta starless + estrellas).
 - `overlap` 0,20; 0,50 sólo con estrellas muy grandes o campos densos (×3 de tiempo).
+- La imagen de estrellas se llama `<id>_stars`: detectarla comparando la lista de ventanas antes y después. "`P.starmask` y `P.linear` no existen". No usar STF Auto Stretch en la imagen de estrellas.
+- El denoise por IA de detalle fino (ML) de la ficha es **MLDenoise** (`modelPath` = modelo `.xmlm` del perfil, `amount` 1,0, sin caché); la variación total multiescala es **MultiscaleTGVDenoise** (1.9.6: `scales` 8, `strength` 0,6). El híbrido lo hace `reducirRuido` con `metodo: "hibrido"`. MLDenoise en RGB puede dar "cannot process RGB images".
+- MLDenoise tarda ~2 min en 26 MP: pasa de 45 s y el MCP devuelve un id de trabajo (esperar con `estado(trabajo)`); con 8+ min seguidos de varios canales en una petición PixInsight dio "Invalid task termination intent" y dejó de responder.
+- En RGB, `reducirRuido` con `{"denoise": 0.70}` mirando `moteado_color_despues` (no_cumple por encima de 1,5); mejor aún, `ruidoCandidatos` con `{"principal": true}`.
 
 **En una llamada** (`herramientas/ruido.js`): `separarEstrellas` hace SXT sobre una copia (unscreen según sea lineal o no), localiza la capa de estrellas y comprueba que starless + estrellas reproduce el original; la estructura extensa de la capa de estrellas se da como orientación (en campos densos es alta sin fallo). Después, el denoise principal con `reducirRuido` (híbrido en mono con el modelo del perfil; en RGB, NXT 0,70 y mirar `moteado_color_despues`) o, mejor, con `ruidoCandidatos(s.starless, { principal: true })`, que compara NXT, MLDenoise y MultiscaleTGVDenoise y prefiere el que baja el ruido un 50–80 % cumpliendo los controles (ver [Paso 14](../../lineal/14-noisex-suave.md)).
 
@@ -334,7 +453,7 @@ Ficha: [lineal/15-starx.md](../../lineal/15-starx.md)
 ```
 
 <a id="lineal-16"></a>
-### Fase lineal · Paso 16: LinearFit / sustracción de continuo
+### Fase lineal · Paso 16: Sustracción de continuo (LinearFit)
 
 Ficha: [lineal/16-linearfit-continuo.md](../../lineal/16-linearfit-continuo.md)
 
@@ -354,6 +473,16 @@ La fórmula es `Ha_sub = Hα − k·R − c`. En nebulosa de emisión y reflexi�
 ]}
 ```
 
+OIII: canal 1 (G). Con el `k` que devuelva, en otra respuesta:
+
+```json
+{"llamadas": [
+  {"funcion": "restarContinuo", "parametros": {"nb": "Ha_starless", "continuo": "RGB_starless", "opciones": {"k": "<k medido>", "nuevaVista": "Ha_CS"}}}
+]}
+```
+
+El ajuste lineal previo con R como referencia es LinearFit.
+
 <a id="lineal-17"></a>
 ### Fase lineal · Paso 17: Checkpoint
 
@@ -366,3 +495,5 @@ Ficha: [lineal/17-checkpoint.md](../../lineal/17-checkpoint.md)
   {"funcion": "checkpointLineal", "parametros": {"vista": "MasterLight_v3", "opciones": {"carpeta": "<carpeta de la versión>", "objeto": "<nombre del objeto>", "version": "v3"}}}
 ]}
 ```
+
+Solución astrométrica: `hasAstrometricSolution === true`. Antes de estirar, `cerrarVista` de las temporales; a mano, `window.purge()` vacía el historial de deshacer de una ventana.
