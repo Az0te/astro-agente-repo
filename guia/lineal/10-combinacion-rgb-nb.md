@@ -41,13 +41,7 @@ Nunca mezclar subs de cámaras distintas en una integración: cada cámara y fil
 
 **HOO / SHO de la mono con estrellas RGB** (si hay banda estrecha): "cada canal Gradient → BXT → SXT → NXT"; SPCC narrowband combinando S,H,O en RGB y volviendo a extraer los canales. El continuo se resta con la RGB starless calibrada: **R sobre Hα, R sobre SII, G sobre OIII**; "OIII nunca con B si se quiere evitar Hβ". Estrellas siempre de la RGB (preferentemente la corta/HDR); "nunca de L ni de Hα/banda estrecha: tienen otra PSF y otro tamaño y dan estrellas hinchadas o de color de paleta".
 
-**En una llamada, con todos los masters** (`herramientas/combinacion.js`): `combinarMasters(carpeta o lista, { tipo })` trabaja con 2 a 8 masters alineados (Paso 5); LRGB son 4.
-- Abre cada master y lo clasifica por su filtro (`FILTER` o el nombre): L, R, G, B, Hα, OIII, SII, Hβ o RGB (color). Si no reconoce un filtro, se le indica en `clases`.
-- Combina lo que toca en lineal:
-  - dos de la misma clase con `combinarMismoCanal`;
-  - R, G y B mono en una RGB (ChannelCombination);
-  - la RGB con el Hα con `inyectarHa`.
-- Deja abiertos la L y la banda estrecha sin RGB para el Paso 2 no lineal (LRGB y paletas).
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-10); en Siril, [Anexo I](../anexos/I-siril.md).
 
 Comprobado con una nebulosa dual band: con RGB + Hα + OIII inyecta el Hα y deja el OIII; con R, G y B mono los junta en `RGB_comb`.
 

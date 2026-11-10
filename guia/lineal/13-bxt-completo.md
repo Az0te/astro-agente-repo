@@ -22,11 +22,7 @@
 
 **Núcleos saturados.** "BXT puede dejarlos casi blancos. En estrellas muy brillantes, pasar BXT sobre la HDR (larga + corta) o enmascarar los núcleos saturados."
 
-**A mano en PixInsight (valores de referencia)**
-
-- `correct_only` desactivado y PSF automática.
-- `sharpen_stars` 0,30; `adjust_star_halos` 0,00 (−0,30 SOLO si hay blue bloat y sin ringing).
-- `sharpen_nonstellar` 0,35 galaxia; 0,50–0,70 nebulosa; 0,45–0,55 con drizzle 2x. `overlap` 0,20.
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-13); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** "Gusanos: si BXT los crea (no estelar alto), NXT los acentúa: bajar BXT, no subir NXT." Ringing = 0; textura no plástica; FWHM de estrellas baja respecto al original; sin franjas de color (mala alineación de canales). Los valores se eligen con la rejilla de abajo, no a ojo.
 
@@ -36,22 +32,6 @@
 2. BXT con nonstellar 0,25 / 0,45 / 0,65 (estrellas fijo 0,25–0,30). Medir FWHM mediano de estrellas, ringing (perfil radial de la estrella más brillante, cambios de signo > 0,01), gusanos al 100 % y contraste en cajas del objeto.
 3. Plancha de recortes al 100 % con el mismo STF y CSV de métricas en `<versión>/tests/`; elegir la ganadora y anotarla en el dossier y en la tabla.
 4. Aplicar la ganadora a la imagen entera (si devuelve id de trabajo, esperar con `estado(trabajo)`).
-
-**Rejilla y aplicación en una llamada** (`herramientas/deconvolucion.js`): `bxtCandidatos` hace la rejilla en un recorte de 1500 px (el de más señal extensa) con los valores de la tabla para el tipo de objeto y mide en cada variante el FWHM de las mismas estrellas, el ringing de la más brillante no saturada y, fuera de las estrellas, la textura nueva en el fondo (gusanos) y el detalle en el objeto respecto a BXT con nonstellar 0; recomienda el nonstellar más alto sin ringing ni gusanos. `bxtAplicar` lo aplica a una copia de la imagen entera. En nebulosa dual band (nov 2026): FWHM 4,6 → 4,1 px; el nonstellar 0,25–0,65 sólo añadía un 0,4–1,9 % de detalle, sin gusanos. Recomendado para modelos sin herramientas.
-
-```json
-{"llamadas": [
-  {"funcion": "bxtCandidatos", "parametros": {"vista": "MasterLight_spcc", "opciones": {"tipo": "nebulosa"}}}
-]}
-```
-
-`tipo`: "nebulosa" | "galaxia" | "cumulo" | "snr_bajo". Con su resultado, en otra respuesta:
-
-```json
-{"llamadas": [
-  {"funcion": "bxtAplicar", "parametros": {"vista": "MasterLight_spcc", "opciones": {"nonstellar": "<recomendada.nonstellar>", "stars": "<recomendada.stars>", "nuevaVista": "MasterLight_bxt"}}}
-]}
-```
 
 | Objeto | BXT CO | BXT stars / nonstellar | NXT denoise / detail / iter / separación | Notas |
 |---|---|---|---|---|

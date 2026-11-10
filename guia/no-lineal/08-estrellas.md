@@ -31,14 +31,6 @@ La capa de estrellas (original − starless) lleva PSF, halos, aigrettes y resid
 - Limpieza de residuos: `iif($T < 0,005, 0, $T)` sobre la capa de estrellas.
 - Suelo de la capa por canal = mediana + 2·MAD (medirlo antes; no subirlo hasta borrar estrellas débiles).
 
-**Preparación en una llamada** (`herramientas/estrellas.js`): sobre una copia de la capa ya estirada hace la limpieza de residuos, el suelo por canal (reescalando), la curva de saturación y comprime las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco); opcionales `halosMagenta: true` y `atenuar: 0.35`. Devuelve las medidas antes y después y el control. Recomendado para modelos sin herramientas; el p90 depende del estirado del Paso 1.
-
-```json
-{"llamadas": [
-  {"funcion": "prepararEstrellas", "parametros": {"vista": "Stars_st", "opciones": {"nuevaVista": "Stars_v1"}}}
-]}
-```
-
-Devuelve los pasos, antes y después por canal (mediana, MAD, máximo, pix_098, p90_estrellas) y el control.
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-08); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** Fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) ≥ 0,08 (0,08–0,13 con `starStretch`, más con `extraer`); `pix_estrella_pct` (píxeles con luminancia > 0,02) ≥ 0,3 % en campos con estrellas: por debajo, la capa está casi vacía y la final saldrá sin estrellas (galaxia grande con Qwen, nov 2026); `no_cumple` vacío; sin manchas de residuos de SXT ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.

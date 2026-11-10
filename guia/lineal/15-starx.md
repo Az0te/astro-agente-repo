@@ -15,19 +15,7 @@
 - "SXT rinde peor con aberraciones fuertes, sobremuestreo (p. ej. drizzle 2x) y estirados extremos tipo GHS/arcsinh (RC-Astro); puede quitar núcleos de galaxias, núcleos de planetarias, comas de cometas y cruces de filamentos (proteger con máscara)."
 - "En galaxias espirales grandes SXT confunde regiones HII y nudos con estrellas: el estirado de estrellas amplifica esos residuos; usar screen, estirado moderado o no separar estrellas."
 
-**A mano en PixInsight (valores de referencia)**
-
-- StarXTerminator con `output_stars` (genera la capa de estrellas) y `unscreen` desactivado en lineal (suma exacta starless + estrellas).
-- `overlap` 0,20; 0,50 sólo con estrellas muy grandes o campos densos (×3 de tiempo).
-
-**En una llamada** (`herramientas/ruido.js`): `separarEstrellas` hace SXT sobre una copia (unscreen según sea lineal o no), localiza la capa de estrellas y comprueba que starless + estrellas reproduce el original; la estructura extensa de la capa de estrellas se da como orientación (en campos densos es alta sin fallo). Después, el denoise principal con `reducirRuido` (híbrido en mono con el modelo del perfil; en RGB, NXT 0,70 y mirar `moteado_color_despues`) o, mejor, con `ruidoCandidatos(s.starless, { principal: true })`, que compara NXT, MLDenoise y MultiscaleTGVDenoise y prefiere el que baja el ruido un 50–80 % cumpliendo los controles (ver [Paso 14](14-noisex-suave.md)).
-
-```json
-{"llamadas": [
-  {"funcion": "separarEstrellas", "parametros": {"vista": "MasterLight_nxt", "opciones": {"nuevaVista": "Starless", "nuevasEstrellas": "Stars"}}},
-  {"funcion": "reducirRuido", "parametros": {"vista": "Starless", "opciones": {"metodo": "hibrido", "modelo": "<.xmlm del perfil>", "nuevaVista": "Starless_dn"}}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-15); en Siril, [Anexo I](../anexos/I-siril.md).
 
 En RGB, `reducirRuido` con `{"denoise": 0.70}` (ver «RGB» abajo); mejor aún, `ruidoCandidatos` con `{"principal": true}`.
 

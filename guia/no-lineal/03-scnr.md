@@ -20,17 +20,6 @@
 - En nebulosa oscura: quitar verde con `G − 0,85·max(0, G − max(R,B))`.
 - SCNR invertido (invertir, SCNR suave, invertir) para halos verdes o azules.
 
-**A mano en PixInsight (valores de referencia)**
-
-- SCNR: amount 0,65 (aescaffre; «nosotros preferimos suave»); verde y Average Neutral por defecto.
-- Alternativa quirúrgica sin tocar el OIII real, en una imagen nueva: `iif(min(R,B) > G, min(R,B), G)`.
-
-**En una llamada** (`herramientas/lineal.js`): `quitarVerde(vista, { amount: 0.85 })` sólo actúa si el verde del cielo supera en más de un 3 % a R **y** a B (con el azul también alto, G/R engaña: en una nebulosa dual band el cielo era azulado y no había verde que quitar). Aplica la fórmula de arriba bajo una máscara de cielo (rampa de 1,5σ a 5σ) y comprueba que el color del objeto no cambia. Si no hace falta, no aplica nada y lo dice.
-
-```json
-{"llamadas": [
-  {"funcion": "quitarVerde", "parametros": {"vista": "Starless_st", "opciones": {"nuevaVista": "Starless_sinverde"}}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-03); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** G/R del cielo después de SCNR ≈ 1,00 (±0,03). Comprobar que el OIII del objeto sigue verde-azulado y que las estrellas no han virado a magenta. En el fondo, medir antes y después en un ROI de cielo limpio.

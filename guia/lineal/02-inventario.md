@@ -24,10 +24,7 @@
 
 > **Compatibilidad:** lights y calibración con la misma ganancia, offset, modo de lectura, binning, temperatura, driver, programa de captura y formato de archivo.
 
-**En una llamada** (`herramientas/preproceso.js`): `inventario(carpeta del objeto, { darks, aliasFiltros })` lee sólo las cabeceras de todas las subcarpetas, en ~1 s para 1100 ficheros. Se salta `_proc`, `_rechazados` y las salidas de WBPP. Devuelve:
-- el equipo: cámara, OSC o mono, píxel, focal, escala y programa de captura;
-- un grupo de lights por noche, filtro, exposición, gain, offset, binning y telescopio, con horas, temperaturas, rotador y cuántos flats y darks compatibles tiene;
-- la calibración disponible y las horas por filtro y exposición.
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-02); en Siril, [Anexo I](../anexos/I-siril.md).
 
 En `no_cumple` avisa de lights sin flats de su filtro en su noche, sin dark de su exposición, con gain u offset mezclados o con flats de otro telescopio. La biblioteca de darks suele estar fuera de la carpeta del objeto: pasarla en `darks`.
 

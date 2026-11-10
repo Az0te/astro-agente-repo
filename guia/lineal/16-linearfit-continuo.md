@@ -24,21 +24,7 @@
 3. Cociente `(N − B_N)/(C − B_C)` por estrella; **mediana** de los cocientes.
 4. Comprobar simetría de residuos: si quedan estrellas positivas, k baja; si quedan agujeros negros, k alta.
 
-**A mano en PixInsight (valores de referencia)**
-
-La fórmula es `Ha_sub = Hα − k·R − c`. En nebulosa de emisión y reflexión, k = 0,293 y c = 0,00155; con la R de la HDR y fotometría de apertura, k = 0,332. Cambiar k con cada combinación de cámara y filtro. En PixelMath la R se usa por el id de su vista:
-
-- PixelMath en una imagen nueva `Ha_CS`: `$T − k·RGB_starless[0] − c` sobre la starless de Hα (k y c medidos antes; ej. k = 0,293, c = 0,00155).
-
-- Comprobación sin tocar la imagen: mediana y mínimo por canal de `Ha_CS`; un mínimo por debajo de −0,001 indica fondo negativo (k o c mal medidos).
-
-**En una llamada** (`herramientas/bandaestrecha.js`): `medirContinuo(nbConEstrellas, rgbConEstrellas, { canal: 0 })` mide k con el procedimiento de arriba (centroide, apertura 7 px, anillo 10–14 px, mediana de ~3000 estrellas); `restarContinuo(nbStarless, rgbStarless, { k })` resta y mide los negativos y el brillo de emisión conservado. nebulosa de emisión y reflexión (nov 2026): k = 0,316 (la medida a mano fue 0,332) y la emisión conserva el 95 %.
-
-```json
-{"llamadas": [
-  {"funcion": "medirContinuo", "parametros": {"nb": "Ha_raw", "continuo": "RGB_spcc", "opciones": {"canal": 0}}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-16); en Siril, [Anexo I](../anexos/I-siril.md).
 
 OIII: canal 1 (G). Con el `k` que devuelva, en otra respuesta:
 

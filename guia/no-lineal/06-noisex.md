@@ -30,10 +30,6 @@
 | Halos oscuros en estrellas | detail alto |
 | Aspecto de cera / plástico | una pasada fuerte |
 
-**A mano en PixInsight (valores de referencia)**
-
-- NoiseXTerminator: `denoise` 0,30 (pasada final suave), `detail` 0,15, `iterations` 2.
-
-**En una llamada** (`herramientas/ruido.js`): `reducirRuido("Starless", { denoise: 0.30, detail: 0.15, nuevaVista: "Starless_nxt" })` (con `croma: 0.90, denoise: 0.40` para la separación de color) aplica NXT sobre una copia y mide σ del cielo, contraste de la zona débil y estructura de la residual. Recomendado para modelos sin herramientas. Mejor aún, `ruidoCandidatos("Starless")`: sobre una imagen estirada compara NXT 0,15 / 0,30 / 0,45, MLDenoise y MultiscaleTGVDenoise 0,25 / 0,5 (en modo general, sin el de cielo profundo) y se queda con el mejor que cumpla (ver [Paso 14 lineal](../lineal/14-noisex-suave.md)).
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-06); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** σ del cielo antes/después (bajar un 50–80 %, nunca a cero: fondo muerto). Contraste de una zona débil (polvo, IFN, filamento): no debe bajar más de ~5 %. Imagen residual: sólo ruido; si se ven filamentos o bordes, se llevó señal.

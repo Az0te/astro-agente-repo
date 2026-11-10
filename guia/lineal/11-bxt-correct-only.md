@@ -26,17 +26,6 @@
 
 **Astrometría.** "BlurXTerminator elimina la solución astrométrica de la vista (aescaffre): tras BXT, `copyAstrometricSolution` desde el master original antes de SPFC/SPCC". Matiz del mismo archivo: "BXT, en cambio, la conservó en PI 1.9.5: comprobar `hasAstrometricSolution` en vez de suponer". Tras BXT CO, si se ha perdido: volver a resolver con `blindSolve` (Paso 8), sin copiar soluciones. En PixInsight 1.9.6 BXT Correct Only y BXT completo la conservaron (prueba del 31 oct 2026), pero se comprueba igual.
 
-**A mano en PixInsight (valores de referencia)**
-
-- BlurXTerminator con `correct_only` activado y PSF automática (o manual con `nonstellar_diameter` = FWHM medido).
-- Después, comprobar la solución astrométrica; si se ha perdido, resolverla otra vez (Paso 8) antes de SPCC.
-
-**En una llamada** (`herramientas/lineal.js`): `bxtCorrectOnly(vista, { nuevaVista })` aplica BXT correct only sobre una copia y mide el FWHM por canal antes y después (sobre las mismas estrellas), el ringing de la estrella más brillante y si conserva la solución astrométrica (si no, la recupera con `blindSolve`). nebulosa dual band (nov 2026): diferencia de FWHM entre canales 0,34 → 0,24 px, sin ringing, WCS conservada.
-
-```json
-{"llamadas": [
-  {"funcion": "bxtCorrectOnly", "parametros": {"vista": "MasterLight", "opciones": {"nuevaVista": "MasterLight_bxtco"}}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-11); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** Comparar el perfil de una estrella brillante antes/después (FWHM por canal más parecido, sin anillos). Ringing = 0 (contar cambios de signo de la derivada del perfil radial con amplitud > 0,01; ver [Anexo B](../anexos/B-checklist-entrega.md)). `hasAstrometricSolution === true` antes de seguir.

@@ -65,7 +65,7 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carg
 | NL10 Exportación | `exportarFinal` (XISF, TIFF 16 bits, JPG sRGB) |
 | NL11 Dossier | `historial` |
 
-Siempre disponibles: `vistas`, `estadisticas`, `historial`, `previa` (JPG para mirar la imagen), `abrirImagen`, `guardarImagen`, `cerrarVista`, `estado`, `ping`, `graxpertBGE`, `graxpertDenoise`. `pxSPCC`, `pxSPFC`, `pxMGC`, `gcStructCopy` y `astrometriaLineal` son internas: las usan otras funciones y no se llaman directamente.
+Siempre disponibles: `vistas`, `estadisticas`, `historial`, `previa` (JPG para mirar la imagen), `abrirImagen`, `guardarImagen`, `cerrarVista`, `estado`, `ping`, `graxpertBGE`, `graxpertDenoise`. `pxSPCC`, `pxSPFC`, `pxMGC` y `astrometriaLineal` son internas: las usan otras funciones y no se llaman directamente.
 
 ## Internet
 
@@ -100,7 +100,7 @@ Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en e
 | Estirar con el STF puesto | Quitarlo antes (`estirado.js` lo hace) |
 | SPCC sobre imagen estirada, sin astrometría o sin las curvas del perfil | Master lineal, `resolverAstrometria`, `calibrarColor` |
 | MGC o IA de GraXpert en nebulosas oscuras, IFN o polvo extenso | Plano robusto o muestras manuales (Paso 9 lineal) |
-| Dar por bueno un modelo de gradiente sin mirarlo | Liso, sin objeto, sin anillo; `gcStructCopy` |
+| Dar por bueno un modelo de gradiente sin mirarlo | Liso, sin objeto, sin anillo; `copia_objeto` |
 | Recombinar estrellas lineales con una starless estirada | Estirar las dos o extraer en no lineal |
 | Estrellas de L, Hα o banda estrecha | RGB corta o HDR |
 | Llamar SHO a una paleta sólo de Hα/OIII | "pseudo-SHO" |
@@ -129,10 +129,12 @@ Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias
 
 ## Índice (cargar sólo el paso en curso; tokens aproximados)
 
-**Lineal:** [1 Análisis del objeto](lineal/01-analisis-del-objeto.md) ~1000 · [2 Inventario](lineal/02-inventario.md) ~780 · [3 Blink / SubframeSelector](lineal/03-blink-subframeselector.md) ~1180 · [4 Preprocesado](lineal/04-preprocesado.md) ~1670 · [5 StarAlignment + crop](lineal/05-staralignment-crop.md) ~800 · [6 HDRComposition](lineal/06-hdr-composition.md) ~1570 · [7 Extracción de canales](lineal/07-extraccion-canales.md) ~1040 · [8 Plate solve](lineal/08-plate-solve.md) ~720 · [9 Gradiente](lineal/09-correccion-gradiente.md) ~1200 · [10 Combinación RGB / NB](lineal/10-combinacion-rgb-nb.md) ~1710 · [11 BXT Correct Only](lineal/11-bxt-correct-only.md) ~910 · [12 SPCC](lineal/12-spcc.md) ~840 · [13 BXT completo](lineal/13-bxt-completo.md) ~1000 · [14 NXT suave](lineal/14-noisex-suave.md) ~560 · [15 StarX y denoise](lineal/15-starx.md) ~1980 · [16 LinearFit / continuo](lineal/16-linearfit-continuo.md) ~1070 · [17 Checkpoint](lineal/17-checkpoint.md) ~930
+**Lineal:** [1 Análisis del objeto](lineal/01-analisis-del-objeto.md) ~600 · [2 Inventario](lineal/02-inventario.md) ~500 · [3 Blink / SubframeSelector](lineal/03-blink-subframeselector.md) ~760 · [4 Preprocesado](lineal/04-preprocesado.md) ~1130 · [5 StarAlignment + crop](lineal/05-staralignment-crop.md) ~630 · [6 HDRComposition](lineal/06-hdr-composition.md) ~920 · [7 Extracción de canales](lineal/07-extraccion-canales.md) ~1100 · [8 Plate solve](lineal/08-plate-solve.md) ~490 · [9 Gradiente](lineal/09-correccion-gradiente.md) ~650 · [10 Combinación RGB / NB](lineal/10-combinacion-rgb-nb.md) ~1250 · [11 BXT Correct Only](lineal/11-bxt-correct-only.md) ~450 · [12 SPCC](lineal/12-spcc.md) ~530 · [13 BXT completo](lineal/13-bxt-completo.md) ~520 · [14 NXT suave](lineal/14-noisex-suave.md) ~410 · [15 StarX y denoise](lineal/15-starx.md) ~1000 · [16 LinearFit / continuo](lineal/16-linearfit-continuo.md) ~490 · [17 Checkpoint](lineal/17-checkpoint.md) ~490
 
-**No lineal:** [1 Estirado](no-lineal/01-estirado.md) ~1310 · [2 LRGB / paleta](no-lineal/02-lrgb-paleta.md) ~2940 · [3 SCNR](no-lineal/03-scnr.md) ~730 · [4 Máscaras](no-lineal/04-mascaras.md) ~800 · [5 Boost](no-lineal/05-boost.md) ~1660 · [6 NoiseX](no-lineal/06-noisex.md) ~720 · [7 Nitidez](no-lineal/07-nitidez.md) ~500 · [8 Estrellas](no-lineal/08-estrellas.md) ~950 · [9 Recombinación](no-lineal/09-recombinacion.md) ~700 · [10 Recorte y exportación](no-lineal/10-recorte-exportacion.md) ~680 · [11 Dossier](no-lineal/11-dossier.md) ~560
+**No lineal:** [1 Estirado](no-lineal/01-estirado.md) ~1410 · [2 LRGB / paleta](no-lineal/02-lrgb-paleta.md) ~1510 · [3 SCNR](no-lineal/03-scnr.md) ~340 · [4 Máscaras](no-lineal/04-mascaras.md) ~420 · [5 Boost](no-lineal/05-boost.md) ~1140 · [6 NoiseX](no-lineal/06-noisex.md) ~500 · [7 Nitidez](no-lineal/07-nitidez.md) ~280 · [8 Estrellas](no-lineal/08-estrellas.md) ~580 · [9 Recombinación](no-lineal/09-recombinacion.md) ~400 · [10 Recorte y exportación](no-lineal/10-recorte-exportacion.md) ~340 · [11 Dossier](no-lineal/11-dossier.md) ~420
 
-**Anexos (bajo demanda):** [A Equivalentes de scripts](anexos/A-equivalentes-scripts.md) · [B Controles de calidad y entrega](anexos/B-checklist-entrega.md) · [C Pendiente](anexos/C-pendiente-documentar.md) · [D Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) · [E Parámetros complementarios](anexos/E-parametros-detalle.md) · [F Anti-patrones y parada](anexos/F-anti-patrones.md) · [G Glosario](anexos/G-glosario.md) · [H Modelo por paso](anexos/H-modelo-por-paso.md)
+**Cómo en cada programa (bajo demanda):** las fichas dicen qué y con qué criterios, con nombres neutros; las funciones, procesos y llamadas de PixInsight están en el [Anexo J](anexos/J-pixinsight.md); con sirilastropilot conectado, el cómo de Siril está en el [Anexo I](anexos/I-siril.md).
+
+**Anexos (bajo demanda):** [A Equivalentes de scripts](anexos/A-equivalentes-scripts.md) · [B Controles de calidad y entrega](anexos/B-checklist-entrega.md) · [C Pendiente](anexos/C-pendiente-documentar.md) · [D Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) · [E Parámetros complementarios](anexos/E-parametros-detalle.md) · [F Anti-patrones y parada](anexos/F-anti-patrones.md) · [G Glosario](anexos/G-glosario.md) · [H Modelo por paso](anexos/H-modelo-por-paso.md) · [I Siril](anexos/I-siril.md) · [J PixInsight](anexos/J-pixinsight.md)
 
 **Detalle de los pasos** (el porqué y las fuentes; sólo si una ficha no basta para decidir): `detalle/`. **Configuración** (crear o completar `perfil.md`, entorno de PixInsight): [00 Perfil y entorno](00-perfil-y-entorno.md). Fuentes: `FUENTES.md`. Instrucciones para ChatGPT y modelos locales: `envolturas/`.

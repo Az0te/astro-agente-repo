@@ -41,7 +41,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | Escala por defecto de sample_free / `-sample_free_simplified true` | sample_free escala 10 (8 si queda gradiente) |
 | Corregir por división un gradiente aditivo (o por sustracción el viñeteo) | Sustracción para contaminación, división para viñeteo |
 | DBE sobre nebulosa | Sólo cielo; nunca sobre señal |
-| Dar por bueno un modelo sin mirarlo | Liso, sin objeto, sin anillo; `gcStructCopy` |
+| Dar por bueno un modelo sin mirarlo | Liso, sin objeto, sin anillo; `copia_objeto` |
 
 ## F.4 Preprocesado y subs
 

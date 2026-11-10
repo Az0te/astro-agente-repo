@@ -22,13 +22,7 @@
 
 - Solución astrométrica, bits por muestra, si es color, mediana y máximo por canal y número de pasos del historial.
 
-**Informe en una llamada** (`herramientas/lineal.js`): `checkpointLineal(vista, { carpeta, objeto, version, notas })` mide la tabla de arriba (lineal, cielo por canal en sigmas, recorte, WCS, FWHM por canal, ringing, núcleos, historial), devuelve `no_cumple` y, con `carpeta`, escribe un borrador de `estado.md` para la fase no lineal.
-
-```json
-{"llamadas": [
-  {"funcion": "checkpointLineal", "parametros": {"vista": "MasterLight_v3", "opciones": {"carpeta": "<carpeta de la versión>", "objeto": "<nombre del objeto>", "version": "v3"}}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-17); en Siril, [Anexo I](../anexos/I-siril.md).
 
 La carpeta es la real de la versión (junto al master); el nombre del objeto sale de OBJECT, del nombre del master o se pregunta al usuario.
 

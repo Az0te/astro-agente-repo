@@ -15,20 +15,7 @@
 - "`window.saveAs` no guarda el historial de procesos en el XISF: anotar los parámetros en el dossier".
 - Desde PixInsight 1.9.6, Crop, DynamicCrop (también girado), Resample y FastRotation **conservan la astrometría** y la ajustan al nuevo marco. Comprobado (nebulosa dual band, nov 2026): tras Crop + Resample 0,5 + DynamicCrop de 10°, una nueva resolución coincide con la heredada a 0,05 px; tras FastRotation 180°, igual que el original. Con 1.9.5 o anterior se perdía y `FastRotation` sobre una ventana con astrometría llegó a colgar PixInsight: girar con PixelMath `pixel($T, w()-1-x(), h()-1-y())`.
 
-**A mano en PixInsight (valores de referencia)**
-
-- ICCProfileTransformation a «sRGB IEC61966-2.1» y guardado del XISF en la carpeta real de la versión.
-- `saveAs` no guarda el historial en el XISF: anotar los parámetros en el dossier.
-
-**En una llamada** (`herramientas/exportar.js`): `exportarFinal("Final", { carpeta, nombre, girar180 })` comprueba saturados y bordes negros, guarda el XISF 32 bits con astrometría y, sobre una copia en sRGB (y girada 180° con FastRotation si se pide), el TIFF 16 bits y el JPG. Crea la carpeta antes de guardar y no sobrescribe (añade _2). Recomendado para modelos sin herramientas.
-
-```json
-{"llamadas": [
-  {"funcion": "exportarFinal", "parametros": {"vista": "Final", "opciones": {"carpeta": "<carpeta de la versión>/final", "nombre": "<objeto>_v1", "girar180": false}}}
-]}
-```
-
-Devuelve los ficheros (con su tamaño), los controles y `no_cumple`.
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-10); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** Abrir el JPG/TIFF exportado en un visor externo y comparar con PixInsight (si cambia, el ICC no está incrustado). Comprobar dimensiones y que el recorte no deja bordes negros ni bandas de máscara.
 

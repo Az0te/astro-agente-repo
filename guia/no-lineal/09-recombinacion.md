@@ -7,25 +7,13 @@
 **Reglas**
 
 - Screen en no lineal. "Con fuerza ajustable `~(~$T * ~(k*stars))` (**k ≈ 0,5–0,6** para estrellas discretas en galaxias)."
-- **ScreenStars** (`realces.js`, herramienta MCP): `screenStarsCombine("Starless", "Stars", { newId: "Final" })` crea la imagen recombinada con screen (`method: "add"` para suma). Si la starless está estirada (mediana > 0,005), lleva las dos capas a casi lineal con una MTF, combina ahí y vuelve a estirar con la inversa (`reverseStretch: false` lo desactiva): las estrellas se integran mejor que con el screen directo. Es la opción por defecto; `method: "add"` sólo con capas lineales, y el PixelMath de abajo para dosificar las estrellas con fuerza `k`. Control: el fondo de la imagen recombinada nunca baja respecto a la starless.
+- Con la starless estirada, llevar las dos capas a casi lineal con una MTF, combinar ahí y volver a estirar con la inversa integra mejor las estrellas que el screen directo. Control: el fondo recombinado nunca baja respecto a la starless.
 - Suma `Starless + Stars` **sólo en lineal**; `S + k·E` con máscara para casos difíciles.
 - "Nunca combinar estrellas lineales sin estirar con una starless estirada."
 - Invariante: "el resultado nunca es menor que la base (`1−(1−B)(1−S) ≥ B`); si el fondo baja tras recombinar, hay un error en otro sitio. Lo que ya está a 1 en cualquier capa no se recupera."
 - "Comprobar la reconstrucción: starless + estrellas con su propia fórmula debe reproducir la imagen original."
 
-**A mano en PixInsight (valores de referencia)**
-
-- Screen con fuerza k en una imagen nueva: `~(~$T · ~(k·Stars))`, equivalente a 1 − (1 − N)(1 − k·S), con k = 0,55 y `Stars` la capa de estrellas ya estirada.
-
-**Recombinación en una llamada** (`herramientas/recombinacion.js`): combina con `screenStarsCombine` (o screen con `k` si se pide `metodo: "screen"`), sin tocar las entradas, y mide que el fondo no baje ni suba, el recorte nuevo y lo que aportan las estrellas; con `original` mide también el residuo. Recomendado para modelos sin herramientas.
-
-```json
-{"llamadas": [
-  {"funcion": "recombinarEstrellas", "parametros": {"starless": "Starless_st", "estrellas": "Stars_v1", "opciones": {"nuevaVista": "Final_v1"}}}
-]}
-```
-
-Screen con k: `{"metodo": "screen", "k": 0.55}`. Devuelve el método, fondo, recorte, aporte de las estrellas (y en %), `no_cumple` y el control (medido y revisar a ojo).
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-09); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Las estrellas tienen que verse.** `aporte_estrellas_pct` es el % de píxeles que suben más de 0,01 al recombinar. Por debajo del 2 % `no_cumple` avisa: la final saldrá casi sin estrellas. Bien procesadas salen 6–10 % (galaxia grande 5,9 %, nebulosa oscura 10 %). Con la capa de `starStretch` amount 2 salió 0,19 % en una galaxia grande y 0,8 % en una nebulosa oscura, y las dos finales quedaron casi sin estrellas. Que el fondo no suba ni baje no basta: se vuelve al Paso 1 con el arcsinh por defecto (en galaxias, `tipo: "galaxia"`) y se repiten los Pasos 8 y 9. Umbral calibrado con un solo caso; en un campo con muy pocas estrellas puede ser normal, y se dice.
 

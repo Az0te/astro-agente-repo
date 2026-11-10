@@ -19,25 +19,9 @@
 
 **Si SPCC falla.** "Si SPCC falla, SCNR como recurso (aescaffre 0,65 en verde; nosotros preferimos suave)". No es una alternativa válida a la calibración: es un recurso estético posterior.
 
-**A mano en PixInsight (valores de referencia)**
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-12); en Siril, [Anexo I](../anexos/I-siril.md).
 
-- Requisitos: solución astrométrica y datos lineales.
-- OSC sin filtro con ventana UV/IR-cut: Sony Color Sensor R/G/B-UVIRcut y «Ideal QE curve» (valores por defecto).
-- Dual band Hα/OIII 5 nm: modo narrowband con [656,3 nm, 5], [500,7, 5], [500,7, 5] y la QE del sensor.
-- Probado el 31 oct 2026 (PixInsight 1.9.6): 2,4 s en 3008×3222; deja PCL:SPCC:WhiteBalanceFactors en la vista.
-- Verificación: medianas del cielo por canal parecidas tras SPCC.
-
-**SPCC en una llamada** (`herramientas/color.js`, necesita `procesos.js`): comprueba la solución astrométrica y que la imagen sea lineal, aplica `pxSPCC` con los filtros del perfil sobre una copia y mide el cielo por canal antes y después, en las zonas más oscuras, comparando la diferencia con el ruido. Devuelve los filtros usados, los factores de balance de blancos, `no_cumple` y el control. Una diferencia de más de 0,5 sigmas en el cielo sale como dominante al estirar (nebulosa dual band, nov 2026: 1,1 sigmas en lineal → 19 % azul estirada). Recomendado para modelos sin herramientas.
-
-```json
-{"llamadas": [
-  {"funcion": "calibrarColor", "parametros": {"vista": "MasterLight", "opciones": {"nuevaVista": "MasterLight_spcc", "spcc": {}}}}
-]}
-```
-
-`spcc`: filtros y QE del perfil. Devuelve los filtros, los factores de balance de blancos, cielo antes y después, `no_cumple` y el control.
-
-**Cielo descompensado tras SPCC** (`neutralizarCielo`, en `color.js`). Si `calibrarColor` da el cielo por encima de 0,5 sigmas, o el estirado sale con dominante en el cielo (> 5 %), se neutraliza el fondo en lineal: BackgroundNeutralization aditiva, que suma a cada canal lo que le falta para igualar su cielo al del canal más alto (no resta, no recorta sombras y no cambia el balance de SPCC más que ese desplazamiento constante). Mide en las mismas zonas que el control del estirado (el 10 % de celdas de 64 px más oscuras); si esas zonas son polvo o nebulosa oscura con color propio, pasar `rect` con un trozo de cielo limpio. Vale sobre la starless lineal, sin rehacer BXT ni SXT. No es un apaño de color: es la neutralización de fondo que la guía ya admite junto a SPCC.
+**Cielo descompensado tras la calibración de color.** Si el cielo por canal queda a más de 0,5 sigmas, o el estirado sale con dominante en el cielo (> 5 %), neutralizar el fondo en lineal de forma **aditiva**: sumar a cada canal lo que le falta para igualar su cielo al del canal más alto (no resta, no recorta sombras y no cambia el balance más que ese desplazamiento constante). Medir en el 10 % de celdas de 64 px más oscuras; si son polvo o nebulosa oscura con color propio, usar un trozo de cielo limpio. Vale sobre la starless lineal, sin rehacer la deconvolución ni la separación de estrellas. No es un apaño de color: es la neutralización de fondo que la guía ya admite junto a la calibración.
 
 ```json
 {"llamadas": [

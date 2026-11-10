@@ -27,16 +27,7 @@
 
 **Caso medido (nebulosa de emisión y reflexión).** HDRComposition en modo global con las rutas de los masters de 120 s y 30 s (crea las ventanas `HDR` y `HDR_mask01`; tarda > 60 s). **Con LocalNormalization los masters no saturan a 1**: el verde de 120 s se quedaba en 0,89–0,92 y R/B en 0,93–0,96; medir la meseta por canal y poner el umbral por debajo (**se usó 0,80, suavizado 7, crecimiento 1**). La salida queda reescalada (HDR ≈ 0,275 × M120, sin pedestal): normal, es lineal. La razón 120/30 en estrellas fue 3,66–3,93, pero en las alas de la estrella brillante ≈ 4,1, lo que dejó un escalón del −6 % a 28 px dentro del núcleo saturado: invisible tras estirar, pero comprobarlo con el perfil HDR/M120 y HDR/M30.
 
-**En una llamada** (`herramientas/hdr.js`): `componerHDR([larga, corta] o carpeta, { nuevaVista })` trabaja con los masters ya alineados (Paso 5, `alinearMasters`) y hace esto:
-- Los ordena por exposición (`EXPTIME`, o el número del nombre: "L120", "S30").
-- Mide la meseta de saturación por canal de la larga y pone el umbral en 0,9 × la más baja. Así sustituye en cuanto satura cualquier canal, como pide OSC.
-- Lanza HDRComposition (suavizado 7, crecimiento 1) y comprueba el resultado: n−1 máscaras, % del campo sustituido, razón de flujo larga/corta, escalón en la transición (HDR frente a la corta escalada, aviso si pasa del 3 %) y si la corta también satura.
-
-```json
-{"llamadas": [
-  {"funcion": "componerHDR", "parametros": {"masters": ["<master 120 s alineado>", "<master 30 s alineado>"], "opciones": {"nuevaVista": "HDR"}}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-06); en Siril, [Anexo I](../anexos/I-siril.md).
 
 Comprobado con una nebulosa de emisión y reflexión (nov 2026; L120 y S30 reducidos ×2, 22 s):
 - Razón de flujo 3,94 para exposiciones 4,0 (en octubre se midió 3,66–3,93).
@@ -45,12 +36,6 @@ Comprobado con una nebulosa de emisión y reflexión (nov 2026; L120 y S30 reduc
 - Aviso: la de 30 s también satura en ~600 px, el núcleo de la estrella brillante.
 
 Si los masters tienen astrometría con splines, reducirlos antes con IntegerResample o recortarlos pide confirmación (ver Paso 5): `astrometriaLineal(ventana)`.
-
-**A mano en PixInsight (valores de referencia)**
-
-- HDRComposition con las imágenes de mayor a menor exposición.
-- `maskBinarizingThreshold` 0,80: por debajo de la meseta medida por canal (0,89–0,96).
-- `maskSmoothness` 7 (suavizado de la transición) y `maskGrowth` 1. Crea `HDR` y `HDR_mask01`.
 
 **Control.** n−1 máscaras; perfil de la relación HDR/M120 y HDR/M30 en la estrella brillante (sin escalones); bordes de la sustitución revisados al 100 % en estrellas y núcleos; sin anillos de color en OSC. Alternativa propia si la composición no convence: medir la razón de flujo larga/corta en estrellas no saturadas y mezclar con máscara de saturación dilatada y suavizada (PixelMath), comprobando que no queda escalón ni anillo.
 

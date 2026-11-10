@@ -41,13 +41,7 @@ Recortar a ≥ 0 **sólo al final** y vigilar sobre-restas (zonas negras) en se�
 
 `OIII_raw` igual, con `−0,1378·(R−pR) + 0,8370·(G−pG) + 0,4542·(B−pB)`.
 
-**En una llamada** (`herramientas/bandaestrecha.js`): `desmezclarDualBand(vista, { ponderarG })` mide los pedestales en el cielo, crea `Ha_raw` y `OIII_raw` (gris, con la solución astrométrica), cuenta las sobre-restas antes de recortar a 0 y comprueba los ratios G/R y B/R en la zona de Hα. nebulosa de emisión y reflexión (nov 2026): ratios 0,146 y 0,072, sin sobre-resta; misma estructura que DBXtract (correlación 0,96 en bloques de 16 px; DBXtract escala distinto).
-
-```json
-{"llamadas": [
-  {"funcion": "desmezclarDualBand", "parametros": {"vista": "MasterLight_NB"}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-07); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Otros filtros dual band (S2O3, S2Hb).** `desmezclarDualBand` lee la palabra clave FILTER, o `{ filtro: "S2O3" }`, y resuelve las dos rayas con la tabla QE de arriba por mínimos cuadrados. Con HaO3 da los mismos coeficientes de arriba:
 - S2O3: `SII = 1.3602·R − 0.0300·G − 0.0530·B` y `OIII = −0.1780·R + 0.8377·G + 0.4562·B`.

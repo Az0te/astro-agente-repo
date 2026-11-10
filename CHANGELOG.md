@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- **Una sola guía para varios programas** (10 nov 2026). Las fichas (`lineal/`, `no-lineal/`) dicen qué hacer, por qué y con qué criterios, con nombres neutros; el cómo de cada programa pasa a anexos bajo demanda.
+  - Nuevo **Anexo J (PixInsight)**: `anexos/J-pixinsight.md` (índice y tabla de nombres neutros ↔ nombres de PixInsight) y `anexos/J-pixinsight/lineal.md` y `no-lineal.md` con lo que antes iba en las fichas: los bloques «A mano en PixInsight», «En una llamada» con sus ejemplos de llamada y los párrafos de funciones concretas. En las fichas queda una línea «Cómo hacerlo» con los enlaces a los anexos.
+  - Nuevo **Anexo I (Siril)**: herramientas de sirilastropilot y comandos de Siril por paso.
+  - Ficha 9 (gradiente) reescrita con nombres neutros; párrafos de las fichas 12, 14, 1 y 5 no lineales, 2 y 9 no lineales cambiados por su criterio neutro.
+  - `SKILL.md`: una línea con el anexo de cada programa, I y J en la lista de anexos, `copia_objeto` en vez de `gcStructCopy` y tokens del índice recalculados.
+  - Nombres neutros en los resultados (los mismos que en Siril): `gradienteCandidatos` devuelve `copia_objeto`, `objeto_quitado_pct` y `gradiente_restante`; `estirarCandidatos`, `separacion`; `reducirRuido` y `ruidoCandidatos`, `ruido_rel`; `contrasteCandidatos`, `contraste_ganado_pct` y `ruido_rel`. Los nombres antiguos (`gcStructCopy`/`corr`, `come_objeto_pct`, `fondoResidual`, `senal_debil_en_ruidos`) siguen como alias durante una versión.
+  - PiAstroPilot Lite y el módulo leen los nombres neutros (con los antiguos de respaldo); el prompt del módulo manda al Anexo J para las llamadas y Lite explica los nombres. El módulo necesita build nueva.
+
 - **PiCopilot pasa a llamarse PiAstroPilot** (9 nov 2026): ya existe otro producto «PI Copilot». Cambian la carpeta (`piastropilot/`), los ficheros y clases del módulo (`PiAstroPilot*.cpp`, `PiAstroPilot-pxm`), el script (`PiAstroPilotLite.js`, menú *Script > PiAstroPilot*), el servidor MCP (`piastropilot-mcp`, herramientas `mcp__piastropilot__*`, runner `piastropilot-runner.js`, datos en `~/.piastropilot`), las variables `PIASTROPILOT_*` y las claves de ajustes (los ajustes guardados con el nombre antiguo no se leen).
 
 - **Sin código generado por el modelo** (9 nov 2026, licencia PCL cláusula c): los modelos sólo proponen llamadas a funciones de la guía, validadas contra el manifiesto; fuera `run_script`, el contrato de la API PJSR y los bloques PJSR de las fichas. En Lite, fuera «Ejecutar sin preguntar» y «Procesado completo».

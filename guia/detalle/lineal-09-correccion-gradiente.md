@@ -46,7 +46,7 @@ sample_free, escala 10 por defecto. Crea `GC_GraXpert_<tag>` (corregida) y `GC_G
 
   Comparativa del 31 oct 2026, sample_free escala 10 en la misma imagen (masters binados ×2):
 
-  | Objeto | `gcStructCopy` graxpert.js | `gcStructCopy` proceso | Diferencia entre las corregidas |
+  | Objeto | `copia_objeto` graxpert.js | `copia_objeto` proceso | Diferencia entre las corregidas |
   |---|---|---|---|
   | nebulosa oscura | copia 0,8 % (0,13) | copia 0,5 % (0,07) | p95 0,07σ del cielo |
   | nebulosa dual band (`master_RGB`) | copia 4,3 % (0,32) | copia 4,1 % (0,31) | p95 0,08σ |
@@ -70,7 +70,7 @@ sample_free, escala 10 por defecto. Crea `GC_GraXpert_<tag>` (corregida) y `GC_G
 | Tiempo | IA ~4 s y sample_free ~14 s en una imagen de 6000×4000 con GPU |
 | Gradiente residual liso | "quitarlo con el plano robusto de grado 1 (no puede comerse formas) en vez de bajar la escala" |
 
-**Tabla de resultados de GraXpert 4.0.0** ("copia" = estructura del original copiada en el modelo, `gcStructCopy`, correlación entre paréntesis; "come" = señal del objeto en el modelo)
+**Tabla de resultados de GraXpert 4.0.0** ("copia" = estructura del original copiada en el modelo, `copia_objeto`, correlación entre paréntesis; "come" = señal del objeto en el modelo)
 
 | Objeto | IA s0,1 | IA s1,0 | SF por defecto | SF escala 8 | SF escala 10 |
 |---|---|---|---|---|---|
@@ -97,7 +97,7 @@ En imágenes grandes GraXpert puede pasar de 45 s: el MCP devuelve un id de trab
 
 **Plano robusto (control conservador).** "Plano robusto de grado 1 (rejilla 24×16 de medianas, mínimos cuadrados con rechazo iterativo a 2σ) restado con PixelMath por canal. No puede crear ni borrar formas; antes, confirmar en una vista binada con mediana que el gradiente es liso (en una nebulosa oscura, brillo verdoso hacia arriba a la derecha)."
 
-**Protocolo de comparativa** (cuando el modelo de GraXpert no convence: correlación de `gcStructCopy` alta o forma del objeto visible en el modelo)
+**Protocolo de comparativa** (cuando el modelo de GraXpert no convence: correlación de `copia_objeto` alta o forma del objeto visible en el modelo)
 
 1. Entrada común: el mismo master lineal, recortado y con astrometría, en el punto del flujo en que se va a corregir (antes de BXT Correct Only). Guardar una copia intacta.
 2. Candidatos, cada uno a una ventana nueva `GC_<metodo>`: MGC (SPFC previo, escalas 1024/2048/4096 si hay duda); GraXpert sample_free escala 10 y 8, y GraXpert IA; GraXpert RBF con muestras manuales si el objeto llena el campo; plano robusto grado 1 (y 2 si el gradiente es curvo); DBE con pocas muestras (opcional). Guardar también el modelo de cada uno.
@@ -114,7 +114,7 @@ En imágenes grandes GraXpert puede pasar de 45 s: el MCP devuelve un id de trab
 
 **Revisión del modelo con medida**
 
-- `gcStructCopy(base, modelo)` de `guia/herramientas/gradcompare.js` da la correlación entre la estructura de gran escala del original y la del modelo (sin estrellas y sin gradiente liso). **Correlación < 0,15 = limpio; > 0,5 = se come el objeto.**
+- `copia_objeto` (en PixInsight, la función `gcStructCopy(base, modelo)` de `guia/herramientas/gradcompare.js`) da la correlación entre la estructura de gran escala del original y la del modelo (sin estrellas y sin gradiente liso). **Correlación < 0,15 = limpio; > 0,5 = se come el objeto.**
 - "Confirmarlo a la vista con el modelo menos su gradiente liso: cualquier forma reconocible del objeto es señal perdida."
 - Revisar siempre el modelo que devuelve GraXpert: "liso, sin la forma del objeto y sin anillo oscuro".
 

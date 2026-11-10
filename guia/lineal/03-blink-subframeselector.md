@@ -22,13 +22,7 @@ Escala del sub = 206,265·píxel(µm)/focal(mm).
 
 **Criterio NOVA:** "descartar primero por pocas estrellas (< 20), excentricidad > 0,66, gradiente fuerte o cielo > 3× el de la sesión, y luego ordenar por `FWHM·(1 + excentricidad)` y quitar el ~10 % peor; son valores de ingeniería, no óptimos". No mezclar en un mismo ranking paneles, filtros o exposiciones distintas.
 
-**En una llamada (PixInsight 1.9.6+, ImageAnalysis)** (`herramientas/preproceso.js`): `seleccionarSubs(carpeta o lista, { csv })` mide los subs con ImageAnalysis (sin abrir ventanas, ~1 s por sub) y, dentro de cada grupo de carpeta, filtro y exposición, rechaza por FWHM > cuartil inferior + 50 %, excentricidad > mediana + 0,10 o extinción por nubes con z robusto > 2,5. Con FWHM entre +35 y +50 % , excentricidad entre +0,07 y +0,10 o nubes con z entre 1,5 y 2,5 los aprueba, pero los lista en `dudosos` para que decida el usuario. En subs crudos CFA la excentricidad sube cuando las estrellas son más pequeñas: en una galaxia grande los subs de mejor FWHM tenían +0,08. Devuelve el número de aprobados y `lista_aprobados` (fichero con una ruta por línea, para WBPP), rechazados con su motivo, pesos (PSF Signal Weight relativo) y los subs con trazos (sólo anotados). ImageAnalysis sustituye a SubframeSelector.
-
-```json
-{"llamadas": [
-  {"funcion": "seleccionarSubs", "parametros": {"subs": "<carpeta LIGHT de una noche>", "opciones": {"csv": "<carpeta>/seleccion.csv"}}}
-]}
-```
+**Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-03); en Siril, [Anexo I](../anexos/I-siril.md).
 
 Comprobado con subs crudos CFA (nov 2026):
 
