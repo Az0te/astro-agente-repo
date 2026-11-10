@@ -70,6 +70,19 @@ Ficha: [no-lineal/04-mascaras.md](../../no-lineal/04-mascaras.md)
 ]}
 ```
 
+Con `normalizar: true` (sólo `tipo: "luminancia"`), la luminancia se lleva a 0–1 (Rescale mín–máx) antes de la gamma: en imágenes con poco rango la máscara sí separa lo brillante. Si `crearMascara` avisa de que apenas distingue cielo y brillante, repetir con `normalizar` o pasar a `fondo_lhe`.
+
+**Aplicar con la máscara medida** (`herramientas/mascaras.js`): `aplicarConMascara(vista, { mascara, operacion, fuerza, invertir, objetivo })` aplica la operación a una copia oculta sin máscara y la mezcla con PixelMath en otra copia (`<vista>_m`): `$T·(1 − k·m) + procesado·k·m`. Es lo mismo que poner la máscara en la ventana y ejecutar el proceso, pero sin dejarla puesta o invertida y con medidas. Operaciones: `{ tipo: "curvas", K: [[x, y], …] }` (CurvesTransformation en K), `{ tipo: "saturacion", factor }` (PixelMath alrededor de la luminancia) y `{ tipo: "lhe", radio, amount, slope }` (LocalHistogramEqualization). `mascara` es el id de una vista gris del mismo tamaño (la de `crearMascara`); `fuerza` 0–1 (def. 1); `invertir` usa 1 − m; `objetivo` `"fondo"` o `"brillante"` activa el aviso de máscara invertida.
+
+```json
+{"llamadas": [
+  {"funcion": "crearMascara", "parametros": {"vista": "Starless_st", "opciones": {"tipo": "fondo_lhe"}}},
+  {"funcion": "aplicarConMascara", "parametros": {"vista": "Starless_st", "opciones": {"mascara": "<id de la máscara devuelta>", "objetivo": "fondo", "operacion": {"tipo": "lhe", "radio": 128, "amount": 0.3}}}}
+]}
+```
+
+Devuelve la vista nueva, la fórmula, `medidas.mascara` (`media_en_cielo`, `media_en_lo_brillante`, `cobertura_pct`, `transicion_pct`, `salto_p99_por_px`), `medidas.efecto` (`cambio_medio_zona_m_alta`, `fuga_media_zona_m_baja`, `fuga_p99`, `fuga_rel_pct` y el % de píxeles de cada zona), `no_cumple` con los avisos de la ficha y el control a ojo (bordes al 100 %, `previa` con el mismo recorte que la original).
+
 <a id="no-lineal-05"></a>
 ### Fase no lineal · Paso 5: Boost (curvas, contraste, saturación)
 

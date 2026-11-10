@@ -56,7 +56,7 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario. El resto se carg
 | NL1 Estirado | **`estirarCandidatos`** (GHS al fallo, MAS, Arcsinh) → `estirarCapas` (o `estirarStarless` + `estirarEstrellas` / `starStretch`) |
 | NL2 Paleta | `paletasDisponibles`, `previsualizarPaletas`, `componerPaleta` |
 | NL3 SCNR | `quitarVerde` |
-| NL4 Máscaras | `crearMascara` |
+| NL4 Máscaras | `crearMascara` → **`aplicarConMascara`** (mezcla medida: fuga, bordes, máscara invertida) |
 | NL5 Boost | **`contrasteCandidatos`** (LHE 64 y 128, HDRMT, DSE), **`nucleoCandidatos`** / `comprimirNucleo` / `medirMeseta` (galaxias, antes de saturar), **`saturarAlFallo`**, `backgroundEnhance`, `darkStructureEnhance` |
 | NL6 NoiseX | **`ruidoCandidatos`** → `reducirRuido` |
 | NL7 Nitidez | Sin función propia: la ficha |
