@@ -980,13 +980,22 @@ static void CollectGuidePreviews( const JsonValue& o, std::vector<std::pair<Stri
       else if ( o["paleta"].type == JsonValue::Str ) label = o["paleta"].s;
       else if ( o["vista"].type == JsonValue::Str ) label = o["vista"].s;
       const JsonValue& met = o["metricas"];
-      if ( met.type == JsonValue::Object && met["fondoResidual"].type == JsonValue::Number )
-         label << Tr( u" · cielo " ) << String().Format( "%.0f", 100 * met["fondoResidual"].n ) << u" %";
-      if ( met.type == JsonValue::Object && met["come_objeto_pct"].type == JsonValue::Number )
-         label << Tr( u" · come " ) << met["come_objeto_pct"].ToText() << u" %";
+      // Nombres neutros de la guía (gradiente_restante, objeto_quitado_pct, separacion); los antiguos por compatibilidad.
+      if ( met.type == JsonValue::Object )
+      {
+         const JsonValue& resto = met["gradiente_restante"].type == JsonValue::Number ? met["gradiente_restante"] : met["fondoResidual"];
+         const JsonValue& come = met["objeto_quitado_pct"].type == JsonValue::Number ? met["objeto_quitado_pct"] : met["come_objeto_pct"];
+         if ( resto.type == JsonValue::Number )
+            label << Tr( u" · cielo " ) << String().Format( "%.0f", 100 * resto.n ) << u" %";
+         if ( come.type == JsonValue::Number )
+            label << Tr( u" · come " ) << come.ToText() << u" %";
+      }
       if ( o["ruido_baja_pct"].type == JsonValue::Number ) label << Tr( u" · ruido −" ) << o["ruido_baja_pct"].ToText() << u" %";
       if ( o["contraste_x"].type == JsonValue::Number ) label << Tr( u" · contraste ×" ) << o["contraste_x"].ToText();
-      if ( o["senal_debil_en_ruidos"].type == JsonValue::Number ) label << Tr( u" · señal débil " ) << o["senal_debil_en_ruidos"].ToText();
+      {
+         const JsonValue& sep = o["separacion"].type == JsonValue::Number ? o["separacion"] : o["senal_debil_en_ruidos"];
+         if ( sep.type == JsonValue::Number ) label << Tr( u" · señal débil " ) << sep.ToText();
+      }
       if ( o["elegido"].type == JsonValue::Bool && o["elegido"].b ) label << Tr( u" · RECOMENDADO" );
       imgs.push_back( { label, img } );
       String mod = o["previa_modelo"].type == JsonValue::Str ? o["previa_modelo"].s : String();
@@ -1041,8 +1050,10 @@ std::vector<std::pair<String, String>> PiAstroPilotInterface::CandidatePreviews(
       const JsonValue& met = c["metricas"];
       if ( met.type == JsonValue::Object )
       {
-         if ( !met["come_objeto_pct"].IsNull() ) label << Tr( u" · come " ) << met["come_objeto_pct"].ToText() << u" %";
-         if ( !met["fondoResidual"].IsNull() ) label << Tr( u" · cielo " ) << String().Format( "%.0f", 100 * met["fondoResidual"].n ) << u" %";
+         const JsonValue& come = !met["objeto_quitado_pct"].IsNull() ? met["objeto_quitado_pct"] : met["come_objeto_pct"];
+         const JsonValue& resto = !met["gradiente_restante"].IsNull() ? met["gradiente_restante"] : met["fondoResidual"];
+         if ( !come.IsNull() ) label << Tr( u" · come " ) << come.ToText() << u" %";
+         if ( !resto.IsNull() ) label << Tr( u" · cielo " ) << String().Format( "%.0f", 100 * resto.n ) << u" %";
       }
       if ( v == rec ) label << Tr( u" · RECOMENDADO" );
       if ( !v.IsEmpty() )

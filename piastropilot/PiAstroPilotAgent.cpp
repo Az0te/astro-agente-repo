@@ -741,8 +741,9 @@ static String HttpContext( const PiAstroPilotConfig& cfg, const PiAstroPilotMode
            u"deja al perfil):\n<<<\n" << perfil << u"\n>>>";
    s << u"\n\nNo tienes acceso directo a PixInsight. Responde con:\n"
         u"1) Una explicación breve del plan, los parámetros elegidos y por qué.\n"
-        u"2) Un único bloque ```json con las llamadas a las funciones de la guía. Los bloques de código de las fichas "
-        u"explican qué hace cada función: no los copies; pide la función con sus parámetros."
+        u"2) Un único bloque ```json con las llamadas a las funciones de la guía. Los ejemplos de llamada del Anexo J "
+        u"(anexos/J-pixinsight.md, el cómo de cada paso en PixInsight) explican qué hace cada función: no los copies; "
+        u"pide la función con sus parámetros."
      << PiAstroPilotPrompts::CallsFormat();
    return s;
 }
@@ -892,7 +893,8 @@ String PiAstroPilotPrompts::Step( const PiAstroPilotConfig& cfg, const PiAstroPi
            << u"\n";
       s << u"\n1) Lee el núcleo de la guía (" << PiAstroPilotUtil::JoinPath( cfg.guideDir, "SKILL.md" )
         << u") y perfil.md si aún no los has leído en esta sesión, y la ficha del paso (" << guideFile
-        << u"). Los ficheros de detalle/ y los anexos, sólo si la ficha no basta. "
+        << u") y su apartado del Anexo J (anexos/J-pixinsight.md: funciones y procesos de PixInsight del paso). "
+           u"Los ficheros de detalle/ y los demás anexos, sólo si la ficha no basta. "
            u"Sigue su método predeterminado y sus ajustes de partida.\n"
         << u"2) Ejecuta el paso sobre la vista indicada con las herramientas MCP de PiAstroPilot (mcp__piastropilot__*): "
            u"cada función de la guía es una herramienta con el mismo nombre (analizarMaster, gradienteCandidatos, "

@@ -625,7 +625,10 @@ function plPromptSistema(aj) {
    "- Trabaja siempre sobre copias: no modifiques las vistas originales (las funciones de nivel «copias» ya crean vistas nuevas).\n" +
    "- No supongas qué objeto es por el nombre del fichero ni nombres objetos concretos que no te haya dicho el usuario.\n" +
    "- Antes de estirar, pregunta al usuario el tipo de objeto (galaxia, nebulosa de emisión, cúmulo...) si no lo sabes.\n" +
-   "- Mide antes y después (estadisticas) y no borres ni sobrescribas ficheros del usuario.\n\n" +
+   "- Mide antes y después (estadisticas) y no borres ni sobrescribas ficheros del usuario.\n" +
+   "- Las medidas usan los nombres neutros de la guía: copia_objeto, objeto_quitado_pct y gradiente_restante (gradiente), " +
+   "separacion (estirado), ruido_rel (ruido), contraste_ganado_pct (contraste). Los nombres antiguos que aún aparezcan " +
+   "(gcStructCopy, come_objeto_pct, fondoResidual, senal_debil_en_ruidos) son lo mismo.\n\n" +
    "Vistas e ids (lo más importante):\n" +
    "- Usa sólo los ids de la lista «Vistas abiertas», escritos exactamente igual (mayúsculas y guiones bajos incluidos). " +
    "Nunca inventes ni completes un id. Los ejemplos de la guía usan ids genéricos (MasterLight y parecidos): sustitúyelos " +
@@ -1119,12 +1122,17 @@ function plMiniaturas(r) {
          vistos[img] = true;
          var rotulo = o.metodo ? o.metodo + (o.parametros ? " " + o.parametros : "") : (o.paleta || o.etiqueta || o.vista || "");
          var extra = [];
-         if (o.metricas && isFinite(o.metricas.fondoResidual)) extra.push("deja " + Math.round(100 * o.metricas.fondoResidual) + " % del gradiente");
-         if (o.metricas && isFinite(o.metricas.come_objeto_pct)) extra.push("se lleva " + o.metricas.come_objeto_pct + " % del objeto");
+         // Nombres neutros de la guía; los antiguos (fondoResidual, come_objeto_pct, senal_debil_en_ruidos) por compatibilidad.
+         var mt = o.metricas || {};
+         var resto = isFinite(mt.gradiente_restante) ? mt.gradiente_restante : mt.fondoResidual;
+         var quitado = isFinite(mt.objeto_quitado_pct) ? mt.objeto_quitado_pct : mt.come_objeto_pct;
+         if (isFinite(resto)) extra.push("deja " + Math.round(100 * resto) + " % del gradiente");
+         if (isFinite(quitado)) extra.push("se lleva " + quitado + " % del objeto");
          if (o.deja_gradiente_pct !== undefined && o.deja_gradiente_pct !== null) extra.push("deja " + o.deja_gradiente_pct + " % del gradiente");
          if (o.ruido_baja_pct !== undefined) extra.push("ruido −" + o.ruido_baja_pct + " %");
          if (o.contraste_x !== undefined) extra.push("contraste ×" + o.contraste_x);
-         if (o.senal_debil_en_ruidos !== undefined) extra.push("señal débil " + o.senal_debil_en_ruidos + " ruidos");
+         var sep = o.separacion !== undefined ? o.separacion : o.senal_debil_en_ruidos;
+         if (sep !== undefined) extra.push("señal débil " + sep + " ruidos");
          var mod = typeof o.previa_modelo === "string" && File.exists(o.previa_modelo) ? o.previa_modelo : null;
          if (mod) vistos[mod] = true;
          filas.push({ img: img, mod: mod, rotulo: rotulo + (extra.length ? " · " + extra.join(", ") : ""), elegido: !!o.elegido });
