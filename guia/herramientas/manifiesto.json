@@ -1084,11 +1084,37 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\", gamma, bin, nuevaVista }"
+      "description": "Opcional. { tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\", gamma, normalizar (luminancia llevada a 0–1 antes de la gamma), bin, nuevaVista }"
      }
     },
     "required": [
      "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "aplicarConMascara",
+   "fichero": "mascaras.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 4 no lineal: aplica una operación (curvas, saturación o LHE) a través de una máscara en una copia (<vista>_m): original·(1 − k·m) + procesado·k·m. Mide la máscara (media en cielo y en lo brillante, transición, borde duro) y el efecto (cambio donde m > 0,8 y fuga donde m < 0,05), y avisa si parece invertida respecto al objetivo.",
+   "resumen": "No lineal: aplica curvas, saturación o LHE con una máscara en una copia y mide efecto, fuga y bordes.",
+   "paso": "no-lineal/04-mascaras.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista a tratar."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "{ mascara: id de la máscara gris (obligatoria, de crearMascara), operacion: { tipo: \"curvas\", K: [[x,y],...] } | { tipo: \"saturacion\", factor } | { tipo: \"lhe\", radio, amount, slope }, fuerza (0–1, def. 1), invertir (false), objetivo: \"fondo\" | \"brillante\" (para avisar si la máscara parece invertida), nuevaVista }"
+     }
+    },
+    "required": [
+     "vista",
+     "opciones"
     ]
    }
   },
