@@ -62,7 +62,7 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 Notas de la fase lineal:
 
 - **Gradiente.** `gradiente_restante` es la inclinación del plano del cielo que queda (después / antes). Cuando la nebulosa ocupa casi todo el campo, el cielo más oscuro también es nebulosa y la cifra no es fiable (en una nebulosa de emisión grande: 0,55–0,75 con modelos limpios): decide por `copia_objeto` y mirando la previa.
-- **Color.** SPCC necesita la astrometría. Si el catálogo en línea no responde, instalar el catálogo local con el script de instalación de catálogos de Siril.
+- **Color.** No pases sensor a `calibrarColor`: lo toma del perfil o de la cabecera; sólo si el usuario lo dice (un sensor deducido del modelo de cámara puede ser otro: ASI2600MC es IMX571, no IMX533). SPCC necesita la astrometría. Si el catálogo en línea no responde, instalar el catálogo local con el script de instalación de catálogos de Siril.
 - **Estrellas.** En campos de Vía Láctea `objeto_quitado_pct` sale alto en todos los motores (quitan también estrellas débiles sin resolver): compara motores entre sí y mira un recorte.
 
 ## Fase no lineal
