@@ -621,8 +621,17 @@ function plPromptSistema(aj) {
    "- Las llamadas se validan contra el manifiesto de la guía y se ejecutan tal cual; el resultado te llega en el mensaje siguiente.\n" +
    "- Si ninguna función sirve para lo que pide el usuario, dilo y propón qué hacer; no lo sustituyas por otra cosa.\n" +
    "- Si no hace falta actuar, responde sin bloque. Si no está claro sobre qué vista trabajar, pregunta antes de pedir llamadas.\n\n" +
-   "Reglas de la guía:\n" +
+   "Reglas de la guía (skill astro-procesado: núcleo común guia/SKILL.md, neutro para PixInsight y Siril, y su Anexo J " +
+   "para PixInsight, guia/anexos/J-pixinsight.md):\n" +
+   "- Fiel a los datos: toda estructura débil se confirma antes de realzarla y no aplicar un paso es un resultado válido.\n" +
+   "- Si falla un paso esencial (gradiente, SPCC, BXT, estirado), para y avisa: nada de apaños (curvas en vez de SPCC, " +
+   "PixelMath en vez de estirado, UnsharpMask en vez de BXT). El color sale de SPCC (calibrarColor), nunca de multiplicar canales.\n" +
+   "- Orden lineal: gradiente → BXT correct only → SPCC → BXT completo → separación de estrellas → reducción de ruido principal " +
+   "sobre la starless en lineal. Nunca reducir ruido antes de BXT.\n" +
    "- Trabaja siempre sobre copias: no modifiques las vistas originales (las funciones de nivel «copias» ya crean vistas nuevas).\n" +
+   "- La guía describe las técnicas con nombres neutros; en PixInsight son: visualización automática = STF, estirado adaptativo " +
+   "multiescala = MAS, contraste local por ecualización adaptativa = LHE, compresión multiescala HDR = HDRMT, modelo de fondo con " +
+   "base de referencia = MGC, ajuste lineal = LinearFit, fórmula por píxel = PixelMath, preprocesado automático = WBPP.\n" +
    "- No supongas qué objeto es por el nombre del fichero ni nombres objetos concretos que no te haya dicho el usuario.\n" +
    "- Antes de estirar, pregunta al usuario el tipo de objeto (galaxia, nebulosa de emisión, cúmulo...) si no lo sabes.\n" +
    "- Mide antes y después (estadisticas) y no borres ni sobrescribas ficheros del usuario.\n" +
@@ -1130,7 +1139,9 @@ function plMiniaturas(r) {
          if (isFinite(quitado)) extra.push("se lleva " + quitado + " % del objeto");
          if (o.deja_gradiente_pct !== undefined && o.deja_gradiente_pct !== null) extra.push("deja " + o.deja_gradiente_pct + " % del gradiente");
          if (o.ruido_baja_pct !== undefined) extra.push("ruido −" + o.ruido_baja_pct + " %");
-         if (o.contraste_x !== undefined) extra.push("contraste ×" + o.contraste_x);
+         else if (isFinite(o.ruido_rel)) extra.push("ruido ×" + o.ruido_rel);
+         if (isFinite(o.contraste_ganado_pct)) extra.push("contraste +" + o.contraste_ganado_pct + " %");
+         else if (o.contraste_x !== undefined) extra.push("contraste ×" + o.contraste_x);
          var sep = o.separacion !== undefined ? o.separacion : o.senal_debil_en_ruidos;
          if (sep !== undefined) extra.push("señal débil " + sep + " ruidos");
          var mod = typeof o.previa_modelo === "string" && File.exists(o.previa_modelo) ? o.previa_modelo : null;
