@@ -74,7 +74,7 @@ Notas de la fase lineal:
 | 3 SCNR | `quitarVerde` | `rmgreen` (sólo si el verde del cielo sobra) | cielo RGB antes y después |
 | 5 Contraste | `contrasteCandidatos` → `aplicarCandidato` | `clahe` 1,5 y 2,5; `wavelet` + `wrecons` (escalas medias); `unsharp` | `contraste_ganado_pct`, `ruido_rel`, recortes |
 | 5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | `satu` 0,25 / 0,5 / 0,75 con factor de fondo 1 | `sat_objeto`, `sat_cielo`, `dominante_cielo_pct`, recortes |
-| 6 Ruido | `reducirRuidoCandidatos` | como en el Paso 14 lineal, pero más suave: NoiseX 0,3, 0,5 y 0,3 ×2 | mismo criterio; sin medida de detalle, la más cercana a la mitad del ruido |
+| 6 Ruido | `reducirRuidoCandidatos` | como en el Paso 14 lineal, pero mucho más suave: `denoise` 0,3 / 0,5 y NoiseX 0,3, 0,5 y 0,3 ×2 | mismo criterio, y ninguna puede dejar menos del 50 % del ruido del cielo (fondo muerto) |
 | 9 Recombinación | `recombinarEstrellas` | screen 1 − (1 − a)(1 − k·b) o suma, con la capa de estrellas del Paso 15 | `aporte_estrellas_pct`, fondo antes y después, recortes |
 | 10 Exportación | `exportarFinal` | `savetif` (16 bits) y `savejpg` 95 | rutas y tamaños; no sobrescribe (_2, _3…) |
 
