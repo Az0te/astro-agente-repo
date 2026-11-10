@@ -14,6 +14,8 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 | Paso | Herramientas |
 |---|---|
 | L1 Análisis | `analizarMaster`, `estrellas`; con internet `documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` |
+| L2 Inventario | `inventarioSubs` (sólo cabeceras) |
+| L3–L4 Selección, calibración y apilado | `revisarCalibracion` → **`apilarCandidatos`** (deja el master cargado) |
 | L5 Recorte | `recortarBordes` |
 | L8 Astrometría | `resolverAstrometria` |
 | L9 Gradiente | **`gradienteCandidatos`** → `aplicarCandidato` |
@@ -28,7 +30,7 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 | NL6 Ruido final | **`reducirRuidoCandidatos`** → `aplicarCandidato` |
 | NL9 Recombinación | `recombinarEstrellas` |
 | NL10 Exportación | `exportarFinal` |
-| Sin herramienta | L2–L4, L6, L7, L10, L16, L17, NL4, NL7, NL8, NL11: la ficha, con `comandoSiril` para lo que esté en la lista blanca |
+| Sin herramienta | L6, L7, L10, L16, L17, NL4, NL7, NL8, NL11: la ficha, con `comandoSiril` para lo que esté en la lista blanca |
 
 **Siempre disponibles:** `ping`, `imagen` (datos de la imagen cargada), `estadisticas`, `previa`, `registro` (consola de Siril), `abrirImagen`, `guardarImagen`, `deshacer`, `rehacer`, `comandoSiril`, `estado` (trabajos largos), `medirRendimiento`.
 
@@ -44,6 +46,16 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 - `previa` da un JPG con el autoestirado de Siril (o un recorte al 100 % con `rect`) para mirar; en lineal, por canal (un master sin calibrar sale azul o verde con el enlazado); `estadisticas` mide; `registro` enseña la consola de Siril cuando algo falla.
 - `comandoSiril` ejecuta un comando de procesado de una lista blanca (nada que cargue, guarde o lance scripts). Sólo para lo que no tenga herramienta.
 - Programas externos que se usan si están instalados: GraXpert (fondo), StarNet2 y StarX (estrellas), y la IA de RC Astro por su programa de línea de comandos (`rc-astro`: StarX, NoiseX, BlurX, con la licencia que ya se tenga).
+
+## Preprocesado y apilado
+
+| Paso | Herramienta | Con qué en Siril | Medidas que devuelve |
+|---|---|---|---|
+| 2 Inventario | `inventarioSubs` | cabeceras FITS (IMAGETYP o carpeta) | grupos por tipo, filtro, exposición, gain, offset, binning, tamaño y noche; avisos |
+| 4 Calibración | `revisarCalibracion` | — | darks, flats y bias (o darks de flats) de cada grupo de lights; qué falta o no encaja |
+| 3–4 Apilado | `apilarCandidatos` | `convert`, `stack` (masters), `calibrate` (`-cc=dark`, y `-cfa -equalize_cfa -debayer` en OSC), `register -2pass`, `seqapplyreg -filter-incl`, `stack … rej` con rechazo winsorized, ESD generalizado o ajuste lineal, con y sin `-weight=wfwhm` | por sub: FWHM ponderada, redondez, estrellas y fondo (se descartan los que pasan de k MAD, como mucho un 30 %); por master: ruido de fondo, FWHM, estrellas, píxeles calientes sueltos |
+
+Trabaja en una carpeta propia (`~/.sirilastropilot/apilado/<proyecto>`) con enlaces a los subs: los ficheros del usuario no se tocan. Con varios grupos de lights se apila uno cada vez (`grupo`); combinarlos es el Paso 10. Es un trabajo largo: el estado del puente enseña el progreso.
 
 ## Fase lineal
 
