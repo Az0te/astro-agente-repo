@@ -20,6 +20,8 @@
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-14); en Siril, [Anexo I](../anexos/I-siril.md).
 
+**Criterio de elección.** Se aplica el candidato que **más ruido quita sin perder prácticamente detalle** (≤ 2 % de `detalle_perdido_pct`) ni añadir recortes, en lineal igual que en no lineal. «Varias pasadas suaves mejor que una fuerte» vale cuando la fuerte pierde detalle o da aspecto de cera: si la fuerte no pierde detalle, se usa la fuerte (M31, 10 nov 2026: NoiseX 0,50 dejó el ruido del cielo al 50 % sin perder detalle y una pasada «ligera» al 63 % dejó el fondo con grano).
+
 **Comparar en vez de fijar el valor.** Probar sobre la misma entrada varias fuerzas (0,30 / 0,50 / 0,70) y algún método distinto, con las mismas medidas (`ruido_rel` del cielo, contraste de la zona débil, estructura de la residual, moteado de color), y quedarse con el que más baja el ruido sin pasar del 80 % entre los que cumplen. En una nebulosa de emisión y reflexión sin calibrar (8 nov 2026) ganó la fuerza 0,70 (−57 %): los que quitaban más ruido subían el moteado de color más de 0,3.
 
 **Control.** σ del cielo baja poco (es una pasada suave), contraste de una zona débil no baja más de ~5 %, la imagen diferencia (antes − después) debe ser **sólo ruido**. Si aparece aspecto de cera, se ha pasado: bajar denoise o dejarlo para la starless.
