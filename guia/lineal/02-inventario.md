@@ -1,6 +1,6 @@
 # Paso 2: Inventario
 
-[← Índice](../SKILL.md) · Anterior: [Paso 1: Análisis del objeto](01-analisis-del-objeto.md) · Siguiente: [Paso 3: Blink / SubframeSelector](03-blink-subframeselector.md)
+[← Índice](../SKILL.md) · Anterior: [Paso 1: Análisis del objeto](01-analisis-del-objeto.md) · Siguiente: [Paso 3: Selección de subs](03-blink-subframeselector.md)
 
 **Por qué.** El preprocesado no se puede juzgar después: "si un master tiene problemas, revisar el preprocesado antes de forzar el postprocesado". El inventario fija qué masters existen, con qué calibración y con qué geometría, y evita dos errores caros: mezclar grupos incompatibles en una integración y descubrir a mitad del procesado que faltan flats de un filtro.
 
@@ -8,7 +8,7 @@
 
 | Campo | Por qué importa |
 |---|---|
-| Cámara (modelo, sensor) | Curva QE para SPCC y coeficientes de DBXtract |
+| Cámara (modelo, sensor) | Curva QE para la calibración de color y coeficientes de la desmezcla dual band |
 | OSC o mono | Decide si hay desmezcla (Paso 7) |
 | Filtros usados (por grupo) | Un master por filtro; un juego de flats por filtro |
 | Exposiciones por grupo (30 s, 120 s…) | Cada tiempo en su propio master |
@@ -26,20 +26,10 @@
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-02); en Siril, [Anexo I](../anexos/I-siril.md).
 
-En `no_cumple` avisa de lights sin flats de su filtro en su noche, sin dark de su exposición, con gain u offset mezclados o con flats de otro telescopio. La biblioteca de darks suele estar fuera de la carpeta del objeto: pasarla en `darks`.
-
-```json
-{"llamadas": [
-  {"funcion": "inventario", "parametros": {"carpeta": "<carpeta del objeto>", "opciones": {"darks": "<carpeta de master darks>"}}}
-]}
-```
+La revisión avisa en `no_cumple` de lights sin flats de su filtro en su noche, sin dark de su exposición, con gain u offset mezclados o con flats de otro telescopio. La biblioteca de darks suele estar fuera de la carpeta del objeto: indicarla aparte.
 
 Comprobado con una nebulosa dual band (nov 2026; 11 grupos en 10 noches, 1147 ficheros). Detectó que los lights Hα/OIII del 12-9 y del 14-9 no tienen flats de ese filtro en su noche (sí del 20-9, 24-9 y 25-9).
 
-**Historial.** Para listar vistas abiertas, la herramienta es `vistas`. Para comprobar que un master contiene realmente una integración y con cuántos subs, se lee su historial:
+**Historial.** Para comprobar que un master contiene realmente una integración y con cuántos subs, se lee su historial: sin ningún paso de integración, el master no ha pasado por el apilado (o se guardó sin historial): revisar el preprocesado.
 
-- Se recorre `view.processing` (el historial de la vista) y se cuentan los pasos con `ImageIntegration`.
-- Sin ninguno, el master no ha pasado por una integración: revisar el preprocesado.
-- Con las herramientas: `historial {vista}`.
-
-**Control.** Un master sin `ImageIntegration` en `view.processing` no ha pasado por WBPP (o se guardó con `window.saveAs`, que "no guarda el historial de procesos en el XISF"). Número de subs integrados por grupo: se lee del log de WBPP (Anexo C).
+**Control.** Un master sin integración en su historial no ha pasado por el preprocesado completo. Número de subs integrados por grupo: se lee del log del preprocesado (Anexo C).

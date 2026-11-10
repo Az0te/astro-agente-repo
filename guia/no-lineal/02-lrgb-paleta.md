@@ -6,16 +6,16 @@
 
 **LRGB**
 
-- "Antes, igualar brillo: LinearFit de L a la luminancia de la RGB (aescaffre: evita velo) y estirados comparables (MAS da estirados parecidos por estadística)."
-- "Un píxel no admite a la vez brillo y saturación máximos: si el color se lava, bajar lightness/subir saturación en LRGBCombination o suavizar L. Punto de partida de reflected-space: **lightness + saturación ≈ 1 (0,50/0,50 o 0,45/0,55)**, con R, G y B desactivados y la L en su casilla."
+- Antes, igualar brillo: ajuste lineal de L a la luminancia de la RGB (aescaffre: evita velo) y estirados comparables (el estirado adaptativo multiescala da estirados parecidos por estadística).
+- "Un píxel no admite a la vez brillo y saturación máximos: si el color se lava, bajar lightness/subir saturación en la combinación LRGB o suavizar L. Punto de partida de reflected-space: **lightness + saturación ≈ 1 (0,50/0,50 o 0,45/0,55)**, con R, G y B desactivados y la L en su casilla."
 - Galaxias (aescaffre): **lightness 0,35 (de canto) / 0,50 (de cara), saturación 0,70**; cúmulos de galaxias lightness 0,45–0,55.
 - "La RGB sólo aporta color: se puede reducir su ruido de crominancia con más fuerza (incluso suavizarla) porque el detalle lo pone la L."
-- Truco de saturación: "Saturar la nebulosa con una L muy desenfocada: sobre la capa sin estrellas, LRGBCombination con la propia luminancia muy suavizada como L y channel weight de L ≈ 0,15–0,19; sube la croma sin amplificar el ruido de luminancia."
+- Truco de saturación: "Saturar la nebulosa con una L muy desenfocada: sobre la capa sin estrellas, combinación LRGB con la propia luminancia muy suavizada como L y channel weight de L ≈ 0,15–0,19; sube la croma sin amplificar el ruido de luminancia."
 - Luminancia sintética (sin L real): `L = wR·R + wG·G + wB·B` con Σw = 1; pesos perceptual 0,30/0,59/0,11; neutro 0,33/0,33/0,33; alta resolución 0,4/0,4/0,2; o por SNR (`w ∝ 1/σ²`).
 
 **Composición natural Hα/OIII + RGB (OSC; la que gustó en una nebulosa de emisión y reflexión)**
 
-1. Estirar por separado con MAS (fondo 0,15) la RGB sin estrellas y el Hα (saturación de MAS desactivada).
+1. Estirar por separado con el estirado adaptativo multiescala (fondo 0,15) la RGB sin estrellas y el Hα (sin su saturación propia).
 2. `hx = max(Has − mediana(Has), 0)`, anulado cerca de estrellas muy brillantes. R += ~1,5·hx, G += ~0,2·hx, B += ~0,45·hx (rosa natural Hα + Hβ). En nebulosa de emisión y reflexión se eligió un rojo de 1,40–1,49 frente a 1,65: más rojo tapa los blancos.
 3. La suma satura el rojo en las zonas brillantes: calcular sin truncar y aplicar la **rodilla suave** sobre el máximo de los tres canales (Anexo E).
 4. El Hα de un dual band OSC sale de la desmezcla (Paso 7 lineal) con el continuo restado (Paso 16 lineal). Alternativa: la inyección en tres partes de aescaffre (R condicional + realce de luminancia + capa de detalle) con máscara de nebulosa derivada del Hα (clipLow 0,04, blur 8; fuerza ~0,65, umbral 0,3).
@@ -26,7 +26,7 @@
 **Paleta: cuándo y cómo se elige**
 
 - "**Cuándo:** nebulosa de emisión (región HII, nebulosa difusa), resto de supernova o nebulosa planetaria con datos de banda estrecha o dual band, y el usuario no ha dicho qué paleta quiere. Antes de componer el color final, generar previews pequeñas de varias paletas y pedirle que elija (pregunta de una palabra, con una recomendada). Mientras contesta, seguir con lo que no depende de la paleta (estrellas, máscaras). No aplicar a reflexión, nebulosas oscuras ni galaxias... Sin banda estrecha no hay paletas: RGB o LHa-RHaGB."
-- Protocolo de previews: capas Hα y OIII (y SII si hay) **sin estrellas**, con gradiente corregido, continuo restado si procede, registradas y estiradas **con el mismo estirado** (o MAS al mismo fondo, ~0,15); reducir a ~1200 px de lado largo (IntegerResample Average); generar el juego por defecto con PixelMath; guardar cada una como JPG en `<versión>/prev/paletas/NN_<Paleta>.jpg` y una plancha; enseñarla y preguntar.
+- Protocolo de previews: capas Hα y OIII (y SII si hay) **sin estrellas**, con gradiente corregido, continuo restado si procede, registradas y estiradas **con el mismo estirado** (o el adaptativo al mismo fondo, ~0,15); reducir a ~1200 px de lado largo (binado por promedio); generar el juego por defecto; guardar cada una como JPG en `<versión>/prev/paletas/NN_<Paleta>.jpg` y una plancha; enseñarla y preguntar.
 
 **Fórmulas de referencia**
 
@@ -47,26 +47,26 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 
 **Herramientas**
 
-- Las fórmulas de paleta vienen de **AutoPalette Studio v1.2.0** (Raúl Hussein, Suite Astrocitas), leídas de su código; aquí se aplican con PixelMath sobre capas estiradas con el mismo estirado (el script estiraba cada canal por separado si recibía imágenes lineales, lo que cambia la proporción Hα/OIII).
+- Las fórmulas de paleta vienen de **AutoPalette Studio v1.2.0** (Raúl Hussein, Suite Astrocitas), leídas de su código; aquí se aplican sobre capas estiradas con el mismo estirado (el script estiraba cada canal por separado si recibía imágenes lineales, lo que cambia la proporción Hα/OIII).
 - Blend mode (mezcla del canal compartido): Neutral 50/50, **Soft 60/40 (defecto)**, Hard 70/30. HOO: G = b·Hα + (1−b)·OIII. SHO: R = b·S + (1−b)·H, G = b·H + (1−b)·O.
-- Familias Foraxx (SHO, HOS, OHS, HOO, HSO, OSH, SOH, 6 variantes cada una): copiadas de las funciones `foraxSHO`…`foraxSOH` de AutoPalette Studio v1.2.0 a `componerPaleta` (8 nov 2026). Exigen SII real. Paletas por defecto de la herramienta: Original, Classic HOO, Foraxx Classic y Foraxx HOS.
+- Familias Foraxx (SHO, HOS, OHS, HOO, HSO, OSH, SOH, 6 variantes cada una): copiadas de AutoPalette Studio v1.2.0 a la herramienta de paletas (8 nov 2026). Exigen SII real. Paletas por defecto de la herramienta: Original, Classic HOO, Foraxx Classic y Foraxx HOS.
 - Con dual band, el canal "SII" no existe: un G sin desmezclar es ≈ 0,11·Hα + 0,93·OIII. Usar siempre la desmezcla del Paso 7 lineal.
 
-**Juego de previews por defecto** (PixelMath con símbolos, comprobando el valor devuelto)
+**Juego de previews por defecto**
 
 - **Sin SII** (dual band, o mono con H y O): Classic HOO Soft, Classic HOO Hard, Foraxx Classic bicolor, Foraxx HOS (marcada pseudo), HOO + NBN (Mode1, shadowpoint 1, Lightness Off) y la composición natural como referencia.
 - **Con SII real**: Classic SHO, Classic Hubble (HSO), Foraxx Classic, Foraxx HOS, Classic HOO, SHO + NBN y la natural.
-- Plancha: copiar cada preview en su casilla de una ImageWindow grande con `setSamples`; si los rótulos con Bitmap/Graphics fallan, numerar las casillas y dar la leyenda en el mensaje.
-- Con la elegida: la misma fórmula a resolución completa y **sin estrellas**; después saturar, preparar la capa de estrellas RGB estirada (nunca sobre la paleta) y recombinar. Si domina el verde (casi siempre la raya de Hα en G), SCNR suave y medir G/max(R,B) antes y después. Sin SII real, las paletas con S usan un SII sintético y se dicen «pseudo».
-- Avisos: no hay fórmula Foraxx oficial única (la ficha C10-34 de astro-photographie no coincide con AutoPalette Studio: usar la de AutoPalette); en SHO sin equilibrar sale verde entero porque domina Hα (IC 1396, 8 nov 2026: G/max(R,B) ≈ 1,36); `quitarVerde` no lo corrige porque mira sólo el cielo, por eso lo hace `componerPaleta`.
+- Plancha: cada preview en su casilla de una imagen grande; si los rótulos fallan, numerar las casillas y dar la leyenda en el mensaje.
+- Con la elegida: la misma fórmula a resolución completa y **sin estrellas**; después saturar, preparar la capa de estrellas RGB estirada (nunca sobre la paleta) y recombinar. Si domina el verde (casi siempre la raya de Hα en G), quitar verde suave y medir G/max(R,B) antes y después. Sin SII real, las paletas con S usan un SII sintético y se dicen «pseudo».
+- Avisos: no hay fórmula Foraxx oficial única (la ficha C10-34 de astro-photographie no coincide con AutoPalette Studio: usar la de AutoPalette); en SHO sin equilibrar sale verde entero porque domina Hα (nebulosa de emisión grande, 8 nov 2026: G/max(R,B) ≈ 1,36); quitar verde en el cielo no lo corrige porque mira sólo el cielo: lo hace la composición de la paleta.
 
-**NarrowbandNormalization 1.0** (proceso)
+**Normalización de banda estrecha** (proceso de normalización por rayas)
 
 - Equilibra la intensidad de los canales con **Hα siempre como referencia**: aplica a cada cana una MTF para que su desviación positiva media sobre la mediana iguale la del Hα, sólo por encima del punto de sombra (**shadowpoint 1 = desde la mediana; 0 = toda la imagen**). "Es un ajuste estético: cambia las proporciones entre rayas (documentarlo)."
 - "Vale en lineal o no lineal, pero con **Lightness = Off en lineal**."
 - Paleta: SHO, HOO, HSO, HOS (dual band OSC → HOO). En HOO toma el OIII del canal verde (más SNR en OSC); R = Hα, B = OIII normalizado y G = (1−amount)·base + amount·mezcla, con Mode1 = Hα original sobre OIII normalizado, Mode2 = OIII normalizado sobre OIII original, Mode3 = Hα original sobre OIII original.
-- Otros: SCNR (`G = min(G, (R+B)/2)`, no en HOO), OIII boost y SII boost, Highlight reduction, Brightness. Orden interno: normalización → SCNR → Lightness → Highlight reduction → Brightness.
-- Parámetros del proceso: `palette` (`Palette_SHO/HOO/HSO/HOS`), `lightness` (`Lightness_Off/Preserve/Ha/OIII/SII`), `blendMode` (`Blend_Mode1..3`), `haBlend`, `scnr`, `o3Boost`, `s2Boost`, `shadowpoint`, `highlightReduction`, `brightness`. Comprobados en PixInsight 1.9.6; en v8 las constantes van en el constructor (`NarrowbandNormalization.Palette_HOO`).
+- Otros: quitar verde (`G = min(G, (R+B)/2)`, no en HOO), OIII boost y SII boost, Highlight reduction, Brightness. Orden interno: normalización → SCNR → Lightness → Highlight reduction → Brightness.
+
 
 **Qué recomendar**
 

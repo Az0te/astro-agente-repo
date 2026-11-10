@@ -2,7 +2,7 @@
 
 [← Índice](../SKILL.md) · Anterior: [Anexo F: Anti-patrones y criterio de parada](F-anti-patrones.md) · Siguiente: [Índice](../SKILL.md)
 
-Términos que la guía usa sin explicar. Las definiciones son de uso común en astrofotografía; los valores concretos están en los pasos, no aquí.
+Términos que la guía usa sin explicar. Las definiciones son de uso común en astrofotografía; los valores concretos están en los pasos, no aquí. Los nombres de procesos de PixInsight (DBE, HDRMT, LHE, MAS, MGC, STF…) están para leer las fuentes; las fichas usan nombres neutros y la equivalencia está en el [Anexo J](J-pixinsight.md#arranque).
 
 | Término | Qué es |
 |---|---|

@@ -8,7 +8,7 @@ Medir con PJSR sobre la imagen final (o tras cada paso arriesgado) y usarlos jun
 
 | Control | Cómo se mide | Umbral |
 |---|---|---|
-| Ringing | Perfil radial alrededor de la zona más brillante (36 ángulos, hasta 150 px); cambios de signo de la derivada con amplitud > 0,01 | 0. Usarlo tras BXT con halos negativos, HDRMT, Contrast Recovery de MAS y en la transición de una HDR |
+| Ringing | Perfil radial alrededor de la zona más brillante (36 ángulos, hasta 150 px); cambios de signo de la derivada con amplitud > 0,01 | 0. Usarlo tras BXT con halos negativos, compresión multiescala, recuperación de contraste del estirado adaptativo y en la transición de una HDR |
 | Núcleos quemados | % de píxeles > 0,93 en el núcleo | < 2 % en 128×128 px y < 10 % en 32×32; ningún bloque de 100×100 px con > 3 % de píxeles > 0,95 (salvo núcleos de estrellas) |
 | Textura en altas luces | Desviación local y rango tonal de la zona brillante antes y después | Conservar ≥ 60 %; < 40 % = textura aplastada |
 | Estrellas | FWHM mediana, diversidad de color (max−min de R,G,B normalizados en el pico), número detectado, contraste con el fondo | FWHM ≤ 8 px a la escala de trabajo, diversidad > 0,05, ≥ ~50 estrellas, contraste ≥ 3×; capa de estrellas con máximo < 0,98 |
@@ -17,7 +17,7 @@ Medir con PJSR sobre la imagen final (o tras cada paso arriesgado) y usarlos jun
 - **Reparar en origen, no tapar después:** si un control falla, volver al punto de control anterior y repetir el paso causante más suave. Nada de recortes finales para ocultar núcleos quemados.
 - **Siempre un control "sin hacer nada"** (NOVA): comparar cada paso de acabado contra la copia sin tocar del mismo punto; no aplicar un paso es un resultado válido.
 - **Medir en zonas, no en toda la imagen:** regiones fijas (núcleo, brazo/filamento, fondo, estrellas sin saturar) e imágenes diferencia. Un p99 más bajo tras comprimir es compresión, no información recuperada.
-- **Probar variantes** en los pasos dudosos (estirado, Hα, LHE, saturación, umbral de HDR): 3–4 claramente distintas sobre una preview, puntuarlas y quedarse con la mejor.
+- **Probar variantes** en los pasos dudosos (estirado, Hα, contraste local, saturación, umbral de HDR): 3–4 claramente distintas sobre una preview, puntuarlas y quedarse con la mejor.
 
 ## B.2 Validación
 

@@ -1,16 +1,16 @@
-# Paso 3: Blink / SubframeSelector
+# Paso 3: Selección de subs
 
 [← Índice](../SKILL.md) · Anterior: [Paso 2: Inventario](02-inventario.md) · Siguiente: [Paso 4: Preprocesado](04-preprocesado.md)
 
 **Por qué.** Las métricas no lo detectan todo: "las métricas no detectan errores de guiado concretos ni **halos alrededor de estrellas brillantes por nubes finas o calima**; quitar esos subs antes de integrar (si no, el halo queda en el master)". Y al contrario: quitar subs buenos cuesta señal (√N), así que el criterio no puede ser "descartar por debajo de un número".
 
-**Blink (obligatorio, no sustituible por métricas)**
+**Revisión visual en parpadeo (obligatoria, no sustituible por métricas)**
 
 - Quitar subs con halos por nubes finas o calima.
 - **No** quitar subs con trazas de satélite: "las elimina el rechazo".
-- Mover los descartes **fuera de las carpetas LIGHT** (`<objeto>/_rechazados/<noche>/`), "porque WBPP añade directorios de forma recursiva, y guardar la lista de movimientos".
+- Mover los descartes **fuera de las carpetas LIGHT** (`<objeto>/_rechazados/<noche>/`), porque el preprocesado añade directorios de forma recursiva, y guardar la lista de movimientos.
 
-**SubframeSelector (umbrales de partida, orientativos)**
+**Métricas de subs (umbrales de partida, orientativos)**
 
 | Métrica | Excelente | Quitar |
 |---|---|---|
@@ -35,12 +35,12 @@ Comprobado con subs crudos CFA (nov 2026):
 | nebulosa dual band, 13-9 (dual band 300 s y RGB 30 s) | Separa los dos grupos y no rechaza ninguno. |
 | nebulosa de emisión y reflexión, 10-10 (120 s y 30 s) | 1 rechazado por nubes y 1 dudoso. |
 
-Los umbrales son de partida: no sustituyen al Blink de halos y nubes finas.
+Los umbrales son de partida: no sustituyen a la revisión visual de halos y nubes finas.
 
 **Índice de halo por sub** (para localizar los subs que forman halos). Receta probada en una nebulosa de emisión y reflexión, la estrella brillante, 379 subs RGB en ~3 min:
 
-1. Abrir el FITS bruto (CFA) e `IntegerResample −2 (Average)` como luminancia.
-2. Localizar la estrella en una copia `resample(1/16)` y centroide de píxeles > 0,5·máx.
+1. Abrir el FITS bruto (CFA) y binarlo ×2 por promedio como luminancia.
+2. Localizar la estrella en una copia reducida a 1/16 y centroide de píxeles > 0,5·máx.
 3. Anillos en píxeles binados: **interno 15–25, medio 40–70, externo 80–170, cielo 330–400**.
 4. Estadístico de cada anillo = **media recortada entre los percentiles 20 y 60** (la mediana de enteros ADU sale cuantizada).
 5. Índice = (externo − cielo)/(interno − cielo).
@@ -54,7 +54,7 @@ Los umbrales son de partida: no sustituyen al Blink de halos y nubes finas.
 
 En dual band la estrella es débil y la detección falla: usar el **cielo del sub (mediana) > 1,25× la mediana de la sesión** junto con la caída del ala interna.
 
-**Expectativa realista, literal:** "WBPP con pesos PSF Signal Weight ya daba poco peso a los subs nublados. Al reintegrar sin ellos, el halo de la estrella brillante bajó sólo un 5 % a 6′ y un 35 % a 15′. El halo que queda está en todos los subs limpios (dispersión de óptica/atmósfera + reflexión real): se trata en el procesado, no quitando más subs."
+**Expectativa realista, literal:** "El preprocesado con pesos por señal de PSF ya daba poco peso a los subs nublados. Al reintegrar sin ellos, el halo de la estrella brillante bajó sólo un 5 % a 6′ y un 35 % a 15′. El halo que queda está en todos los subs limpios (dispersión de óptica/atmósfera + reflexión real): se trata en el procesado, no quitando más subs."
 
 **Estadístico de anillo (media recortada p20–p60)**
 
@@ -62,4 +62,4 @@ En dual band la estrella es débil y la detección falla: usar el **cielo del su
 - Se ordenan y se promedian los que quedan entre los percentiles 20 y 60 (con menos de 20 píxeles el anillo no vale).
 - `índice = (anillo externo − anillo de cielo) / (anillo interno − anillo de cielo)`.
 
-**Control.** Comparar los dudosos con una plancha de recortes de la estrella con el mismo estirado. En los subs cortos (30 s), que son los que darán las estrellas, ser especialmente exigente con halos y FWHM. Revisar en el log de WBPP cuántos subs integró cada grupo: "el SubframeSelector descartó por su cuenta ~65 de 204 subs del dual band".
+**Control.** Comparar los dudosos con una plancha de recortes de la estrella con el mismo estirado. En los subs cortos (30 s), que son los que darán las estrellas, ser especialmente exigente con halos y FWHM. Revisar en el log del preprocesado cuántos subs integró cada grupo: la selección automática llegó a descartar por su cuenta ~65 de 204 subs del dual band.

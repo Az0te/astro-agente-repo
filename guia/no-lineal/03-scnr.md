@@ -15,8 +15,8 @@
 - "Sólo si la G/R del cielo supera ~1,03; máscara de cielo por luminancia (sigma-clip del fondo, rampa de 1,5σ a 5σ, suavizada); suavizar los canales (gauss σ ≈ 6 px) y restar en el cielo `amount·max(G_s − max(R_s,B_s), 0)` (amount ≈ 0,85)."
 - "El tope max(R,B) neutraliza el verde sin volverlo magenta; un recorte píxel a píxel dejó el cielo de una galaxia grande por debajo de neutro (G/R 1,06 → 0,93). No tocar el verde/cian real del objeto (OIII)."
 - Caso nebulosa brillante: "la corrección sin máscara neutralizó el cielo pero volvió verde el núcleo (G/R 0,91 → 1,13, porque su OIII es real); con máscara quedó en 0,92."
-- Fórmula puntual para halos: `G = iif(min(R,B) > G, min(R,B), G)`.
-- En NarrowbandNormalization: SCNR interno `G = min(G, (R+B)/2)`, "no en HOO".
+- Fórmula puntual para halos: `G = máx(G, mín(R,B))`.
+- En la normalización de banda estrecha: quitar verde interno `G = min(G, (R+B)/2)`, "no en HOO".
 - En nebulosa oscura: quitar verde con `G − 0,85·max(0, G − max(R,B))`.
 - SCNR invertido (invertir, SCNR suave, invertir) para halos verdes o azules.
 

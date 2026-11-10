@@ -15,17 +15,17 @@
 **Variantes documentadas**
 
 - "**Variante sólo Correct Only** (sin pasada completa): cúmulos, campos estelares, datos de SNR bajo o cuando la pasada completa crea textura."
-- "Si las aberraciones difieren por canal: Correct Only por canal (ChannelExtraction), recombinar y BXT de nuevo (ojo: deconvolución independiente por canal puede desequilibrar colores)."
+- "Si las aberraciones difieren por canal: Correct Only por canal (extrayendo los canales), recombinar y BXT de nuevo (ojo: deconvolución independiente por canal puede desequilibrar colores)."
 - "Para mono LRGB/SHO: BXT sobre el RGB combinado mejor que por canal (la red entiende las relaciones de color); Correct Only por canal sólo si las aberraciones difieren mucho."
 
 **Diagnóstico previo (¿hace falta halos negativos?)**
 
 - "En nebulosa de emisión y reflexión los FWHM por canal (R 4,4 / G 3,7 / B 4,0 px) indicaban que habría servido."
-- SPFC deja en la vista `PCL:SPFC:FWHMx/FWHMy` por canal: "en una nebulosa de emisión y reflexión (R 4,4 / G 3,7 / B 4,0 px) no había blue bloat y se usó halos 0,00".
+- Con la FWHM por canal medida (en una nebulosa de emisión y reflexión R 4,4 / G 3,7 / B 4,0 px) no había blue bloat y se usó halos 0,00.
 - Regla: "Usar −0,30 sólo si hay blue bloat y comprobar anillos oscuros al 100 % alrededor de estrellas brillantes".
 
-**Astrometría.** "BlurXTerminator elimina la solución astrométrica de la vista (aescaffre): tras BXT, `copyAstrometricSolution` desde el master original antes de SPFC/SPCC". Matiz del mismo archivo: "BXT, en cambio, la conservó en PI 1.9.5: comprobar `hasAstrometricSolution` en vez de suponer". Tras BXT CO, si se ha perdido: volver a resolver con `blindSolve` (Paso 8), sin copiar soluciones. En PixInsight 1.9.6 BXT Correct Only y BXT completo la conservaron (prueba del 31 oct 2026), pero se comprueba igual.
+**Astrometría.** BXT puede eliminar la solución astrométrica de la imagen (aescaffre) o conservarla, según la versión: comprobarla tras BXT en vez de suponer. Si se ha perdido, volver a resolver (Paso 8), sin copiar soluciones.
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-11); en Siril, [Anexo I](../anexos/I-siril.md).
 
-**Control.** Comparar el perfil de una estrella brillante antes/después (FWHM por canal más parecido, sin anillos). Ringing = 0 (contar cambios de signo de la derivada del perfil radial con amplitud > 0,01; ver [Anexo B](../anexos/B-checklist-entrega.md)). `hasAstrometricSolution === true` antes de seguir.
+**Control.** Comparar el perfil de una estrella brillante antes/después (FWHM por canal más parecido, sin anillos). Ringing = 0 (contar cambios de signo de la derivada del perfil radial con amplitud > 0,01; ver [Anexo B](../anexos/B-checklist-entrega.md)). Solución astrométrica presente antes de seguir.

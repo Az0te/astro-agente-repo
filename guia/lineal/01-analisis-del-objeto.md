@@ -13,7 +13,7 @@
 | Fondo más azul que rojo antes de calibrar | Color del cielo y de la cámara sin calibrar, **no** blue bloat | SPCC (Paso 12) |
 | Estrellas más grandes en el azul que en R/G | Blue bloat (dispersión/aberración cromática, reflexiones del filtro dual) | BXT Correct Only (Paso 11) y, si no basta, [Anexo E: blue bloat](../anexos/E-parametros-detalle.md#blue-bloat-y-halos-azules) |
 | Anillos de color alrededor de una estrella brillante | Halo: nubes finas/calima en algunos subs, o reflejo instrumental | Quitar subs (Paso 3) o restar halo (Fase No Lineal 8) |
-| Estrella brillante con núcleo blanco sin detalle | Saturación: en OSC los canales saturan a distinto nivel y el rojo suele saturar antes | Tomas cortas / HDRComposition (Paso 6) |
+| Estrella brillante con núcleo blanco sin detalle | Saturación: en OSC los canales saturan a distinto nivel y el rojo suele saturar antes | Tomas cortas / HDR (Paso 6) |
 
 "Lo mejor es no generarlos: tomas cortas y HDR para las estrellas brillantes, y descartar subs con halos de nubes finas (índice de halo por sub)."
 
@@ -23,14 +23,14 @@
 2. ¿Hay banda estrecha? Sin ella no hay paletas.
 3. Estrella más brillante del campo y magnitud: decide si hacen falta tomas cortas y a qué exposición.
 4. ¿El objeto llena el campo o se difumina en el fondo? (galaxia grande, nebulosas extensas, polvo): riesgo de anillo oscuro en la corrección de gradiente y de que la IA se coma el objeto.
-5. ¿Hay IFN/polvo? Desconfiar de MGC y de cualquier extractor agresivo.
+5. ¿Hay IFN/polvo? Desconfiar de los modelos de fondo con base de referencia y de cualquier extractor agresivo.
 6. Régimen de muestreo: submuestreado / bien muestreado / sobremuestreado (drizzle 2x), que condiciona BXT, NXT y nitidez.
-7. **¿Bordes sin datos?** (`bordes_sin_datos` de `analizarMaster`). Un master registrado sin recortar tiene cuñas en los bordes; WBPP las rellena con un valor constante, no con 0, y a ojo se confunden con cielo oscuro. Con varios masters, lo primero es el [Paso 5: alinear y recortar](05-staralignment-crop.md); con uno solo, recortar los bordes. Gradiente, BXT, SPCC o desmezcla con cuñas dan resultados falsos (`gradienteCandidatos` se niega).
+7. **¿Bordes sin datos?** (`bordes_sin_datos` del análisis). Un master registrado sin recortar tiene cuñas en los bordes; el preprocesado puede rellenarlas con un valor constante, no con 0, y a ojo se confunden con cielo oscuro. Con varios masters, lo primero es el [Paso 5: alinear y recortar](05-staralignment-crop.md); con uno solo, recortar los bordes. Gradiente, BXT, SPCC o desmezcla con cuñas dan resultados falsos (la comparación de gradientes se niega).
 
 **Estado de partida del master**
 
 - Por canal: mediana, máximo y MAD; además canales, bits por muestra, si es color y si tiene solución astrométrica.
-- Todo eso lo devuelve `analizarMaster` (abajo); `estadisticas {vista}` da sólo las estadísticas por canal.
+- Todo eso lo devuelve la herramienta de análisis; las estadísticas dan sólo los valores por canal.
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-01); en Siril, [Anexo I](../anexos/I-siril.md).
 

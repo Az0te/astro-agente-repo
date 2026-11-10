@@ -9,16 +9,16 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | No hacer | En su lugar |
 |---|---|
 | Reducir ruido antes de BXT | BXT primero; el ruido fino es información para la deconvolución |
-| Sustituir un paso esencial por un apaño (curvas en vez de SPCC, PixelMath en vez de estirado, UnsharpMask en vez de BXT) | Parar y avisar |
+| Sustituir un paso esencial por un apaño (curvas en vez de calibración de color, una fórmula en vez de estirado, una máscara de enfoque en vez de deconvolución) | Parar y avisar |
 | Seguir adelante cuando falla gradiente, SPCC, BXT o estirado | Parar; no marcarlo como "resuelto con alternativa" |
 | Trabajar sobre el master | Copia con nombre de versión |
 | Aplicar un proceso y fiarse del "success" | Comprobar estadísticas e historial `view.processing` |
 | Encadenar resize + registro + rotación | Interpolar una sola vez (Lanczos-3, 32 bits) |
-| Confundir HDRComposition (lineal) con HDRMT (no lineal) | Cada uno en su fase |
+| Confundir la composición HDR (lineal) con la compresión multiescala del rango (no lineal) | Cada uno en su fase |
 | HDR global cuando sólo el núcleo lo necesita | Mezcla sólo bajo máscara de núcleo (`hdr_core_blend`) |
-| HDRMT sobre núcleos ya recortados | Dejar margen (~0,93–0,97) o tomas cortas |
-| LHE + HDRMT juntos, LHE amount > 0,5, radios pequeños con estrellas | Uno u otro; sobre starless o con máscara |
-| Mapa de "estructuras oscuras" por diferencia de escalas sin mirarlo (en una nebulosa de emisión y reflexión era ruido) | `darkStructureEnhance` con `keepMask: true`: sólo si la máscara sigue estructuras reales; si no, LHE con máscara de fondo |
+| Compresión multiescala sobre núcleos ya recortados | Dejar margen (~0,93–0,97) o tomas cortas |
+| Contraste local + compresión multiescala juntos, contraste local amount > 0,5, radios pequeños con estrellas | Uno u otro; sobre starless o con máscara |
+| Mapa de "estructuras oscuras" por diferencia de escalas sin mirarlo (en una nebulosa de emisión y reflexión era ruido) | Realce de estructuras oscuras mirando su máscara: sólo si sigue estructuras reales; si no, contraste local con máscara de fondo |
 
 ## F.2 Color
 
@@ -37,7 +37,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 
 | No hacer | En su lugar |
 |---|---|
-| MGC o IA de GraXpert en nebulosas oscuras, IFN o polvo extenso | Plano robusto grado 1 o muestras manuales |
+| Modelos de fondo con referencia o IA de GraXpert en nebulosas oscuras, IFN o polvo extenso | Plano robusto grado 1 o muestras manuales |
 | Escala por defecto de sample_free / `-sample_free_simplified true` | sample_free escala 10 (8 si queda gradiente) |
 | Corregir por división un gradiente aditivo (o por sustracción el viñeteo) | Sustracción para contaminación, división para viñeteo |
 | DBE sobre nebulosa | Sólo cielo; nunca sobre señal |
@@ -62,7 +62,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | Recombinar estrellas lineales con starless estirada | Estirar ambas o extraer en no lineal |
 | Erosión/MorphologicalTransformation para reducir estrellas | Estirar menos o tomas cortas; si se usa, con StarMask y revisando anillos |
 | Separar estrellas en cúmulos | Las estrellas son el objeto |
-| Auto-stretch/STF en la capa de estrellas | Fondo a cero y estirado controlado |
+| Autoestirado o visualización automática en la capa de estrellas | Fondo a cero y estirado controlado |
 | Rellenar un núcleo con un círculo plano | Ley de potencias o superficie de grado 2 |
 | Dar por buena una separación porque la starless está "limpia" | Revisar original − starless |
 | Fuente "OSC Dualband" de AutoPalette (inventa SII) | DBXtract o su emulación, fuente "DBXtract / Mono" |
@@ -74,7 +74,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 
 | No hacer | En su lugar |
 |---|---|
-| Escribir código de PixInsight o pedir que se ejecute | Las funciones de la guía; si ninguna sirve, decirlo y proponer qué hacer |
+| Escribir código del programa o pedir que se ejecute | Las funciones de la guía; si ninguna sirve, decirlo y proponer qué hacer |
 | `saveAs` y creer que conserva el historial | Anotar los parámetros en el dossier |
 | Lanzar scripts o depender de iconos del escritorio | Su función equivalente de la guía (Anexo A) |
 | Suponer nombres de parámetros | La ficha del paso o el manifiesto (`herramientas/manifiesto.json`) |
@@ -86,10 +86,10 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 Se para cuando:
 
 1. **El control empeora o no mejora.** Comparar siempre contra la copia sin tocar del mismo punto y contra la versión anterior. Si el resultado no gana, se revierte; no se "ajusta un poco más".
-2. **El control falla.** "Si un control falla, volver al punto de control anterior y repetir el paso causante con parámetros más suaves (menos saturación en LRGB, menos fuerza de Hα, menos LHE…)".
+2. **El control falla.** "Si un control falla, volver al punto de control anterior y repetir el paso causante con parámetros más suaves (menos saturación en LRGB, menos fuerza de Hα, menos contraste local…)".
 3. **Hay que tapar el fallo.** "No usar un recorte/clamp final para ocultar núcleos quemados (para eso están las tomas cortas)."
 4. **Se está forzando la señal.** "Con 2 h 50 min de una sola noche el cuerpo tiene menos estructura que las referencias: forzarla saca ruido."
-5. **No hay variantes que comparar.** En los pasos dudosos (estirado, Hα, LHE, saturación, umbral de HDR): 3–4 variantes, puntuarlas y quedarse con una; si ninguna convence, no se aplica.
+5. **No hay variantes que comparar.** En los pasos dudosos (estirado, Hα, contraste local, saturación, umbral de HDR): 3–4 variantes, puntuarlas y quedarse con una; si ninguna convence, no se aplica.
 6. **Falla un paso esencial.** Parar y avisar (gradiente, SPCC, BXT, estirado).
 
 Número de iteraciones o de pasadas hasta "rendirse": `[Pendiente de documentar]` — la guía fija el criterio (comparar contra no hacer nada) pero no un límite numérico.
