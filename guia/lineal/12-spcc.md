@@ -19,6 +19,14 @@
 
 **Si SPCC falla.** "Si SPCC falla, SCNR como recurso (aescaffre 0,65 en verde; nosotros preferimos suave)". No es una alternativa válida a la calibración: es un recurso estético posterior.
 
+**Si no hay calibración fotométrica posible.** Antes de parar, en este orden:
+
+1. **Cámara sin curvas en la base de filtros** (muchas DSLR): calibración fotométrica sin curvas (PCC), que sólo necesita el catálogo de estrellas. No usar las curvas de otra cámara "parecida".
+2. **Catálogo inaccesible** (sin internet, servidor caído): el catálogo instalado en local si lo hay.
+3. **Ni catálogo ni curvas:** equilibrado aproximado, que es lo que esta guía admite "sin SPCC": neutralizar el fondo (cada canal a la misma mediana del cielo, medida en las celdas más oscuras) y equilibrar el blanco con el color medio de las estrellas no saturadas (o de las zonas brillantes de una galaxia espiral grande). Se aplica en lineal, con deshacer, y **se dice en el informe que el color es aproximado**. De media las estrellas de campo son algo amarillentas, así que el blanco queda un poco más frío que con SPCC. Comprobar la dispersión de color de las estrellas y la dominante del cielo después.
+
+Lo que no se hace en ningún caso es ajustar el color a ojo, ni copiar la calibración de otra foto.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-12); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Cielo descompensado tras la calibración de color.** Si el cielo por canal queda a más de 0,5 sigmas, o el estirado sale con dominante en el cielo (> 5 %), neutralizar el fondo en lineal de forma **aditiva**: sumar a cada canal lo que le falta para igualar su cielo al del canal más alto (no resta, no recorta sombras y no cambia el balance más que ese desplazamiento constante). Medir en el 10 % de celdas de 64 px más oscuras; si son polvo o nebulosa oscura con color propio, usar un trozo de cielo limpio. Vale sobre la starless lineal, sin rehacer la deconvolución ni la separación de estrellas. No es un apaño de color: es la neutralización de fondo que la guía ya admite junto a la calibración.
