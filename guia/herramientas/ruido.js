@@ -227,7 +227,14 @@ function reducirRuido(viewId, o) {
   o = o || {};
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
-  var metodo = o.metodo || "nxt", aviso = null, t0 = Date.now();
+  // 11 nov 2026: un modelo local pasó metodo "NXT" en mayúsculas; no casaba con ninguno, caía en la rama del híbrido sin
+  // modelo (MLDenoise.modelPath vacío) y dejaba vistas temporales abiertas en cada intento.
+  var metodo = String(o.metodo || "nxt").toLowerCase().replace(/[^a-z]/g, "");
+  metodo = { noisex: "nxt", noisexterminator: "nxt", mldenoise: "ml", multiscaletgvdenoise: "tgv", tgvdenoise: "tgv",
+             hybrid: "hibrido", mask: "mascara" }[metodo] || metodo;
+  if (["nxt", "mascara", "ml", "tgv", "hibrido"].indexOf(metodo) < 0)
+    throw new Error("metodo «" + o.metodo + "» no existe: usa \"nxt\", \"ml\", \"tgv\", \"mascara\" o \"hibrido\" (en minúsculas)");
+  var aviso = null, t0 = Date.now();
   var mono = src.image.numberOfChannels === 1;
   if (metodo === "hibrido" && rdModeloML(o)) o.modelo = rdModeloML(o);
   // Híbrido (dosier IC 1396, 4 nov 2026): detalle fino de MLDenoise + lo grueso de NXT, canal a canal (también en RGB
@@ -280,9 +287,14 @@ function reducirRuido(viewId, o) {
   } else {
     var W = src.image.width, H = src.image.height, R = new Rect(0, 0, W, H);
     var ml = rdCopy(viewId, "rdTmpML"), nx = rdCopy(viewId, "rdTmpNX");
-    var M = new MLDenoise; M.modelPath = o.modelo; M.amount = 1.0; M.useCache = false;
-    if (!M.executeOn(ml.mainView)) throw new Error("MLDenoise falló");
-    rdNXT(nx.mainView, { denoise: (o.denoiseGrueso !== undefined) ? o.denoiseGrueso : 0.95, detail: 0.15, iterations: 2 });
+    try {   // si algo falla, no dejar las vistas temporales abiertas (se acumulaban en cada intento)
+      var M = new MLDenoise; M.modelPath = String(o.modelo); M.amount = 1.0; M.useCache = false;
+      if (!M.executeOn(ml.mainView)) throw new Error("MLDenoise falló");
+      rdNXT(nx.mainView, { denoise: (o.denoiseGrueso !== undefined) ? o.denoiseGrueso : 0.95, detail: 0.15, iterations: 2 });
+    } catch (eH) {
+      ml.forceClose(); nx.forceClose(); w.forceClose();
+      throw eH;
+    }
     var m = new Float32Array(W * H), x = new Float32Array(W * H), out = new Float32Array(W * H);
     v.beginProcess();
     for (var ch = 0; ch < src.image.numberOfChannels; ++ch) {
