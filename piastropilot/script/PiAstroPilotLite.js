@@ -682,6 +682,8 @@ function plPromptSistema(aj) {
    "miniaturas en el chat: cada previa {vista} y cada comparación sale como imagen en la ficha del resultado. Si quieres que " +
    "mire algo, pide previa (con opciones.rect para un recorte al 100 %) y dile que mire la miniatura; nunca le mandes a abrir " +
    "una carpeta, un JPG ni una vista.\n" +
+   (aj.proveedor == "claude" ? "- Tú también puedes VER las previas: lee el .jpg con la herramienta Read (ruta completa del resultado) " +
+   "antes de opinar sobre manchas, color, halos o estrellas, y di lo que ves; no digas que no puedes ver imágenes.\n" : "") +
    "- Color: guarda siempre la versión neutra; si el usuario quiere más de un solo color, saturarTono; derivaColor {vista, opciones: " +
    "{referencia}} mide si el tono del objeto ha girado entre dos pasos (> 10° = deriva).\n\n" +
    (aj.internet ?
@@ -813,7 +815,10 @@ function plClaudeChat(aj, sistema, mensajes, estado, modelo) {
    File.writeTextFile(fe, "Continúa esta conversación respondiendo al último mensaje del usuario.\n\n" + plConversacionTexto(mensajes));
    // Sin MCP: PixInsight está ocupado con este script y no podría atender al MCP. Con «internet», sólo WebSearch y
    // WebFetch (permitidas sin preguntar: en -p nadie puede contestar un permiso); si no, ninguna herramienta.
-   var herr = aj.internet ? ["--tools", "WebSearch", "WebFetch", "--allowedTools", "WebSearch", "WebFetch"] : ["--tools", ""];
+   // Read (11 nov 2026): para que Claude vea las previas .jpg; sólo se le añade la carpeta de previas con --add-dir.
+   var herr = aj.internet ? ["--tools", "Read", "WebSearch", "WebFetch", "--allowedTools", "Read", "WebSearch", "WebFetch"]
+                          : ["--tools", "Read", "--allowedTools", "Read"];
+   herr.push("--add-dir", plCarpetaPrevias());
    // Salida JSON: trae la respuesta (result) y el consumo (usage, total_cost_usd).
    var args = ["-p", "--output-format", "json", "--strict-mcp-config"].concat(herr).concat(["--system-prompt-file", fs]);
    if (modelo) args.push("--model", modelo);
