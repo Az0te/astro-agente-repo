@@ -24,7 +24,7 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque d
 7. **Todo con las herramientas de la guía**, sin iconos, scripts ni menús del programa. Si una herramienta dice que falta un proceso o un programa externo, avisar, no sustituirlo.
 8. **El dossier cuenta lo que dice el historial**, no lo que se pretendía.
 
-**Orden lineal:** gradiente → deconvolución sólo de corrección → calibración de color → deconvolución completa → separación de estrellas → reducción de ruido principal sobre la capa sin estrellas en lineal (Paso 15). Nunca reducir ruido antes de la deconvolución.
+**Orden lineal:** gradiente → deconvolución sólo de corrección → calibración de color → deconvolución completa → separación de estrellas → reducción de ruido principal sobre la capa sin estrellas en lineal (Paso 15). Nunca reducir ruido antes de la deconvolución. **Con banda estrecha o dual band** (Paso 10): cada capa por su gradiente y su deconvolución; la calibración de color se hace sobre la RGB **sola** y la combinación (inyectar Hα/OIII o paleta) va **después** del color, aunque su número de paso sea menor. Neutralizar el cielo, si hace falta, sobre la starless lineal (la misma que se estira).
 
 ## Imágenes e ids
 

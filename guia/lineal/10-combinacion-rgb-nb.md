@@ -2,6 +2,8 @@
 
 [← Índice](../SKILL.md) · Anterior: [Paso 9: Corrección de Gradiente](09-correccion-gradiente.md) · Siguiente: [Paso 11: BlurX correct only](11-bxt-correct-only.md)
 
+**Cuándo, aunque sea el Paso 10.** La combinación va **después** de calibrar el color de la RGB (Paso 12, sobre la RGB sola) y con las capas ya con su gradiente: Hα o OIII sumados antes de la calibración sesgan los factores de color y dejan el cielo teñido (azul o rojo) al estirar. Orden con dual band: alinear (5) → desmezclar (7) → gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB (12) → **combinar (10)** → deconvolución completa (13) → separar estrellas (15).
+
 **Por qué.** Combinar es decidir **qué canal aporta qué**: el color natural y las estrellas vienen de la banda ancha; el detalle y la emisión, de la banda estrecha. Hacerlo mal (Hα sin restar continuo, o mezclado antes de calibrar) produce el síntoma clásico: fondo rojo y regiones HII "pegadas" por diferencia de textura.
 
 **Cuándo aplica.** Sólo cuando hay **masters separados que juntar**:

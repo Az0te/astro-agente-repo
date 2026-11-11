@@ -444,8 +444,20 @@ function plConstantesEnPrototipo() {
    return n;
 }
 
+// Sello de la guía: fechas del runner y de los ficheros de herramientas. Si cambia (un arreglo de la guía), se recarga sin
+// cerrar el Lite (11 nov 2026: un arreglo de ruido.js no llegaba al Lite abierto).
+function plSelloGuia(guia) {
+   var s = [], fs = [plPadre(guia) + "/mcp/pjsr/piastropilot-runner.js"];
+   for (var i = 0; i < PL_ORDEN_GUIA.length; ++i) fs.push(guia + "/herramientas/" + PL_ORDEN_GUIA[i] + ".js");
+   for (var j = 0; j < fs.length; ++j) {
+      try { s.push(File.exists(fs[j]) ? new FileInfo(fs[j]).lastModified.getTime() : 0); } catch (e) { s.push(0); }
+   }
+   return guia + "|" + s.join(",");
+}
+
 function plCargarGuia(guia) {
-   if (plGuiaCargada === guia) return [];
+   var sello = plSelloGuia(guia);
+   if (plGuiaCargada === sello) return [];
    var g = plGlobal(), avisos = [];
    plDefinirConstantesJsh();
    plConstantesEnPrototipo();
@@ -482,7 +494,7 @@ function plCargarGuia(guia) {
       g.cerrarVista = function (vista, descartar) { return g.pprCerrar(vista, descartar === true); };
    }
    plEnvolverFunciones(g, guia);
-   plGuiaCargada = guia;
+   plGuiaCargada = sello;
    return avisos;
 }
 
@@ -670,7 +682,12 @@ function plPromptSistema(aj) {
    "(por ejemplo, si una imagen aún no se ha analizado, lo primero es analizarla). Si hay alternativas razonables, añade " +
    "líneas que empiecen por «Paso N: ...». El chat las muestra como enlaces que el usuario pulsa para que lo hagas.\n\n" +
    "Orden de los pasos de la guía (no saltes ni cambies el orden al recomendar el siguiente; si uno no aplica, dilo y pasa al siguiente):\n" +
-   plOrdenPasos() + "\n\n" +
+   plOrdenPasos() + "\n" +
+   "Con varios masters (RGB + banda estrecha o dual band), el número de paso no es el orden: alinear (5) → desmezclar (7) → " +
+   "gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB SOLA (12) → combinar (10) → " +
+   "deconvolución completa (13) → separar estrellas (15) → ruido de la starless (15) → estirar. Combinar antes del color " +
+   "sesga los factores y deja el cielo teñido. El cielo se neutraliza sobre la starless lineal (las funciones de estirado " +
+   "lo hacen solas).\n\n" +
    "Funciones disponibles (nombre {parámetros, * = obligatorio} [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
    "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
 }
@@ -922,6 +939,8 @@ function plEjecutarLlamadas(aj, texto) {
    }
    for (var j = 0; j < lista.length; ++j) {
       var ll = lista[j], p = ll.parametros || {};
+      // Enumeraciones sin distinguir mayúsculas ni acentos («NXT», «Galaxia»), con la función del runner.
+      if (typeof g.pprNormalizarOpciones === "function") p = g.pprNormalizarOpciones(p);
       console.noteln("[PiAstroPilotLite] " + ll.funcion + " " + JSON.stringify(p));
       try {
          var v = L[ll.funcion](p), s;
@@ -2079,9 +2098,10 @@ function plConstruirDialogo(aj) {
                 this.pasosSerie + "). Haz el resumen del paso CORTO (como mucho 10 líneas: «Medido» y «Revisar a ojo»). " +
                 "Después, en la misma respuesta, pide las llamadas del SIGUIENTE paso que falte (UNO solo, en el ORDEN DE LA " +
                 "GUÍA, con los ids de vista que acaba de devolver este resultado) en un único bloque ```json: se ejecutarán sin " +
-                "esperar al usuario, así que no le preguntes si sigue. Si ya están hechos todos los pasos pedidos, o una medida " +
-                "indica un problema que el usuario tiene que decidir, NO pidas llamadas: escribe una línea que empiece por " +
-                "«PARO:» con el motivo."
+                "esperar al usuario, así que no le preguntes si sigue. Si un no_cumple ya dice el arreglo de la guía (aplicar una " +
+                "función o volver a un paso anterior), pídelo tú en el bloque ```json SIN parar ni preguntar. Si ya están hechos " +
+                "todos los pasos pedidos, o hay una decisión que es del usuario (tipo de objeto dudoso, paleta, un arreglo de la " +
+                "guía que ya falló dos veces), NO pidas llamadas: escribe una línea que empiece por «PARO:» con el motivo."
               : "\nAhora, sin pedir ninguna llamada, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
                 "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +
                 "demuestra, con su valor) y «Revisar a ojo» (lo que el resultado no mide); nunca des por bueno algo de la segunda.\n" +
@@ -2183,8 +2203,11 @@ function plBienvenida(aj) {
              "- You tell me which image you have (or simply «the image on screen») and which object it is.\n" +
              "- I answer with information, an analysis or the guide functions I want to run.\n" +
              "- I always work on copies: I do not modify your original views unless you explicitly ask.\n" +
-             "- The guide functions I ask for run on their own and I explain the result. The «Next step» links " +
-             "run that step with one click.\n\n" +
+             "- The guide functions I ask for run on their own and I explain the result.\n" +
+             "- If you ask for several steps or the full processing, I chain them without asking: after each result I run " +
+             "the next one in the guide's order, and I only stop when it is done, when something needs your decision, or " +
+             "if you press «Cancel». «go on» continues where I stopped.\n" +
+             "- The «Next step» links run that step with one click.\n\n" +
              "Guide: `" + aj.guia + "`";
    return "**PiAstroPilot Lite** es un asistente de inteligencia artificial especializado en astrofotografía que funciona " +
           "dentro de PixInsight.\n\n" +
@@ -2201,8 +2224,11 @@ function plBienvenida(aj) {
           "- Tú me dices qué imagen tienes (o simplemente «la imagen en pantalla») y qué objeto es.\n" +
           "- Yo te respondo con información, análisis o las funciones de la guía que quiero ejecutar.\n" +
           "- Siempre trabajo sobre copias: no modifico tus vistas originales sin que lo pidas explícitamente.\n" +
-          "- Las funciones de la guía que pido se ejecutan solas y te explico el resultado. Los enlaces " +
-          "«Siguiente paso» hacen ese paso con un clic.\n\n" +
+          "- Las funciones de la guía que pido se ejecutan solas y te explico el resultado.\n" +
+          "- Si me pides varios pasos o el procesado completo, los encadeno sin preguntar: tras cada resultado hago el " +
+          "siguiente en el orden de la guía y sólo paro al terminar, si algo necesita tu decisión o si pulsas «Cancelar». " +
+          "«sigue» continúa donde me paré.\n" +
+          "- Los enlaces «Siguiente paso» hacen ese paso con un clic.\n\n" +
           "Guía: `" + aj.guia + "`";
 }
 

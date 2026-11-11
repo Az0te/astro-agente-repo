@@ -600,6 +600,12 @@ String PiAstroPilotInterface::AutoNextText() const
           u"separarEstrellas (15) → ruidoCandidatos sobre r.starless (15) → checkpointLineal (17). Tras analizarMaster el "
           u"siguiente es la astrometría y el gradiente, NUNCA el estirado: se estira sólo la starless lineal de separarEstrellas "
           u"(r.starless y r.estrellas, dos vistas distintas).\n"
+          u"Con varios masters (RGB + banda estrecha o dual band) el número de paso no es el orden: alinearMasters (5) → "
+          u"desmezclarDualBand (7) → gradiente de cada capa (9) → bxtCorrectOnly de la RGB (11) → calibrarColor de la RGB SOLA (12) "
+          u"→ combinar (10) → deconvolución completa (13) → separarEstrellas (15). Combinar antes del color tiñe el cielo. El "
+          u"cielo se neutraliza sobre la starless lineal (las funciones de estirado lo hacen solas).\n"
+          u"Si un no_cumple ya dice el arreglo de la guía (aplicar una función o volver a un paso), pídelo en el bloque ```json "
+          u"SIN «PARO:»; «PARO:» sólo para decisiones del usuario (tipo de objeto dudoso, paleta, un arreglo que ya falló dos veces).\n"
           u"Orden no lineal: estirarCapas (1) → en galaxias comprimirNucleo (5) → saturarAlFallo (5) → prepararEstrellas (8) → "
           u"recombinarEstrellas (9) → exportarFinal (10). Antes de estirarCapas, si no sabes el tipo de objeto (galaxia, "
           u"nebulosa oscura, de emisión, de reflexión...), escribe «PARO:» y pregunta el tipo al usuario.";

@@ -433,6 +433,28 @@ function pprJsonTolerante(texto) {
    }
 }
 
+// Opciones de texto que son enumeraciones (tipo, metodo, modo…): los modelos locales escriben «NXT», «Galaxia», «Nebulosa
+// oscura». Se pasan a minúsculas, sin acentos y con «_» en vez de espacios antes de llamar a la función (11 nov 2026:
+// metodo "NXT" acababa en la rama equivocada). No se tocan nombres propios ni ids (paleta, vista, ficheros, canal).
+var PPR_ENUMS = { tipo: 1, metodo: 1, metodos: 1, modo: 1, estrellas: 1, metodoEstrellas: 1, objetivo: 1, referencia: 1 };
+function pprNormalizarEnum(v) {
+   if (typeof v === "string") {
+      var s = v.trim().toLowerCase(), de = "áéíóúüñ", a = "aeiouun";
+      for (var i = 0; i < de.length; ++i) s = s.split(de.charAt(i)).join(a.charAt(i));
+      return s.replace(/\s+/g, "_");
+   }
+   if (v instanceof Array) return v.map(pprNormalizarEnum);
+   return v;
+}
+function pprNormalizarOpciones(p) {
+   if (!p || typeof p !== "object" || p instanceof Array) return p;
+   for (var k in p) if (p.hasOwnProperty(k)) {
+      if (PPR_ENUMS.hasOwnProperty(k)) p[k] = pprNormalizarEnum(p[k]);
+      else if (k === "opciones") pprNormalizarOpciones(p[k]);
+   }
+   return p;
+}
+
 function pprEjecutarLlamadas(texto) {
    var lista, man;
    try {
@@ -451,7 +473,7 @@ function pprEjecutarLlamadas(texto) {
    }
    var salida = [];
    for (var j = 0; j < lista.length; ++j) {
-      var ll = lista[j], p = ll.parametros || {}, s;
+      var ll = lista[j], p = pprNormalizarOpciones(ll.parametros || {}), s;
       console.noteln("[piastropilot] " + ll.funcion + " " + JSON.stringify(p));
       try {
          var v = LISTA[ll.funcion](p);

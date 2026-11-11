@@ -75,6 +75,23 @@ function esComprobarStarless(viewId, o) {
   return f;
 }
 
+// Neutraliza el cielo de la starless LINEAL antes de estirar (desplazamiento aditivo por canal con neutralizarCielo,
+// color.js, en las mismas celdas que mide el estirado). 11 nov 2026: neutralizado sobre la imagen con estrellas antes de
+// separarlas, la starless seguía con un 12 % de dominante azul al estirar y el modelo paró dos veces. Devuelve el
+// resultado de neutralizarCielo (vista nueva <id>_bn) o null si no hace falta, no es RGB o se pide { neutralizar: false }.
+function esNeutralizarStarless(viewId, o) {
+  o = o || {};
+  if (o.neutralizar === false) return null;
+  var w = ImageWindow.windowById(viewId);
+  if (w.isNull || w.mainView.image.numberOfChannels !== 3) return null;
+  if (!esNecesita("neutralizarCielo", "color.js")) return null;
+  var d = esSkyDominance(w.mainView);
+  if (d.dominante_pct < 0.5) return null;
+  var r = neutralizarCielo(viewId, { nuevaVista: viewId + "_bn" });
+  r.dominante_lineal_antes_pct = d.dominante_pct;
+  return r;
+}
+
 function esMedian(view) {
   var im = view.image, s = 0;
   for (var c = 0; c < im.numberOfChannels; ++c) { im.selectedChannel = c; s += im.median(); }
@@ -343,9 +360,12 @@ function estirarStarless(viewId, o) {
   var sd = esSkyDominance(v), dom = sd.dominante_pct, noCumple = [];
   if (dom >= 5) {
     var nombres = ["rojo", "verde", "azul"], k = sd.canales.indexOf(Math.max.apply(null, sd.canales));
-    noCumple.push("DOMINANTE DEL CIELO " + dom + " % hacia el " + nombres[k] + " (límite 5 %): no es aceptable; viene de la " +
-                  "fase lineal (fondo tras el gradiente o SPCC) y hay que corregirla allí antes de seguir: neutralizarCielo (color.js) " +
-                  "sobre la starless lineal, y volver a estirar");
+    noCumple.push("DOMINANTE DEL CIELO " + dom + " % hacia el " + nombres[k] + " (límite 5 %): viene de la fase lineal. Arreglo " +
+                  "de la guía, sin preguntar: neutralizarCielo (color.js) sobre la STARLESS lineal (la que acabas de estirar, no la " +
+                  "imagen con estrellas) y volver a estirar con estirarCapas/estirarCandidatos (lo hacen solas salvo { neutralizar: false }). " +
+                  (k !== 1 ? "No es verde: quitarVerde (SCNR) no lo arregla. " : "") +
+                  "Si sigue tras neutralizar, las celdas oscuras son polvo o nebulosa: neutralizarCielo con un rect de cielo limpio. " +
+                  "Si se combinó banda estrecha ANTES del color, rehacer: color de la RGB sola y combinar después");
   }
   if (Math.abs(c.cielo - cielo) > 0.02) noCumple.push("cielo " + c.cielo + " fuera del objetivo " + cielo);
   // Sólo en galaxias es un fallo (bulbo quemado). En nebulosas una meseta suele ser una estrella que quedó en la "starless"
@@ -419,7 +439,21 @@ function estirarCandidatos(viewId, o) {
   esQuitarSTF(win.mainView);
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): estirarCandidatos es para la starless lineal");
-  if (!o._sinComprobar) { esComprobarStarless(viewId, o); var oc = {}; for (var kc in o) oc[kc] = o[kc]; oc._sinComprobar = true; o = oc; }
+  if (!o._sinComprobar) {
+    esComprobarStarless(viewId, o);
+    var oc = {}; for (var kc in o) oc[kc] = o[kc]; oc._sinComprobar = true; o = oc;
+    var neuC = esNeutralizarStarless(viewId, o);
+    if (neuC) {   // se compara sobre la starless con el cielo igualado en lineal; los nombres siguen siendo los de la original
+      o.neutralizar = false; o.nuevaVista = o.nuevaVista || (viewId + "_st");
+      try {
+        var rN = estirarCandidatos(neuC.vista, o);
+        rN.original = viewId;
+        rN.cielo_neutralizado = { dominante_lineal_antes_pct: neuC.dominante_lineal_antes_pct, sumado_por_canal: neuC.sumado_por_canal,
+                                  nota: "cielo de la starless igualado en lineal antes de estirar (aditivo; el objeto no cambia)" };
+        return rN;
+      } finally { var wN = ImageWindow.windowById(neuC.vista); if (!wN.isNull) wN.forceClose(); }
+    }
+  }
   var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "mas", "arcsinh"], t0 = Date.now();
   // Imagen grande (> 8 MP): se comparan los métodos en un recorte con cielo y señal (rdElegirRecorte, ruido.js) y sólo el
   // ganador se aplica a la imagen entera (9 nov 2026: en un drizzle 2x de 89 MP cada pasada de GHS al fallo es lenta).
@@ -779,11 +813,15 @@ function estirarCapas(starlessId, starsId, o) {
   if (starsId && String(starsId) === String(starlessId))
     throw new Error("La starless y la capa de estrellas son la misma vista («" + starlessId + "»): tienen que ser las dos salidas de " +
                     "separarEstrellas (r.starless y r.estrellas). Falta la fase lineal, en este orden: " + ES_FASE_LINEAL + ".");
-  var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3, tipo: o.tipo, conEstrellas: o.conEstrellas }) };
+  esComprobarStarless(starlessId, o);
+  var neu = esNeutralizarStarless(starlessId, o), slId = neu ? neu.vista : starlessId;
+  var r = { starless: estirarStarless(slId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless || (starlessId + "_st"), fase3: o.fase3, tipo: o.tipo, _sinComprobar: true }) };
+  if (neu) r.cielo_neutralizado = { dominante_lineal_antes_pct: neu.dominante_lineal_antes_pct, sumado_por_canal: neu.sumado_por_canal,
+                                    nota: "cielo de la starless igualado en lineal antes de estirar (aditivo; el objeto no cambia)" };
   if (starsId) {
     var aviso = null;
     if (o.estrellas === "extraer") {
-      try { r.estrellas = estirarEstrellasExtraer(starlessId, starsId, r.starless.vista, { nuevaVista: o.nuevasEstrellas, saturacion: o.saturacion }); }
+      try { r.estrellas = estirarEstrellasExtraer(slId, starsId, r.starless.vista, { nuevaVista: o.nuevasEstrellas, saturacion: o.saturacion }); }
       catch (e) { aviso = "no se pudo sacar la capa de estrellas con el mismo estirado (" + e.message + "): se usa starStretch"; }
     }
     if (!r.estrellas) {
@@ -794,5 +832,6 @@ function estirarCapas(starlessId, starsId, o) {
       r.no_cumple = (r.starless.no_cumple || []).concat(r.estrellas.no_cumple);
   }
   if (t) r.tipo = { nombre: String(o.tipo), valores: t };
+  if (neu) { var wn = ImageWindow.windowById(neu.vista); if (!wn.isNull) wn.forceClose(); }   // copia intermedia
   return r;
 }

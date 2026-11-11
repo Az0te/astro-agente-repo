@@ -29,6 +29,8 @@ Lo que no se hace en ningún caso es ajustar el color a ojo, ni copiar la calibr
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-12); en Siril, [Anexo I](../anexos/I-siril.md).
 
+**Dónde neutralizar.** Sobre la **starless lineal** (la que se va a estirar) y midiendo en las mismas celdas que mide el estirado: hecho sobre la imagen con estrellas antes de separarlas, la dominante vuelve al estirar la starless. Las funciones de estirado lo hacen solas por defecto (desplazamiento aditivo, no cambia el objeto). Una dominante azul o roja no se arregla con SCNR, que sólo quita verde.
+
 **Cielo descompensado tras la calibración de color.** Si el cielo por canal queda a más de 0,5 sigmas, o el estirado sale con dominante en el cielo (> 5 %), neutralizar el fondo en lineal de forma **aditiva**: sumar a cada canal lo que le falta para igualar su cielo al del canal más alto (no resta, no recorta sombras y no cambia el balance más que ese desplazamiento constante). Medir en el 10 % de celdas de 64 px más oscuras; si son polvo o nebulosa oscura con color propio, usar un trozo de cielo limpio. Vale sobre la starless lineal, sin rehacer la deconvolución ni la separación de estrellas. No es un apaño de color: es la neutralización de fondo que la guía ya admite junto a la calibración.
 
 **Control.** Medianas de R, G y B en zonas de cielo limpio parecidas tras la calibración; si un canal se aparta, revisar la referencia de fondo antes de seguir. Un fondo más azul que rojo **después** de SPCC ya no es "color del cielo sin calibrar": es un problema a investigar (gradiente, flats, extinción).
