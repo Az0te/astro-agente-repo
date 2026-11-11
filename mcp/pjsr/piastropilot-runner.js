@@ -446,13 +446,33 @@ function pprNormalizarEnum(v) {
    if (v instanceof Array) return v.map(pprNormalizarEnum);
    return v;
 }
+// Sólo DENTRO de «opciones»: fuera, nombres como «estrellas» o «referencia» son ids de vista y no se tocan (11 nov 2026:
+// recombinarEstrellas recibió el id de la capa de estrellas en minúsculas y no la encontraba).
 function pprNormalizarOpciones(p) {
    if (!p || typeof p !== "object" || p instanceof Array) return p;
-   for (var k in p) if (p.hasOwnProperty(k)) {
-      if (PPR_ENUMS.hasOwnProperty(k)) p[k] = pprNormalizarEnum(p[k]);
-      else if (k === "opciones") pprNormalizarOpciones(p[k]);
-   }
+   var o = p.opciones;
+   if (o && typeof o === "object" && !(o instanceof Array))
+      for (var k in o) if (o.hasOwnProperty(k) && PPR_ENUMS.hasOwnProperty(k)) o[k] = pprNormalizarEnum(o[k]);
+   pprCorregirIds(p);
    return p;
+}
+
+// Red de seguridad: un texto que no es el id exacto de ninguna vista abierta pero coincide con uno sin distinguir
+// mayúsculas se cambia por el id exacto (los modelos a veces escriben «master_rgb_…» por «master_RGB_…»).
+function pprCorregirIds(p) {
+   var ids = null;
+   function arreglar(v) {
+      if (typeof v !== "string" || !v || v.indexOf("/") >= 0 || v.indexOf("\\") >= 0) return v;
+      if (!ImageWindow.windowById(v).isNull) return v;
+      if (ids === null) { ids = []; try { var ws = ImageWindow.windows; for (var i = 0; i < ws.length; ++i) ids.push(ws[i].mainView.id); } catch (e) {} }
+      var bajo = v.toLowerCase();
+      for (var j = 0; j < ids.length; ++j) if (ids[j].toLowerCase() === bajo) return ids[j];
+      return v;
+   }
+   for (var k in p) if (p.hasOwnProperty(k)) {
+      if (k === "opciones" || k === "fichero" || k === "carpeta") continue;
+      p[k] = (p[k] instanceof Array) ? p[k].map(arreglar) : arreglar(p[k]);
+   }
 }
 
 function pprEjecutarLlamadas(texto) {
