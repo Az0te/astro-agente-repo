@@ -78,7 +78,7 @@ function ppHeader(path) {
   var o = { fichero: path, ancho: d[0].width, alto: d[0].height }, k = f.keywords;
   var want = ["IMAGETYP", "FILTER", "EXPTIME", "EXPOSURE", "CCD-TEMP", "SET-TEMP", "GAIN", "OFFSET", "XBINNING",
               "BAYERPAT", "DATE-OBS", "INSTRUME", "TELESCOP", "FOCALLEN", "OBJECT", "XPIXSZ", "SWCREATE", "ROTATANG",
-              "ROTATOR", "FOCPOS", "FOCUSPOS", "READOUTM"];
+              "ROTATOR", "FOCPOS", "FOCUSPOS", "READOUTM", "NCOMBINE"];
   for (var i = 0; i < k.length; ++i) if (want.indexOf(k[i].name) >= 0) o[k[i].name] = k[i].strippedValue.trim();
   // Masters XISF: a veces sólo llevan propiedades XISF, sin palabras clave FITS.
   var props = { EXPTIME: "Instrument:FrameExposureTime", EXPOSURE: "Instrument:ExposureTime", "CCD-TEMP": "Instrument:Sensor:Temperature", FILTER: "Instrument:Filter:Name",
@@ -100,6 +100,7 @@ function ppHeader(path) {
   o.filtro = o.FILTER || "";
   o.telescopio = (o.TELESCOP || "").toLowerCase();
   o.tipo = (o.IMAGETYP || "").toLowerCase();
+  o.ncombine = o.NCOMBINE !== undefined && isFinite(parseInt(o.NCOMBINE)) ? parseInt(o.NCOMBINE) : null;
   return o;
 }
 
@@ -270,7 +271,7 @@ function inventario(carpeta, o) {
   if (o.aliasFiltros) H.forEach(function (h) { if (o.aliasFiltros[h.filtro] !== undefined) h.filtro = o.aliasFiltros[h.filtro]; });
 
   function tipo(h) {
-    var t = h.tipo, n = File.extractName(h.fichero).toLowerCase(), m = /master/.test(t) || /master/.test(n);
+    var t = h.tipo, n = File.extractName(h.fichero).toLowerCase(), m = /master|integrat/.test(t) || /master|integrat/.test(n) || (h.ncombine !== null && h.ncombine > 1);
     var b = /flat/.test(t) ? "flat" : /bias|offset/.test(t) ? "bias" : /dark/.test(t) ? "dark" : /light|science/.test(t) ? "light" :
             /flat/.test(n) ? "flat" : /bias/.test(n) ? "bias" : /dark/.test(n) ? "dark" : "light";
     return m ? "master " + b : b;
@@ -281,6 +282,13 @@ function inventario(carpeta, o) {
     return isFinite(t) ? new Date(t - 12 * 3600e3).toISOString().substring(0, 10) : d.substring(0, 10);
   }
   H.forEach(function (h) { h.clase = tipo(h); h.noche = noche(h); });
+  // Carpeta de masters ya integrados (11 nov 2026, datos de otro astrofotógrafo: un fichero por filtro, sin calibración):
+  // si no hay ningún fichero de calibración y cada grupo filtro/exposición tiene un solo fichero, se tratan como masters.
+  var hayCal = H.some(function (h) { return !/light/.test(h.clase); }), cuenta = {};
+  H.forEach(function (h) { var k = h.filtro + "|" + h.exp; cuenta[k] = (cuenta[k] || 0) + 1; });
+  var soloMasters = H.every(function (h) { return /master light/.test(h.clase); }) ||
+                    (!hayCal && H.every(function (h) { return h.clase == "light" && cuenta[h.filtro + "|" + h.exp] == 1; }));
+  if (soloMasters) H.forEach(function (h) { h.clase = "light"; h.master = true; });
   var L = H.filter(function (h) { return h.clase == "light"; });
   if (L.length == 0) throw new Error("No hay lights en " + raices.join(", ") + " (" + H.length + " ficheros leídos)");
 
@@ -300,11 +308,21 @@ function inventario(carpeta, o) {
     var G = L.filter(function (h) { return gkey(h) == k; }), h0 = G[0];
     var temps = G.map(function (h) { return h.temp; }).filter(isFinite);
     var rot = ppUnique(G, function (h) { return h.ROTATANG || h.ROTATOR || ""; }).filter(function (x) { return x; });
-    var g = { noche: h0.noche, filtro: h0.filtro || "(sin FILTER)", exposicion_s: h0.exp, n: G.length, horas: +(G.length * h0.exp / 3600).toFixed(2),
+    var nSubs = G.reduce(function (s, h) { return s + (h.master && h.ncombine ? h.ncombine : 1); }, 0);
+    var g = { noche: h0.noche, filtro: h0.filtro || "(sin FILTER)", exposicion_s: h0.exp, n: G.length, horas: +(nSubs * h0.exp / 3600).toFixed(2),
               gain: h0.gain, offset: h0.offset, bin: h0.bin, telescopio: h0.TELESCOP || "",
               temp: temps.length ? [Math.min.apply(null, temps), Math.max.apply(null, temps)] : null,
               carpetas: ppUnique(G, function (h) { return (File.extractDrive(h.fichero) + File.extractDirectory(h.fichero)).replace(raiz || "\u0000", "").replace(/^[\/]/, ""); }) };
     if (rot.length) g.rotador = rot.length > 3 ? rot.slice(0, 3).concat(["…"]) : rot;
+    // Rutas completas (para abrirImagen) si son pocas; con muchos subs, sólo la primera como ejemplo.
+    if (G.length <= 5) g.ficheros = G.map(function (h) { return h.fichero; });
+    else g.ejemplo = G[0].fichero;
+    if (soloMasters) {
+      g.master = true;
+      if (h0.ncombine) g.subs_integrados = nSubs; else g.nota = "master sin NCOMBINE: las horas son las de un solo sub (el total real puede venir en un texto de la carpeta)";
+      r.lights.push(g);
+      return;
+    }
     // Flats de su filtro y su noche (o de la mañana siguiente), mismo sensor y telescopio.
     var flats = H.filter(function (f) { return /flat/.test(f.clase) && f.filtro == h0.filtro && f.bin == h0.bin && f.ancho == h0.ancho &&
                                                (f.gain === null || h0.gain === null || f.gain == h0.gain); });
@@ -339,7 +357,10 @@ function inventario(carpeta, o) {
 
   // Mezclas que no deben integrarse juntas.
   var gains = ppUnique(L, function (h) { return h.gain + "/" + h.offset; });
-  if (gains.length > 1) r.no_cumple.push("Lights con distintos gain/offset: " + gains.join(", ") + ". Cada combinación necesita su calibración y su master.");
+  if (soloMasters) {
+    r.masters = true;
+    r.control.medido.push("La carpeta tiene masters ya integrados (" + L.length + ", uno por filtro y exposición): sin calibración, selección de subs ni WBPP (pasos 3 y 4); seguir con analizarMaster y alinearMasters.");
+  } else if (gains.length > 1) r.no_cumple.push("Lights con distintos gain/offset: " + gains.join(", ") + ". Cada combinación necesita su calibración y su master.");
   var tels = r.equipo.telescopios.filter(function (t) { return t; });
   if (tels.length > 1) r.control.revisar_a_ojo.push("Lights con varios TELESCOP (" + tels.join(", ") + "): ¿otro tren óptico o sólo otro nombre?");
 
@@ -355,6 +376,20 @@ function inventario(carpeta, o) {
   r.lights.forEach(function (g) { porFiltro[g.filtro + " " + g.exposicion_s + " s"] = (porFiltro[g.filtro + " " + g.exposicion_s + " s"] || 0) + g.horas; });
   for (var f in porFiltro) r.control.medido.push(f + ": " + porFiltro[f].toFixed(2) + " h en " + r.lights.filter(function (g) { return g.filtro + " " + g.exposicion_s + " s" == f; }).length + " noches");
   r.no_cumple = ppUnique(r.no_cumple, function (x) { return x; });
+  // Textos de la carpeta (description.txt, readme...): el autor suele dejar ahí equipo, filtros, número de subs y créditos.
+  var textos = [];
+  raices.forEach(function (rz) {
+    ["*.txt", "*.md"].forEach(function (e) {
+      ppSearch(rz + "/" + e, false).forEach(function (f) {
+        if (textos.length >= 3 || /subs_aprobados/i.test(f)) return;
+        try { var t = File.readTextFile(f); textos.push({ fichero: f, texto: t.length > 4000 ? t.substring(0, 4000) + " …[recortado]" : t }); } catch (e2) { }
+      });
+    });
+  });
+  if (textos.length) {
+    r.textos = textos;
+    r.control.revisar_a_ojo.push("La carpeta tiene " + textos.length + " texto(s) (ver textos): leerlos para el equipo, los filtros, los subs y los créditos del autor.");
+  }
   return r;
 }
 

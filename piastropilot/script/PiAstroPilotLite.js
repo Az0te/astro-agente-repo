@@ -945,8 +945,10 @@ function plEjecutarLlamadas(aj, texto) {
    }
    for (var j = 0; j < lista.length; ++j) {
       var ll = lista[j], p = ll.parametros || {};
-      // Enumeraciones sin distinguir mayúsculas ni acentos («NXT», «Galaxia»), con la función del runner.
-      if (typeof g.pprNormalizarOpciones === "function") p = g.pprNormalizarOpciones(p);
+      // Enumeraciones sin distinguir mayúsculas ni acentos («NXT», «Galaxia»), con la función del runner. Si falla,
+      // se sigue con los parámetros tal cual (11 nov 2026: un error aquí cortaba la serie sin respuesta al modelo).
+      try { if (typeof g.pprNormalizarOpciones === "function") p = g.pprNormalizarOpciones(p); }
+      catch (e) { console.warningln("[PiAstroPilotLite] normalizar parámetros: " + (e.message || e)); }
       console.noteln("[PiAstroPilotLite] " + ll.funcion + " " + JSON.stringify(p));
       try {
          var v = L[ll.funcion](p), s;

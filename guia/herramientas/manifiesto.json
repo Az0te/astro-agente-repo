@@ -164,7 +164,7 @@
    "fichero": "preproceso.js",
    "nivel": "lectura",
    "timeout_s": 300,
-   "descripcion": "Paso 2 lineal: recorre una o varias carpetas (FITS/XISF), lee solo cabeceras y agrupa lights, flats, darks y bias por filtro, exposición, temperatura, gain y noche. Excluye carpetas que empiezan por \"_\" y las de salida de WBPP. No abre ventanas.",
+   "descripcion": "Paso 2 lineal: recorre una o varias carpetas (FITS/XISF), lee solo cabeceras y agrupa lights, flats, darks y bias por filtro, exposición, temperatura, gain y noche. Excluye carpetas que empiezan por \"_\" y las de salida de WBPP. No abre ventanas. Con 5 ficheros o menos por grupo da sus rutas completas (ficheros, para abrirImagen). Reconoce una carpeta de masters ya integrados (masters: true; sin pasos 3 y 4) y devuelve en textos el contenido de los .txt/.md de la carpeta (descripción del autor, créditos).",
    "resumen": "Paso 2 lineal: lee cabeceras de una o varias carpetas y agrupa lights, flats, darks y bias. No abre ventanas.",
    "paso": "lineal/02-inventario.md",
    "params": {

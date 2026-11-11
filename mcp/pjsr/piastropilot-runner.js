@@ -468,7 +468,10 @@ function pprCorregirIds(p) {
    var ids = null;
    function arreglar(v) {
       if (typeof v !== "string" || !v || v.indexOf("/") >= 0 || v.indexOf("\\") >= 0) return v;
-      if (!ImageWindow.windowById(v).isNull) return v;
+      // Sólo textos con forma de id: windowById lanza «Invalid image identifier» con espacios u otros signos
+      // (11 nov 2026: simbad {objeto: "Tarantula Nebula"} fallaba aquí antes de llegar a la función).
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(v)) return v;
+      try { if (!ImageWindow.windowById(v).isNull) return v; } catch (e) { return v; }
       if (ids === null) { ids = []; try { var ws = ImageWindow.windows; for (var i = 0; i < ws.length; ++i) ids.push(ws[i].mainView.id); } catch (e) {} }
       var bajo = v.toLowerCase();
       for (var j = 0; j < ids.length; ++j) if (ids[j].toLowerCase() === bajo) return ids[j];
