@@ -14,6 +14,12 @@
 - Subir el umbral de ruido para no coger ruido, subir la escala para incluir estrellas grandes, subir los medios y bajar algo el truncado para proteger centros grandes, subir el suavizado para cubrir halos de forma uniforme.
 - Máscara de luminancia (protege el fondo) menos (máscara de estrellas + mapa de estructuras con estrellas agrandadas por dilatación morfológica y suavizadas quitando las escalas 1–3).
 - Para inyección de Hα: "clipLow 0,04–0,08"; "sin máscara el fondo se vuelve rojo".
+- **Mejor de partida: la capa de estrellas de la separación** (Paso 15 lineal o extracción en no lineal), binarizada o con su luminancia, agrandada un poco y suavizada. La detección de estructuras se deja las estrellas grandes y brillantes; la capa de estrellas no (astroimagetw). Sirve en cualquier programa que separe estrellas.
+- **Cuándo hace falta:** siempre que haya estrellas brillantes y se suba contraste, brillo o saturación de forma global (sin ella se queman e hinchan, y las pequeñas cogen anillos o manchas de color al saturar), y en cualquier reducción de ruido o deconvolución sobre la imagen con estrellas. La mayoría de defectos de estrellas (anillos negros, bordes duros, formas de diamante) vienen de una máscara mal hecha: rehacer la máscara, no insistir con el proceso.
+
+**Máscara de nebulosa** (realzar la nebulosa sin tocar estrellas ni fondo): luminancia de la starless **menos** la máscara de estrellas, con umbral sobre el cielo y suavizada. Mismo principio por escalas: quitar las capas pequeñas (estrellas) y la de fondo, y quedarse con las intermedias. Control: con la máscara superpuesta, las estrellas y el fondo deben quedar fuera y la nebulosidad dentro.
+
+**Máscara de poca señal para el ruido** (Jon Rista): la relación señal/ruido cambia por zonas; lo brillante ya tiene poco ruido relativo y lo débil mucho. Una máscara que vale 1 en el cielo y la señal débil y baja a 0 en lo brillante (rampa entre cielo + 3σ y cielo + 20σ, suavizada) permite un denoise fuerte donde hace falta sin plastificar el objeto. Las máscaras de rango tal cual dejan el fondo oscuro sin proteger o sin tratar: construirla sobre la luminancia medida. La herramienta de ruido la prueba como candidato ([Paso 14 lineal](../lineal/14-noisex-suave.md)).
 
 **Máscara de cielo** (para neutralizar sin tocar el objeto): "máscara de cielo por luminancia (sigma-clip del fondo, rampa de 1,5σ a 5σ, suavizada)". Sólo si las esquinas se desvían > 0,10 de neutro. "La zona más oscura no siempre es cielo limpio (IFN, polvo, nebulosidad débil)."
 

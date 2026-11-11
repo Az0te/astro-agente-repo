@@ -38,4 +38,7 @@ Resúmenes y referencias usados para escribir esta guía. Todo el contenido est�
 - GraXpert, script para PixInsight (carpeta temporal, siempre IA, suavizado gaussiano del modelo): https://ideviceapps.de/graxpert-script.html
 - Siril, interfaz con GraXpert (parámetros smoothing y correction type; modelos de denoise y deconvolución en 3.1): https://siril.readthedocs.io/de/stable/processing/graxpert.html
 - AstroBin, gradiente en M31 que GraXpert no quitó (jul 2026; MGC/DBE como alternativa): https://app.astrobin.com/forum/topic/245723/weird-gradient-i-cant-remove-through-pixinsight-m31
+- Jon Rista, The Astrophotographer's Guide, PixInsights (SCNR, BackgroundNeutralization, LinearFit, DBE, Effective Noise Reduction parte 1; 2015–2016): https://jonrista.com/the-astrophotographers-guide/pixinsights/ (leído nov 2026: color del modelo de gradiente, SCNR por defecto, denoise según señal/ruido con máscara).
+- RC-Astro, manual de NoiseXTerminator 2 / AI3 para PixInsight (separación de color y de frecuencias, valores de partida): https://www.rc-astro.com/noisexterminator-2-ai3-user-manual-pixinsight/
+- astroimagetw, tutoriales en español (máscaras, reducción y quitado de estrellas, defectos de estrellas, SCNR y color de estrellas, BXT y AI4, IA de ruido, gradientes, MGC/SPFC, debayer, HDR, color, estirado; 2020–2025): https://www.astroimagetw.com/es/tutorials/ (leídos nov 2026).
 - Dosieres sobre BlurXTerminator y NoiseXTerminator generados con IA (oct 2026): se usaron sólo las partes coherentes con RC-Astro (ver los pasos 13 y 15 de la fase lineal).

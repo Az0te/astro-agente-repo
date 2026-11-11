@@ -43,7 +43,7 @@ Modo color conserva el tono; por canal puede desplazarlo. Histograma con dos cú
 
 **Antes de estirar, quitar la visualización automática.** Sólo cambia la pantalla: con ella puesta la imagen parece ya estirada y la estirada se ve estirada dos veces. Las herramientas de estirado la quitan solas de la imagen de entrada.
 
-**Topes de luces y color.** Ningún candidato vale si el p99 pasa de 0,80 (disco lavado), el p999 de 0,92 (núcleo o zonas brillantes quemadas) o si apenas estira (p99 a menos de 0,10 del cielo). El estirado conserva el color: misma curva para los tres canales sobre la luminancia; estirar cada canal por su cuenta deja halos verdes y magenta alrededor del objeto (M31, 10 nov 2026). En galaxias se prefiere el que más levanta la señal débil (brazos, disco exterior) **dentro de esos topes**.
+**Topes de luces y color.** Ningún candidato vale si el p99 pasa de 0,80 (disco lavado), el p999 de 0,92 (núcleo o zonas brillantes quemadas) o si apenas estira (p99 a menos de 0,10 del cielo). El estirado conserva el color: misma curva para los tres canales sobre la luminancia; estirar cada canal por su cuenta deja halos verdes y magenta alrededor del objeto (galaxia grande, 10 nov 2026). En galaxias se prefiere el que más levanta la señal débil (brazos, disco exterior) **dentro de esos topes**.
 
 **Comparar métodos.** Probar sobre copias un estirado por pasadas cortas al fallo (GHS), uno adaptativo multiescala y arcsinh, todos llevados **al mismo cielo** para comparar en igualdad. Gana, entre los que no fallan (ruido del cielo, recortes, dominante), el que más separa la señal débil del fondo: `separacion` = (p90 − cielo) / ruido del cielo. La capa de estrellas se estira aparte.
 

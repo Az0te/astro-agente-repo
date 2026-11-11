@@ -218,7 +218,7 @@ El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida
 | Caso | Cadena |
 |---|---|
 | GraXpert | Recorte → `blindSolve` → GraXpert sample_free 10 → BXT Correct Only → comprobar WCS → SPCC |
-| MGC | Recorte → `blindSolve` → `pxSPFC` → `pxMGC` (base MARS del perfil) → SPCC |
+| MGC | Recorte → `blindSolve` → `pxSPFC` → `pxMGC` (base MARS del perfil) → SPCC. SPFC no sustituye a SPCC: sólo añade metadatos de brillo. Con HOO/SHO o dual band, no las bandas RGB de MARS (casi seguro falla): Hα como rojo y OIII como verde y azul cuando MARS la publique |
 | Nebulosas oscuras, IFN, polvo extenso | Plano robusto grado 1 o muestras manuales; desconfiar de MGC y de la IA |
 | Banda estrecha sin MGC | Polinomio sobre rejilla de medianas con rechazo sigma: grado 2 en OIII; en Hα sólo plano grado 1 en los bordes |
 
@@ -347,7 +347,7 @@ Ficha: [lineal/12-spcc.md](../../lineal/12-spcc.md)
 - Verificación: medianas del cielo por canal parecidas tras SPCC (Statistics en previews de cielo limpio).
 - Curvas: `pxSPCC()` de `herramientas/procesos.js` las carga por su nombre desde la base de filtros de PixInsight (`filters.xspd`). "Un `new SpectrophotometricColorCalibration` sin más usa curvas genéricas, no las de la cámara".
 - Referencia de blanco: `P.whiteReferenceName` ("Average Spiral Galaxy" por defecto). `P.whiteReferenceSpectrum` es la tabla de datos (longitud de onda, valor), **no** el nombre: da "Parsing 32-bit floating point expression: conversion error".
-- Narrowband dual band: `SPCC_HA_O3_5nn`.
+- Narrowband dual band: `SPCC_HA_O3_5nn`. En modo narrowband, la recomendación oficial es referencia de blanco **«Photon Flux»** en vez de «Average Spiral Galaxy» (astroimagetw); compararla si el resultado sale con dominante.
 - Sin SPCC: BackgroundNeutralization + ColorCalibration.
 
 **SPCC en una llamada** (`herramientas/color.js`, necesita `procesos.js`): comprueba la solución astrométrica y que la imagen sea lineal, aplica `pxSPCC` con los filtros del perfil sobre una copia y mide el cielo por canal antes y después, en las zonas más oscuras, comparando la diferencia con el ruido. Devuelve los filtros usados, los factores de balance de blancos, `no_cumple` y el control. Una diferencia de más de 0,5 sigmas en el cielo sale como dominante al estirar (nebulosa dual band, nov 2026: 1,1 sigmas en lineal → 19 % azul estirada). Recomendado para modelos sin herramientas.
@@ -414,7 +414,11 @@ Ficha: [lineal/14-noisex-suave.md](../../lineal/14-noisex-suave.md)
 ]}
 ```
 
-Opciones de `ruidoCandidatos`: `metodos`, `niveles`, `tgv`, `amount`, `modelo`. La tabla está en `comparados`.
+Opciones de `ruidoCandidatos`: `metodos` (por defecto `nxt`, `frecuencias`, `mascara`, `ml`, `tgv`), `niveles`, `tgv`, `amount`, `modelo`. La tabla está en `comparados`.
+
+- `frecuencias` (sólo color): NXT con `enable_color_separation` y `enable_frequency_separation`; lineal intensidad 0,85 alta / 0,60 baja, color 0,95 alta / 1,0 baja, `frequency_scale` 5; estirada intensidad 0,40 / 0,30, color 0,90 / 1,0. Pone los parámetros que existan en la versión instalada y los devuelve en `parametros.aplicado`; si no hay croma de baja frecuencia, lo avisa. En `reducirRuido`: `{ frecuencias: { hf, lf, hfColor, lfColor, escala } }`.
+- `mascara`: NXT 0,80 (estirada 0,45) en una copia y mezcla `original·(1 − m) + nxt·m`, con m = 1 en el cielo y la señal débil y 0 desde cielo + 20σ (rampa desde + 3σ, suavizada). En `reducirRuido`: `{ metodo: "mascara", denoise }`; devuelve la cobertura de la máscara.
+- Con estrellas brillantes en la imagen (Paso 14), NXT lineal puede dañar sus núcleos: revisar al estirar o usar la máscara de estrellas del Paso 4 no lineal.
 
 **En una llamada** (`herramientas/ruido.js`): `reducirRuido` aplica NXT sobre una copia y mide los controles de abajo: σ del cielo antes y después, contraste de la zona débil y estructura de la imagen residual (~1–2 = sólo ruido). En nebulosa dual band (nov 2026), NXT 0,50 bajó el ruido del cielo un 43 % con el contraste intacto (−0,5 %). Recomendado para modelos sin herramientas.
 

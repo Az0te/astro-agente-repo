@@ -736,7 +736,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodo: \"nxt\" | \"hibrido\" | \"ml\" | \"tgv\", denoise: 0.5, detail: 0.15, iterations: 2, croma, amount (ml), strength (tgv), modelo: .xmlm, nuevaVista }"
+      "description": "Opcional. { metodo: \"nxt\" | \"mascara\" (NXT fuerte sólo donde hay poca señal) | \"hibrido\" | \"ml\" | \"tgv\", denoise: 0.5, detail: 0.15, iterations: 2, croma, frecuencias: { hf, lf, hfColor, lfColor, escala } (NXT con separación de color y de frecuencias), amount (ml), strength (tgv), modelo: .xmlm, nuevaVista }"
      }
     },
     "required": [
@@ -749,7 +749,7 @@
    "fichero": "ruido.js",
    "nivel": "copias",
    "timeout_s": 1800,
-   "descripcion": "Compara NoiseXTerminator (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45), MLDenoise (amount 1,0, modelo .xmlm del perfil; lento) y MultiscaleTGVDenoise (strength 0,5/1,0) sobre la misma entrada con las medidas de reducirRuido, y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
+   "descripcion": "Compara NoiseXTerminator (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45), NXT con separación de frecuencias (en color: croma de baja frecuencia 1,0 contra las manchas de color), NXT fuerte sólo en zonas de poca señal (máscara), MLDenoise (amount 1,0, modelo .xmlm del perfil; lento) y MultiscaleTGVDenoise (strength 0,5/1,0) sobre la misma entrada con las medidas de reducirRuido, y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
    "resumen": "Compara NXT, MLDenoise y MultiscaleTGVDenoise sobre la misma entrada y se queda con el mejor que cumple. Preferible a reducirRuido.",
    "paso": "lineal/14-noisex-suave.md",
    "params": {
@@ -761,7 +761,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodos: [\"nxt\", \"ml\", \"tgv\", \"hibrido\"], niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
+      "description": "Opcional. { metodos: [\"nxt\", \"frecuencias\", \"mascara\", \"ml\", \"tgv\", \"hibrido\"], niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
      }
     },
     "required": [

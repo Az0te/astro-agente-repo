@@ -67,7 +67,7 @@ Ficha: [no-lineal/03-scnr.md](../../no-lineal/03-scnr.md)
 
 **A mano en PixInsight (valores de referencia)**
 
-- SCNR: amount 0,65 (aescaffre; «nosotros preferimos suave»); verde y Average Neutral por defecto.
+- SCNR: amount 0,65 (aescaffre; «nosotros preferimos suave»); verde y Average Neutral por defecto. Jon Rista: 0,7 habitual (0,2–0,95); Maximum Neutral sólo a 1,0, Minimum Neutral ≤ 0,5; Maximum Mask y Additive Mask llevan a magenta (0,01–0,05). Comprobar en el histograma de HistogramTransformation que el final del verde queda alineado con el segundo canal. Sobre la starless o con máscara de estrellas (vacía el amarillo de las estrellas).
 - Alternativa quirúrgica sin tocar el OIII real, en una imagen nueva: `iif(min(R,B) > G, min(R,B), G)`.
 
 **En una llamada** (`herramientas/lineal.js`): `quitarVerde(vista, { amount: 0.85 })` sólo actúa si el verde del cielo supera en más de un 3 % a R **y** a B (con el azul también alto, G/R engaña: en una nebulosa dual band el cielo era azulado y no había verde que quitar). Aplica la fórmula de arriba bajo una máscara de cielo (rampa de 1,5σ a 5σ) y comprueba que el color del objeto no cambia. Si no hace falta, no aplica nada y lo dice.
@@ -86,6 +86,7 @@ Ficha: [no-lineal/04-mascaras.md](../../no-lineal/04-mascaras.md)
 **A mano en PixInsight (valores de referencia)**
 
 - Máscara de luminancia en una imagen nueva: `exp(g·ln(max($T, 1e-5)))` con g = 2,0 para LHE (1,5 para HDRMT).
+- Máscara de estrellas desde la capa de estrellas (mejor que StarMask con estrellas grandes): PixelMath en una imagen nueva gris `min(1, CIEL(Stars)/u)` con u ≈ 0,05–0,10 (o `iif(CIEL(Stars) > u, 1, 0)` para binarizar), luego MorphologicalTransformation Dilation 3–5 px y Convolution (gauss 2–4 px) para cubrir halos. Máscara de nebulosa: `max(0, CIEL(Starless) − cielo) − MascaraEstrellas`, reescalada y suavizada; control con la máscara mostrada en rojo.
 - Máscara de estrellas con StarMask: "Subir Noise threshold para no coger ruido, subir Scale para incluir estrellas grandes, subir Midtones y bajar algo Truncation para proteger centros grandes, subir Smoothness para cubrir halos de forma uniforme." Mapa de estructuras con estrellas agrandadas por MorphologicalTransformation y suavizadas quitando capas 1–3 con MultiscaleLinearTransform. La máscara de fondo para contraste local es `fondo_lhe`.
 
 **En una llamada** (`herramientas/mascaras.js`): `crearMascara(vista, { tipo })` con `tipo` `luminancia` (gamma 2,0 LHE / 1,5 HDRMT), `cielo` (rampa 1,5σ–5σ, suavizada) o `fondo_lhe` (receta v4B). Devuelve la vista de la máscara, su cobertura y la media en el cielo y en lo brillante, y cómo aplicarla.
@@ -195,6 +196,8 @@ Devuelve los pasos, antes y después por canal (mediana, MAD, máximo, pix_098, 
 - Limpieza de residuos: `iif($T < 0.005, 0, $T)`; atenuar: `iif($T > 0.02, $T*0.65, $T)`; halos magenta: `G = iif(min(R,B) > G, min(R,B), G)`. Nunca MorphologicalTransformation para contener estrellas (anillos).
 - Capa con el mismo estirado: `estrellas: "extraer"` en el Paso 1; si no, `starStretch`. Nunca STF auto-stretch en la capa.
 - Extracción en no lineal: SXT con `unscreen=true` sobre el clon estirado.
+- Reducción de estrellas sin erosión (astroimagetw), PixelMath sobre la imagen con estrellas `O` y su starless `S` del mismo estirado: `~((~mtf(k, O) / ~mtf(k, S)) * ~S)`, con k ≈ 0,75 (en PixInsight `mtf` oscurece con k > 0,5: más cerca de 0,5 reduce menos; más alto, más). Si `mtf(k, x)` no existe en la versión de PixelMath, aplicar antes a copias de O y S la misma HistogramTransformation con medios desplazados a la derecha. Como mucho dos pasadas; medir FWHM o `pix_estrella_pct` antes y después.
+- Lineal: separar sin `unscreen` y recombinar sumando; no lineal: `unscreen` y recombinar con `~(~starless * ~stars)`.
 - **`screenStarsExtract`** (ScreenStars, mismo resultado que el script): `screenStarsExtract("Original_st", "Starless_st")` crea la capa nueva, inversa exacta de `screenStarsCombine`; mismo `method` que al recombinar.
 
 <a id="no-lineal-09"></a>

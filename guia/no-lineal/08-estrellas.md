@@ -12,6 +12,14 @@ La capa de estrellas (original − starless) lleva PSF, halos, aigrettes y resid
 - Contenerlas atenuando el brillo (por encima de 0,02, × 0,65), nunca con erosión ni transformaciones morfológicas (anillos).
 - Comprimir las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco).
 
+**Reducir estrellas gordas** (sin erosión). Si las estrellas quedan grandes frente al objeto, reducirlas con la starless del mismo estirado, no con erosión ni transformaciones morfológicas (dejan formas de diamante y anillos negros). Fórmula (astroimagetw), con `~x = 1 − x` y `mtf(k, x)` una transformación de medios tonos que oscurece las dos imágenes por igual:
+
+`reducida = ~( ( ~mtf(k, original) / ~mtf(k, starless) ) · ~starless )`
+
+Cuanto más oscurece `mtf`, más se reducen. Como mucho **dos pasadas**. Control: tamaño de las estrellas antes y después (FWHM mediano, o `pix_estrella_pct` de la capa) y que las estrellas no se oscurezcan, cambien de color ni dejen anillo; revisar al 200–400 %. Alternativa equivalente cuando hay capa de estrellas: atenuar la capa (abajo) o estirarla menos en el Paso 1.
+
+**Tamaños distintos por filtro o canal** (mono con varios filtros, o deconvolución sólo en la luminancia): al combinar salen anillos de color o negros alrededor de las estrellas. Igualar antes de combinar: deconvolución en todos los canales (o en la imagen color entera) y, si un canal sigue con estrellas mayores, reducirlas en ese canal.
+
 **Extracción en no lineal** (evita halos hinchados): clon antes de separar → separación lineal para la starless → estirar la starless → aplicar al clon **exactamente el mismo estirado** → separar con `unscreen` sobre el clon → estrellas listas para screen.
 
 **Extraer la capa por screen inverso**

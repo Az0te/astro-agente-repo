@@ -20,11 +20,13 @@
 
 **PSF manual.** "Automatic PSF off, diámetro = FWHM medido" (`auto_nonstellar_psf = false`, `nonstellar_diameter` = FWHM medido): campos con pocas estrellas, nebulosa que llena el campo o deconvolución de una starless. Un valor aproximado basta."
 
-**Núcleos saturados.** "BXT puede dejarlos casi blancos. En estrellas muy brillantes, pasar BXT sobre la HDR (larga + corta) o enmascarar los núcleos saturados."
+**Núcleos saturados.** "BXT puede dejarlos casi blancos. En estrellas muy brillantes, pasar BXT sobre la HDR (larga + corta) o enmascarar los núcleos saturados." Pasa también en núcleos de galaxia en imágenes de color (no en mono): la deconvolución crea píxeles cerca de 1,0 que al estirar queman el entorno y le quitan color y detalle (astroimagetw). Control: píxeles > 0,98 en el núcleo antes y después; si suben, máscara sobre lo saturado y repetir.
+
+**Color entero, no sólo la luminancia.** La deconvolución por IA encoge las estrellas: si sólo se aplica a la L, las estrellas de color quedan mayores y salen anillos de color al combinar. En color, aplicarla a la imagen RGB y extraer la L después; en mono, a la L y a los canales de color a la vez.
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-13); en Siril, [Anexo I](../anexos/I-siril.md).
 
-**Control.** "Gusanos: si BXT los crea (no estelar alto), NXT los acentúa: bajar BXT, no subir NXT." Ringing = 0; textura no plástica; FWHM de estrellas baja respecto al original; sin franjas de color (mala alineación de canales). Los valores se eligen con la rejilla de abajo, no a ojo.
+**Control.** "Gusanos: si BXT los crea (no estelar alto), NXT los acentúa: bajar BXT, no subir NXT." Ringing = 0; textura no plástica; FWHM de estrellas baja respecto al original (y la excentricidad no sube); detalle nuevo real, no inventado (si hay duda, comparar con una imagen de referencia de mayor resolución del mismo campo); sin franjas de color (mala alineación de canales). Los valores se eligen con la rejilla de abajo, no a ojo.
 
 **Rejilla de variantes con medidas** (BXT aquí; NXT en el Paso 15)
 

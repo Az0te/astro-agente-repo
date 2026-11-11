@@ -12,7 +12,9 @@
 //   var f = reducirRuido("Starless_st", { denoise: 0.30, detail: 0.15, nuevaVista: "Starless_nxt" });
 //
 // reducirRuido(vista, opciones), sobre una copia:
-//   metodo      "nxt" (por defecto) | "hibrido" (MLDenoise + NXT 0,95: ML − suave(ML) + suave(NXT), caja de radio 3;
+//   metodo      "mascara" (NXT fuerte, lineal 0,80 / estirada 0,45, sólo donde hay poca señal; lo brillante queda igual)
+//               | frecuencias: { hf, lf, hfColor, lfColor, escala } con metodo "nxt" (separación de color y de frecuencias)
+//               | "nxt" (por defecto) | "hibrido" (MLDenoise + NXT 0,95: ML − suave(ML) + suave(NXT), caja de radio 3;
 //               sólo mono y con modelo .xmlm; si no se puede, cae a NXT 0,95 y lo dice) | "ml" (MLDenoise solo, también
 //               RGB; amount 1,0) | "tgv" (MultiscaleTGVDenoise de PixInsight 1.9.6; strength 0,5)
 //   modelo      .xmlm de MLDenoise; si no se da, la primera ruta .xmlm de perfil.md
@@ -143,15 +145,54 @@ function rdCopy(viewId, newId) {
   return w;
 }
 
+// Pone el primer parámetro de la lista que exista en esta versión de NXT y lo anota en «hechos».
+function rdSet(N, nombres, valor, hechos) {
+  for (var i = 0; i < nombres.length; ++i)
+    if (N[nombres[i]] !== undefined) { N[nombres[i]] = valor; hechos.push(nombres[i] + "=" + valor); return true; }
+  return false;
+}
+
+// o.frecuencias = { hf, lf, hfColor, lfColor, escala }: separación de color y de frecuencias del manual de RC-Astro
+// (NXT 2 / AI3): alta frecuencia = grano píxel a píxel; baja = manchas y ondulaciones. Valores de partida del manual:
+// intensidad HF 0,80–0,90 y LF 0,50–0,70; color HF 0,90–1,0 y LF 1,0 («quita las manchas de color»). Devuelve los
+// parámetros que se pudieron poner (los nombres cambian entre versiones de NXT).
 function rdNXT(view, o) {
   var N = new NoiseXTerminator;
   var d = (o.denoise !== undefined) ? o.denoise : 0.50;
+  if (o.frecuencias && o.frecuencias.hf !== undefined) d = o.frecuencias.hf;
   N.denoise = d; N.denoise_intensity = d;
   N.detail = (o.detail !== undefined) ? o.detail : 0.15;
   N.iterations = o.iterations || 2;
   if (o.croma !== undefined) { N.enable_color_separation = true; N.denoise_color = o.croma; }
   else { N.enable_color_separation = false; N.denoise_color = d; }
+  var hechos = null;
+  if (o.frecuencias) {
+    var f = o.frecuencias; hechos = ["denoise=" + d];
+    N.enable_color_separation = true; N.denoise_color = f.hfColor; hechos.push("denoise_color=" + f.hfColor);
+    rdSet(N, ["enable_frequency_separation"], true, hechos);
+    rdSet(N, ["denoise_high_freq", "denoise_hf"], f.hf, hechos);
+    rdSet(N, ["denoise_low_freq", "denoise_lf"], f.lf, hechos);
+    rdSet(N, ["denoise_color_low_freq", "denoise_low_freq_color", "denoise_lf_color"], f.lfColor, hechos);
+    rdSet(N, ["denoise_color_high_freq", "denoise_high_freq_color", "denoise_hf_color"], f.hfColor, hechos);
+    rdSet(N, ["frequency_scale"], f.escala, hechos);
+  }
   if (!N.executeOn(view)) throw new Error("NXT falló");
+  return hechos;
+}
+
+// Máscara de «poca señal» (Jon Rista: reducir fuerte donde la relación señal/ruido es baja y proteger lo brillante):
+// 1 en el cielo y la señal débil, 0 desde cielo + 20σ, con rampa desde cielo + 3σ, sobre la luminancia suavizada
+// (caja de radio 4) y la máscara suavizada (radio 8) para que no haya escalones.
+function rdMascaraSenal(view) {
+  var a = rdLum(view), cells = rdCells(a), W = a.W, H = a.H, n = W * H;
+  var srt = cells.filter(function (c) { return c.m > 1e-6; }).sort(function (p, q) { return p.m - q.m; });
+  var sky = srt.slice(0, Math.max(5, Math.floor(srt.length * 0.10)));
+  var sig = rdNoise(a, sky), cielo = sky[sky.length >> 1].m, lo = cielo + 3 * sig, hi = cielo + 20 * sig;
+  var Ls = rdBox(a.L, W, H, 4), m = new Float32Array(n), cub = 0;
+  for (var i = 0; i < n; ++i) { var t = (Ls[i] - lo) / Math.max(1e-9, hi - lo); m[i] = 1 - Math.min(1, Math.max(0, t)); }
+  m = rdBox(m, W, H, 8);
+  for (var j = 0; j < n; j += 7) if (m[j] > 0.5) ++cub;
+  return { m: m, cobertura_pct: +(100 * cub / Math.ceil(n / 7)).toFixed(1) };
 }
 
 function rdBox(a, W, H, r) {
@@ -201,7 +242,28 @@ function reducirRuido(viewId, o) {
   if (metodo === "ml" && !rdModeloML(o)) throw new Error("MLDenoise necesita un modelo .xmlm: pásalo en { modelo } o apunta su ruta en perfil.md");
   if (metodo === "tgv" && typeof MultiscaleTGVDenoise !== "function") throw new Error("MultiscaleTGVDenoise no está disponible (PixInsight 1.9.6 o posterior)");
   var w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn")), v = w.mainView;
-  if (metodo === "nxt") rdNXT(v, o);
+  var nxtHechos = null, mascaraInfo = null, linealIn = src.image.median() < 0.05;
+  if (metodo === "nxt") {
+    nxtHechos = rdNXT(v, o);
+    if (o.frecuencias && !nxtHechos.some(function (h) { return /low_freq_color|color_low_freq|lf_color/.test(h); }))
+      aviso = (aviso ? aviso + "; " : "") + "esta versión de NXT no tiene croma de baja frecuencia: se aplicó sin ella (" + nxtHechos.join(", ") + ")";
+  }
+  else if (metodo === "mascara") {
+    // NXT fuerte sólo donde hay poca señal; lo brillante (alta señal/ruido) se queda como estaba.
+    var tmp = rdCopy(viewId, "rdTmpMK"), dMk = (o.denoise !== undefined) ? o.denoise : (linealIn ? 0.80 : 0.45);
+    rdNXT(tmp.mainView, { denoise: dMk, detail: o.detail, iterations: o.iterations });
+    var mk = rdMascaraSenal(src), Wm = src.image.width, Hm = src.image.height, Rm = new Rect(0, 0, Wm, Hm);
+    var s0 = new Float32Array(Wm * Hm), s1 = new Float32Array(Wm * Hm);
+    v.beginProcess();
+    for (var cm = 0; cm < src.image.numberOfChannels; ++cm) {
+      src.image.getSamples(s0, Rm, cm); tmp.mainView.image.getSamples(s1, Rm, cm);
+      for (var im2 = 0; im2 < s0.length; ++im2) s0[im2] = s0[im2] * (1 - mk.m[im2]) + s1[im2] * mk.m[im2];
+      v.image.setSamples(s0, Rm, cm);
+    }
+    v.endProcess();
+    tmp.forceClose();
+    mascaraInfo = { denoise: dMk, cobertura_pct: mk.cobertura_pct };
+  }
   else if (metodo === "ml") {
     // MLDenoise solo (sin NXT): también en RGB. Lento: ~5 min en 22 MP (8 nov 2026).
     var M1 = new MLDenoise; M1.modelPath = rdModeloML(o); M1.amount = (o.amount !== undefined) ? o.amount : 1.0; M1.useCache = false;
@@ -263,9 +325,13 @@ function reducirRuido(viewId, o) {
                              : "no aplicar este NXT"));
   return {
     vista: v.id, original: viewId,
-    metodo: { nxt: "NoiseXTerminator", ml: "MLDenoise", tgv: "MultiscaleTGVDenoise" }[metodo] || "híbrido MLDenoise + NXT",
-    parametros: metodo === "nxt" ? { denoise: (o.denoise !== undefined) ? o.denoise : 0.50, detail: (o.detail !== undefined) ? o.detail : 0.15,
-                                    iterations: o.iterations || 2, croma: (o.croma !== undefined) ? o.croma : null } :
+    metodo: { nxt: o.frecuencias ? "NoiseXTerminator con separación de color y de frecuencias" : "NoiseXTerminator",
+              mascara: "NoiseXTerminator sólo donde hay poca señal (máscara)", ml: "MLDenoise", tgv: "MultiscaleTGVDenoise" }[metodo] || "híbrido MLDenoise + NXT",
+    parametros: metodo === "nxt" ? (o.frecuencias ? { frecuencias: o.frecuencias, aplicado: nxtHechos } :
+                                  { denoise: (o.denoise !== undefined) ? o.denoise : 0.50, detail: (o.detail !== undefined) ? o.detail : 0.15,
+                                    iterations: o.iterations || 2, croma: (o.croma !== undefined) ? o.croma : null }) :
+                metodo === "mascara" ? { denoise: mascaraInfo.denoise, mascara_cobertura_pct: mascaraInfo.cobertura_pct,
+                                         mascara: "1 en cielo y señal débil, 0 desde cielo + 20σ (rampa desde + 3σ), suavizada" } :
                 metodo === "ml" ? { amount: (o.amount !== undefined) ? o.amount : 1.0 } :
                 metodo === "tgv" ? { strength: (o.strength !== undefined) ? o.strength : 0.5 } : { modelo: o.modelo },
     aviso: aviso, segundos: Math.round((Date.now() - t0) / 1000), medidas: q, no_cumple: noCumple,
@@ -301,12 +367,22 @@ function ruidoCandidatos(viewId, o) {
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
   var lineal = src.image.median() < 0.05, t0 = Date.now();
-  var metodos = o.metodos || ["nxt", "ml", "tgv"];
+  var metodos = o.metodos || ["nxt", "frecuencias", "mascara", "ml", "tgv"], color = src.image.numberOfChannels >= 3;
   var pruebas = [];
   if (metodos.indexOf("nxt") >= 0)
     (o.niveles || (lineal ? [0.30, 0.50, 0.70] : [0.15, 0.30, 0.45])).forEach(function (d) {
       pruebas.push({ etiqueta: "NXT denoise " + d, op: { metodo: "nxt", denoise: d }, sufijo: "_nxt" + Math.round(100 * d) });
     });
+  // NXT con separación de color y de frecuencias (manual de RC-Astro): la croma de baja frecuencia al 100 % ataca las
+  // manchas de color grandes (moteado) que el NXT normal no quita. Sólo en color. Estirada: intensidad mucho más suave.
+  if (metodos.indexOf("frecuencias") >= 0 && color) {
+    var fr = lineal ? { hf: 0.85, lf: 0.60, hfColor: 0.95, lfColor: 1.0, escala: 5 } : { hf: 0.40, lf: 0.30, hfColor: 0.90, lfColor: 1.0, escala: 5 };
+    pruebas.push({ etiqueta: "NXT frecuencias (int. " + fr.hf + "/" + fr.lf + ", color " + fr.hfColor + "/" + fr.lfColor + ")",
+                   op: { metodo: "nxt", frecuencias: fr }, sufijo: "_nxtfrec" });
+  }
+  // NXT fuerte sólo donde hay poca señal (Jon Rista): protege lo brillante, que ya tiene buena relación señal/ruido.
+  if (metodos.indexOf("mascara") >= 0)
+    pruebas.push({ etiqueta: "NXT " + (lineal ? 0.80 : 0.45) + " sólo en zonas de poca señal (máscara)", op: { metodo: "mascara" }, sufijo: "_nxtmk" });
   if (metodos.indexOf("ml") >= 0) {
     var a = (o.amount !== undefined) ? o.amount : 1.0;
     pruebas.push({ etiqueta: "MLDenoise amount " + a, op: { metodo: "ml", amount: a }, sufijo: "_ml" });

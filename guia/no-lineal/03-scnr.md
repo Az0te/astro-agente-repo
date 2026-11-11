@@ -19,7 +19,9 @@
 - En la normalización de banda estrecha: quitar verde interno `G = min(G, (R+B)/2)`, "no en HOO".
 - En nebulosa oscura: quitar verde con `G − 0,85·max(0, G − max(R,B))`.
 - SCNR invertido (invertir, SCNR suave, invertir) para halos verdes o azules.
+- **Protege las estrellas:** quitar verde vacía el amarillo de las estrellas (sobre todo el centro de las pequeñas). Hacerlo sobre la starless o con máscara de estrellas, sólo donde haga falta. Estrellas magenta: mejor estrellas de RGB que tapar el síntoma.
+- **Mejor quedarse corto** (Jon Rista): el verde corregido debe quedar a la altura del segundo canal, no por debajo; si R y B están lejos entre sí, la protección por media neutra con fuerza 1 deja una dominante del segundo canal. Fuerza habitual 0,7 (0,2–0,95). Las variantes de protección «no neutras» llevan a magenta: como mucho 0,01–0,05. Repetirlo apenas cambia nada.
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-03); en Siril, [Anexo I](../anexos/I-siril.md).
 
-**Control.** G/R del cielo después de SCNR ≈ 1,00 (±0,03). Comprobar que el OIII del objeto sigue verde-azulado y que las estrellas no han virado a magenta. En el fondo, medir antes y después en un ROI de cielo limpio.
+**Control.** G/R del cielo después de SCNR ≈ 1,00 (±0,03). Comprobar que el OIII del objeto sigue verde-azulado, que las estrellas no han virado a magenta y que las amarillas siguen amarillas. En el fondo, medir antes y después en un ROI de cielo limpio.

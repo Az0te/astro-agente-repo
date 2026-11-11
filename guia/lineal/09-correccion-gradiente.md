@@ -21,7 +21,7 @@ El gradiente es un offset de gran escala que no es del objeto: contamina la cali
 - Queda gradiente en el cielo → escala algo menor (copia algo más, fondo más plano) o, si el residuo es liso, plano robusto grado 1 encima (no puede comerse formas).
 - Modelos de IA de fondo: sólo objetos pequeños en campo amplio; se comen objetos extensos. Aun así entran en la comparativa: las medidas deciden.
 - Comparar el color del fondo después de la calibración de color: algunos métodos neutralizan además el color del fondo y otros no.
-- Los modelos con base de referencia necesitan astrometría (sin ella, no se prueban). Si la nebulosa aparece en su modelo, subir la escala; si aparece en negativo, bajarla.
+- Los modelos con base de referencia necesitan astrometría (sin ella, no se prueban). Con banda estrecha o dual band, no usar las bandas RGB de la referencia: Hα como rojo y OIII como verde y azul cuando exista; si no hay banda de referencia para ese filtro, no probarlo. Si la nebulosa aparece en su modelo, subir la escala; si aparece en negativo, bajarla.
 - Píxeles a 0 de los bordes del registro: recortar primero (Paso 5); un modelo que intente ajustarlos falsea todo.
 
 **Medidas** (las mismas en todos los programas):
@@ -33,7 +33,9 @@ El gradiente es un offset de gran escala que no es del objeto: contamina la cali
 
 Se recomienda, entre los que no se comen el objeto (`objeto_quitado_pct` ≤ 3 % y |`copia_objeto`| < 0,3), el que deja el cielo más plano. En una galaxia grande (nov 2026) eso reprodujo la decisión hecha a mano: el modelo por muestras se llevaba el 8,5 %, el de referencia el 1,8 % y el polinomio de grado 2 el 0 % con el cielo igual de plano (13 % del gradiente). Medir el gradiente que queda en toda la imagen, en vez de fuera del objeto, medía la galaxia y daba por bueno al que se la comía.
 
-**Revisar el modelo siempre**, antes de aceptarlo: liso, sin la forma del objeto, sin bordes ni anillo oscuro. Si no convence, hacer la comparativa de candidatos del detalle.
+**Revisar el modelo siempre**, antes de aceptarlo: liso, sin la forma del objeto, sin bordes ni anillo oscuro, y **con el color de la luz parásita** (Jon Rista): pardo si es airglow, dorado o anaranjado si es contaminación lumínica. Manchas azules, magenta o rojas en el modelo = se está llevando el objeto (reflexión, OIII, Hα): quitar muestras de esa zona o subir el suavizado. Si tras corregir el fondo queda más desigual, revisar muestras y máscara en vez de encadenar más pasadas; y no usar el gradiente para tapar una calibración (flats) mala.
+
+**Encadenar dos métodos** puede ganar a cualquiera solo: uno automático de base y otro de acabado (en una toma con mucha contaminación y sin flats, astroimagetw obtuvo lo mejor con un modelo automático seguido de la corrección de gradiente nativa, que además quitó la sombra que dejó el primero). Medir la cadena como un candidato más. Si no convence, hacer la comparativa de candidatos del detalle.
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-09); en Siril, [Anexo I](../anexos/I-siril.md).
 
