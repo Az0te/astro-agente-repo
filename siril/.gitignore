@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.log
+# Notas de trabajo internas (rutas locales del equipo de desarrollo)
+TRASPASO.md

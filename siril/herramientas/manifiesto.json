@@ -1,0 +1,1294 @@
+{
+ "version": 1,
+ "nota": "Herramientas que el MCP sirilastropilot ofrece al modelo. El puente (siril/puente/SirilAstroPilot.py) solo ejecuta las que están en LISTA de siril/herramientas/herramientas.py; este fichero describe sus parámetros. Mismo formato que guia/herramientas/manifiesto.json. Niveles: lectura (no cambia nada), vista (cambia la imagen cargada, con deshacer), disco (lee o escribe ficheros). resumen: versión corta para clientes con poco contexto (SIRILASTROPILOT_COMPACTO=1). El puente ignora los parámetros que una herramienta no conoce (con aviso en parametros_ignorados) y sugiere el correcto si parece una errata.",
+ "funciones": [
+  {
+   "nombre": "ping",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 15,
+   "descripcion": "Comprueba que Siril responde a través del puente. Devuelve la versión de las herramientas y de sirilpy, la carpeta de trabajo de Siril y, si hay imagen cargada, sus datos.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "imagen",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 20,
+   "descripcion": "Datos de la imagen cargada en Siril (Siril trabaja con una sola imagen a la vez, no hay vistas): ancho, alto, canales, tipo (uint16 o float32), fichero, si tiene astrometría y las últimas 10 líneas de su historial.",
+   "resumen": "Datos de la imagen cargada: tamaño, canales, tipo, fichero, astrometría, historial.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "estadisticas",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Mediana, MAD, media, mínimo y máximo por canal de la imagen cargada, en 0–1 (entera o de un rectángulo). Sirve para saber si está lineal (medianas < 0,05), comprobar el fondo o medir zonas concretas. Sin rect ni bordes usa las estadísticas de Siril (rápido, añade ruido_fondo). Con bordes mide franjas de los cuatro bordes frente al centro (viñeteo, cuñas, zonas con menos subs).",
+   "resumen": "Mediana, MAD, media, mín. y máx. por canal en 0–1 (imagen entera o rect). Con bordes: franjas de borde frente al centro.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "rect": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Zona [x0, y0, x1, y1] en píxeles, (0,0) arriba a la izquierda como se ve en pantalla; x1 e y1 excluidos. Sin él, toda la imagen."
+     },
+     "bordes": {
+      "type": "number",
+      "description": "Ancho en píxeles de las franjas de borde (p. ej. 200). Añade medianas de izquierda, derecha, arriba, abajo y centro y la caída de cada borde respecto al centro."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "previa",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 90,
+   "descripcion": "Guarda un JPG de la imagen cargada con el autoestirado de Siril (sin tocarla) y devuelve su ruta para mirarla. Lado máximo 'lado' px (por defecto 1600). Con rect da un recorte (al 100 % si cabe en 'lado') para revisar detalle, estrellas, anillos o textura.",
+   "resumen": "JPG reducido con autoestirado (o recorte al 100 % con rect) para mirarla. No la toca.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "lado": {
+      "type": "number",
+      "description": "Lado máximo en píxeles (por defecto 1600)."
+     },
+     "rect": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Zona [x0, y0, x1, y1] en píxeles, (0,0) arriba a la izquierda como se ve en pantalla; x1 e y1 excluidos. Sin él, toda la imagen."
+     },
+     "enlazado": {
+      "type": "boolean",
+      "description": "Autoestirado enlazado entre canales. Por defecto: por canal si la imagen es lineal (fondo neutro aunque falte calibrar el color) y enlazado si ya está estirada (color real)."
+     },
+     "fichero": {
+      "type": "string",
+      "description": "Ruta .jpg absoluta. Por defecto ~/.sirilastropilot/previas/<nombre>[_x0_y0].jpg."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "analizarMaster",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 120,
+   "descripcion": "Paso 1 lineal: cabecera (objeto, filtro, cámara, focal, exposición total, nº de subs...), escala en \"/px y campo, mediana/MAD/saturados/ceros por canal en 0–1, si está lineal, fondo en rejilla 3×3, fracción del campo con señal, bordes sin datos (cuñas tras alinear: p95 y máximo en px por lado y % del campo; para recortar, el p95) y estrellas (número, FWHM, redondez, saturadas, la más brillante). No interpreta.",
+   "resumen": "Paso 1 lineal: cabecera, escala, estadísticas por canal, si está lineal, fondo 3×3, bordes sin datos y estrellas. No interpreta.",
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "estrellas": {
+      "type": "boolean",
+      "description": "Detectar estrellas (por defecto true; false si tarda mucho)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "inventarioSubs",
+   "fichero": "apilado.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "paso": "lineal/02-inventario.md",
+   "descripcion": "Paso 2 lineal: recorre una carpeta (y subcarpetas) de subs, lee sólo las cabeceras y agrupa lights, darks, flats, bias y darks de flats por filtro, exposición, gain, offset, binning, tamaño y noche (tipo por IMAGETYP o por el nombre de la carpeta). Avisa de ficheros sin tipo, temperaturas que varían y nombres de filtro raros. No abre imágenes ni cambia nada.",
+   "resumen": "Paso 2: agrupa los subs de una carpeta por tipo, filtro, exposición, gain, noche (sólo cabeceras).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta absoluta con los subs."
+     },
+     "excluir": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Subcarpetas que no se leen (p. ej. [\"_proc\"]): procesados de otros, pruebas… Las de procesados (_*, process, masters, output…) ya se saltan solas."
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
+   "nombre": "revisarCalibracion",
+   "fichero": "apilado.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "paso": "lineal/04-preprocesado.md",
+   "descripcion": "Paso 4 lineal: para cada grupo de lights, qué darks (misma exposición, gain, binning; temperatura más cercana), flats (mismo filtro; mejor de la misma noche) y bias o darks de flats le corresponden, qué falta y qué no encaja (temperatura > 2 °C, flats de otra noche, pocos darks o flats).",
+   "resumen": "Paso 4: calibración de cada grupo de lights (qué hay, qué falta, qué no encaja).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta absoluta con los subs."
+     },
+     "excluir": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Subcarpetas que no se leen (p. ej. [\"_proc\"]): procesados de otros, pruebas… Las de procesados (_*, process, masters, output…) ya se saltan solas."
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
+   "nombre": "apilarCandidatos",
+   "fichero": "apilado.py",
+   "nivel": "disco",
+   "timeout_s": 14400,
+   "paso": "lineal/04-preprocesado.md",
+   "descripcion": "Pasos 3–4 lineales: con una o varias noches de lights (por defecto todas si comparten filtro, exposición y gain; cada noche se calibra con sus darks/flats/bias y luego se unen, se registran juntas y se seleccionan sobre el conjunto) hace los masters (bias o darks de flats, flats, darks), calibra (con -cfa -equalize_cfa -debayer si es OSC), registra en dos pasadas, mide cada sub (FWHM ponderada, redondez, estrellas, fondo) y descarta los que se alejan de la mediana más de k MAD (como mucho un 30 %), y apila comparando métodos de rechazo (winsorized, ESD generalizado, ajuste lineal) con y sin pesos por FWHM. Mide cada master (ruido de fondo, FWHM, estrellas, píxeles calientes sueltos) y recomienda; deja el elegido cargado y guardado. Trabaja en ~/.sirilastropilot/apilado/<proyecto> con enlaces a los ficheros: los del usuario no se tocan. Trabajo largo: el progreso se ve en el estado del puente.",
+   "resumen": "Pasos 3–4: masters, calibración, registro, selección de subs y apilado comparando rechazos y pesos; master cargado.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta absoluta con los subs."
+     },
+     "grupo": {
+      "description": "Id de un grupo de lights (de inventarioSubs), una lista de ids, o 'todos'. Sin él: todas las noches compatibles juntas."
+     },
+     "proyecto": {
+      "type": "string",
+      "description": "Nombre de la carpeta de trabajo (por defecto carpeta_grupo)."
+     },
+     "rechazos": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "w",
+        "g",
+        "l",
+        "s",
+        "p",
+        "a"
+       ]
+      },
+      "description": "Rechazos a comparar: w winsorized, g ESD generalizado, l ajuste lineal, s sigma, p percentil, a MAD (por defecto w, g, l)."
+     },
+     "pesos": {
+      "type": "array",
+      "items": {
+       "type": "boolean"
+      },
+      "description": "Sin y con pesos por FWHM (por defecto [false, true])."
+     },
+     "seleccionar": {
+      "type": "boolean",
+      "description": "Descartar los peores subs tras registrar (por defecto true)."
+     },
+     "k": {
+      "type": "number",
+      "description": "MAD desde la mediana para descartar (por defecto 2,5)."
+     },
+     "drizzle": {
+      "type": "boolean",
+      "description": "Registro con drizzle (más lento; sólo si está submuestreado)."
+     },
+     "excluir": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Subcarpetas que no se leen (p. ej. [\"_proc\"]): procesados de otros, pruebas… Las de procesados (_*, process, masters, output…) ya se saltan solas."
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
+   "nombre": "documentarObjeto",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 90,
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "internet": true,
+   "descripcion": "Paso 1 lineal, con internet: identifica el objeto de la imagen cargada por OBJECT (aunque lleve texto de más) o por la astrometría, y devuelve su tipo, tamaño y magnitud (SIMBAD), la señal esperada según el tipo (rayas y banda ancha o estrecha), un resumen de Wikipedia y las estrellas brillantes del campo (mag < 7; avisa con mag < 4 por halos y reflejos). Sólo con la casilla Internet marcada.",
+   "resumen": "Paso 1: ficha del objeto por OBJECT o astrometría (SIMBAD, Wikipedia, señal esperada, estrellas brillantes). Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "objeto": {
+      "type": "string",
+      "description": "Nombre si OBJECT no sirve, p. ej. «M 31»."
+     },
+     "idioma": {
+      "type": "string",
+      "description": "es o en (Wikipedia; por defecto es)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "simbad",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 45,
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "internet": true,
+   "descripcion": "Tipo (SIMBAD), coordenadas, tamaño en minutos de arco, magnitud V y señal esperada de un objeto por su nombre. Con internet.",
+   "resumen": "SIMBAD: tipo, coordenadas, tamaño, magnitud de un objeto. Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "objeto": {
+      "type": "string",
+      "description": "Nombre, p. ej. «IC 1396»."
+     }
+    },
+    "required": [
+     "objeto"
+    ]
+   }
+  },
+  {
+   "nombre": "wikipedia",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 45,
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "internet": true,
+   "descripcion": "Resumen del artículo de Wikipedia (español o inglés; si no hay, inglés) de un objeto, cámara, telescopio o filtro. Con internet.",
+   "resumen": "Resumen de Wikipedia (es/en). Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "texto": {
+      "type": "string"
+     },
+     "idioma": {
+      "type": "string",
+      "description": "es o en."
+     }
+    },
+    "required": [
+     "texto"
+    ]
+   }
+  },
+  {
+   "nombre": "leerWeb",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 45,
+   "internet": true,
+   "descripcion": "Texto limpio (sin etiquetas, scripts ni estilos) de una página https, recortado a 'maximo' caracteres (por defecto 8000). Para documentación de equipos, filtros o técnicas. Con internet.",
+   "resumen": "Texto limpio de una página https. Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string",
+      "description": "Dirección https://."
+     },
+     "maximo": {
+      "type": "number",
+      "description": "Caracteres máximos (500–20000)."
+     }
+    },
+    "required": [
+     "url"
+    ]
+   }
+  },
+  {
+   "nombre": "estrellas",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 120,
+   "descripcion": "Detecta estrellas con la configuración actual de Siril (findstar) y devuelve número, FWHM mediana en px y \", redondez, saturadas y la más brillante.",
+   "resumen": "Estrellas: número, FWHM, redondez, saturadas, la más brillante.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "medirRendimiento",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "descripcion": "Prueba de rendimiento del puente con la imagen cargada: tiempo de metadatos, estadísticas de Siril, paso de píxeles a numpy (con MB/s), previa de 8 bits, mediana en numpy y, opcionalmente, detección de estrellas. Para validar el puente en un PC nuevo.",
+   "resumen": "Tiempos del puente (metadatos, estadísticas, píxeles a numpy, previa, estrellas).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "repeticiones": {
+      "type": "number",
+      "description": "Repeticiones por prueba (1–10, por defecto 3)."
+     },
+     "estrellas": {
+      "type": "boolean",
+      "description": "Medir también la detección de estrellas (por defecto false)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "registro",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 30,
+   "descripcion": "Últimas líneas del registro (consola) de Siril: mensajes de los comandos, avisos y errores. Para ver por qué ha fallado un comando o qué ha medido Siril. Con solo_errores: true solo las líneas que parecen errores o avisos; con filtro, solo las que contienen ese texto.",
+   "resumen": "Últimas líneas de la consola de Siril (solo_errores, filtro).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "lineas": {
+      "type": "number",
+      "description": "Número de líneas (por defecto 80, máx. 500)."
+     },
+     "filtro": {
+      "type": "string",
+      "description": "Solo las líneas que contienen este texto (sin distinguir mayúsculas)."
+     },
+     "solo_errores": {
+      "type": "boolean",
+      "description": "Solo las líneas que parecen errores o avisos."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "abrirImagen",
+   "fichero": "herramientas.py",
+   "nivel": "disco",
+   "timeout_s": 120,
+   "descripcion": "Carga un fichero (FITS, TIFF, XISF, PNG, JPG, RAW...) en Siril. Sustituye la imagen cargada: guárdala antes si tiene cambios. Devuelve sus datos.",
+   "resumen": "Carga un fichero en Siril (sustituye la imagen cargada).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta."
+     }
+    },
+    "required": [
+     "fichero"
+    ]
+   }
+  },
+  {
+   "nombre": "guardarImagen",
+   "fichero": "herramientas.py",
+   "nivel": "disco",
+   "timeout_s": 300,
+   "descripcion": "Guarda la imagen cargada en un fichero; el formato sale de la extensión (.fit/.fits, .tif, .png, .jpg). No sobrescribe salvo sobrescribir: true. Crea la carpeta si no existe.",
+   "resumen": "Guarda la imagen cargada (.fit, .tif, .png, .jpg). No sobrescribe.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta con extensión."
+     },
+     "sobrescribir": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "fichero"
+    ]
+   }
+  },
+  {
+   "nombre": "deshacer",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 60,
+   "descripcion": "Deshace la última operación de la imagen cargada (historial de Siril).",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "rehacer",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 60,
+   "descripcion": "Rehace la última operación deshecha.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "comandoSiril",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 900,
+   "descripcion": "Ejecuta un comando de procesado de Siril sobre la imagen cargada (queda en el historial y se puede deshacer). Solo comandos de la lista blanca: estirados (asinh, autostretch, ght, invght, modasinh, linstretch, mtf, clahe, satu), fondo y color (subsky, rmgreen, ccm, pcc, spcc, platesolve, fixbanding), ruido y nitidez (denoise, fmedian, gauss, epf, unsharp, wiener, rl, sb), estrellas (starnet, synthstar, unclipstars, findstar), geometría (crop, binxy, resample, rotate, rotatepi, mirrorx, mirrory) y medidas (stat, bgnoise, bg). Nada que cargue, guarde, cambie de carpeta o ejecute scripts. Argumentos como en la consola de Siril, uno por elemento, sin espacios ni comillas.",
+   "resumen": "Comando de procesado de Siril de la lista blanca sobre la imagen cargada (con deshacer).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "comando": {
+      "type": "string",
+      "description": "Nombre del comando, p. ej. \"ght\"."
+     },
+     "args": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Argumentos, p. ej. [\"-D=0.5\", \"-b=2.0\"]."
+     }
+    },
+    "required": [
+     "comando"
+    ]
+   }
+  },
+  {
+   "nombre": "recortarBordes",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 120,
+   "paso": "lineal/05-staralignment-crop.md",
+   "descripcion": "Paso 5 lineal (con un solo master): busca el rectángulo más grande sin las cuñas sin datos del registrado y recorta la imagen cargada con crop (con deshacer). Devuelve el rectángulo, los píxeles que quita por lado y las cuñas que quedan. Con aplicar: false solo calcula. Hacerlo antes del gradiente.",
+   "resumen": "Paso 5: recorta las cuñas sin datos (crop, con deshacer). aplicar: false solo calcula.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "margen": {
+      "type": "number",
+      "description": "Píxeles extra a quitar por lado (por defecto 8)."
+     },
+     "aplicar": {
+      "type": "boolean",
+      "description": "false = solo calcular (por defecto true)."
+     },
+     "tolerancia_pct": {
+      "type": "number",
+      "description": "% de píxeles sin datos que se tolera dentro del recorte (por defecto 0,01)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "resolverAstrometria",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "lineal/08-plate-solve.md",
+   "descripcion": "Paso 8 lineal: resuelve la astrometría con platesolve de Siril (escribe la solución en la imagen; no cambia los píxeles salvo voltearla si está al revés). Devuelve si se resolvió, AR/Dec, focal y píxel, y las líneas del registro de Siril. Si la cabecera no trae focal o píxel, pásalos. Píxel, focal y centro salen de la cabecera: no los pases (píxel o focal distintos se rechazan; un centro a más de 2° del de la cabecera se ignora con aviso). Pasa centro sólo si la cabecera no trae coordenadas.",
+   "resumen": "Paso 8: plate solve con platesolve de Siril (focal, pixel, centro opcionales).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "forzar": {
+      "type": "boolean",
+      "description": "Resolver aunque ya tenga solución."
+     },
+     "focal": {
+      "type": "number",
+      "description": "Focal en mm."
+     },
+     "pixel": {
+      "type": "number",
+      "description": "Tamaño de píxel en µm."
+     },
+     "centro": {
+      "type": "string",
+      "description": "Centro aproximado 'AR,Dec' en grados o 'hh:mm:ss,+dd:mm:ss'."
+     },
+     "catalogo": {
+      "type": "string",
+      "description": "Catálogo (p. ej. localgaia, gaia, nomad)."
+     },
+     "astrometrynet": {
+      "type": "boolean",
+      "description": "Usar Astrometry.net local."
+     },
+     "reducir": {
+      "type": "boolean",
+      "description": "Reducir la imagen para detectar estrellas más rápido (-downscale)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "gradienteCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 1200,
+   "paso": "lineal/09-correccion-gradiente.md",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (subsky de Siril con polinomio de grado 1 y 2 y con RBF, y GraXpert IA por su CLI si está instalado), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "resumen": "Paso 9: compara subsky polinomio/RBF y GraXpert IA, mide y recomienda; no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "polinomio": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Grados de polinomio (por defecto [1, 2]; [] = ninguno)."
+     },
+     "rbf": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Suavizados de RBF (por defecto [0.5]; [] = ninguno)."
+     },
+     "usar_graxpert": {
+      "type": "boolean",
+      "description": "Probar GraXpert IA (por defecto true; ruta en ~/.sirilastropilot/config.json si no lo encuentra)."
+     },
+     "muestras": {
+      "type": "number",
+      "description": "Muestras por línea de subsky (por defecto 20)."
+     },
+     "tolerancia": {
+      "type": "number",
+      "description": "Tolerancia de subsky en MAD (por defecto 1,0)."
+     },
+     "ignorar_cunas": {
+      "type": "boolean",
+      "description": "Seguir aunque haya cuñas sin datos (no recomendado)."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
+      "description": "Tipo de objeto (se admite en todas las comparativas)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "aplicarCandidato",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 120,
+   "descripcion": "Pone en la imagen cargada el candidato elegido de la última comparación (gradienteCandidatos, estirarCandidatos, reducirRuidoCandidatos, saturacionCandidatos), exactamente el que se midió, con estado de deshacer. Se niega si la imagen ha cambiado desde la comparación. Después, guardar la versión con guardarImagen.",
+   "resumen": "Aplica el candidato id de la última comparación (con deshacer).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "description": "Id del candidato, p. ej. \"gradiente_2\" o \"estirado_1\"."
+     }
+    },
+    "required": [
+     "id"
+    ]
+   }
+  },
+  {
+   "nombre": "listaSPCC",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 30,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "Nombres que acepta SPCC en este Siril (sensores, filtros, blanco de referencia), para pasarlos tal cual a calibrarColor.",
+   "resumen": "Nombres de sensores/filtros/blanco para calibrarColor.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "oscsensor",
+       "monosensor",
+       "redfilter",
+       "greenfilter",
+       "bluefilter",
+       "oscfilter",
+       "osclpf",
+       "whiteref"
+      ],
+      "description": "Qué lista (por defecto oscsensor)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "calibrarColor",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "Paso 12 lineal: SPCC de Siril sobre la imagen cargada (exige lineal y con astrometría). NO pases sensor: la herramienta lo toma del perfil del usuario o de la cámara de la cabecera; pásalo sólo si el usuario lo dice. Devuelve el cielo por canal antes y después, la dominante que queda en el cielo y las líneas del registro de Siril. El sensor sale de la cabecera de la imagen (INSTRUME) antes que del perfil; DSLR Canon/Nikon de la base con su filtro de serie; si la DSLR no está, pide fotometrica: true (PCC). Si el catálogo de estrellas no responde (sin internet, servidor caído), cae solo a equilibrarColor y lo avisa: no repitas la llamada. PCC usa el Gaia local si está instalado.",
+   "resumen": "Paso 12: SPCC. No pases sensor (sale del perfil o de la cabecera) salvo que el usuario lo diga.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "sensor": {
+      "type": "string",
+      "description": "Sólo si el usuario lo dice (nombre exacto de listaSPCC). Si no se pasa, sale del perfil o de la cabecera; nunca adivinarlo por el modelo de cámara."
+     },
+     "mono": {
+      "type": "boolean",
+      "description": "Cámara mono (por defecto false)."
+     },
+     "filtro": {
+      "type": "string",
+      "description": "Filtro OSC (oscfilter)."
+     },
+     "lpf": {
+      "type": "string",
+      "description": "Filtro antipolución de OSC (osclpf)."
+     },
+     "filtros_rgb": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Mono: [rojo, verde, azul]."
+     },
+     "blanco": {
+      "type": "string",
+      "description": "Blanco de referencia (whiteref), p. ej. \"Average Spiral Galaxy\"."
+     },
+     "limitmag": {
+      "type": "string",
+      "description": "Magnitud límite: un número (p. ej. 12) o relativo con signo (+1, -1)."
+     },
+     "catalogo": {
+      "type": "string",
+      "enum": [
+       "localgaia",
+       "gaia",
+       "nomad",
+       "apass"
+      ],
+      "description": "Catálogo para SPCC (localgaia, gaia) o PCC (además nomad, apass). Sin él: el local si está."
+     },
+     "banda_estrecha": {
+      "type": "object",
+      "description": "{ rwl, rbw, gwl, gbw, bwl, bbw } en nm para modo banda estrecha."
+     },
+     "forzar_sensor": {
+      "type": "boolean",
+      "description": "Usar un sensor distinto del del perfil (sólo si de verdad es otra cámara)."
+     },
+     "ignorar_perfil": {
+      "type": "boolean",
+      "description": "La foto no es del equipo del perfil del usuario (otra cámara): no se usa el sensor del perfil. Pásalo si el usuario dice que ignores su perfil."
+     },
+     "fotometrica": {
+      "type": "boolean",
+      "description": "PCC (color por fotometría, sin curvas de sensor) en vez de SPCC: para cámaras que no están en la base de SPCC (muchas DSLR, p. ej. Canon EOS 6D)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "equilibrarColor",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "Paso 12 sin catálogo: color APROXIMADO cuando no hay calibración fotométrica posible (sin internet ni catálogo local, o cámara sin curvas y PCC imposible). Neutraliza el fondo (cada canal a la misma mediana del cielo) y equilibra el blanco con el color medio de las estrellas no saturadas (o del objeto). Imagen lineal. Deja deshacer. Devuelve factores RGB, estrellas usadas y dominante del cielo antes y después.",
+   "resumen": "Paso 12 sin catálogo: fondo neutro + blanco medio de estrellas (aproximado).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "referencia": {
+      "type": "string",
+      "enum": [
+       "estrellas",
+       "objeto"
+      ],
+      "description": "Blanco de las estrellas (por defecto) o de las zonas brillantes del objeto (galaxia espiral grande)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "separarEstrellas",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 1200,
+   "paso": "lineal/15-starx.md",
+   "descripcion": "Paso 15 lineal: StarNet desde Siril (instalado y configurado en Preferencias de Siril). Deja la starless cargada y la capa de estrellas como fichero starmask en la carpeta de trabajo de Siril. Con imagen lineal usa -stretch. Guardar la starless con guardarImagen.",
+   "resumen": "Paso 15: StarNet; starless cargada y estrellas en fichero.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "estirar": {
+      "type": "boolean",
+      "description": "Pre-estirado de StarNet (por defecto: sí si la imagen es lineal)."
+     },
+     "upscale": {
+      "type": "boolean",
+      "description": "Duplicar el tamaño para estrellas muy pequeñas (más lento)."
+     },
+     "motor": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "siril",
+       "starnet2"
+      ],
+      "description": "auto (por defecto): comando starnet de Siril y, si falla, el ejecutable starnet2 (StarNet2 2.5+) directo con --linear si la imagen es lineal."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "estirarCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/01-estirado.md",
+   "descripcion": "Paso 1 no lineal: compara GHS por pasadas cortas en tres intensidades (suave y medio paran al 60 y 80 % del ruido límite; fuerte, al fallo), arcsinh al fallo y autostretch enlazado sobre la starless lineal, todos con el cielo en el mismo objetivo (0,10 nebulosas y cúmulos, 0,07 galaxias, 0,12 nebulosas oscuras), y recomienda el que más separa la señal débil del fondo sin fallos de ruido, recorte ni dominante. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También GHS con el punto de simetría en la señal débil (brazos). Mide senal_debil (zona débil del objeto sobre el cielo); en galaxias, y en empates de separación, recomienda el que más la levanta. Topes: p99 ≤ 0,80, p999 ≤ 0,92 y que estire (p99 al menos 0,10 sobre el cielo); GHS en modo que conserva el color. También un estirado por escalas (base comprimida, detalle conservado), con el mismo cielo y topes. Antes de estirar quita el pedestal del cielo en lineal (un mismo resto en los tres canales: sale el color real), y en GHS y arcsinh las altas luces van hacia neutro (sin núcleo salmón). Sólo falla por dominante si es un tinte (aditivo en las celdas oscuras y planas), no por el color propio de polvo o nebulosa.",
+   "resumen": "Paso 1 NL: compara GHS, arcsinh, por escalas y autostretch con el mismo cielo; no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
+      "description": "Pone cielo y ruido_max (por defecto nebulosa: 0,10 y 0,15)."
+     },
+     "cielo": {
+      "type": "number",
+      "description": "Cielo objetivo (manda sobre tipo)."
+     },
+     "ruido_max": {
+      "type": "number",
+      "description": "Ruido del cielo máximo relativo (manda sobre tipo)."
+     },
+     "metodos": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "ghs_suave",
+        "ghs_medio",
+        "ghs",
+        "ghs_debil",
+        "asinh",
+        "escalas",
+        "autostretch"
+       ]
+      },
+      "description": "Métodos a comparar (por defecto todos: GHS suave, medio y al fallo, arcsinh, por escalas y autostretch)."
+     },
+     "negro_lineal": {
+      "type": "boolean",
+      "description": "Quitar el pedestal del cielo en lineal antes de estirar (por defecto true)."
+     },
+     "luces_neutras": {
+      "type": "boolean",
+      "description": "Altas luces hacia neutro en GHS y arcsinh (por defecto true)."
+     },
+     "negro_por_canal": {
+      "type": "boolean",
+      "description": "Punto negro por canal para que el cielo de cada canal quede en el objetivo (por defecto true; false = uno común, que amplifica las dominantes pequeñas del lineal)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "paletasCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "no-lineal/02-lrgb-paleta.md",
+   "descripcion": "Paso 2 no lineal (banda estrecha): compone paletas desde capas ya estiradas y las compara. Sin ficheros, de la imagen dual band cargada (Hα = R, OIII = media de G y B); con ha/oiii/sii, de esos ficheros. Candidatas: HOO, HOO suave (G = 0,6·Hα + 0,4·OIII), HOO con OIII realzado, HOO dinámica y SHO si hay SII. Mide la separación de tonos en el objeto, el verde residual, la saturación y que el cielo quede neutro, y recomienda (la elección es estética: mirar la galería). La imagen NO cambia: aplicarCandidato(id).",
+   "resumen": "Paso 2 NL: paletas HOO/SHO desde capas estiradas (o la dual band cargada); tonos, verde, cielo; no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ha": {
+      "type": "string",
+      "description": "Fichero de la capa Hα estirada (opcional)."
+     },
+     "oiii": {
+      "type": "string",
+      "description": "Fichero de la capa OIII estirada (opcional)."
+     },
+     "sii": {
+      "type": "string",
+      "description": "Fichero de la capa SII estirada (para SHO)."
+     },
+     "paletas": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "HOO",
+        "HOO_suave",
+        "HOO_realzado",
+        "HOO_dinamica",
+        "SHO"
+       ]
+      },
+      "description": "Paletas a comparar (por defecto todas las posibles)."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
+      "description": "Tipo de objeto (se admite en todas las comparativas)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "quitarVerde",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 120,
+   "paso": "no-lineal/03-scnr.md",
+   "descripcion": "Paso 3 no lineal: SCNR (rmgreen de Siril) solo si el verde del cielo supera en más de 'umbral' % a rojo y azul; devuelve el cielo por canal antes y después.",
+   "resumen": "Paso 3 NL: rmgreen solo si el cielo tiene exceso de verde.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "umbral": {
+      "type": "number",
+      "description": "% de exceso de verde a partir del cual se aplica (por defecto 3)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Aplicar aunque no haga falta."
+     },
+     "tipo": {
+      "type": "number",
+      "description": "0 neutro promedio (por defecto), 1 neutro máximo, 2 máscara máxima, 3 máscara aditiva."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "reducirRuidoCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/06-noisex.md",
+   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril y NoiseX (si está instalado; GraXpert sólo si se pide) con no hacer nada. Lineal: denoise 0,5/0,7/1,0 y NoiseX 0,5, 0,3 ×2 y 0,5 ×2. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
+   "resumen": "Pasos 14 L / 6 NL: compara denoise 0,5/0,7/1,0/DA3D con nada (ruido y detalle); no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "mods": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas del denoise de Siril, 0–1. Por defecto: lineal [0.5, 0.7, 1.0]; no lineal, más suave, [0.3, 0.5]."
+     },
+     "da3d": {
+      "type": "boolean",
+      "description": "Probar DA3D (más lento). Por defecto, solo si el denoise normal tarda < 30 s."
+     },
+     "perdida_max": {
+      "type": "number",
+      "description": "Pérdida de detalle máxima en % (por defecto 10)."
+     },
+     "ia": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Candidatos de NoiseX: fuerza y pasadas. Por defecto, si está instalado: en lineal [\"0.5\", \"0.3x2\", \"0.5x2\"]; en no lineal, más suave, [\"0.3\", \"0.5\", \"0.3x2\"]. [] para no probarlo."
+     },
+     "graxpert": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas del denoise de GraXpert (IA, por su CLI), sólo si se piden, p. ej. [0.5]. Por defecto no entra."
+     },
+     "perdida_limpia": {
+      "type": "number",
+      "description": "Pérdida de detalle que se considera «prácticamente nada», en % (por defecto 2): se recomienda la que más baja el ruido sin pasarla."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
+      "description": "Tipo de objeto (se admite; no cambia el resultado)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "estrellasCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 2400,
+   "paso": "lineal/15-starx.md",
+   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "resumen": "Paso 15: StarNet2 frente a StarX (restos, agujeros, objeto quitado); no cambia la imagen (aplicarCandidato devuelve la capa de estrellas).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "motores": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "starnet",
+        "starx"
+       ]
+      },
+      "description": "Motores a comparar (por defecto los dos)."
+     },
+     "objeto_max": {
+      "type": "number",
+      "description": "% máximo del objeto que puede llevarse (por defecto 2)."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
+      "description": "Tipo de objeto (se admite en todas las comparativas)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "nitidezLineal",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 1800,
+   "paso": "lineal/13-bxt-completo.md",
+   "descripcion": "Pasos 11 y 13 lineales: deconvolución con IA de RC Astro (rc-astro bxt) sobre la imagen lineal, con deshacer. solo_corregir: true = solo corrige la forma de las estrellas (Paso 11); si no, nitidez de estrellas, de la nebulosa y halos (Paso 13). Devuelve las estrellas (FWHM, redondez) antes y después.",
+   "resumen": "Pasos 11/13: deconvolución IA (solo corregir o completa), con deshacer; FWHM antes y después.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "solo_corregir": {
+      "type": "boolean",
+      "description": "Solo corregir aberraciones, sin nitidez (Paso 11)."
+     },
+     "estrellas": {
+      "type": "number",
+      "description": "Nitidez de estrellas 0–0,7 (por defecto 0,5)."
+     },
+     "nebulosa": {
+      "type": "number",
+      "description": "Nitidez de lo no estelar 0–1 (por defecto 0,5)."
+     },
+     "halos": {
+      "type": "number",
+      "description": "Ajuste de halos −0,5–0,5 (por defecto 0)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "saturacionCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 900,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5 y 0,75 (factor de fondo 1) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "resumen": "Paso 5 NL: compara satu 0,25/0,5/0,75; saturación objeto/cielo, dominante, recortes; no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "cantidades": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Cantidades de satu (por defecto [0.25, 0.5, 0.75])."
+     },
+     "fondo": {
+      "type": "number",
+      "description": "background_factor de satu (por defecto 1): por debajo de ese umbral de fondo no satura."
+     },
+     "dominante_max": {
+      "type": "number",
+      "description": "Dominante del cielo máxima en % (por defecto 5)."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
+      "description": "Tipo de objeto (se admite; no cambia el resultado)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "nucleoCandidatos",
+   "fichero": "nucleo.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "Núcleo de galaxias, no lineal, después de estirar y ANTES de saturar: comprime el bulbo con una máscara suave (desde el umbral 'desde' hasta el pico, en una base del tamaño del bulbo), restando parte del rango grande y reforzando el detalle, a varias fuerzas. Mide la meseta (radio de lo que pasa de 0,95), los anillos (subidas del perfil radial hacia fuera), el brillo y la estructura del bulbo, antes y después; recomienda la de más estructura sin anillos nuevos ni apagar el bulbo. La imagen NO cambia: aplicarCandidato(id).",
+   "resumen": "Núcleo de galaxias NL: comprimir el bulbo; meseta, anillos, brillo; no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fuerzas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas a comparar (por defecto 0,25, 0,4 y 0,55)."
+     },
+     "desde": {
+      "type": "number",
+      "description": "Umbral de la máscara del bulbo (por defecto, pico − 0,30 entre 0,45 y 0,80)."
+     },
+     "radio": {
+      "type": "number",
+      "description": "Radio de la base en px (por defecto lado mayor / 160)."
+     },
+     "tipo": {
+      "type": "string",
+      "description": "Se admite; el paso es para galaxias."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "contrasteCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 900,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "Contraste local en no lineal: compara CLAHE (límite 1,5 y 2,5), realce de escalas medias con ondículas (wavelet + wrecons) y máscara de enfoque (unsharp). Mide el contraste de escala media en el objeto (sin estrellas), el ruido del cielo después/antes y los recortes; descarta los que suben el ruido más de ruido_max o recortan, y recomienda el de más contraste por ruido añadido. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "resumen": "Contraste local NL: CLAHE, ondículas, máscara de enfoque; contraste en objeto, ruido del cielo, recortes; no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "metodos": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "clahe_suave",
+        "clahe_medio",
+        "ondiculas",
+        "enfoque"
+       ]
+      },
+      "description": "Métodos a comparar (por defecto los cuatro)."
+     },
+     "ruido_max": {
+      "type": "number",
+      "description": "Ruido del cielo máximo después/antes (por defecto 1,25; 1,10 en galaxias)."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
+      "description": "Tipo de objeto (en galaxias el límite de ruido es más estricto)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "recombinarEstrellas",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "no-lineal/09-recombinacion.md",
+   "descripcion": "Paso 9 no lineal: une la starless cargada con la capa de estrellas de un fichero (la de separarEstrellas) con screen 1−(1−a)(1−k·b) (por defecto) o suma, y pone el resultado en la imagen con deshacer. Si la capa de estrellas es lineal y la starless está estirada no hace nada y avisa; con estirar_estrellas: true estira la capa con arcsinh hasta que el p90 de los píxeles de estrella sea ≈ 0,10. Controles: aporte_estrellas_pct (≥ 0,5 %), que el fondo no baje y recortes nuevos.",
+   "resumen": "Paso 9 NL: starless cargada + fichero de estrellas (screen o suma, factor), con deshacer; avisa si las estrellas son lineales.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta de la capa de estrellas."
+     },
+     "metodo": {
+      "type": "string",
+      "enum": [
+       "screen",
+       "suma"
+      ],
+      "description": "screen (por defecto, no lineal) o suma (solo con capas lineales)."
+     },
+     "factor": {
+      "type": "number",
+      "description": "Fuerza k de las estrellas (por defecto 1; 0,5–0,6 para estrellas discretas)."
+     },
+     "estirar_estrellas": {
+      "type": "boolean",
+      "description": "Estirar la capa de estrellas si es lineal (arcsinh hasta p90 de estrella ≈ 0,10)."
+     }
+    },
+    "required": [
+     "fichero"
+    ]
+   }
+  },
+  {
+   "nombre": "exportarFinal",
+   "fichero": "pasos.py",
+   "nivel": "disco",
+   "timeout_s": 300,
+   "paso": "no-lineal/10-recorte-exportacion.md",
+   "descripcion": "Paso 10 no lineal: guarda la imagen cargada como TIFF de 16 bits y JPG (calidad 95) en 'carpeta' con nombres <nombre>_final.tif/.jpg (nombre por defecto: el del fichero cargado). Crea la carpeta y no sobrescribe (añade _2, _3…). Devuelve rutas, tamaños y un control de recortes y de si la imagen sigue lineal.",
+   "resumen": "Paso 10 NL: TIFF 16 bits + JPG 95 como <nombre>_final, sin sobrescribir.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta absoluta de destino."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Base del nombre (por defecto el del fichero cargado)."
+     },
+     "calidad": {
+      "type": "number",
+      "description": "Calidad del JPG 1–100 (por defecto 95)."
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
+   "nombre": "alinearMasters",
+   "fichero": "multicapa.py",
+   "nivel": "disco",
+   "timeout_s": 900,
+   "paso": "lineal/05-staralignment-crop.md",
+   "descripcion": "Paso 5 lineal: alinea varios masters del mismo objeto (otra noche u otro filtro, p. ej. un RGB y un dual band) contra el primero, con los comandos de secuencia de Siril, y los recorta TODOS al mismo rectángulo con datos en todos (sin las cuñas de cada apilado): después no hace falta recortarBordes. Deja copias <nombre>_alin.fit en 'carpeta' (los originales no se tocan) y carga la primera. Devuelve el desplazamiento y el giro de cada uno.",
+   "resumen": "Paso 5: alinea varios masters contra el primero y los recorta a la zona común.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ficheros": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Rutas absolutas de los masters; el primero es la referencia (el RGB)."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta para los alineados (por defecto 'alineados' junto al primero)."
+     }
+    },
+    "required": [
+     "ficheros"
+    ]
+   }
+  },
+  {
+   "nombre": "desmezclarDualBand",
+   "fichero": "multicapa.py",
+   "nivel": "disco",
+   "timeout_s": 300,
+   "paso": "lineal/07-extraccion-canales.md",
+   "descripcion": "Paso 7 lineal: separa un master OSC con filtro dual band (Hα + OIII) en dos capas mono lineales: Hα = rojo, OIII = media de verde y azul. Guarda <nombre>_Ha.fit y <nombre>_OIII.fit y da su señal en ruidos. Va antes del gradiente y del color. Con fichero, al terminar vuelve a dejar cargada la imagen que había (imagen_cargada dice cuál): para trabajar una capa, ábrela con abrirImagen.",
+   "resumen": "Paso 7: separa el dual band en capas Hα y OIII (FITS mono, lineales).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fichero": {
+      "type": "string",
+      "description": "Master dual band (alineado). Sin él, la imagen cargada."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de salida."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "combinarCandidatos",
+   "fichero": "multicapa.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "lineal/10-combinacion-rgb-nb.md",
+   "descripcion": "Paso 10 lineal: con el RGB lineal cargado (alineado, con gradiente y color hechos), compara añadirle el exceso de Hα en el rojo (y el de OIII en azul y verde) a varias intensidades; las estrellas se quedan las del RGB. La escala sale de las estrellas (continuo) y el exceso se limita para que ×1 como mucho duplique la nebulosa. Si lo cargado parece el propio dual band, se niega. Mide la nebulosa ganada en Hα y OIII, el ruido y la dominante del cielo y el color de las estrellas, y recomienda. La imagen no cambia: aplicarCandidato(id).",
+   "resumen": "Paso 10: compara añadir Hα (y OIII) al RGB lineal y recomienda; aplicarCandidato(id).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ha": {
+      "type": "string",
+      "description": "Fichero de la capa Hα (de desmezclarDualBand, alineada y con gradiente)."
+     },
+     "oiii": {
+      "type": "string",
+      "description": "Fichero de la capa OIII (opcional)."
+     },
+     "intensidades": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Intensidades a comparar (por defecto 0,5 y 1)."
+     }
+    },
+    "required": [
+     "ha"
+    ]
+   }
+  }
+ ]
+}

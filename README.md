@@ -9,6 +9,7 @@ Incluye estas partes:
 - **[PiAstroPilot Lite](piastropilot/script/README.md)** (`piastropilot/script/PiAstroPilotLite.js`): **la forma más sencilla de empezar**. Es un script de PixInsight, sin compilar ni firmar nada: chat con el asistente (Ollama local, Claude Code o Codex), funciones de la guía ya cargadas, comparación de métodos, información del objeto desde internet y voz. Ver [Empezar con PiAstroPilot Lite](#empezar-con-piastropilot-lite).
 - **[PiAstroPilot](piastropilot/README.md)** (`piastropilot/`): módulo nativo de PixInsight que acopla un asistente de IA al panel lateral sin bloquear PixInsight. Tiene un botón por paso de la guía, chat con tablas y vistas previas, y funciona con Claude Code, Codex o un modelo local (Ollama). Va con la guía de este repositorio; por ahora hay que compilarlo y firmarlo con claves de desarrollador propias.
 - **Servidor MCP piastropilot** (`mcp/`): el puente entre la IA y PixInsight. Ofrece las funciones de la guía como herramientas y las ejecuta en la instancia de PixInsight que tienes abierta (IPC `PixInsight.exe -x=`), sin carpeta vigilada ni `eval`. Detalles en [`mcp/README.md`](mcp/README.md).
+- **[SirilAstroPilot](siril/README.md)** (`siril/`): lo mismo para **Siril**, con la misma guía. Ver [SirilAstroPilot](#sirilastropilot).
 - **Guía de procesado** (`guia/`): un manual detallado, en español, que Claude carga como *skill*. El asistente responde en el idioma en que se le pregunte (inglés o cualquier otro), aunque la guía esté en español. Está ordenada como el flujo de trabajo: 17 pasos de la fase lineal, 11 de la no lineal y anexos (equivalentes de scripts, controles de calidad, anti-patrones, flujos por tipo de objeto, glosario); cada paso es un fichero con el porqué, los parámetros, la función de la guía que lo hace y el control para comprobarlo. Es la parte principal: recoge técnicas, trampas, valores de partida y controles de calidad aprendidos en sesiones reales de procesado.
 
 ## Principio
@@ -36,6 +37,23 @@ Es lo que usará la mayoría: no necesita Node.js, servidor MCP ni compilar nada
 5. Opcional: en **Ajustes > Idioma** elige español o inglés (ventana y respuestas del modelo; se aplica al momento).
 
 Detalles, opciones y problemas frecuentes en [`piastropilot/script/README.md`](piastropilot/script/README.md). Lo de abajo es para el servidor MCP y el módulo.
+
+## SirilAstroPilot
+
+El mismo asistente para **Siril** (`siril/`). Es un puente escrito desde cero con sirilpy, sin código de PixInsight, más un chat dentro de Siril. Funciona con un modelo local de Ollama (p. ej. Qwen) o con Claude. Sigue la misma guía común, con el cómo de Siril en el Anexo I. Las herramientas son de una lista blanca y comparan candidatos en cada paso, del apilado a la exportación.
+
+1. Requisitos: Siril 1.4.x (con Python y sirilpy).
+2. En Siril, Preferencias > Scripts: añade la carpeta `siril/puente`.
+3. Lanza **Scripts > SirilAstroPilot**: arranca el puente y abre el chat.
+
+Detalles e instalación del MCP (Claude Code, Codex) en [`siril/README.md`](siril/README.md).
+
+## Comparativa PixInsight frente a Siril
+
+[Dossier comparativo (PDF, M31 e IC 1396)](comparativas/dossier_PI_vs_Siril_M31_IC1396.pdf). Son los mismos masters, con el mismo encargo y medidos con el mismo código:
+
+- **M31** (galaxia, cuatro procesados: PixInsight y Siril, cada uno con Claude Opus y con Qwen). Gana PixInsight con Opus: brazos más separados del cielo, núcleo con estructura y más estrellas. A Siril le faltaban un paso de núcleo y un estirado por escalas, que ya están añadidos.
+- **IC 1396** (nebulosa de emisión, RGB + dual band Hα/OIII, sólo Qwen). Siril gana en la nebulosa, el ruido y el color (Hα y OIII visibles). PixInsight gana en el cielo neutro y en las estrellas.
 
 ## Requisitos (servidor MCP y módulo)
 

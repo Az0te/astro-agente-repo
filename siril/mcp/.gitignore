@@ -1,0 +1,3 @@
+node_modules/
+# El bundle se publica para usar el MCP sin compilar
+!dist/
