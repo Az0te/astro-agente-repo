@@ -512,7 +512,7 @@
    "fichero": "combinacion.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 10 lineal: clasifica masters alineados (por FILTER) y hace lo que toca: misma clase → combinarMismoCanal; R,G,B mono → RGB; RGB + Hα → inyectarHa. L y banda estrecha sin RGB se dejan para el Paso 2 no lineal.",
+   "descripcion": "Paso 10 lineal: clasifica masters alineados (por FILTER) y hace lo que toca: misma clase → combinarMismoCanal; R,G,B mono → RGB; RGB + Hα (+ OIII) → inyectarHa (Hα en R y OIII en G y B). Un dual band en color sin separar no se combina: antes desmezclarDualBand. L y banda estrecha sin RGB se dejan para el Paso 2 no lineal.",
    "paso": "lineal/10-combinacion-rgb-nb.md",
    "params": {
     "type": "object",
@@ -533,7 +533,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", alfa, inyectar: true, clases: { \"fichero\": \"Ha\" } }"
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", alfa, inyectar: true, oiii: true, clases: { \"fichero\": \"Ha\" } }"
      }
     },
     "required": [
@@ -575,7 +575,7 @@
    "fichero": "combinacion.js",
    "nivel": "copias",
    "timeout_s": 600,
-   "descripcion": "Paso 10 lineal: inyecta Hα (lineal, alineado, mejor starless y sin continuo) en el rojo de la RGB bajo máscara de nebulosa. Por defecto suma solo el exceso de Hα sobre R.",
+   "descripcion": "Paso 10 lineal: inyecta Hα (lineal, alineado, mejor starless y sin continuo) en el rojo de la RGB bajo máscara de nebulosa, y con opciones.oiii la capa OIII en verde y azul a partes iguales. Nebulosas: modo \"senal\" (suma la señal del Hα ajustada al R, sube la nebulosa ≈ α·100 %). Galaxias: modo \"suma\" (sólo el exceso de Hα sobre R). Se niega si la RGB lleva FILTER de banda estrecha (sería el propio dual band).",
    "paso": "lineal/10-combinacion-rgb-nb.md",
    "params": {
     "type": "object",
@@ -590,7 +590,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", modo: \"suma\" | \"mezcla\", alfa, clipLow, suavizado, nuevaVista }"
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", modo: \"senal\" | \"suma\" | \"mezcla\", alfa, oiii: \"<vista OIII>\", alfaOIII, clipLow, suavizado, nuevaVista }"
      }
     },
     "required": [

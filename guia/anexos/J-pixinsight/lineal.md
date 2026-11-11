@@ -289,19 +289,24 @@ Ficha: [lineal/10-combinacion-rgb-nb.md](../../lineal/10-combinacion-rgb-nb.md)
 - Combina lo que toca en lineal:
   - dos de la misma clase con `combinarMismoCanal`;
   - R, G y B mono en una RGB (ChannelCombination);
-  - la RGB con el Hα con `inyectarHa`.
+  - la RGB con el Hα y el OIII con `inyectarHa` (el OIII sólo en nebulosas; `oiii: false` para dejarlo fuera).
 - Deja abiertos la L y la banda estrecha sin RGB para el Paso 2 no lineal (LRGB y paletas).
+- Un dual band en color sin separar no se toma por RGB: pide `desmezclarDualBand` antes.
 
-Comprobado con una nebulosa dual band: con RGB + Hα + OIII inyecta el Hα y deja el OIII; con R, G y B mono los junta en `RGB_comb`.
+Comprobado con una nebulosa dual band: con R, G y B mono los junta en `RGB_comb`. La inyección del OIII en G y B se añadió el 11 nov 2026 (nebulosa de emisión que llena el campo): antes el OIII se quedaba fuera.
 
 **Las piezas, sobre vistas** (sobre copias):
 
 - `combinarMismoCanal(a, b, { nuevaVista })`: dos masters del mismo canal, alineados. LinearFit del segundo al primero y suma pesada por 1/σ² (ruido MRS); avisa si el ruido apenas baja (< 2 %) o si las estrellas empeoran más de un 10 %.
-- `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, clipLow })`: RGB y Hα lineales, sin estrellas y alineados. LinearFit del Hα al R y máscara de nebulosa referida al cielo. Modo "suma" por defecto; la fórmula clásica queda como `modo: "mezcla"`.
+- `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, oiii, alfaOIII, clipLow })`: RGB y Hα lineales, sin estrellas y alineados. LinearFit del Hα al R y máscara de nebulosa referida al cielo.
+  - En nebulosas, `modo: "senal"` por defecto: suma la señal del Hα ajustada al R, y α 0,6 sube la nebulosa ≈ 60 %. El exceso sobre el R («suma») no aporta cuando la nebulosa llena el campo, porque el ajuste la iguala.
+  - En galaxias, `modo: "suma"`. La fórmula clásica queda como `modo: "mezcla"`.
+  - Con `oiii` (la vista OIII de `desmezclarDualBand`), el OIII entra en G y B a partes iguales (turquesa, como HOO), con su máscara.
+  - Se niega si la «RGB» lleva `FILTER` de banda estrecha: sería el propio dual band.
 
 ```json
 {"llamadas": [
-  {"funcion": "inyectarHa", "parametros": {"rgb": "RGB_starless", "ha": "Ha_CS", "opciones": {"tipo": "nebulosa", "nuevaVista": "RGB_Ha"}}}
+  {"funcion": "inyectarHa", "parametros": {"rgb": "RGB_starless", "ha": "Ha_CS", "opciones": {"tipo": "nebulosa", "oiii": "OIII_starless", "nuevaVista": "RGB_HaO"}}}
 ]}
 ```
 

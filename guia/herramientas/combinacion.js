@@ -12,8 +12,12 @@
 //   más de un 10 % se avisa: entonces usarlo sólo para la señal difusa).
 // inyectarHa(rgb, ha): RGB y Hα lineales, alineados, sin estrellas y con el continuo ya restado (Paso 16) si es posible.
 //   LinearFit del Hα al canal R; máscara de nebulosa desde el Hα (estirado automático, clipLow 0,06, suavizada);
-//   Modo "suma" (por defecto): R' = R + α·M·max(0, Hα − R), α 0,6 nebulosas / 0,3 galaxias: añade sólo la emisión que el R no tiene.
+//   Modo "senal" (por defecto en nebulosas): R' = R + α·M·max(0, Hα − cielo), α 0,6: sube la nebulosa ≈ 60 % aunque llene el campo.
+//   Modo "suma" (por defecto en galaxias): R' = R + α·M·max(0, Hα − R), α 0,3: añade sólo la emisión que el R no tiene
+//   (en una nebulosa que llena el campo el ajuste iguala la nebulosa y no aporta).
 //   Modo "mezcla": R' = (1 − α·M)·R + α·M·Hα (α 0,4 / 0,25). G y B no cambian.
+//   o.oiii (vista de la capa OIII): igual en G y B a partes iguales (turquesa, como HOO), con su propia máscara (alfaOIII).
+//   Se niega si la «RGB» lleva FILTER de banda estrecha o dual band (sería el propio dual band).
 //   Controles: dominante del cielo antes y después (medianas R/G/B en las celdas más oscuras: no debe enrojecer),
 //   % del campo bajo la máscara y cuánto cambia el R en la nebulosa.
 
@@ -81,7 +85,8 @@ function cbSky(im) {
 
 // Clase de un master por su filtro (FILTER o nombre) y canales: L, R, G, B, Ha, OIII, SII, Hb o RGB (color).
 function cbClase(w, path) {
-  if (w.mainView.image.numberOfChannels >= 3) return "RGB";
+  // Un dual band OSC también tiene 3 canales: no es «RGB» (se combinaría con la RGB como si fuera el mismo canal).
+  if (w.mainView.image.numberOfChannels >= 3) return cbFiltroEstrecho(w.mainView) ? "DUAL" : "RGB";
   var f = "", k = w.keywords;
   for (var i = 0; i < k.length; ++i) if (k[i].name == "FILTER") f = k[i].strippedValue;
   var t = (f + " " + File.extractName(path || w.mainView.id)).toUpperCase().replace(/[^A-Z0-9]+/g, " ");
@@ -143,11 +148,12 @@ function combinarMasters(lista, o) {
     (por[cl] = por[cl] || []).push(w.mainView.id);
     r.masters.push({ fichero: f, clase: cl, vista: w.mainView.id });
   });
+  if (por.DUAL) r.no_cumple.push("Dual band en color sin separar (" + por.DUAL.join(", ") + "): primero desmezclarDualBand y pasa aquí sus capas (Ha_raw, OIII_raw), no el master.");
   if (por["?"]) r.no_cumple.push("No se reconoce el filtro de: " + por["?"].join(", ") + ". Pásalo en clases, con el id de la vista o el nombre del fichero como clave, por ejemplo clases: { \"" + por["?"][0] + "\": \"Ha\" } (valores: Ha, OIII, SII, Hb, L, R, G, B, RGB).");
 
   // 1. Mismo canal: combinar de dos en dos.
   for (var cl in por) {
-    if (cl == "?" || por[cl].length < 2) continue;
+    if (cl == "?" || cl == "DUAL" || por[cl].length < 2) continue;
     var acc = por[cl][0];
     for (var i = 1; i < por[cl].length; ++i) {
       var c = combinarMismoCanal(acc, por[cl][i], { nuevaVista: cl + "_comb" });
@@ -175,17 +181,19 @@ function combinarMasters(lista, o) {
   }
   // 3. Hα en la RGB.
   if (por.RGB && por.Ha && o.inyectar !== false && !/SHO|HSO|HOO|PALETA|FORAXX/i.test(String(o.tipo || ""))) {
-    var h = inyectarHa(por.RGB[0], por.Ha[0], { tipo: o.tipo, alfa: o.alfa, nuevaVista: por.RGB[0] + "_Ha" });
-    r.hecho.push("Hα inyectado en el R de " + por.RGB[0] + " → " + h.vista + " (" + h.control.medido[0] + ")");
+    var h = inyectarHa(por.RGB[0], por.Ha[0], { tipo: o.tipo, alfa: o.alfa, nuevaVista: por.RGB[0] + "_Ha",
+                                               oiii: (por.OIII && o.oiii !== false && o.tipo != "galaxia") ? por.OIII[0] : null });
+    r.hecho.push("Hα inyectado en el R de " + por.RGB[0] + (h.oiii ? " y OIII en G y B (" + h.oiii.vista + ")" : "") + " → " + h.vista + " (" + h.control.medido[0] + ")");
     r.no_cumple = r.no_cumple.concat(h.no_cumple);
     r.control.revisar_a_ojo = r.control.revisar_a_ojo.concat(h.control.revisar_a_ojo);
-    r.inyeccion = { vista: h.vista, mascara: h.mascara, cielo_R_sobre_GB: h.cielo_R_sobre_GB, bajo_mascara_pct: h.bajo_mascara_pct, cambio_R_nebulosa_pct: h.cambio_R_nebulosa_pct };
+    r.inyeccion = { vista: h.vista, mascara: h.mascara, modo: h.modo, oiii: h.oiii, cielo_R_sobre_GB: h.cielo_R_sobre_GB, bajo_mascara_pct: h.bajo_mascara_pct, cambio_R_nebulosa_pct: h.cambio_R_nebulosa_pct };
   }
   // 4. Lo que se deja para la fase no lineal.
   if (por.L) r.control.medido.push("L (" + por.L[0] + "): la combinación LRGB se hace en el Paso 2 no lineal, con las dos ya estiradas.");
   var nb = ["Ha", "OIII", "SII", "Hb"].filter(function (c) { return por[c]; });
-  var nbRGB = ["OIII", "SII", "Hb"].filter(function (c) { return por[c]; }).map(function (c) { return c + " (" + por[c][0] + ")"; });
-  if (por.RGB && nbRGB.length) r.control.medido.push("Con RGB sólo se inyecta el Hα en lineal; " + nbRGB.join(", ") + " siguen abiertas para la paleta o para mezclarlas en el Paso 2 no lineal. Si hay dos vistas de la misma raya (de dos filtros dual band), pásalas las dos y se combinan aquí.");
+  var nbRGB = ["OIII", "SII", "Hb"].filter(function (c) { return por[c] && !(c == "OIII" && r.inyeccion && r.inyeccion.oiii); })
+    .map(function (c) { return c + " (" + por[c][0] + ")"; });
+  if (por.RGB && nbRGB.length) r.control.medido.push("Con RGB sólo se inyectan Hα y OIII en lineal; " + nbRGB.join(", ") + " siguen abiertas para la paleta o para mezclarlas en el Paso 2 no lineal. Si hay dos vistas de la misma raya (de dos filtros dual band), pásalas las dos y se combinan aquí.");
   if (nb.length && !por.RGB) r.control.medido.push("Banda estrecha sin RGB (" + nb.join(", ") + "): la paleta (HOO, SHO...) se monta en el Paso 2 no lineal; aquí no hay nada que combinar en lineal.");
   if (!r.hecho.length) r.control.medido.push("Nada que combinar en lineal con estos masters.");
   // La vista principal que sale de aquí (Qwen buscó "la última ventana" porque no había r.vista, 7 nov 2026).
@@ -233,13 +241,29 @@ function combinarMismoCanal(a, b, o) {
   return r;
 }
 
+// ¿La «RGB» es en realidad un master de banda estrecha o dual band (FILTER)? En Siril (11 nov 2026) el modelo procesó el
+// dual band creyendo que era el RGB y la inyección no aportaba nada: era el Hα consigo mismo.
+function cbFiltroEstrecho(v) {
+  var f = "";
+  try { var k = v.window.keywords; for (var i = 0; i < k.length; ++i) if (k[i].name == "FILTER") f = k[i].strippedValue; } catch (e) { }
+  return /dual|duo|tri.?band|quad|extreme|enhance|ultimate|\d+(\.\d+)?\s*nm\b|\b(ha|h-?alpha|o3|oiii|s2|sii)\b/i.test(f) ? f : null;
+}
+
 function inyectarHa(rgb, ha, o) {
   o = o || {};
   var vr = cbView(rgb), vh = cbView(ha);
   if (vr.image.numberOfChannels < 3) throw new Error(vr.id + " no es RGB");
   if (vr.image.width != vh.image.width || vr.image.height != vh.image.height)
     throw new Error("Tamaños distintos: alinear y recortar antes (Paso 5, alinearMasters)");
-  var modo = o.modo || "suma";
+  var fe = cbFiltroEstrecho(vr);
+  if (fe && !o.permitirEstrecho)
+    throw new Error(vr.id + " lleva FILTER = '" + fe + "' (banda estrecha o dual band): no es la RGB de banda ancha. Pasa como rgb la " +
+                    "vista que viene del master RGB (alinearMasters → r.vistas) y como ha la capa Hα de desmezclarDualBand.");
+  // Modo por defecto: "senal" en nebulosas, "suma" en galaxias. "suma" (exceso de Hα sobre el R, con el Hα ajustado al R por
+  // LinearFit) no aporta en una nebulosa que llena el campo: el ajuste iguala la nebulosa y el exceso es ≈ 0 (nebulosa
+  // de emisión con RGB + dual band, 11 nov 2026: PixInsight-Qwen inyectó Hα y la nebulosa siguió apagada, 3,9 ruidos). "senal" suma la señal del Hα
+  // (ajustada al nivel del R y sin el cielo) bajo la máscara: α 0,6 sube la nebulosa ≈ 60 %, sin tocar el cielo.
+  var modo = o.modo || (o.tipo == "galaxia" ? "suma" : "senal");
   var alfa = o.alfa !== undefined ? o.alfa : (modo == "mezcla" ? (o.tipo == "galaxia" ? 0.25 : 0.4) : (o.tipo == "galaxia" ? 0.3 : 0.6));
   var clip = o.clipLow !== undefined ? o.clipLow : 0.06;
 
@@ -280,12 +304,57 @@ function inyectarHa(rgb, ha, o) {
   // modo "suma" (por defecto): sólo se añade el exceso de Hα sobre el R → más rojo donde hay emisión, sin tocar el resto.
   // modo "mezcla": R' = (1−α·M)·R + α·M·Hα (la fórmula clásica); con un Hα ajustado por LinearFit global apagó el color
   // de la nebulosa en una nebulosa dual band (5 nov 2026), así que queda como opción.
+  var cieloR = cbSky(wR.mainView.image)[0];
   if (modo == "mezcla")
     P2.expression = "a = " + alfa + "; m = " + mId + "; (1 - a*m)*$T + a*m*" + wH.mainView.id;
+  else if (modo == "senal")
+    P2.expression = "a = " + alfa + "; m = " + mId + "; $T + a*m*max(0, " + wH.mainView.id + " - " + cieloR.toExponential(6) + ")";
   else
     P2.expression = "a = " + alfa + "; m = " + mId + "; $T + a*m*max(0, " + wH.mainView.id + " - " + wR.mainView.id + ")";
   P2.expression1 = "$T"; P2.expression2 = "$T"; P2.rescale = false; P2.truncate = true; P2.createNewImage = false;
   if (!P2.executeOn(wO.mainView)) throw new Error("PixelMath de la inyección falló");
+
+  // OIII (opcional, o.oiii = vista de la capa OIII): lo mismo en verde y azul A PARTES IGUALES (como HOO: el OIII de
+  // 501 nm es turquesa). Con la mitad en el verde salía lavanda sobre el Hα (Siril, 11 nov 2026).
+  var oiii = null;
+  if (o.oiii) {
+    var vo = cbView(o.oiii);
+    if (vo.image.width != vr.image.width || vo.image.height != vr.image.height) throw new Error("OIII de otro tamaño: alinear antes");
+    var wB = new ImageWindow(vr.image.width, vr.image.height, 1, 32, true, false, cbNewId("cbB"));
+    wB.mainView.beginProcess(); vr.image.selectedChannel = 2; wB.mainView.image.assign(vr.image); vr.image.resetSelections(); wB.mainView.endProcess();
+    var wOx = cbCopy(vo, "cbO", true), wMo = null;
+    try {
+      var LFo = new LinearFit; LFo.referenceViewId = wB.mainView.id;
+      if (!LFo.executeOn(wOx.mainView)) throw new Error("LinearFit del OIII al B falló");
+      var oim = wOx.mainView.image, cO = cbSky(oim)[0], so = [], rowO = new Float32Array(oim.width);
+      for (var y2 = 0; y2 < oim.height; y2 += 8) { oim.getSamples(rowO, new Rect(0, y2, oim.width, y2 + 1), 0); for (var x2 = 0; x2 < oim.width; x2 += 8) so.push(rowO[x2]); }
+      so.sort(function (p, q) { return p - q; });
+      var o99 = so[Math.floor(0.995 * (so.length - 1))], loO = cO + clip * (o99 - cO);
+      var moId = cbNewId("cbMaskO"), PMo = new PixelMath;
+      PMo.expression = "sqrt(max(0, min(1, ($T - " + loO.toExponential(6) + ")/" + (o99 - loO).toExponential(6) + ")))";
+      PMo.useSingleExpression = true; PMo.createNewImage = true; PMo.showNewImage = false; PMo.newImageId = moId;
+      PMo.rescale = false; PMo.truncate = true;
+      PMo.newImageColorSpace = (PixelMath.Gray !== undefined) ? PixelMath.Gray : PixelMath.prototype.Gray;
+      PMo.newImageSampleFormat = (PixelMath.f32 !== undefined) ? PixelMath.f32 : PixelMath.prototype.f32;
+      if (!PMo.executeOn(wOx.mainView)) throw new Error("PixelMath de la máscara de OIII falló");
+      wMo = ImageWindow.windowById(moId);
+      var Co = new Convolution; Co.mode = (Convolution.Parametric !== undefined) ? Convolution.Parametric : Convolution.prototype.Parametric;
+      Co.sigma = o.suavizado || 4; Co.shape = 2; Co.aspectRatio = 1; Co.executeOn(wMo.mainView);
+      var cB = cbSky(wB.mainView.image)[0], ao = o.alfaOIII !== undefined ? o.alfaOIII : alfa;
+      var add = "a*m*max(0, " + wOx.mainView.id + " - " + cB.toExponential(6) + ")";
+      var P3 = new PixelMath; P3.useSingleExpression = false; P3.symbols = "a, m";
+      P3.expression = "$T";
+      P3.expression1 = "a = " + ao + "; m = " + moId + "; $T + " + add;
+      P3.expression2 = "a = " + ao + "; m = " + moId + "; $T + " + add;
+      P3.rescale = false; P3.truncate = true; P3.createNewImage = false;
+      if (!P3.executeOn(wO.mainView)) throw new Error("PixelMath de la inyección de OIII falló");
+      oiii = { vista: vo.id, alfa: ao, mascara: moId };
+    } finally {
+      try { wB.forceClose(); } catch (e) { }
+      try { wOx.forceClose(); } catch (e) { }
+      try { if (wMo && !wMo.isNull) wMo.show(); } catch (e) { }
+    }
+  }
 
   // Controles.
   var sky0 = cbSky(vr.image), sky1 = cbSky(wO.mainView.image);
@@ -299,7 +368,7 @@ function inyectarHa(rgb, ha, o) {
     rIn.getSamples(b0, new Rect(0, y, rIn.width, y + 1), 0); rOut.getSamples(b1, new Rect(0, y, rIn.width, y + 1), 0);
     for (var x = 0; x < mim.width; x += 4) if (row[x] > 0.5) { s0 += b0[x]; s1 += Math.abs(b1[x] - b0[x]); if (b0[x] > 0) rels.push(Math.abs(b1[x] - b0[x]) / b0[x]); }
   }
-  var r = { vista: id, mascara: mId, modo: modo, alfa: alfa, clipLow: clip,
+  var r = { vista: id, mascara: mId, modo: modo, alfa: alfa, clipLow: clip, oiii: oiii,
             cielo_R_sobre_GB: { antes: +rel(sky0).toFixed(4), despues: +rel(sky1).toFixed(4) },
             bajo_mascara_pct: +(100 * en / tot).toFixed(1), cambio_R_nebulosa_pct: s0 > 0 ? +(100 * s1 / s0).toFixed(1) : null,
             cambio_R_p95_pct: rels.length ? +(100 * rels.sort(function (p, q) { return p - q; })[Math.floor(0.95 * (rels.length - 1))]).toFixed(1) : null,
@@ -312,6 +381,7 @@ function inyectarHa(rgb, ha, o) {
   if (r.cambio_R_p95_pct !== null && r.cambio_R_p95_pct < 1)
     r.control.revisar_a_ojo.push("El Hα cambia el R menos de un 1 % en la nebulosa (alfa " + alfa + "): aporta poco; comparar a ojo si compensa.");
   if (d > 3) r.no_cumple.push("El cielo enrojece un " + d.toFixed(1) + " %: subir clipLow o bajar alfa (sin máscara fina el fondo se vuelve rojo).");
+  if (oiii && d < -3) r.no_cumple.push("El cielo se vuelve turquesa (" + d.toFixed(1) + " % en R/(G+B)/2): subir clipLow o bajar alfaOIII.");
   if (r.bajo_mascara_pct > 80) r.no_cumple.push("La máscara cubre el " + r.bajo_mascara_pct + " % del campo: subir clipLow para que no entre el cielo.");
   r.control.revisar_a_ojo.push("Comparar con la RGB sola al 100 % en una zona de Hα y en el fondo: sin textura distinta entre nebulosa y banda ancha, sin bordes de máscara, sin estrellas rojas.");
   return r;
