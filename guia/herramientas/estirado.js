@@ -32,6 +32,49 @@ function esQuitarSTF(view) {
   catch (e) { return false; }
 }
 
+// ---------------------------------------------------------------------------------------------------
+// Guarda de la fase lineal: el estirado del Paso 1 no lineal parte de la STARLESS lineal que sale de separarEstrellas,
+// después de gradiente, astrometría, color y deconvolución. 11 nov 2026: un modelo local fue de analizarMaster directo a
+// estirarCapas con la MISMA vista (el master con estrellas) como starless y como estrellas. Se mide en lugar de fiarse
+// del nombre o del historial (las copias empiezan con historial vacío): fuentes compactas (FWHM 1–6 px, > 25 σ) en un
+// recorte central de 2000 px. Calibrado con una galaxia grande (ASI2600MC, 1,5″/px): con estrellas 224 por MP; starless 0.
+var ES_FASE_LINEAL = "gradiente (gradienteCandidatos) → astrometría (resolverAstrometria) → color (calibrarColor) → " +
+                     "deconvolución (bxtCorrectOnly, bxtCandidatos) → ruido suave → separarEstrellas → estirar r.starless";
+
+function esNecesita(fnName, file, o) {
+  var ok = false;
+  try { ok = (typeof eval(fnName) === "function"); } catch (e) { ok = false; }
+  if (ok) return true;
+  var g = (o && o.guia) || (typeof PIASTROPILOT_GUIA === "string" ? PIASTROPILOT_GUIA : null);
+  if (!g) return false;
+  try { eval.call(null, File.readTextFile(g + "/herramientas/" + file)); return true; } catch (e2) { return false; }
+}
+
+function esFuentesCompactas(view, lado) {
+  if (!esNecesita("dcStars", "deconvolucion.js")) return null;   // sin la medida no se bloquea
+  var im = view.image, W = im.width, H = im.height, l = Math.min(lado || 2000, W, H);
+  var R = new Rect(Math.floor((W - l) / 2), Math.floor((H - l) / 2), Math.floor((W - l) / 2) + l, Math.floor((H - l) / 2) + l);
+  var L = dcLum(view, R), st = dcStats(L), s = dcStars(L, l, l, st), n = 0;
+  for (var i = 0; i < s.length; ++i) if (s[i].fwhm >= 1 && s[i].fwhm <= 6) ++n;
+  return { compactas: n, por_mp: +(n / (l * l / 1e6)).toFixed(1) };
+}
+
+// Lanza un error claro si la vista que se va a estirar no es una starless lineal. o.conEstrellas: true para estirar a
+// propósito una imagen con estrellas (p. ej. una prueba); o._sinComprobar: llamadas internas ya comprobadas.
+function esComprobarStarless(viewId, o) {
+  o = o || {};
+  if (o.conEstrellas === true || o._sinComprobar) return null;
+  var w = ImageWindow.windowById(viewId);
+  if (w.isNull) return null;
+  var f = esFuentesCompactas(w.mainView, 2000);
+  if (f && f.por_mp > (o.maxCompactasMP || 20))
+    throw new Error("«" + viewId + "» todavía tiene estrellas (" + f.compactas + " fuentes compactas en un recorte de 2000 px, " +
+                    f.por_mp + " por MP; una starless tiene casi 0): no es una starless y no se estira. Falta la fase lineal, en " +
+                    "este orden: " + ES_FASE_LINEAL + ". Si ya la hiciste, pasa r.starless de separarEstrellas (no el master). " +
+                    "Para estirar a propósito una imagen con estrellas: { conEstrellas: true }.");
+  return f;
+}
+
 function esMedian(view) {
   var im = view.image, s = 0;
   for (var c = 0; c < im.numberOfChannels; ++c) { im.selectedChannel = c; s += im.median(); }
@@ -261,6 +304,7 @@ function estirarStarless(viewId, o) {
   esQuitarSTF(win.mainView);
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): no repetir la fase 1");
+  esComprobarStarless(viewId, o);
   var w = esCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"));
   w.show();
   var v = w.mainView, pasadas = [];
@@ -375,6 +419,7 @@ function estirarCandidatos(viewId, o) {
   esQuitarSTF(win.mainView);
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): estirarCandidatos es para la starless lineal");
+  if (!o._sinComprobar) { esComprobarStarless(viewId, o); var oc = {}; for (var kc in o) oc[kc] = o[kc]; oc._sinComprobar = true; o = oc; }
   var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "mas", "arcsinh"], t0 = Date.now();
   // Imagen grande (> 8 MP): se comparan los métodos en un recorte con cielo y señal (rdElegirRecorte, ruido.js) y sólo el
   // ganador se aplica a la imagen entera (9 nov 2026: en un drizzle 2x de 89 MP cada pasada de GHS al fallo es lenta).
@@ -730,7 +775,11 @@ function estirarCapas(starlessId, starsId, o) {
   if (!starsId && !o.soloStarless)
     throw new Error("Falta la capa de estrellas: estirarCapas(starless, estrellas, opciones). Las dos salen de separarEstrellas (Paso 15 lineal): " +
                     "r.starless y r.estrellas (ids de texto). Si de verdad sólo quieres estirar una starless, pasa { soloStarless: true }");
-  var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3, tipo: o.tipo }) };
+  // 11 nov 2026: un modelo local pasó la misma vista (el master con estrellas) como starless y como estrellas.
+  if (starsId && String(starsId) === String(starlessId))
+    throw new Error("La starless y la capa de estrellas son la misma vista («" + starlessId + "»): tienen que ser las dos salidas de " +
+                    "separarEstrellas (r.starless y r.estrellas). Falta la fase lineal, en este orden: " + ES_FASE_LINEAL + ".");
+  var r = { starless: estirarStarless(starlessId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless, fase3: o.fase3, tipo: o.tipo, conEstrellas: o.conEstrellas }) };
   if (starsId) {
     var aviso = null;
     if (o.estrellas === "extraer") {

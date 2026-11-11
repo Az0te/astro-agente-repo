@@ -594,6 +594,12 @@ String PiAstroPilotInterface::AutoNextText() const
           u"que decidir (no algo que se arregla repitiendo el paso con otros parámetros), NO pidas llamadas: escribe una "
           u"línea que empiece por «PARO:» con el motivo.\n"
           u"Pide SÓLO funciones de la guía, con sus parámetros:\n" + PiAstroPilotPrompts::FunctionList( m_cfg.guideDir, false ) +
+          // 11 nov 2026: sin el orden lineal aquí, un modelo local fue de analizarMaster directo a estirarCapas.
+          u"Orden lineal (primero, sobre el master con estrellas): analizarMaster (1) → resolverAstrometria (8) → "
+          u"gradienteCandidatos (9) → bxtCorrectOnly (11) → calibrarColor (12) → bxtCandidatos y bxtAplicar (13) → "
+          u"separarEstrellas (15) → ruidoCandidatos sobre r.starless (15) → checkpointLineal (17). Tras analizarMaster el "
+          u"siguiente es la astrometría y el gradiente, NUNCA el estirado: se estira sólo la starless lineal de separarEstrellas "
+          u"(r.starless y r.estrellas, dos vistas distintas).\n"
           u"Orden no lineal: estirarCapas (1) → en galaxias comprimirNucleo (5) → saturarAlFallo (5) → prepararEstrellas (8) → "
           u"recombinarEstrellas (9) → exportarFinal (10). Antes de estirarCapas, si no sabes el tipo de objeto (galaxia, "
           u"nebulosa oscura, de emisión, de reflexión...), escribe «PARO:» y pregunta el tipo al usuario.";

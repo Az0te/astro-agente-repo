@@ -414,10 +414,29 @@ function pprVistasTexto() {
    try { return pprVistas().vistas.map(function (v) { return v.id; }).join(", ") || "ninguna"; } catch (e) { return "?"; }
 }
 
+// JSON de los modelos locales con los fallos de siempre arreglados: falta el cierre final (Qwen 3.8 se come el último
+// «}» de {"llamadas": [...]}: 11 nov 2026, dos veces seguidas en la misma posición), coma antes de un cierre o texto
+// después del bloque. Sólo se añaden o quitan cierres y comas: si sigue sin ser válido, el error de siempre.
+function pprJsonTolerante(texto) {
+   try { return JSON.parse(texto); } catch (e0) {
+      var s = String(texto).trim().replace(/,\s*([}\]])/g, "$1"), pila = [], enCadena = false, escape = false, fin = -1;
+      for (var i = 0; i < s.length; ++i) {
+         var c = s.charAt(i);
+         if (enCadena) { if (escape) escape = false; else if (c == "\\") escape = true; else if (c == "\"") enCadena = false; continue; }
+         if (c == "\"") enCadena = true;
+         else if (c == "{" || c == "[") pila.push(c == "{" ? "}" : "]");
+         else if (c == "}" || c == "]") { if (pila.length && pila[pila.length - 1] == c) { pila.pop(); if (!pila.length) { fin = i; break; } } else break; }
+      }
+      if (fin >= 0) s = s.substring(0, fin + 1);              // texto sobrante después del bloque
+      else if (!enCadena) s = s.replace(/,\s*$/, "") + pila.reverse().join("");   // cierres que faltan, en orden
+      try { return JSON.parse(s); } catch (e1) { throw e0; }
+   }
+}
+
 function pprEjecutarLlamadas(texto) {
    var lista, man;
    try {
-      var o = JSON.parse(texto);
+      var o = pprJsonTolerante(texto);
       lista = o && o.llamadas;
       if (!(lista instanceof Array) || !lista.length) throw new Error("falta la lista \"llamadas\"");
    } catch (e) {

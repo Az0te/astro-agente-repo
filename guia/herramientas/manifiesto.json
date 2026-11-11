@@ -880,7 +880,7 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") y la capa de estrellas con starStretch, en vistas nuevas. Hacen falta LAS DOS capas de separarEstrellas (r.starless y r.estrellas): con una imagen con estrellas como starless, las estrellas salen enormes.",
+   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") y la capa de estrellas con starStretch, en vistas nuevas. Hacen falta LAS DOS capas de separarEstrellas (r.starless y r.estrellas): con una imagen con estrellas como starless, las estrellas salen enormes. Se niega si la starless aún tiene estrellas o si las dos son la misma vista, y dice qué falta de la fase lineal (gradiente → astrometría → color → deconvolución → separarEstrellas); { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
    "resumen": "Paso 1 no lineal: estira la starless al fallo y las estrellas, en vistas nuevas. Necesita LAS DOS capas de separarEstrellas.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
@@ -910,7 +910,7 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 1800,
-   "descripcion": "Paso 1 no lineal: compara GHS al fallo, MultiscaleAdaptiveStretch y ArcsinhStretch sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante; devuelve la tabla de la comparación. Preferible a estirarStarless con un solo método.",
+   "descripcion": "Paso 1 no lineal: compara GHS al fallo, MultiscaleAdaptiveStretch y ArcsinhStretch sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante; devuelve la tabla de la comparación. Preferible a estirarStarless con un solo método. Se niega si la vista aún tiene estrellas (no es la starless de separarEstrellas) y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
    "resumen": "Paso 1 no lineal: compara GHS, MAS y Arcsinh sobre la starless lineal con el mismo cielo y elige. Preferible a estirarStarless.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
@@ -935,7 +935,7 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 1 no lineal: solo la starless, \"al fallo\".",
+   "descripcion": "Paso 1 no lineal: solo la starless, \"al fallo\". Se niega si la vista aún tiene estrellas y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",

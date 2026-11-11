@@ -880,6 +880,24 @@ function plValidarLlamada(ll, man, L) {
    return null;
 }
 
+// JSON de los modelos locales con los fallos de siempre arreglados (cierre final que falta, coma antes de un cierre,
+// texto después del bloque); igual que pprJsonTolerante del runner. Si sigue sin ser válido, el error de siempre.
+function plJsonTolerante(texto) {
+   try { return JSON.parse(texto); } catch (e0) {
+      var s = String(texto).trim().replace(/,\s*([}\]])/g, "$1"), pila = [], enCadena = false, escape = false, fin = -1;
+      for (var i = 0; i < s.length; ++i) {
+         var c = s.charAt(i);
+         if (enCadena) { if (escape) escape = false; else if (c == "\\") escape = true; else if (c == "\"") enCadena = false; continue; }
+         if (c == "\"") enCadena = true;
+         else if (c == "{" || c == "[") pila.push(c == "{" ? "}" : "]");
+         else if (c == "}" || c == "]") { if (pila.length && pila[pila.length - 1] == c) { pila.pop(); if (!pila.length) { fin = i; break; } } else break; }
+      }
+      if (fin >= 0) s = s.substring(0, fin + 1);
+      else if (!enCadena) s = s.replace(/,\s*$/, "") + pila.reverse().join("");
+      try { return JSON.parse(s); } catch (e1) { throw e0; }
+   }
+}
+
 function plEjecutarLlamadas(aj, texto) {
    var avisos = plCargarGuia(aj.guia), g = plGlobal(), salida = [], t0 = Date.now();
    g.PIASTROPILOT_INTERNET = !!aj.internet;   // web.js lo respeta: sin la casilla, simbad/wikipedia/... no salen a internet
@@ -887,7 +905,7 @@ function plEjecutarLlamadas(aj, texto) {
    avisos.forEach(function (a) { console.warningln("[PiAstroPilotLite] " + a); });
    var lista;
    try {
-      var o = JSON.parse(texto);
+      var o = plJsonTolerante(texto);
       lista = o && o.llamadas;
       if (!(lista instanceof Array) || !lista.length) throw new Error("falta la lista \"llamadas\"");
    } catch (e) {
