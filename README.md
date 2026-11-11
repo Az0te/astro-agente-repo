@@ -53,7 +53,7 @@ Detalles e instalación del MCP (Claude Code, Codex) en [`siril/README.md`](siri
 [Dossier comparativo (PDF, M31 e IC 1396)](comparativas/dossier_PI_vs_Siril_M31_IC1396.pdf). Son los mismos masters, con el mismo encargo y medidos con el mismo código:
 
 - **M31** (galaxia, cuatro procesados: PixInsight y Siril, cada uno con Claude Opus y con Qwen). Gana PixInsight con Opus: brazos más separados del cielo, núcleo con estructura y más estrellas. A Siril le faltaban un paso de núcleo y un estirado por escalas, que ya están añadidos.
-- **IC 1396** (nebulosa de emisión, RGB + dual band Hα/OIII, sólo Qwen). Siril gana en la nebulosa, el ruido y el color (Hα y OIII visibles). PixInsight gana en el cielo neutro y en las estrellas.
+- **IC 1396** (nebulosa de emisión, RGB + dual band Hα/OIII, sólo Qwen). PixInsight gana en el cielo neutro y en las estrellas. Siril gana en la nebulosa, el ruido y el color (Hα y OIII visibles).
 
 ## Requisitos (servidor MCP y módulo)
 
