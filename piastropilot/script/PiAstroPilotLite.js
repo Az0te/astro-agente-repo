@@ -488,7 +488,16 @@ function plCargarGuia(guia) {
       g.vistas = function () { return g.pprVistas(); };
       g.estadisticas = function (vista, o) { return g.pprEstadisticas(vista, o || {}); };
       g.historial = function (vista, o) { return g.pprHistorial(vista, o || {}); };
-      g.previa = function (vista, o) { return g.pprPrevia(vista, o || {}); };
+      // En la carpeta de miniaturas del chat (se borra con «Limpiar»), con el sufijo del recorte para no pisar la entera.
+      g.previa = function (vista, o) {
+         o = o || {};
+         if (!o.fichero) {
+            var cp = {}; for (var k in o) cp[k] = o[k];
+            cp.fichero = plCarpetaPrevias() + "/" + vista + (o.rect ? "_" + [].concat(o.rect).join("_") : "") + "_" + Date.now() + ".jpg";
+            o = cp;
+         }
+         return g.pprPrevia(vista, o);
+      };
       g.abrirImagen = function (fichero) { return g.pprAbrir(fichero); };
       g.guardarImagen = function (vista, fichero, sobrescribir) { return g.pprGuardar(vista, fichero, sobrescribir === true); };
       g.cerrarVista = function (vista, descartar) { return g.pprCerrar(vista, descartar === true); };
@@ -669,6 +678,10 @@ function plPromptSistema(aj) {
    "antes de recombinar, nunca en el Paso 1; tres candidatos: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 %), " +
    "colorCandidatos (Paso 5: saturación, equilibrio y contraste) y nitidezCandidatos (Paso 7). Enseña la tabla con la recomendada, " +
    "para con «PARO:» y sigue con la vista que elija el usuario; cierra las demás con cerrarVista.\n" +
+   "- Mientras esta ventana está abierta el usuario NO puede tocar PixInsight ni abrir ficheros. Ve las imágenes sólo como " +
+   "miniaturas en el chat: cada previa {vista} y cada comparación sale como imagen en la ficha del resultado. Si quieres que " +
+   "mire algo, pide previa (con opciones.rect para un recorte al 100 %) y dile que mire la miniatura; nunca le mandes a abrir " +
+   "una carpeta, un JPG ni una vista.\n" +
    "- Color: guarda siempre la versión neutra; si el usuario quiere más de un solo color, saturarTono; derivaColor {vista, opciones: " +
    "{referencia}} mide si el tono del objeto ha girado entre dos pasos (> 10° = deriva).\n\n" +
    (aj.internet ?
@@ -1172,7 +1185,8 @@ function plMiniaturas(r) {
    (function recorrer(o) {
       if (!o || typeof o !== "object") return;
       if (Array.isArray(o)) { o.forEach(recorrer); return; }
-      var img = o.previa || o.jpg;
+      // previa {vista} devuelve la ruta en «fichero» (11 nov 2026: no salía en el chat y el usuario no podía verla).
+      var img = o.previa || o.jpg || (typeof o.fichero === "string" && /\.(jpe?g|png)$/i.test(o.fichero) ? o.fichero : null);
       if (typeof img === "string" && !vistos[img] && File.exists(img)) {
          vistos[img] = true;
          var rotulo = o.metodo ? o.metodo + (o.parametros ? " " + o.parametros : "") : (o.paleta || o.etiqueta || o.vista || "");
