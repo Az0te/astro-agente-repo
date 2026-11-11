@@ -310,6 +310,48 @@ function esSkyDominance(view) {
   return { dominante_pct: +(100 * (Math.max.apply(null, med) - Math.min.apply(null, med)) / mean).toFixed(1),
            canales: med.map(function (m) { return +m.toFixed(4); }) };
 }
+// Celdas de la señal débil del objeto: las de 64 px cuya mediana de luminancia está entre los percentiles 60 y 85 de
+// todas (fuera el cielo y lo brillante), medidas en la imagen de partida y fijas durante el estirado. Y la fracción de
+// celdas con señal clara sobre el cielo (campo lleno de nebulosa si pasa del 60 %).
+function esCeldasDebiles(view) {
+  var im = view.image, W = im.width, H = im.height, S = 64, nc = im.numberOfChannels;
+  var blk = new Float32Array(S * S), lum = new Float32Array(S * S), cells = [];
+  for (var y0 = 0; y0 + S <= H; y0 += S)
+    for (var x0 = 0; x0 + S <= W; x0 += S) {
+      var R = new Rect(x0, y0, x0 + S, y0 + S); lum.fill(0);
+      for (var c = 0; c < nc; ++c) { im.getSamples(blk, R, c); for (var i = 0; i < blk.length; i += 2) lum[i] += blk[i] / nc; }
+      var v = []; for (var j = 0; j < lum.length; j += 2) v.push(lum[j]);
+      v.sort(function (a, b) { return a - b; });
+      // ruido de la celda por diferencias entre vecinos (para decidir si hay señal sobre el cielo)
+      var d = []; for (var t = 0; t + 2 < lum.length; t += 4) d.push(Math.abs(lum[t + 2] - lum[t]));
+      d.sort(function (a, b) { return a - b; });
+      cells.push({ r: R, m: v[v.length >> 1], s: d[d.length >> 1] / (0.6745 * Math.SQRT2) });
+    }
+  cells = cells.filter(function (q) { return q.m > 1e-6; });
+  var ms = cells.map(function (q) { return q.m; }).sort(function (a, b) { return a - b; });
+  var pc = function (p) { return ms[Math.floor(p * (ms.length - 1))]; };
+  var a = pc(0.60), b = pc(0.85), sky = pc(0.05);
+  var sig = cells.map(function (q) { return q.s; }).sort(function (x, y) { return x - y; });
+  var ruido = sig[Math.floor(0.1 * (sig.length - 1))] || 1e-6;
+  // La mediana de una celda promedia ~1000 píxeles: superar el cielo en 1 σ de píxel ya es señal clara (con 3 σ, un
+  // campo lleno de nebulosa salía con sólo el 25 % de celdas con señal).
+  var conSenal = cells.filter(function (q) { return q.m > sky + ruido; }).length / Math.max(cells.length, 1);
+  return { rects: cells.filter(function (q) { return q.m >= a && q.m <= b; }).map(function (q) { return q.r; }),
+           fraccion_con_senal: +conSenal.toFixed(3) };
+}
+
+function esNivelDebil(view, rects) {
+  var im = view.image, nc = im.numberOfChannels, blk = new Float32Array(64 * 64), med = [];
+  rects.forEach(function (R) {
+    var lum = new Float32Array(64 * 64);
+    for (var c = 0; c < nc; ++c) { im.getSamples(blk, R, c); for (var i = 0; i < blk.length; i += 4) lum[i] += blk[i] / nc; }
+    var v = []; for (var j = 0; j < lum.length; j += 4) v.push(lum[j]);
+    v.sort(function (a, b) { return a - b; }); med.push(v[v.length >> 1]);
+  });
+  med.sort(function (a, b) { return a - b; });
+  return med.length ? med[med.length >> 1] : null;
+}
+
 function estirarStarless(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
@@ -322,6 +364,10 @@ function estirarStarless(viewId, o) {
   var med0 = esMedian(win.mainView);
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): no repetir la fase 1");
   esComprobarStarless(viewId, o);
+  // simetria "debil": en cada pasada el punto de simetría del GHS va al nivel de la señal débil (celdas entre los
+  // percentiles 60 y 85), no al del cielo: el contraste se pone donde está la nebulosa débil o los brazos. En un campo
+  // lleno de nebulosa (RGB + dual band, 11 nov 2026) separó 14,2 ruidos frente a 9,4 con la simetría en el cielo.
+  var debiles = (o.simetria === "debil") ? esCeldasDebiles(View.viewById(viewId)) : null;
   var w = esCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"));
   w.show();
   var v = w.mainView, pasadas = [];
@@ -333,6 +379,7 @@ function estirarStarless(viewId, o) {
   for (var n = 2; n <= maxN; ++n) {
     esAssign(prev.mainView, v);
     var sp = Math.max(c.cielo, 1e-5);
+    if (debiles && debiles.rects.length) { var nd = esNivelDebil(v, debiles.rects); if (nd !== null) sp = Math.max(nd, 1e-5); }
     esGHS(v, D, 6, sp, 0, 0.92, canal);
     var c1 = esCheck(v), bp = 0;
     if (c1.cielo > cielo) { bp = esBlackPoint(v, c1.cielo, cielo); c1 = esCheck(v); }
@@ -377,7 +424,8 @@ function estirarStarless(viewId, o) {
     noCumple.push("NÚCLEO QUEMADO: meseta de " + meseta.radio_px + " px de radio con luminancia > 0,95 (con estructura: 0–3 px). " +
                   "Siguiente paso, antes de saturar: comprimirNucleo (nucleo.js) sobre esta starless. No volver a estirar ni subir curvas");
   return {
-    vista: v.id, original: viewId, metodo: "al fallo (pasadas cortas de GHS + punto negro)", cielo_objetivo: cielo,
+    vista: v.id, original: viewId, metodo: "al fallo (pasadas cortas de GHS + punto negro)" + (debiles ? ", simetría en la señal débil" : ""),
+    cielo_objetivo: cielo, campo_con_senal_pct: debiles ? +(100 * debiles.fraccion_con_senal).toFixed(1) : undefined,
     pasadas: pasadas, pasadas_descartadas: descartadas, parada: motivo,
     no_cumple: noCumple,
     medidas: c, mediana_por_canal: porCanal, cielo_por_canal: sd.canales, dominante_cielo_pct: dom, meseta_nucleo: meseta,
@@ -454,7 +502,7 @@ function estirarCandidatos(viewId, o) {
       } finally { var wN = ImageWindow.windowById(neuC.vista); if (!wN.isNull) wN.forceClose(); }
     }
   }
-  var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "mas", "arcsinh"], t0 = Date.now();
+  var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "ghs_debil", "mas", "arcsinh"], t0 = Date.now();
   // Imagen grande (> 8 MP): se comparan los métodos en un recorte con cielo y señal (rdElegirRecorte, ruido.js) y sólo el
   // ganador se aplica a la imagen entera (9 nov 2026: en un drizzle 2x de 89 MP cada pasada de GHS al fallo es lenta).
   var Wi = win.mainView.image.width, Hi = win.mainView.image.height;
@@ -497,6 +545,15 @@ function estirarCandidatos(viewId, o) {
       var g = estirarStarless(viewId, op);
       medir(View.viewById(g.vista), "GHS al fallo (" + g.pasadas.length + " pasadas)", { parada: g.parada }, t1, "ghs");
     } catch (e) { cands.push({ etiqueta: "GHS al fallo", error: String(e && e.message ? e.message : e) }); }
+  }
+  if (metodos.indexOf("ghs_debil") >= 0) {
+    var t1d = Date.now();
+    try {
+      var opd = {}; for (var kd in o) if (["metodos", "nuevaVista", "cerrar"].indexOf(kd) < 0) opd[kd] = o[kd];
+      opd.nuevaVista = viewId + "_st_ghsd"; opd.cielo = cielo; opd.simetria = "debil";
+      var gd = estirarStarless(viewId, opd);
+      medir(View.viewById(gd.vista), "GHS al fallo, simetría en la señal débil (" + gd.pasadas.length + " pasadas)", { parada: gd.parada }, t1d, "ghs_debil");
+    } catch (e) { cands.push({ etiqueta: "GHS simetría en la señal débil", error: String(e && e.message ? e.message : e) }); }
   }
   if (metodos.indexOf("mas") >= 0) {
     var t2 = Date.now();
@@ -815,7 +872,17 @@ function estirarCapas(starlessId, starsId, o) {
                     "separarEstrellas (r.starless y r.estrellas). Falta la fase lineal, en este orden: " + ES_FASE_LINEAL + ".");
   esComprobarStarless(starlessId, o);
   var neu = esNeutralizarStarless(starlessId, o), slId = neu ? neu.vista : starlessId;
-  var r = { starless: estirarStarless(slId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless || (starlessId + "_st"), fase3: o.fase3, tipo: o.tipo, _sinComprobar: true }) };
+  // Simetría del GHS: en la señal débil si se pide o en campos llenos de nebulosa (> 60 % de las celdas con señal sobre
+  // el cielo; no en galaxias); si no, en el cielo. En un campo lleno de nebulosa la simetría en el cielo se quedó en
+  // 3,9 ruidos (RGB + dual band, 11 nov 2026).
+  var simetria = o.simetria, campo = null;
+  if (!simetria) {
+    if (String(o.tipo || "").toLowerCase() === "galaxia") simetria = "cielo";
+    else { campo = esCeldasDebiles(View.viewById(slId)); simetria = campo.fraccion_con_senal > 0.6 ? "debil" : "cielo"; }
+  }
+  var r = { starless: estirarStarless(slId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless || (starlessId + "_st"), fase3: o.fase3, tipo: o.tipo, simetria: simetria, _sinComprobar: true }) };
+  r.simetria = { valor: simetria, campo_con_senal_pct: campo ? +(100 * campo.fraccion_con_senal).toFixed(1) : undefined,
+                 nota: "punto de simetría del GHS: 'debil' = nivel de la señal débil (campos llenos de nebulosa, > 60 % de celdas con señal, o si se pide { simetria: \"debil\" }), 'cielo' = el cielo" };
   if (neu) r.cielo_neutralizado = { dominante_lineal_antes_pct: neu.dominante_lineal_antes_pct, sumado_por_canal: neu.sumado_por_canal,
                                     nota: "cielo de la starless igualado en lineal antes de estirar (aditivo; el objeto no cambia)" };
   if (starsId) {
