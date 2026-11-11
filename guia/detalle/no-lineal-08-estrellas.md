@@ -6,6 +6,19 @@ Material de apoyo de la ficha: fuentes y recetas medidas para halos y estrellas 
 
 **Fuentes de la ficha.** "La capa de estrellas = Original − Starless: contiene PSF completa, halos, aigrettes, residuos de nebulosa, núcleos de galaxias/cúmulos" y la preparación de la capa (fondo a cero, `iif($T < 0.005, 0, $T)`, curva de saturación, "el fondo de la capa debe quedar negro puro", atenuar en vez de erosionar) son de aescaffre. El suelo mediana + 2·MAD es de NOVA: "si no, el screen añade al fondo el grano estirado entre estrellas. Pero en campos densos ese 'grano' puede ser estrellas débiles reales (Cocoon: 94 % de la varianza del fondo eran estrellas)". La fórmula de estrellas de banda estrecha es la de NB to RGB Stars: "una estrella saturada en las tres capas queda blanca". "No usar erosión/umbral (MorphologicalTransformation) para reducir estrellas: crea anillos. Mejor estirar menos las estrellas o usar tomas cortas."
 
+**Identificar el origen del artefacto antes de corregir** (lámina «halos, reflets et artefacts optiques»): cada uno se arregla en un sitio distinto.
+
+| Aspecto | Causa probable | Cómo comprobarlo | Dónde se arregla |
+|---|---|---|---|
+| Anillos de color alrededor de estrellas brillantes | microlentes del sensor | compararlo en otra cámara o con RGB frente a banda estrecha | en la toma; en procesado, atenuar en la capa de estrellas |
+| Halo circular grande o difuso, distinto por filtro | reflejo en el filtro (banda estrecha) | cambia con el filtro o con la inclinación; gira con la cámara | en la toma (filtro, inclinación); en procesado, resta de halo (abajo) |
+| Copias débiles simétricas de una estrella brillante | reflejos internos (fantasmas) | simétricos respecto al centro óptico; cambian con el ángulo | parasoles y deflectores; en procesado, sólo resta local documentada |
+| Picos (aigrettes) | difracción de la araña | número de picos = forma de la araña | no es un defecto: atenuar sólo si se pide |
+| Estrellas alargadas hacia un lado | inclinación del sensor o backfocus | peor en un lado del campo | mecánico: calzas, rotador; la deconvolución ayuda poco |
+| Estrellas en coma o cruz en los bordes | aberraciones (coma, astigmatismo, curvatura) | crecen hacia los bordes | corrector de campo; la deconvolución ayuda pero no lo quita |
+
+Un halo que sólo está en algunos subs son nubes: quitar esos subs. En la duda, no tocar y decirlo.
+
 **Halos: diagnóstico y recetas que funcionaron**
 
 Diagnóstico previo, en este orden:

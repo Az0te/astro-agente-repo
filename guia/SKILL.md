@@ -16,11 +16,11 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque d
 ## Reglas
 
 1. **Si falla un paso esencial (gradiente, calibración de color, deconvolución, estirado), parar y avisar.** Nada de apaños (curvas en vez de calibración de color, una fórmula en vez de un estirado, una máscara de enfoque en vez de deconvolución).
-2. **El color sale de la calibración fotométrica (SPCC)**, nunca de multiplicar canales ni de curvas por canal a ojo.
-3. **Estirar con un método de estirado probado** (GHS por pasadas cortas al fallo, adaptativo multiescala, arcsinh o transformación de histograma; la herramienta de estirado los compara); el estirado propio de estrellas sólo para la capa de estrellas lineal. Nunca fórmulas inventadas. Antes de estirar, quitar la visualización automática de la imagen (las herramientas de estirado lo hacen solas) y saber el tipo de objeto (preguntarlo o sacarlo de la ficha del objeto).
+2. **El color sale de la calibración fotométrica (SPCC)**, nunca de multiplicar canales ni de curvas por canal a ojo. Las versiones cálida y fría del paso de color (no lineal 5) son una elección estética del usuario sobre un color ya calibrado: medidas, con el cielo fijo y la versión neutra guardada.
+3. **Estirar con un método de estirado probado** (GHS por pasadas cortas al fallo, adaptativo multiescala, arcsinh o transformación de histograma; la herramienta de estirado los compara); el estirado propio de estrellas sólo para la capa de estrellas lineal, en el paso de estrellas (no lineal 8), justo antes de recombinar. Nunca fórmulas inventadas. Antes de estirar, quitar la visualización automática de la imagen (las herramientas de estirado lo hacen solas) y saber el tipo de objeto (preguntarlo o sacarlo de la ficha del objeto).
 4. **Comprobar cada paso** con las estadísticas por canal antes y después y con el historial. Un paso que no cambió nada no se ha hecho. Ningún canal puede acabar recortado.
 5. **Copias con nombre de versión** (v1, v2…): nunca trabajar sobre el master ni sobrescribir. Nunca borrar subs ni masters: los descartes van a `_rechazados` y el usuario confirma.
-6. **Comparar siempre, no fijar un método.** Donde la guía tiene una herramienta `…Candidatos`, usarla en vez de aplicar un solo método o valor, y enseñar su tabla.
+6. **Comparar siempre, no fijar un método.** Donde la guía tiene una herramienta `…Candidatos`, usarla en vez de aplicar un solo método o valor, y enseñar su tabla. En los pasos estéticos (color en no lineal 5, nitidez en no lineal 7, estrellas en no lineal 8) **elige el usuario**: enseñar las previas con la recomendada marcada, esperar su elección y seguir con esa versión.
 7. **Todo con las herramientas de la guía**, sin iconos, scripts ni menús del programa. Si una herramienta dice que falta un proceso o un programa externo, avisar, no sustituirlo.
 8. **El dossier cuenta lo que dice el historial**, no lo que se pretendía.
 
@@ -52,16 +52,16 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque d
 | L15 Estrellas y ruido | Separación; **candidatos** de ruido sobre la starless | reconstrucción, `ruido_rel`, moteado |
 | L16 Continuo | k de la sustracción de continuo | k, negativos, emisión conservada |
 | L17 Checkpoint | Estado lineal congelado | tabla del checkpoint, `no_cumple` |
-| NL1 Estirado | **Candidatos** al mismo cielo (starless y estrellas aparte) | `separacion`, `ruido_rel`, recortes, dominante, meseta del núcleo |
+| NL1 Estirado | **Candidatos** al mismo cielo, sólo la starless (las estrellas siguen lineales hasta NL8) | `separacion`, `ruido_rel`, recortes, dominante, meseta del núcleo |
 | NL2 Paleta | Previas de paletas; el usuario elige | G/max(R,B), fondo teñido |
 | NL3 Verde | Quitar verde sólo si sobra | cielo RGB antes y después |
 | NL4 Máscaras | Máscara medida y mezcla | fuga, borde, máscara invertida |
-| NL5 Realces | **Candidatos** de contraste local y de núcleo; saturación al fallo | `contraste_ganado_pct`, `ruido_rel`, cielo, quemados, meseta |
+| NL5 Realces | **Candidatos** de contraste local y de núcleo; **versiones de color para que elija el usuario** (neutra, saturación al fallo, viva, cálida, fría, contraste) | `contraste_ganado_pct`, `ruido_rel`, cielo, quemados, meseta; deriva de tono, % muy saturados |
 | NL6 Ruido final | **Candidatos** | `ruido_rel`, moteado de color |
-| NL7 Nitidez | Sin herramienta propia: la ficha | — |
-| NL8 Estrellas | Preparación de la capa | p90, suelo, residuos |
+| NL7 Nitidez | Tres niveles sobre la starless, con máscara; elige el usuario (o ninguno) | ruido del cielo ≤ ×1,10, detalle fino, quemados |
+| NL8 Estrellas | **Estirado de la capa** y **candidatos para que elija el usuario**: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 % | tamaño y saturación conseguidos, p90, suelo, aporte |
 | NL9 Recombinación | Screen o suma | `aporte_estrellas_pct`, fondo, recortes |
-| NL10 Exportación | Formatos de entrega | ficheros, saturados, bordes |
+| NL10 Exportación | Limpieza cosmética y formatos de entrega | ficheros, saturados, bordes, recorte del gamut al pasar a sRGB |
 | NL11 Dossier | Historial y revisión crítica | historial |
 
 Qué herramienta hace cada paso, las siempre disponibles y cómo se recoge un trabajo largo: [Anexo J, arranque](anexos/J-pixinsight.md#arranque) en PixInsight; [Anexo I, arranque](anexos/I-siril.md#arranque) en Siril.

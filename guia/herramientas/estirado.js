@@ -1,9 +1,10 @@
-// estirado.js — Estirado del Paso 1 no lineal en una sola llamada: starless "al fallo" con pasadas cortas de GHS y capa
-// de estrellas con starStretch. PJSR, ECMAScript 5.
+// estirado.js — Estirado del Paso 1 no lineal en una sola llamada: starless "al fallo" con pasadas cortas de GHS. La capa
+// de estrellas ya no se estira aquí (Rafael, 11 nov 2026): se estira en el Paso 8, justo antes de recombinar, con
+// estirarEstrellasCandidatos (estrellas.js), que usa estirarEstrellas / estirarEstrellasExtraer de este fichero. PJSR, ECMAScript 5.
 //
 // Uso (en el nivel superior del script):
 //   eval(File.readTextFile("<ruta de guia>/herramientas/estirado.js"));
-//   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // las dos capas
+//   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // la starless; la capa de estrellas queda para el Paso 8
 //   var r = estirarStarless("Starless", { cielo: 0.10, nuevaVista: "Starless_st_v1" });
 //   JSON.stringify(r);
 //
@@ -398,7 +399,7 @@ function estirarStarless(viewId, o) {
     c = c1;
   }
   prev.forceClose();
-  ES_OPS[v.id] = { canal: canal, ops: ops };
+  esGuardarRegistro(v.id, { canal: canal, ops: ops, lineal: viewId, ancho: v.image.width, alto: v.image.height, mediana: esMedian(v) });
   var meseta = esMeseta(v);
 
   var im = v.image, porCanal = [];
@@ -498,6 +499,7 @@ function estirarCandidatos(viewId, o) {
         rN.original = viewId;
         rN.cielo_neutralizado = { dominante_lineal_antes_pct: neuC.dominante_lineal_antes_pct, sumado_por_canal: neuC.sumado_por_canal,
                                   nota: "cielo de la starless igualado en lineal antes de estirar (aditivo; el objeto no cambia)" };
+        esAnotarNeutralizado(rN.vista, viewId, neuC.sumado_por_canal);
         return rN;
       } finally { var wN = ImageWindow.windowById(neuC.vista); if (!wN.isNull) wN.forceClose(); }
     }
@@ -610,7 +612,7 @@ function estirarCandidatos(viewId, o) {
     if (c === best) {
       if (c.vista !== nombre) { var old = ImageWindow.windowById(nombre); if (!old.isNull) old.forceClose(); w.mainView.id = nombre; }
       vista = w.mainView.id;
-      if (ES_OPS[c.vista] && c.vista !== vista) { ES_OPS[vista] = ES_OPS[c.vista]; }
+      var regC = esRegistro(c.vista); if (regC && c.vista !== vista) esGuardarRegistro(vista, regC);
     } else if (o.cerrar !== false) w.forceClose();
   });
   var comparados = cands.map(function (c) {
@@ -741,6 +743,43 @@ function estirarEstrellas(viewId, o) {
 // estirado sobre la imagen con estrellas y sacar la capa de estrellas con screenStarsExtract (como Opus en una galaxia grande).
 var ES_OPS = {};
 
+// El registro también se guarda en un fichero (carpeta temporal del sistema): el runner del MCP arranca un script nuevo
+// en cada llamada y las variables se pierden, y el estirado de las estrellas va ahora en el Paso 8, varias llamadas
+// después del Paso 1 (Rafael, 11 nov 2026). Se guarda el tamaño y la mediana de la vista estirada para no repetir el
+// registro de otra imagen con el mismo id.
+function esRutaRegistro() { return File.systemTempDirectory + "/piastropilot-estirados.json"; }
+function esLeerRegistros() {
+  try { var f = esRutaRegistro(); return File.exists(f) ? JSON.parse(File.readTextFile(f)) : {}; } catch (e) { return {}; }
+}
+function esGuardarRegistro(id, rec) {
+  var r = {}; for (var k in rec) r[k] = rec[k];
+  r.fecha = Date.now();
+  ES_OPS[id] = r;
+  try {
+    var t = esLeerRegistros();
+    t[id] = r;
+    var ks = Object.keys(t).sort(function (a, b) { return (t[a].fecha || 0) - (t[b].fecha || 0); });
+    while (ks.length > 30) delete t[ks.shift()];
+    File.writeTextFile(esRutaRegistro(), JSON.stringify(t));
+  } catch (e) { }
+}
+function esRegistro(id) {
+  var r = ES_OPS[id] || esLeerRegistros()[id] || null;
+  if (!r) return null;
+  var w = ImageWindow.windowById(id);   // otra imagen con el mismo id: el registro no vale
+  if (!w.isNull && r.ancho && (w.mainView.image.width !== r.ancho || w.mainView.image.height !== r.alto ||
+                               Math.abs(esMedian(w.mainView) - r.mediana) > 1e-4)) return null;
+  return r;
+}
+// Starless estirada desde una copia con el cielo neutralizado (aditivo por canal): al repetir el estirado sobre
+// starless + estrellas hay que sumar lo mismo.
+function esAnotarNeutralizado(vistaSt, linealOriginal, sumas) {
+  var r = esRegistro(vistaSt);
+  if (!r) return;
+  r.lineal = linealOriginal; r.sumar = sumas;
+  esGuardarRegistro(vistaSt, r);
+}
+
 function esReplay(view, rec) {
   for (var i = 0; i < rec.ops.length; ++i) {
     var p = rec.ops[i];
@@ -779,8 +818,12 @@ function esMeseta(view, thr) {
 // detectables en la final frente a 13 721 con este método (Opus v7).
 function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   o = o || {};
-  var rec = ES_OPS[starlessStId];
-  if (!rec) throw new Error("no hay registro del estirado de " + starlessStId + " (sólo con el modo al fallo)");
+  var rec = esRegistro(starlessStId);
+  if (!rec) throw new Error("no hay registro del estirado de " + starlessStId + " (sólo el GHS al fallo deja registro, y sólo de la starless " +
+                            "que salió del Paso 1 sin tocar después)");
+  starlessLinId = starlessLinId || rec.lineal;
+  if (!starlessLinId || ImageWindow.windowById(starlessLinId).isNull)
+    throw new Error("falta la starless LINEAL (" + (starlessLinId || "?") + ") de la que salió " + starlessStId);
   if (typeof screenStarsExtract !== "function" && typeof PIASTROPILOT_GUIA === "string")
     try { eval.call(null, File.readTextFile(PIASTROPILOT_GUIA + "/herramientas/realces.js")); } catch (e) { }
   if (typeof screenStarsExtract !== "function") throw new Error("screenStarsExtract no está cargado (herramientas/realces.js)");
@@ -788,8 +831,12 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   if (!stv || stv.isNull) throw new Error("No existe la vista " + starsLinId);
   if (esMedian(stv) > 0.05) throw new Error("la capa de estrellas parece ya estirada");
   var orig = esCopy(starlessLinId, "esTmpConEstrellas");
-  var P = new PixelMath;
-  P.expression = "$T + " + starsLinId; P.useSingleExpression = true; P.createNewImage = false;
+  var P = new PixelMath, su = (rec.sumar instanceof Array) ? rec.sumar : null;
+  if (su && su.length >= 3 && orig.mainView.image.numberOfChannels >= 3) {   // mismo cielo neutralizado que la starless estirada
+    P.useSingleExpression = false;
+    P.expression = "$T + " + starsLinId + " + " + su[0]; P.expression1 = "$T + " + starsLinId + " + " + su[1]; P.expression2 = "$T + " + starsLinId + " + " + su[2];
+  } else { P.expression = "$T + " + starsLinId; P.useSingleExpression = true; }
+  P.createNewImage = false;
   P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
   if (!P.executeOn(orig.mainView)) { orig.forceClose(); throw new Error("suma starless + estrellas falló"); }
   var r;
@@ -823,8 +870,8 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
   st.sort(function (a, b) { return a - b; });
   var p90 = st.length ? st[Math.floor(0.9 * (st.length - 1))] : 0, pePct = 100 * pe / n, noCumpleE = [];
   if (pePct > 10) noCumpleE.push("CAPA DE ESTRELLAS HINCHADA: el " + pePct.toFixed(1) + " % de los píxeles pasa de 0,02 (límite 10 %). " +
-    "Con el estirado de una nebulosa débil, 'extraer' hincha las estrellas (nebulosa oscura, 7 nov 2026: 25 %): repetir estirarCapas SIN " +
-    "estrellas \"extraer\" (starStretch). 'extraer' es para galaxias");
+    "Con el estirado de una nebulosa débil, 'extraer' hincha las estrellas (nebulosa oscura, 7 nov 2026: 25 %): repetir SIN " +
+    "\"extraer\" (arcsinh k 3000). 'extraer' es para galaxias");
   return {
     vista: v.id, original: starsLinId, metodo: "mismo estirado que la starless + screenStarsExtract", saturacion: sat, no_cumple: noCumpleE,
     p90_estrellas: +p90.toFixed(3), pix_estrella_pct: +(100 * pe / n).toFixed(2), mediana_fondo: med, maximo: +mx.toFixed(4),
@@ -852,20 +899,19 @@ var ES_TIPOS = {
   nebulosa_oscura: { cielo: 0.12, ruidoMax: 0.20 }   // estrellas con arcsinh k 3000 (con starStretch amount 2, aporte 0,7–0,8 %)
 };
 
-// Las dos capas del Paso 1 en una llamada.
-//   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // { starless: {...}, estrellas: {...} }
-//   var r = estirarCapas("Starless", "Stars", { tipo: "galaxia" });   // cielo 0,07, ruidoMax 0,12, estrellas "extraer", saturación 1,3
-//   var r = estirarCapas("Starless", "Stars", { estrellas: "extraer" });   // estrellas con el mismo estirado que la starless
+// Paso 1: la starless. Desde el 11 nov 2026 (Rafael) la capa de estrellas NO se estira aquí: queda lineal y se estira en
+// el Paso 8, justo antes de recombinar, con estirarEstrellasCandidatos (tres candidatos para elegir). Se puede pasar la capa de
+// estrellas para que el resultado diga cuál es (estrellas_pendientes); { estirarEstrellas: true } recupera el modo antiguo.
+//   var r = estirarCapas("Starless", "Stars", { cielo: 0.10 });   // { starless: {...}, estrellas_pendientes: {...} }
+//   var r = estirarCapas("Starless", "Stars", { tipo: "galaxia" });   // cielo 0,07, ruidoMax 0,12
+//   var r = estirarCapas("Starless", "Stars", { estirarEstrellas: true, estrellas: "extraer" });   // antiguo: las dos capas
 function estirarCapas(starlessId, starsId, o) {
   if (starlessId && typeof starlessId === "object") starlessId = (starlessId.id !== undefined) ? starlessId.id : (typeof starlessId.vista === "string" ? starlessId.vista : starlessId);   // también vale la View o el resultado de otra función ({ vista: ... })
   if (starsId && typeof starsId === "object") starsId = (starsId.id !== undefined) ? starsId.id : (typeof starsId.vista === "string" ? starsId.vista : starsId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
   var t = ES_TIPOS[String(o.tipo || "").toLowerCase()];
   if (t) { var o2 = {}; for (var k in o) o2[k] = o[k]; for (var k2 in t) if (o2[k2] === undefined) o2[k2] = t[k2]; o = o2; }
-  // Qwen llamó estirarCapas(imagen_con_estrellas, null) (7 nov 2026): las estrellas se estiraron como nebulosa y salieron enormes.
-  if (!starsId && !o.soloStarless)
-    throw new Error("Falta la capa de estrellas: estirarCapas(starless, estrellas, opciones). Las dos salen de separarEstrellas (Paso 15 lineal): " +
-                    "r.starless y r.estrellas (ids de texto). Si de verdad sólo quieres estirar una starless, pasa { soloStarless: true }");
+  // Una imagen con estrellas como starless (Qwen, 7 nov 2026) la para esComprobarStarless, que mide si quedan estrellas.
   // 11 nov 2026: un modelo local pasó la misma vista (el master con estrellas) como starless y como estrellas.
   if (starsId && String(starsId) === String(starlessId))
     throw new Error("La starless y la capa de estrellas son la misma vista («" + starlessId + "»): tienen que ser las dos salidas de " +
@@ -881,14 +927,22 @@ function estirarCapas(starlessId, starsId, o) {
     else { campo = esCeldasDebiles(View.viewById(slId)); simetria = campo.fraccion_con_senal > 0.6 ? "debil" : "cielo"; }
   }
   var r = { starless: estirarStarless(slId, { cielo: o.cielo, ruidoMax: o.ruidoMax, modo: o.modo, fondo: o.fondo, canal: o.canal, nuevaVista: o.nuevaStarless || (starlessId + "_st"), fase3: o.fase3, tipo: o.tipo, simetria: simetria, _sinComprobar: true }) };
+  if (neu) esAnotarNeutralizado(r.starless.vista, starlessId, neu.sumado_por_canal);
   r.simetria = { valor: simetria, campo_con_senal_pct: campo ? +(100 * campo.fraccion_con_senal).toFixed(1) : undefined,
                  nota: "punto de simetría del GHS: 'debil' = nivel de la señal débil (campos llenos de nebulosa, > 60 % de celdas con señal, o si se pide { simetria: \"debil\" }), 'cielo' = el cielo" };
   if (neu) r.cielo_neutralizado = { dominante_lineal_antes_pct: neu.dominante_lineal_antes_pct, sumado_por_canal: neu.sumado_por_canal,
                                     nota: "cielo de la starless igualado en lineal antes de estirar (aditivo; el objeto no cambia)" };
-  if (starsId) {
+  if (starsId && !o.estirarEstrellas) {
+    r.estrellas_pendientes = {
+      lineal: starsId, starless_estirada: r.starless.vista,
+      nota: "La capa de estrellas sigue LINEAL: se estira en el Paso 8 (justo antes de recombinar) con estirarEstrellasCandidatos(\"" + starsId +
+            "\", { starless: \"" + r.starless.vista + "\", starlessActual: <la starless al final del Paso 7>" + (o.tipo ? ", tipo: \"" + o.tipo + "\"" : "") +
+            " }). No cerrar ni modificar " + r.starless.vista + " ni " + starsId + " hasta entonces."
+    };
+  } else if (starsId) {
     var aviso = null;
     if (o.estrellas === "extraer") {
-      try { r.estrellas = estirarEstrellasExtraer(slId, starsId, r.starless.vista, { nuevaVista: o.nuevasEstrellas, saturacion: o.saturacion }); }
+      try { r.estrellas = estirarEstrellasExtraer(starlessId, starsId, r.starless.vista, { nuevaVista: o.nuevasEstrellas, saturacion: o.saturacion }); }
       catch (e) { aviso = "no se pudo sacar la capa de estrellas con el mismo estirado (" + e.message + "): se usa starStretch"; }
     }
     if (!r.estrellas) {

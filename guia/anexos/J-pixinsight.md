@@ -34,14 +34,14 @@ Los ejemplos de llamada explican qué hace cada función: no se copian, se pide 
 | L15 StarX y denoise | `separarEstrellas`; **`ruidoCandidatos`** → `reducirRuido` sobre la starless |
 | L16 Continuo | `medirContinuo`, `restarContinuo` |
 | L17 Checkpoint | `checkpointLineal` |
-| NL1 Estirado | **`estirarCandidatos`** (GHS al fallo, MAS, Arcsinh) → `estirarCapas` (o `estirarStarless` + `estirarEstrellas` / `starStretch`) |
+| NL1 Estirado | **`estirarCandidatos`** (GHS al fallo, MAS, Arcsinh) → `estirarCapas` (o `estirarStarless`); sólo la starless |
 | NL2 Paleta | `paletasDisponibles`, `previsualizarPaletas`, `componerPaleta` |
 | NL3 SCNR | `quitarVerde` |
-| NL4 Máscaras | `crearMascara` → **`aplicarConMascara`** (mezcla medida: fuga, bordes, máscara invertida) |
-| NL5 Boost | **`contrasteCandidatos`** (LHE 64 y 128, HDRMT, DSE), **`nucleoCandidatos`** / `comprimirNucleo` / `medirMeseta` (galaxias, antes de saturar), **`saturarAlFallo`**, `backgroundEnhance`, `darkStructureEnhance` |
+| NL4 Máscaras | `crearMascara` (también por color) → **`aplicarConMascara`** (mezcla medida: fuga, bordes, máscara invertida) |
+| NL5 Boost | **`contrasteCandidatos`** (LHE 64 y 128, HDRMT, DSE), **`nucleoCandidatos`** / `comprimirNucleo` / `medirMeseta` (galaxias, antes de saturar), **`colorCandidatos`** (versiones para elegir; dentro, `saturarAlFallo`), `saturarTono`, `derivaColor`, `backgroundEnhance`, `darkStructureEnhance` |
 | NL6 NoiseX | **`ruidoCandidatos`** → `reducirRuido` |
-| NL7 Nitidez | Sin función propia: la ficha |
-| NL8 Estrellas | `prepararEstrellas`; `screenStarsExtract` (sacar la capa sin repetir SXT) |
+| NL7 Nitidez | **`nitidezCandidatos`** (suave, equilibrada, acentuada; elige el usuario) |
+| NL8 Estrellas | **`estirarEstrellasCandidatos`** (estira la capa lineal y saca 3 candidatos para elegir; dentro, `estirarEstrellas` y `prepararEstrellas`); `screenStarsExtract` (sacar la capa sin repetir SXT) |
 | NL9 Recombinación | `recombinarEstrellas` (con controles); `screenStarsCombine` |
 | NL10 Exportación | `exportarFinal` (XISF, TIFF 16 bits, JPG sRGB) |
 | NL11 Dossier | `historial` |

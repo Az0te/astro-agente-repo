@@ -21,6 +21,8 @@
 
 **Máscara de poca señal para el ruido** (Jon Rista): la relación señal/ruido cambia por zonas; lo brillante ya tiene poco ruido relativo y lo débil mucho. Una máscara que vale 1 en el cielo y la señal débil y baja a 0 en lo brillante (rampa entre cielo + 3σ y cielo + 20σ, suavizada) permite un denoise fuerte donde hace falta sin plastificar el objeto. Las máscaras de rango tal cual dejan el fondo oscuro sin proteger o sin tratar: construirla sobre la luminancia medida. La herramienta de ruido la prueba como candidato ([Paso 14 lineal](../lineal/14-noisex-suave.md)).
 
+**Máscara por color** (ajustes locales por tono: zonas de Hα rojas, regiones azules de reflexión, OIII cian): 1 en los píxeles del tono pedido (±30°) con color claro, 0 en el resto y en lo casi gris (cielo neutro, núcleos), suavizada. Con ella se ajusta saturación, curvas o contraste sólo en esa zona. Control: con la máscara superpuesta, sólo la zona de ese color dentro, sin bordes duros; la corrección debe ser suave ("trop fort = artificiel, halos").
+
 **Máscara de cielo** (para neutralizar sin tocar el objeto): "máscara de cielo por luminancia (sigma-clip del fondo, rampa de 1,5σ a 5σ, suavizada)". Sólo si las esquinas se desvían > 0,10 de neutro. "La zona más oscura no siempre es cielo limpio (IFN, polvo, nebulosidad débil)."
 
 **Máscaras por escalas (polvo, reflexión, fondo)** — caso nebulosa oscura

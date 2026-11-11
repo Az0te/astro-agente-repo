@@ -18,6 +18,8 @@
 
 **Verificación.** "Verificar al 100 % y en negativo."
 
-**Código.** No hay una receta de sharpening no lineal medida (proceso, radio, amount): está en el Anexo C. Lo documentado es el **orden**, la máscara y la verificación. Si se aplica, siempre con máscara que proteja estrellas y fondo, nunca global, y comparando contra la versión sin sharpening; casi siempre basta con lo que ya hizo BXT.
+**Niveles para elegir** (Rafael, 11 nov 2026). Sobre la **starless** estirada (las estrellas van aparte: sin ellas no hay halos oscuros que crear) y con máscara de luminancia que protege el cielo, tres niveles de máscara de enfoque en luminancia: suave (σ 1,5, amount 0,3), equilibrado (σ 2, 0,5) y acentuado (σ 2,5, 0,7). Se mide el detalle fino (laplaciana en las celdas con señal), el ruido y el nivel del cielo y los quemados; se recomienda el más fuerte que no sube el ruido del cielo más de un 10 %, y si ninguno cumple, no aplicar. El usuario elige mirando un recorte al 100 %. Valores de partida sin calibrar con casos (Anexo C); casi siempre basta con lo que ya hizo la deconvolución.
 
-**Control.** Sin halos oscuros alrededor de estrellas ni bordes "ilustrados"; sin grano amplificado en el fondo; comparación al 100 % contra la versión sin sharpening. "Probar variantes... y quedarse con la mejor"; "no aplicar un paso es un resultado válido".
+**Microcontraste no es resolución** (lámina «le microcontraste n'est pas la résolution»): el contraste local y la nitidez hacen más visible lo que ya hay; sólo la deconvolución puede bajar la FWHM, y sólo con buena SNR. Tras la nitidez, la FWHM de las estrellas (en la imagen recombinada) no debe cambiar: si "mejora", es un artefacto. Un detalle que no aparece en los datos de otra noche o en otra integración no es un detalle.
+
+**Control.** Ruido del cielo ≤ ×1,10; FWHM de las estrellas igual que antes; sin halos oscuros alrededor de estrellas ni bordes "ilustrados"; sin grano amplificado en el fondo; comparación al 100 % contra la versión sin sharpening. "Probar variantes... y quedarse con la mejor"; "no aplicar un paso es un resultado válido".

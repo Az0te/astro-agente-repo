@@ -945,7 +945,8 @@ static String HelperBlock( const PiAstroPilotStep& step, const String& viewId, c
       { "lineal/13-bxt-completo.md", u"bxtCandidatos {vista: \"%V\", opciones: {tipo: ...}} y, cuando veas su resultado, en otra respuesta, bxtAplicar {vista: \"%V\", opciones: {nonstellar: <recomendada.nonstellar>, stars: <recomendada.stars>, nuevaVista: ...}}" },
       { "lineal/14-noisex-suave.md", u"ruidoCandidatos {vista: \"%V\", opciones: {nuevaVista: ...}} (compara NXT 0,30/0,50/0,70, MLDenoise y MultiscaleTGVDenoise y se queda con el mejor que cumpla; enseña su tabla comparados)" },
       { "lineal/15-starx.md", u"separarEstrellas {vista: \"%V\", opciones: {nuevaVista: ..., nuevasEstrellas: ...}} y, en el mismo bloque, ruidoCandidatos {vista: <el id que has dado en nuevaVista>, opciones: {principal: true, nuevaVista: ...}} (compara NXT, MLDenoise y MultiscaleTGVDenoise; prefiere bajar el ruido 50-80 % cumpliendo los controles)" },
-      { "no-lineal/05-boost.md", u"saturarAlFallo {vista: \"%V\", opciones: {tipo: \"nebulosa\" | \"galaxia\", nuevaVista: ...}} para la saturación (el LHE y las curvas, si hacen falta, después y a mano). "
+      { "no-lineal/05-boost.md", u"colorCandidatos {vista: \"%V\", opciones: {tipo: \"nebulosa\" | \"galaxia\"}} para el color: galería de saturación (neutra, equilibrada al fallo, viva), "
+        u"equilibrio (cálida, fría) y contraste global con miniaturas; enseña las miniaturas y que elija el usuario (saturarTono para un solo color). "
         u"En galaxias, ANTES y en su propia respuesta, nucleoCandidatos {vista: \"%V\", opciones: {nuevaVista: ...}} (compara HDRMT y GradientHDRCompression) si el estirado dio meseta_nucleo.radio_px > 3; "
         u"el contraste local, también en su propia respuesta, con contrasteCandidatos {vista: \"%V\", opciones: {nuevaVista: ...}} (LHE, HDRMT y DarkStructureEnhance; puede recomendar no tocarla), "
         u"y la saturación sobre su resultado" },
@@ -954,18 +955,20 @@ static String HelperBlock( const PiAstroPilotStep& step, const String& viewId, c
       { "lineal/08-plate-solve.md", u"resolverAstrometria {vista: \"%V\"}" },
       { "lineal/07-extraccion-canales.md", u"desmezclarDualBand {vista: \"%V\"}" },
       { "lineal/16-linearfit-continuo.md", u"medirContinuo {nb: <banda estrecha CON estrellas>, continuo: <RGB calibrada CON estrellas>, opciones: {canal: 0}} y, con el k que devuelva, en otra respuesta, restarContinuo {nb: \"%V\", continuo: <RGB sin estrellas>, opciones: {k: ..., nuevaVista: ...}}" },
-      { "no-lineal/04-mascaras.md", u"crearMascara {vista: \"%V\", opciones: {tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\"}}" },
+      { "no-lineal/04-mascaras.md", u"crearMascara {vista: \"%V\", opciones: {tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\" | \"color\" (con tono)}}" },
+      { "no-lineal/07-nitidez.md", u"nitidezCandidatos {vista: \"%V\"} sobre la starless (suave, equilibrada, acentuada con máscara; puede recomendar no aplicar); enseña el recorte al 100 % y que elija el usuario" },
       { "no-lineal/02-lrgb-paleta.md", u"previsualizarPaletas {ha: \"%V\", oiii: <OIII estirado igual>, opciones: {carpeta: ...}} para las previews; la composición final con componerPaleta {capas: {S, H, O}, opciones: {paleta: \"SHO\" | \"HOO\" | \"FORAXX\" ..., estrellas}} y la paleta que elija el usuario (paletasDisponibles {} da la lista)" },
       { "lineal/11-bxt-correct-only.md", u"bxtCorrectOnly {vista: \"%V\", opciones: {nuevaVista: ...}}" },
       { "lineal/17-checkpoint.md", u"checkpointLineal {vista: \"%V\", opciones: {carpeta: ..., objeto: ..., version: ...}}" },
       { "no-lineal/03-scnr.md", u"quitarVerde {vista: \"%V\", opciones: {nuevaVista: ...}}" },
       { "lineal/12-spcc.md", u"calibrarColor {vista: \"%V\", opciones: {nuevaVista: ..., spcc: {...filtros y QE del perfil...}}}" },
-      { "no-lineal/01-estirado.md", u"estirarCapas {starless: \"%V\", estrellas: \"%S\", opciones: {cielo: 0.10, nuevaStarless: ..., nuevasEstrellas: ...}} (si el objeto es una galaxia, "
-        u"OBLIGATORIO opciones {tipo: \"galaxia\", nuevaStarless: ..., nuevasEstrellas: ...} sin cielo: cielo 0,07 y estrellas con el mismo estirado; "
+      { "no-lineal/01-estirado.md", u"estirarCapas {starless: \"%V\", estrellas: \"%S\", opciones: {cielo: 0.10, nuevaStarless: ...}} (sólo estira la starless: "
+        u"la capa de estrellas queda LINEAL hasta el Paso 8; si el objeto es una galaxia, OBLIGATORIO opciones {tipo: \"galaxia\", nuevaStarless: ...} sin cielo: cielo 0,07; "
         u"si es una nebulosa oscura de polvo, {tipo: \"nebulosa_oscura\", ...} sin cielo). En nebulosas de emisión o reflexión, mejor "
-        u"estirarCandidatos {vista: \"%V\", opciones: {cielo: 0.10, nuevaVista: ...}} (compara GHS al fallo, MAS y ArcsinhStretch con el mismo cielo) y, en el mismo "
-        u"bloque, estirarEstrellas {vista: \"%S\", opciones: {nuevaVista: ...}}" },
-      { "no-lineal/08-estrellas.md", u"prepararEstrellas {vista: \"%V\", opciones: {nuevaVista: ...}}" },
+        u"estirarCandidatos {vista: \"%V\", opciones: {cielo: 0.10, nuevaVista: ...}} (compara GHS al fallo, MAS y ArcsinhStretch con el mismo cielo). "
+        u"No estires aquí la capa de estrellas" },
+      { "no-lineal/08-estrellas.md", u"estirarEstrellasCandidatos {vista: <capa de estrellas LINEAL>, opciones: {starless: <starless estirada en el Paso 1>, starlessActual: \"%V\", tipo: ...}} "
+        u"(estira las estrellas y saca 3 candidatos: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 %); enseña las miniaturas y que elija el usuario" },
       { "no-lineal/09-recombinacion.md", u"recombinarEstrellas {starless: \"%V\", estrellas: \"%S\", opciones: {nuevaVista: ...}}" },
       { "lineal/10-combinacion-rgb-nb.md", u"combinarMasters {masters: <carpeta o lista de masters alineados>, opciones: {tipo: \"nebulosa\" | \"galaxia\"}} (no usa ninguna vista: "
         u"clasifica cada master por su filtro y combina lo que toca). Antes mira «Cuándo aplica» en la ficha: si sólo hay una imagen RGB "

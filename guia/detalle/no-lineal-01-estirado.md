@@ -48,7 +48,7 @@ Documentación citada por el PDF: `ghsastro.co.uk/doc/tools/GeneralizedHyperboli
 - Clases: nebulosa débil = estirado suave, recuperación moderada; nebulosa compleja = equilibrio recuperación/DRC; galaxia = DRC para el bulbo, recuperación medida; núcleo muy brillante (nebulosa brillante) = HDRComposition con tomas cortas → MAS con saturación off → HDRMT → curvas de saturación.
 - "MAS no sustituye HDRMT ni repara datos recortados. Como usa estadísticas, da estirados parecidos en imágenes distintas."
 
-**Capa de estrellas**
+**Capa de estrellas** (se estira en el [Paso 8](../no-lineal/08-estrellas.md), justo antes de recombinar)
 
 - `starStretch` hace `y = 3^A·x / ((3^A − 1)·x + 1)` (A de 0 a 8; 5 por defecto en el script), saturación por tono con ColorSaturation (0,4·s / 0,7·s / 0,4·s) y, si se pide, SCNR del verde. "Color Boost aumenta separación cromática (controlar R:G:B en no saturados, evitar anillos de color). Suprimir verde off salvo dominante real."
 - Objetivo de NOVA: "p90 de la capa en ~0,25 (factor de Star Stretch 1–3, más suave que el 5 por defecto), probando la fuerza con saturación y SCNR fijos."

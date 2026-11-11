@@ -48,6 +48,21 @@ function exChecks(view) {
            filas_negras_en_bordes: zeroRows, columnas_negras_en_bordes: zeroCols };
 }
 
+// Gamut (lámina «gamut»): valores pegados a 0 o a 1 en algún canal antes y después de convertir a sRGB. Si la conversión
+// recorta más del 0,05 % de los valores, hay colores fuera del gamut que el JPG/TIFF pierde.
+function exRecortados(view) {
+  var im = view.image, W = im.width, H = im.height, n = W * H, b = new Float32Array(n), k = 0, t = 0;
+  for (var c = 0; c < im.numberOfChannels; ++c) {
+    im.getSamples(b, new Rect(0, 0, W, H), c);
+    for (var i = 0; i < n; i += 2) { ++t; if (b[i] <= 0 || b[i] >= 0.9999) ++k; }
+  }
+  return t ? 100 * k / t : 0;
+}
+function exGamut(antes, despues) {
+  var a = exRecortados(antes), d = exRecortados(despues);
+  return { recortados_antes_pct: +a.toFixed(4), recortados_srgb_pct: +d.toFixed(4), recortados_por_conversion_pct: +Math.max(0, d - a).toFixed(4) };
+}
+
 function exSave(win, path) {
   if (!win.saveAs(path, false, false, false, false)) throw new Error("No se pudo guardar " + path);
   var kb = 0; try { kb = Math.round(new FileInfo(path).size / 1024); } catch (e) { }
@@ -62,7 +77,7 @@ function exportarFinal(viewId, o) {
   if (!o.carpeta) throw new Error("Falta la carpeta de salida (opción carpeta)");
   var dir = o.carpeta.replace(/\\/g, "/").replace(/\/$/, "");
   if (!File.directoryExists(dir)) File.createDirectory(dir, true);
-  var nombre = o.nombre || viewId, fmts = o.formatos || ["xisf", "tif", "jpg"], out = [], t0 = Date.now();
+  var nombre = o.nombre || viewId, fmts = o.formatos || ["xisf", "tif", "jpg"], out = [], t0 = Date.now(), gamut = null;
   var checks = exChecks(v);
 
   if (fmts.indexOf("xisf") >= 0) {
@@ -77,6 +92,7 @@ function exportarFinal(viewId, o) {
     icc.targetProfile = "sRGB IEC61966-2.1";
     icc.toDefaultProfile = false;
     if (!icc.executeOn(w.mainView)) throw new Error("ICC sRGB falló");
+    gamut = exGamut(v, w.mainView);
     if (o.girar180) {
       var F = new FastRotation;
       F.mode = 0;   // Rotate180 (la constante no está expuesta en PJSR)
@@ -99,8 +115,11 @@ function exportarFinal(viewId, o) {
   if (checks.a_uno_pct > 0.05) noCumple.push("hay " + checks.a_uno_pct + " % de valores a 1: zonas quemadas (núcleos de estrellas o del objeto)");
   if (checks.filas_negras_en_bordes + checks.columnas_negras_en_bordes > 0)
     noCumple.push("bordes negros: " + checks.filas_negras_en_bordes + " filas y " + checks.columnas_negras_en_bordes + " columnas; recortar antes de exportar");
+  if (gamut && gamut.recortados_por_conversion_pct > 0.05)
+    noCumple.push("la conversión a sRGB recorta el " + gamut.recortados_por_conversion_pct + " % de los valores (colores fuera del gamut): bajar la " +
+                  "saturación (Paso 5) o desaturar sólo ese tono (saturarTono con cantidad negativa) y volver a exportar");
   return {
-    vista: viewId, carpeta: dir, ficheros: out, girada_180: !!o.girar180, icc: "sRGB IEC61966-2.1 (TIFF y JPG)",
+    vista: viewId, carpeta: dir, ficheros: out, girada_180: !!o.girar180, icc: "sRGB IEC61966-2.1 (TIFF y JPG)", gamut: gamut,
     dimensiones: [v.image.width, v.image.height], controles: checks, no_cumple: noCumple,
     segundos: Math.round((Date.now() - t0) / 1000),
     control: {

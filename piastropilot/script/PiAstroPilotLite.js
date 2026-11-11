@@ -659,12 +659,18 @@ function plPromptSistema(aj) {
    "como (activa). Si no está en la lista o hay dudas, pregunta sin pedir llamadas.\n" +
    "- Si una llamada falla, cambia lo que causó el error (id, parámetro, valor): no repitas la misma llamada.\n" +
    "- Encadena las vistas: cada función devuelve el id de lo que ha creado (vista; separarEstrellas: starless y " +
-   "estrellas; estirarCapas: starless.vista y estrellas.vista; gradienteVarias: corregidas). El paso siguiente trabaja " +
+   "estrellas; estirarCapas: starless.vista, y la capa de estrellas sigue LINEAL hasta el Paso 8; gradienteVarias: corregidas). El paso siguiente trabaja " +
    "sobre ese id (o el que salga en «Vistas abiertas»), nunca sobre el original ni sobre un nombre inventado. Si una función ya " +
    "aplica el ganador de su comparación (…Candidatos), no lo apliques otra vez.\n" +
    "- Compara siempre: si la guía tiene una función que prueba varios candidatos y recomienda uno (gradienteCandidatos o " +
    "gradienteVarias, ruidoCandidatos, bxtCandidatos, estirarCandidatos, contrasteCandidatos, nucleoCandidatos...), úsala en vez de aplicar un solo método o valor, y enseña la tabla " +
-   "de la comparación (comparados / candidatos) en tu resumen.\n\n" +
+   "de la comparación (comparados / candidatos) en tu resumen.\n" +
+   "- Pasos en los que ELIGE EL USUARIO (Rafael, 11 nov 2026): estirarEstrellasCandidatos (Paso 8: la capa de estrellas se estira AQUÍ, justo " +
+   "antes de recombinar, nunca en el Paso 1; tres candidatos: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 %), " +
+   "colorCandidatos (Paso 5: saturación, equilibrio y contraste) y nitidezCandidatos (Paso 7). Enseña la tabla con la recomendada, " +
+   "para con «PARO:» y sigue con la vista que elija el usuario; cierra las demás con cerrarVista.\n" +
+   "- Color: guarda siempre la versión neutra; si el usuario quiere más de un solo color, saturarTono; derivaColor {vista, opciones: " +
+   "{referencia}} mide si el tono del objeto ha girado entre dos pasos (> 10° = deriva).\n\n" +
    (aj.internet ?
    "Información de internet (objeto, filtros, cámaras, telescopios, qué señal tiene la nebulosa, problemas típicos):\n" +
    (aj.proveedor == "claude" ? "- Tienes WebSearch y WebFetch: úsalos directamente y cita las fuentes.\n" : "") +
@@ -1153,7 +1159,7 @@ function plListaHtml(arr, cls, icono) {
 
 // Array de objetos → tabla (columnas: claves escalares y las de los objetos anidados, máx. 10; filas máx. 40).
 // Campos con rutas de miniaturas: se pintan como imágenes (plMiniaturas), no como columnas de texto.
-function plEsCampoPrevia(k) { return /^(previa|previa_modelo|jpg|sel|clave)$/.test(k); }   // también datos internos (sel, clave)
+function plEsCampoPrevia(k) { return /^(previa|previa_modelo|previa_recorte|jpg|sel|clave)$/.test(k); }   // también datos internos (sel, clave)
 
 function plRutaFichero(p) { return "file:" + "/" + "/" + "/" + String(p).replace(/\\/g, "/"); }
 
@@ -1182,9 +1188,13 @@ function plMiniaturas(r) {
          else if (o.contraste_x !== undefined) extra.push("contraste ×" + o.contraste_x);
          var sep = o.separacion !== undefined ? o.separacion : o.senal_debil_en_ruidos;
          if (sep !== undefined) extra.push("señal débil " + sep + " ruidos");
+         if (typeof o.resumen === "string" && o.resumen) extra.push(o.resumen);
          var mod = typeof o.previa_modelo === "string" && File.exists(o.previa_modelo) ? o.previa_modelo : null;
+         var rec100 = typeof o.previa_recorte === "string" && File.exists(o.previa_recorte) ? o.previa_recorte : null;
          if (mod) vistos[mod] = true;
-         filas.push({ img: img, mod: mod, rotulo: rotulo + (extra.length ? " · " + extra.join(", ") : ""), elegido: !!o.elegido });
+         if (rec100) vistos[rec100] = true;
+         filas.push({ img: img, mod: mod || rec100, pie: mod ? "Gradiente quitado (modelo)" : "Recorte al 100 %",
+                      rotulo: rotulo + (extra.length ? " · " + extra.join(", ") : ""), elegido: !!o.elegido });
       }
       for (var k in o) if (!plEsCampoPrevia(k)) recorrer(o[k]);
    })(r);
@@ -1194,7 +1204,7 @@ function plMiniaturas(r) {
    }
    return "<div class=\"grid\">" + filas.map(function (f) {
       return "<div class=\"row\">" + fig(f.img, (f.elegido ? "★ ELEGIDO · " : "") + f.rotulo, f.elegido) +
-             (f.mod ? fig(f.mod, "Gradiente quitado (modelo)", false) : "") + "</div>";
+             (f.mod ? fig(f.mod, f.pie, false) : "") + "</div>";
    }).join("") + "</div>";
 }
 
@@ -2100,7 +2110,8 @@ function plConstruirDialogo(aj) {
                 "GUÍA, con los ids de vista que acaba de devolver este resultado) en un único bloque ```json: se ejecutarán sin " +
                 "esperar al usuario, así que no le preguntes si sigue. Si un no_cumple ya dice el arreglo de la guía (aplicar una " +
                 "función o volver a un paso anterior), pídelo tú en el bloque ```json SIN parar ni preguntar. Si ya están hechos " +
-                "todos los pasos pedidos, o hay una decisión que es del usuario (tipo de objeto dudoso, paleta, un arreglo de la " +
+                "todos los pasos pedidos, o hay una decisión que es del usuario (tipo de objeto dudoso, paleta, elegir entre los " +
+                "candidatos de estirarEstrellasCandidatos, colorCandidatos o nitidezCandidatos, un arreglo de la " +
                 "guía que ya falló dos veces), NO pidas llamadas: escribe una línea que empiece por «PARO:» con el motivo."
               : "\nAhora, sin pedir ninguna llamada, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
                 "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +

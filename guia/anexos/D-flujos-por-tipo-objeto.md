@@ -34,7 +34,7 @@ Parámetros orientativos de aescaffre para galaxias: fondo 0,10; compresión mul
 Cadena que funcionó en una galaxia grande (versión de referencia, oct 2026) y que la comparación con un modelo local (7 nov 2026) confirmó por lo que faltó:
 
 1. Lineal: gradiente polinomio grado 2 → BXT correct only → SPCC → BXT (estrellas 0,25, halos 0, no estelar 0,65) → SXT → **un** NXT lineal moderado. Checkpoint con el cielo neutro (≤ 0,5 σ); si no, neutralizar el cielo antes de estirar.
-2. Estirado de galaxia: cielo 0,07 y estrellas con el mismo estirado que la starless. SXT se lleva a veces los núcleos de la galaxia y de sus satélites: devolverlos a la starless.
+2. Estirado de galaxia: cielo 0,07; las estrellas, en el Paso 8, con el mismo estirado que la starless. SXT se lleva a veces los núcleos de la galaxia y de sus satélites: devolverlos a la starless.
 3. Comprimir el núcleo: compresión multiescala de 7 capas al 60 % con máscara de bulbo. Nunca a pleno ni contraste local de radio 200 sobre el bulbo (anillo y bulbo plano).
 4. Contraste local r64 (y r32 para más detalle) sólo en el disco, con máscara galaxia × (1 − bulbo).
 5. Saturación al fallo (galaxia), o por tono con la misma máscara: sin excluir el bulbo, el núcleo recorta).

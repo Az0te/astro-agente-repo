@@ -5,6 +5,7 @@
 //   var m = crearMascara("Starless_st", { tipo: "luminancia", gamma: 2.0 });   // LHE (1,5 para HDRMT)
 //   var c = crearMascara("Starless_st", { tipo: "cielo" });                    // cielo: rampa de 1,5σ a 5σ, suavizada
 //   var f = crearMascara("Starless_st", { tipo: "fondo_lhe" });                // 1 − clip((L64 − 0,20)/0,25)
+//   var k = crearMascara("Starless_st", { tipo: "color", tono: "rojo" });       // por tono (rojo, cian, azul... o grados)
 //   // aplicar: ImageWindow.windowById("Starless_st").mask = ImageWindow.windowById(m.vista);
 //
 // Devuelve la vista de la máscara (gris) y su cobertura: % de píxeles con máscara > 0,5 (zona que recibirá el efecto)
@@ -112,7 +113,31 @@ function crearMascara(viewId, o) {
     var P = new PixelMath; P.useSingleExpression = true; P.expression = "1 - min(max(($T - 0.20) / 0.25, 0), 1)";
     P.createNewImage = false; P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1; P.executeOn(w.mainView);
     desc = "fondo para LHE (nebulosa de emisión y reflexión): 1 − clip((L64 − 0,20)/0,25); protege la nebulosa brillante";
-  } else throw new Error("Tipo de máscara desconocido: " + tipo + " (luminancia | cielo | fondo_lhe)");
+  } else if (tipo === "color") {
+    // Máscara por tono (lámina «ajustes locales»): 1 en los píxeles del tono pedido con color claro, 0 en el resto. Para
+    // ajustes locales por color (zonas de Hα rojas, regiones azules, OIII cian) con aplicarConMascara.
+    if (v.image.numberOfChannels !== 3) throw new Error("La máscara por color necesita una imagen RGB");
+    var tonos = { rojo: 0, naranja: 30, amarillo: 60, verde: 120, cian: 180, azul: 240, magenta: 300 };
+    var tono = typeof o.tono === "number" ? o.tono : tonos[String(o.tono || "").toLowerCase()];
+    if (tono === undefined) throw new Error("tono desconocido: " + o.tono + " (" + Object.keys(tonos).join(", ") + " o grados)");
+    var ancho = o.ancho || 30, im = v.image, W = im.width, H = im.height, n = W * H, R = new Rect(0, 0, W, H);
+    var ch = [new Float32Array(n), new Float32Array(n), new Float32Array(n)], m = new Float32Array(n);
+    for (var c = 0; c < 3; ++c) im.getSamples(ch[c], R, c);
+    for (var i = 0; i < n; ++i) {
+      var r = ch[0][i], g = ch[1][i], b = ch[2][i], mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+      if (d <= 0 || mx <= 0) continue;
+      var h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360;
+      var dh = Math.abs(h - tono) % 360; if (dh > 180) dh = 360 - dh;
+      if (dh >= ancho) continue;
+      var croma = d / mx, pesoC = Math.max(0, Math.min(1, (croma - 0.05) / 0.15));   // sin color claro (cielo, núcleos): 0
+      m[i] = pesoC * 0.5 * (1 + Math.cos(Math.PI * dh / ancho));
+    }
+    var mid2 = mkUnique((typeof o.nuevaVista === "string" && o.nuevaVista) || ("mask_color_" + String(o.tono)));
+    w = new ImageWindow(W, H, 1, 32, true, false, mid2);
+    w.mainView.beginProcess(); w.mainView.image.setSamples(m, R, 0); w.mainView.endProcess();
+    if (o.bin !== 0) mkBlur(w, o.bin || 4);
+    desc = "color: 1 en el tono " + tono + "° (± " + ancho + "°) con croma > 0,2, 0 en el resto y en lo casi gris (cielo neutro, núcleos), suavizada";
+  } else throw new Error("Tipo de máscara desconocido: " + tipo + " (luminancia | cielo | fondo_lhe | color)");
   w.show();
   var cov = mkCoverage(w, v);
   return { vista: w.mainView.id, original: viewId, tipo: tipo, descripcion: desc, cobertura: cov,

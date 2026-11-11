@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- **Estrellas, color y nitidez para elegir** (11 nov 2026, Rafael).
+  - **Estrellas en el Paso 8 no lineal.** El Paso 1 sólo estira la starless; la capa de estrellas se queda lineal y se estira justo antes de recombinar. Nueva `estirarEstrellasCandidatos` (estrellas.js): estirado de la guía (galaxias, el mismo que la starless; resto, arcsinh k 3000) y tres candidatos para elegir: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 %. Tamaño por área de estrellas (subiendo las alas débiles, sin dilatar); previa combinada con la starless terminada, recorte al 100 % y aporte.
+  - `estirarCapas` ya no estira las estrellas (`estrellas_pendientes`; `estirarEstrellas: true` = modo antiguo) y la capa de estrellas es opcional. El registro del GHS al fallo se guarda también en un fichero temporal (el MCP arranca un script nuevo en cada llamada) con lo sumado al neutralizar el cielo.
+  - **Color para elegir** (Paso 5): `colorCandidatos` (neutra, saturación al fallo, viva, cálida, fría, contraste suave y medio, con miniaturas), `saturarTono` (un solo tono) y `derivaColor` (giro del tono del objeto, % de píxeles muy saturados). Regla 2 aclarada (cálida y fría son elección del usuario sobre color calibrado) y regla 6: en color, nitidez y estrellas elige el usuario.
+  - **Nitidez para elegir** (Paso 7): `nitidezCandidatos` (UnsharpMask suave, equilibrada y acentuada con máscara sobre la starless).
+  - Máscara por color (`crearMascara` `tipo: "color"`), recorte del gamut al pasar a sRGB en `exportarFinal`, limpieza cosmética antes de exportar, tabla de diagnóstico de halos y artefactos ópticos (detalle del Paso 8) y controles nuevos en el Anexo B. De las láminas de color, contraste, gamut, nitidez y artefactos que pasó Rafael.
+  - Lite: los pasos de elegir paran con «PARO:»; miniaturas con recorte al 100 % y resumen. Módulo: pistas de los pasos 1, 4, 5, 7 y 8 al día (necesita build nueva). Siril: anotado como pendiente en el Anexo I.
+
 - **Skill neutra `astro-procesado`** (10 nov 2026), válida igual para PixInsight y Siril (antes `astro-procesado-pixinsight`).
   - `SKILL.md` reescrito sin nombres propios de un programa: reglas, «Imágenes e ids», tabla «Qué se compara en cada paso» (paso → qué se decide → medidas), Internet, Siguiente paso, Entorno y Trampas en neutro. Se lee junto con el **arranque** del anexo del programa.
   - Anexo J: sección «Arranque en PixInsight» con la tabla «Funciones por paso» (antes en `SKILL.md`), «Siempre disponibles», entorno MCP/panel/Lite, Internet, trabajos largos, tabla de nombres de PixInsight de las técnicas neutras y trampas propias. Anexo I: «Arranque en Siril» con las herramientas por paso de SirilAstroPilot y las siempre disponibles.

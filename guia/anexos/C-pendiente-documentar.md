@@ -12,7 +12,7 @@ Comprobados el 31 oct 2026 en PixInsight 1.9.6 y ya corregidos en los pasos: HDR
 | Corrección de gradiente antes de BXT Correct Only | Es el orden del flujo; la tabla de GraXpert se midió con BXT CO previo. Comprobar en un objeto que el ganador no cambia |
 | Comparativa de gradientes en nebulosas que llenan el campo | sample_free 10 aún copia un 14 % en una nebulosa dual band: sin criterio cerrado |
 | Tabla de GraXpert en una nebulosa dual band | El 14 % de copia de sample_free 10 no se reproduce con `master_RGB.xisf` (4,3 %): averiguar qué master se usó y repetir la tabla con el proceso GraXpert |
-| Receta de sharpening no lineal (proceso, radio, amount) | Sólo están el orden, la máscara y la verificación |
+| Receta de sharpening no lineal (proceso, radio, amount) | Tres niveles de partida sin calibrar (σ 1,5/2/2,5, amount 0,3/0,5/0,7, con máscara, sobre la starless); falta medirlos con casos |
 | Calidad y tamaño de los JPG de entrega | Sólo está el orden: ICC sRGB y redimensionar al final |
 | Número de subs integrados por grupo desde PJSR | Se lee del log de WBPP |
 | Plantilla formal de inventario | Sólo están los campos (Paso 2 lineal) |

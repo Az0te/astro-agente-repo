@@ -487,3 +487,90 @@ function contrasteCandidatos(viewId, o) {
     }
   };
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Paso 7 no lineal: nitidez para elegir (lámina «sharpening y denoise final»; Rafael, 11 nov 2026). Sobre la STARLESS
+// estirada (sin estrellas no hay halos oscuros alrededor de ellas) y a través de una máscara de luminancia que protege el
+// cielo. Tres niveles de máscara de enfoque (UnsharpMask en luminancia): suave (σ 1,5, amount 0,3), equilibrado (σ 2,
+// 0,5) y acentuado (σ 2,5, 0,7). Mide en cada uno el detalle fino (laplaciana en las celdas con señal), el ruido y el
+// nivel del cielo y los quemados. Recomienda el más fuerte que no sube el ruido del cielo más de un 10 % (ruidoMax), no
+// mueve el cielo ni quema; si ninguno cumple, no aplicar («casi siempre basta con lo que hizo la deconvolución»). Valores
+// de partida sin calibrar con casos: el usuario elige mirando el recorte al 100 %.
+//   var r = nitidezCandidatos("Starless_nxt");
+function rzDetalleFino(view) {
+  var im = view.image, W = im.width, H = im.height, nc = im.numberOfChannels, n = W * H, R = new Rect(0, 0, W, H);
+  var L = new Float32Array(n), b = new Float32Array(n);
+  for (var c = 0; c < nc; ++c) { im.getSamples(b, R, c); for (var i = 0; i < n; ++i) L[i] += b[i] / nc; }
+  var S = 64, cells = [];
+  for (var y0 = 1; y0 + S < H; y0 += S) for (var x0 = 1; x0 + S < W; x0 += S) {
+    var s = 0, k = 0; for (var y = y0; y < y0 + S; y += 4) for (var x = x0; x < x0 + S; x += 4) { s += L[y * W + x]; ++k; }
+    cells.push({ x: x0, y: y0, m: s / k });
+  }
+  cells.sort(function (a, b2) { return b2.m - a.m; });
+  var top = cells.slice(0, Math.max(5, Math.floor(cells.length * 0.3))), v = [];
+  top.forEach(function (cc) {
+    for (var y = cc.y; y < cc.y + S; y += 2) for (var x = cc.x; x < cc.x + S; x += 2) {
+      var p = y * W + x; v.push(Math.abs(4 * L[p] - L[p - 1] - L[p + 1] - L[p - W] - L[p + W]));
+    }
+  });
+  v.sort(function (a, b2) { return a - b2; });
+  var cx = top[0].x + S / 2, cy = top[0].y + S / 2, h = Math.min(400, W >> 1, H >> 1);
+  var x1 = Math.max(0, Math.min(W - 2 * h, cx - h)), y1 = Math.max(0, Math.min(H - 2 * h, cy - h));
+  return { detalle_fino: v.length ? v[v.length >> 1] : 0, rect: [x1, y1, x1 + 2 * h, y1 + 2 * h] };
+}
+
+function nitidezCandidatos(viewId, o) {
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
+  o = o || {};
+  var src = rzView(viewId), t0 = Date.now();
+  if (rzMedian(src) < 0.05) throw new Error("La imagen parece lineal: la nitidez va sobre la starless estirada (Paso 7 no lineal)");
+  var niveles = o.niveles || [{ etiqueta: "suave", sigma: 1.5, amount: 0.3 }, { etiqueta: "equilibrado", sigma: 2.0, amount: 0.5 },
+                              { etiqueta: "acentuado", sigma: 2.5, amount: 0.7 }];
+  var ruidoMax = o.ruidoMax || 1.10, base = rzMedidasContraste(src), df0 = rzDetalleFino(src), cands = [];
+  var masc = (o.mascara !== false && typeof bsMascara === "function") ? bsMascara(src) : null;
+  function previaRec(id) {
+    if (typeof PIASTROPILOT_PREVIAS !== "string" || !PIASTROPILOT_PREVIAS || typeof pprPrevia !== "function") return null;
+    try { return pprPrevia(id, { fichero: PIASTROPILOT_PREVIAS + "/" + id + "_100.jpg", lado: 800, rect: df0.rect, estirar: false }).fichero; } catch (e) { return null; }
+  }
+  niveles.forEach(function (nv) {
+    var c = { etiqueta: nv.etiqueta + " (σ " + nv.sigma + ", amount " + nv.amount + ")" };
+    try {
+      var id = viewId + "_nit_" + nv.etiqueta;
+      for (var n2 = 2; !ImageWindow.windowById(id).isNull; ++n2) id = viewId + "_nit_" + nv.etiqueta + "_" + n2;
+      var w = rzCopy(src, id); w.show();
+      if (masc) { w.mask = masc; w.maskVisible = false; w.maskInverted = false; w.maskEnabled = true; }
+      var U = new UnsharpMask;
+      U.sigma = nv.sigma; U.amount = nv.amount; U.useLuminance = true; U.linear = false; U.deringing = false;
+      var ok = U.executeOn(w.mainView);
+      if (masc) w.removeMask();
+      rzMust(ok, "UnsharpMask");
+      var m = rzMedidasContraste(w.mainView), df = rzDetalleFino(w.mainView), f = [];
+      var gr = m.ruido_cielo / Math.max(base.ruido_cielo, 1e-9);
+      if (gr > ruidoMax) f.push("sube el ruido del cielo ×" + gr.toFixed(2) + " (máx. ×" + ruidoMax + ")");
+      if (Math.abs(m.cielo - base.cielo) > 0.01) f.push("mueve el cielo de " + base.cielo + " a " + m.cielo);
+      if (m.quemados_pct - base.quemados_pct > 0.02) f.push("quema " + (m.quemados_pct - base.quemados_pct).toFixed(3) + " % más de píxeles");
+      c.vista = id; c.detalle_x = +(df.detalle_fino / Math.max(df0.detalle_fino, 1e-9)).toFixed(2); c.ruido_x = +gr.toFixed(3);
+      c.cielo = m.cielo; c.fallos = f; c.cumple = !f.length; c.fuerza = nv.amount;
+      c.previa = typeof pxPrevia === "function" ? pxPrevia(id, id, { estirar: false }) : null;
+      c.previa_recorte = previaRec(id);
+      c.resumen = "detalle ×" + c.detalle_x + ", ruido ×" + c.ruido_x + (f.length ? " · NO CUMPLE: " + f.join("; ") : "");
+    } catch (e) { c.error = String(e && e.message ? e.message : e); }
+    cands.push(c);
+  });
+  if (masc) masc.forceClose();
+  var ok2 = cands.filter(function (c) { return c.vista && c.cumple; });
+  var best = ok2.reduce(function (a, c) { return a === null || c.fuerza > a.fuerza ? c : a; }, null);
+  cands.forEach(function (c) { c.recomendado = c === best; c.elegido = c === best; });
+  return {
+    vista: best ? best.vista : null, original: viewId, candidatos: cands, recomendado: best ? best.etiqueta : "no aplicar nitidez",
+    entrada: { ruido_cielo: base.ruido_cielo, cielo: base.cielo, detalle_fino: +df0.detalle_fino.toPrecision(3) },
+    recorte_previa: df0.rect, no_cumple: [], segundos: Math.round((Date.now() - t0) / 1000),
+    siguiente: "El usuario elige uno (o ninguno: la original sigue siendo válida) mirando el recorte al 100 %; seguir con esa vista y cerrar las demás.",
+    control: {
+      revisar_a_ojo: ["bordes 'ilustrados' o halos claros en los bordes de la nebulosa", "grano del fondo amplificado al 100–200 %",
+                      "comparar con la original: más microcontraste no es más resolución"],
+      nota: "Sobre la starless: las estrellas no se enfocan (se recombinan en el Paso 9). detalle_x = laplaciana mediana en el 30 % de celdas " +
+            "más brillantes frente a la original. Niveles sin calibrar con varios casos. Lo de revisar_a_ojo no lo mide esta función."
+    }
+  };
+}

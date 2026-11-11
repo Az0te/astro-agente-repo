@@ -13,6 +13,9 @@ Medir con PJSR sobre la imagen final (o tras cada paso arriesgado) y usarlos jun
 | Textura en altas luces | Desviación local y rango tonal de la zona brillante antes y después | Conservar ≥ 60 %; < 40 % = textura aplastada |
 | Estrellas | FWHM mediana, diversidad de color (max−min de R,G,B normalizados en el pico), número detectado, contraste con el fondo | FWHM ≤ 8 px a la escala de trabajo, diversidad > 0,05, ≥ ~50 estrellas, contraste ≥ 3×; capa de estrellas con máximo < 0,98 |
 | Croma en altas luces | Saturación en zonas con lum > 0,5 | Que no suba de forma artificial |
+| Deriva de color | Tono medio del objeto (HSV, ponderado por la croma) frente al paso anterior | Giro ≤ 10° entre pasos no lineales (orientativo) |
+| Muy saturados | % de píxeles con señal y croma > 0,8 | ≤ 5 % y no el doble que la versión neutra (orientativo) |
+| Gamut | Valores pegados a 0 o a 1 antes y después de convertir a sRGB | La conversión no recorta más del 0,05 % |
 
 - **Reparar en origen, no tapar después:** si un control falla, volver al punto de control anterior y repetir el paso causante más suave. Nada de recortes finales para ocultar núcleos quemados.
 - **Siempre un control "sin hacer nada"** (NOVA): comparar cada paso de acabado contra la copia sin tocar del mismo punto; no aplicar un paso es un resultado válido.
@@ -30,8 +33,8 @@ Medir con PJSR sobre la imagen final (o tras cada paso arriesgado) y usarlos jun
 1. Fondo limpio, sin gradientes ni dominantes; cielo (zonas más oscuras) ~0,10 tras el estirado al fallo; la mediana de una nebulosa que llena el campo queda por encima.
 2. Estrellas redondas, sin halos, con variedad de color; `hasAstrometricSolution` en el XISF final.
 3. Estructura visible (filamentos, polvo, densidades) sin inventar; separación tonal núcleo–extensiones.
-4. Color natural sin sobresaturar; ningún canal recortado; % de píxeles > 0,98 anotado.
-5. Ruido controlado sin emborronar; "sensación de 'observado', no 'procesado'".
+4. Color natural sin sobresaturar; ningún canal recortado; % de píxeles > 0,98 anotado; sin deriva de tono; la conversión a sRGB no recorta; versión neutra guardada junto a la elegida.
+5. Limpieza cosmética revisada al 100–200 % (sólo artefactos confirmados). Ruido controlado sin emborronar; "sensación de 'observado', no 'procesado'".
 6. Controles objetivos pasados: ringing 0, núcleos < 2 % > 0,93, textura ≥ 60 %, FWHM ≤ 8 px, ≥ 50 estrellas, contraste estrella/fondo ≥ 3×.
 7. Versiones guardadas: XISF 32 bits con astrometría, TIFF 16, JPG, capas separadas, capas lineales intermedias.
 8. Dossier con historial, parámetros, paleta, errores, tiempo y revisión crítica puntuada.

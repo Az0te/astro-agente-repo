@@ -880,8 +880,8 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") y la capa de estrellas con starStretch, en vistas nuevas. Hacen falta LAS DOS capas de separarEstrellas (r.starless y r.estrellas): con una imagen con estrellas como starless, las estrellas salen enormes. Se niega si la starless aún tiene estrellas o si las dos son la misma vista, y dice qué falta de la fase lineal (gradiente → astrometría → color → deconvolución → separarEstrellas); { conEstrellas: true } para estirar a propósito una imagen con estrellas. En campos llenos de nebulosa (> 60 % de celdas con señal) el punto de simetría del GHS va a la señal débil (r.simetria).",
-   "resumen": "Paso 1 no lineal: estira la starless al fallo y las estrellas, en vistas nuevas. Necesita LAS DOS capas de separarEstrellas.",
+   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") en una vista nueva. La capa de estrellas NO se estira aquí: queda lineal para el Paso 8 (estirarEstrellasCandidatos, justo antes de recombinar); si se pasa, el resultado la devuelve en estrellas_pendientes. Se niega si la starless aún tiene estrellas o si starless y estrellas son la misma vista, y dice qué falta de la fase lineal (gradiente → astrometría → color → deconvolución → separarEstrellas); { conEstrellas: true } para estirar a propósito una imagen con estrellas. En campos llenos de nebulosa (> 60 % de celdas con señal) el punto de simetría del GHS va a la señal débil (r.simetria). { estirarEstrellas: true } = modo antiguo (estira también las estrellas).",
+   "resumen": "Paso 1 no lineal: estira la starless al fallo en una vista nueva. Las estrellas se estiran en el Paso 8 (estirarEstrellasCandidatos).",
    "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",
@@ -892,16 +892,15 @@
      },
      "estrellas": {
       "type": "string",
-      "description": "Vista de estrellas lineal."
+      "description": "Opcional: la capa de estrellas lineal de separarEstrellas (no se estira: queda para el Paso 8)."
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"galaxia\" (cielo 0.07, ruidoMax 0.12, estrellas \"extraer\", saturacion 1.3), cielo: 0.10, ruidoMax, estrellas: \"extraer\" (mismo estirado que la starless + screenStarsExtract); si no, arcsinh k 3000 (k para cambiarlo; metodoEstrellas \"starstretch\" o amount = starStretch, pierde estrellas débiles), tipo \"nebulosa_oscura\" (cielo 0.12, ruidoMax 0.20), simetria: \"debil\" | \"cielo\" (por defecto, según el campo), nuevaStarless, nuevasEstrellas, modo: \"fondo\" (antiguo) }"
+      "description": "Opcional. { tipo: \"galaxia\" (cielo 0.07, ruidoMax 0.12) | \"nebulosa_oscura\" (cielo 0.12, ruidoMax 0.20), cielo: 0.10, ruidoMax, simetria: \"debil\" | \"cielo\" (por defecto, según el campo), nuevaStarless, modo: \"fondo\" (antiguo), estirarEstrellas: true (antiguo: estira también las estrellas; con estrellas: \"extraer\", k, amount, nuevasEstrellas) }"
      }
     },
     "required": [
-     "starless",
-     "estrellas"
+     "starless"
     ]
    }
   },
@@ -959,8 +958,8 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 1 no lineal: solo la capa de estrellas (starStretch).",
-   "paso": "no-lineal/01-estirado.md",
+   "descripcion": "Paso 8 no lineal: estira solo la capa de estrellas lineal (arcsinh k 3000 que conserva el color; starStretch si se pide). Normalmente se usa estirarEstrellasCandidatos, que la estira y saca los candidatos para elegir.",
+   "paso": "no-lineal/08-estrellas.md",
    "params": {
     "type": "object",
     "properties": {
@@ -1073,7 +1072,7 @@
    "fichero": "mascaras.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 4 no lineal: crea una máscara (vista gris) y mide su cobertura. No la aplica.",
+   "descripcion": "Paso 4 no lineal: crea una máscara (vista gris) y mide su cobertura. No la aplica. tipo \"color\": por tono, para ajustes locales por color.",
    "paso": "no-lineal/04-mascaras.md",
    "params": {
     "type": "object",
@@ -1084,7 +1083,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\", gamma, normalizar (luminancia llevada a 0–1 antes de la gamma), bin, nuevaVista }"
+      "description": "Opcional. { tipo: \"luminancia\" | \"cielo\" | \"fondo_lhe\" | \"color\", tono (con tipo color: rojo, naranja, amarillo, verde, cian, azul, magenta o grados), ancho (grados, 30), gamma, normalizar (luminancia llevada a 0–1 antes de la gamma), bin, nuevaVista }"
      }
     },
     "required": [
@@ -1217,11 +1216,86 @@
    }
   },
   {
+   "nombre": "colorCandidatos",
+   "fichero": "boost.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 5 no lineal: galería de color para que el usuario elija, en copias de la starless estirada: neutra, equilibrada (saturación al fallo, RECOMENDADA), viva (+0,05 con máscara de luminancia), cálida y fría (curvas R/B suaves ancladas en el cielo) y contraste suave y medio (curva S anclada en el cielo). Mide en cada una canales > 0,98, dominante y ruido de color del cielo, tono del objeto y su deriva, saturación media y % de píxeles muy saturados, con miniatura. No elige: el usuario decide; la recomendada es la equilibrada.",
+   "resumen": "Paso 5 no lineal: galería de saturación, equilibrio y contraste con miniaturas para que el usuario elija; recomienda la saturación al fallo.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Starless estirada (o la imagen RGB no lineal)."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", candidatos: [\"neutra\",\"equilibrada\",\"viva\",\"calida\",\"fria\",\"contraste_suave\",\"contraste_medio\"], puntoMedio (salta la búsqueda al fallo), prefijo }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "saturarTono",
+   "fichero": "boost.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 5 no lineal: saturación selectiva de un solo tono (ColorSaturation con una campana alrededor del tono), en una copia. Para cuando falta un color (rojo de Hα, cian de OIII) y la saturación global ya para. cantidad negativa desatura ese tono (p. ej. si se sale del gamut al exportar). Mide antes y después y avisa si tiñe el cielo o satura de más.",
+   "resumen": "Paso 5 no lineal: sube o baja la saturación de un solo tono, en una copia.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Imagen RGB no lineal."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "{ tono: rojo | naranja | amarillo | verde | cian | azul | magenta | grados, cantidad: 0.3 (−1 a 1), ancho: 30 (grados), mascara: true (protege el cielo), nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "derivaColor",
+   "fichero": "boost.js",
+   "nivel": "lectura",
+   "timeout_s": 120,
+   "descripcion": "Mide el color del objeto (tono medio, saturación media y % de píxeles muy saturados) y, con referencia, cuánto ha girado el tono entre dos versiones. Un giro > 10° entre pasos no lineales es una deriva de color (curvas por canal, máscara, dominante). No cambia nada.",
+   "resumen": "Mide tono, saturación y píxeles muy saturados; con referencia, la deriva de tono entre dos versiones.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Imagen RGB."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { referencia: id de la versión anterior, toleranciaTono: 10, muySaturadosMax: 5 }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
    "nombre": "prepararEstrellas",
    "fichero": "estrellas.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 8 no lineal: limpia y ajusta la capa de estrellas ya estirada (residuos, suelo, saturación, techo) en una copia.",
+   "descripcion": "Paso 8 no lineal: limpia y ajusta una capa de estrellas ya estirada (residuos, suelo, saturación, techo) en una copia. estirarEstrellasCandidatos ya la aplica a cada candidato.",
    "paso": "no-lineal/08-estrellas.md",
    "params": {
     "type": "object",
@@ -1233,6 +1307,31 @@
      "opciones": {
       "type": "object",
       "description": "Opcional. { limpieza: 0.005, suelo, saturacion, maximo: 0.97, rodilla: 0.8, halosMagenta, atenuar, nuevaVista }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "estirarEstrellasCandidatos",
+   "fichero": "estrellas.js",
+   "nivel": "copias",
+   "timeout_s": 900,
+   "descripcion": "Paso 8 no lineal: estira la capa de estrellas LINEAL justo antes de recombinar y saca tres candidatos para que el usuario elija: recomendada (galaxias: mismo estirado que la starless; resto: arcsinh k 3000; + prepararEstrellas), estrellas +20 % de tamaño y +10 % de saturación, y +50 % de tamaño y +20 % de saturación. Más grandes = sube las alas débiles hasta que el área de estrellas crece ×1,2 o ×1,5 (sin dilatar). Con starlessActual, cada uno se combina por screen para la miniatura, un recorte al 100 % y el aporte de estrellas.",
+   "resumen": "Paso 8 no lineal: estira las estrellas y saca 3 candidatos (recomendada, +20 %/+10 %, +50 %/+20 %) con miniaturas para elegir.",
+   "paso": "no-lineal/08-estrellas.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Capa de estrellas LINEAL de separarEstrellas."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { starless: la starless estirada en el Paso 1 (para el mismo estirado en galaxias), starlessActual: la starless al final del Paso 7 (previas y aporte), tipo: \"galaxia\" | \"nebulosa\" | \"nebulosa_oscura\", metodo: \"extraer\" | \"asinh\" | \"starstretch\", k, amount, variantes: [{ etiqueta, tamano, saturacion }], preparar: {opciones de prepararEstrellas}, prefijo }"
      }
     },
     "required": [
@@ -1274,7 +1373,7 @@
    "fichero": "exportar.js",
    "nivel": "disco",
    "timeout_s": 600,
-   "descripcion": "Paso 10 no lineal: controles y exportación a XISF 32 bits, TIFF 16 bits y JPG sRGB en 'carpeta' (no sobrescribe).",
+   "descripcion": "Paso 10 no lineal: controles y exportación a XISF 32 bits, TIFF 16 bits y JPG sRGB en 'carpeta' (no sobrescribe). Mide cuántos valores recorta la conversión a sRGB (gamut) y avisa si pasa del 0,05 %.",
    "paso": "no-lineal/10-recorte-exportacion.md",
    "params": {
     "type": "object",
@@ -1394,6 +1493,31 @@
      "opciones": {
       "type": "object",
       "description": "Opcional. { lhe: [{ radius, slopeLimit, amount }], hdrmt: { capas, mezcla } | false, dse: { median } | false, ruidoMax: 1.25, nuevaVista, cerrar: false para conservar los demás }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "nitidezCandidatos",
+   "fichero": "realces.js",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "descripcion": "Paso 7 no lineal: nitidez para elegir sobre la starless estirada, con máscara de luminancia que protege el cielo: máscara de enfoque suave, equilibrada y acentuada. Mide detalle fino, ruido y nivel del cielo y quemados, con miniatura y recorte al 100 %. Recomienda la más fuerte que no sube el ruido del cielo más de un 10 %; si ninguna cumple, no aplicar.",
+   "resumen": "Paso 7 no lineal: tres niveles de nitidez con máscara sobre la starless para elegir; si ninguno cumple, no aplicar.",
+   "paso": "no-lineal/07-nitidez.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Starless estirada."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { niveles: [{ etiqueta, sigma, amount }], ruidoMax: 1.10, mascara: false (sin máscara) }"
      }
     },
     "required": [
@@ -1535,15 +1659,46 @@
    "descripcion": "Internet, Paso 1: identifica el objeto de una vista (OBJECT, astrometría o RA/DEC) o por su nombre y da su tipo (SIMBAD), un resumen (Wikipedia), la emisión esperada (rayas y filtros según el tipo), las estrellas brillantes del campo (V < 6) y los problemas que pueden dar (halos, reflejos, HDR). Usar junto a analizarMaster al analizar la imagen.",
    "resumen": "Internet, Paso 1: tipo de objeto (SIMBAD), resumen, emisión esperada y estrellas brillantes del campo. Usar junto a analizarMaster.",
    "paso": "lineal/01-analisis-del-objeto.md",
-   "params": { "type": "object", "properties": { "vista": { "type": "string", "description": "Id de la vista abierta o nombre del objeto (IC 63, M31...)." }, "opciones": { "type": "object", "description": "Opcional. { radio: grados del campo, magMax: 6, idioma: \"es\" }" } }, "required": ["vista"] }
-  },  {
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Id de la vista abierta o nombre del objeto (IC 63, M31...)."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { radio: grados del campo, magMax: 6, idioma: \"es\" }"
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
    "nombre": "simbad",
    "fichero": "web.js",
    "nivel": "lectura",
    "timeout_s": 60,
    "descripcion": "Internet: tipo de objeto según SIMBAD (región HII, nebulosa de reflexión, galaxia...), coordenadas, tamaño, magnitudes e identificadores de un objeto por su nombre.",
    "paso": "lineal/01-analisis-del-objeto.md",
-   "params": { "type": "object", "properties": { "objeto": { "type": "string", "description": "Nombre del objeto (IC 63, M31, NGC 7000, Sh2-155...)." }, "opciones": { "type": "object", "description": "Opcional." } }, "required": ["objeto"] }
+   "params": {
+    "type": "object",
+    "properties": {
+     "objeto": {
+      "type": "string",
+      "description": "Nombre del objeto (IC 63, M31, NGC 7000, Sh2-155...)."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional."
+     }
+    },
+    "required": [
+     "objeto"
+    ]
+   }
   },
   {
    "nombre": "wikipedia",
@@ -1552,7 +1707,22 @@
    "timeout_s": 60,
    "descripcion": "Internet: busca en Wikipedia (español y, si no hay, inglés) y devuelve el resumen del mejor artículo: objetos, cámaras, telescopios, filtros.",
    "paso": "lineal/01-analisis-del-objeto.md",
-   "params": { "type": "object", "properties": { "texto": { "type": "string", "description": "Qué buscar." }, "opciones": { "type": "object", "description": "Opcional. { idioma: \"es\" | \"en\" }" } }, "required": ["texto"] }
+   "params": {
+    "type": "object",
+    "properties": {
+     "texto": {
+      "type": "string",
+      "description": "Qué buscar."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { idioma: \"es\" | \"en\" }"
+     }
+    },
+    "required": [
+     "texto"
+    ]
+   }
   },
   {
    "nombre": "leerWeb",
@@ -1560,7 +1730,22 @@
    "nivel": "lectura",
    "timeout_s": 60,
    "descripcion": "Internet: texto de una página web dada por su URL (ficha del fabricante del filtro o de la cámara, artículo), sin etiquetas y recortado.",
-   "params": { "type": "object", "properties": { "url": { "type": "string", "description": "URL completa (https:...)." }, "opciones": { "type": "object", "description": "Opcional. { max: 6000 }" } }, "required": ["url"] }
+   "params": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string",
+      "description": "URL completa (https:...)."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { max: 6000 }"
+     }
+    },
+    "required": [
+     "url"
+    ]
+   }
   },
   {
    "nombre": "imagenCatalogo",
@@ -1570,7 +1755,22 @@
    "descripcion": "Internet: abre en PixInsight una imagen de catálogo (SkyView, NASA) de un objeto, unas coordenadas o el campo de una vista con astrometría: DSS2 Red/Blue/IR, H-Alpha Comp (mapa Hα), WISE, 2MASS, GALEX. Para saber qué señal esperar y distinguir estructura real de gradiente; no para combinar.",
    "resumen": "Internet: abre una imagen de catálogo (DSS2, Hα, WISE…) del campo para saber qué señal esperar. No para combinar.",
    "paso": "lineal/01-analisis-del-objeto.md",
-   "params": { "type": "object", "properties": { "posicion": { "type": "string", "description": "Nombre del objeto, \"ra, dec\" en grados o id de una vista con astrometría." }, "opciones": { "type": "object", "description": "Opcional. { survey: \"DSS2 Red\", campo: 1 (grados), pixeles: 1000, abrir: true }" } }, "required": ["posicion"] }
+   "params": {
+    "type": "object",
+    "properties": {
+     "posicion": {
+      "type": "string",
+      "description": "Nombre del objeto, \"ra, dec\" en grados o id de una vista con astrometría."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { survey: \"DSS2 Red\", campo: 1 (grados), pixeles: 1000, abrir: true }"
+     }
+    },
+    "required": [
+     "posicion"
+    ]
+   }
   }
  ]
 }

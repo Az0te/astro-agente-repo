@@ -111,8 +111,8 @@ function recombinarEstrellas(starlessId, starsId, o) {
   if (recNuevo.some(function (c) { return c > 0.00005 * fin.image.width * fin.image.height; })) noCumple.push("recorte nuevo de " + recNuevo.join(" / ") + " px a 0,99: bajar el máximo de la capa de estrellas o usar k < 1");
   if (aporte < 2)
     noCumple.push("LAS ESTRELLAS CASI NO APORTAN: sólo el " + aporte + " % de los píxeles sube más de 0,01 (umbral 2 %; bien procesadas, 6–10 %). La imagen " +
-                  "final se verá casi sin estrellas. Volver al Paso 1 y estirar la capa de estrellas con el arcsinh por defecto (sin amount; en galaxias, tipo \"galaxia\"), " +
-                  "repetir el Paso 8 y recombinar. Sólo es aceptable en un campo con muy pocas estrellas, y hay que decirlo");
+                  "final se verá casi sin estrellas. Volver al Paso 8 (estirarEstrellasCandidatos con la capa de estrellas LINEAL: arcsinh por defecto, sin amount; en galaxias, tipo \"galaxia\"), " +
+                  "elegir un candidato con estrellas más grandes si hace falta y recombinar. Sólo es aceptable en un campo con muy pocas estrellas, y hay que decirlo");
   var res = {
     vista: id, starless: starlessId, estrellas: starsId, metodo: usado,
     fondo: { starless: medSl, estrellas: medSt, final: medFin, subida: fondoSube },
