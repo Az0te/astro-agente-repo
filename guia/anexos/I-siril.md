@@ -63,15 +63,20 @@ Trabaja en una carpeta propia (`~/.sirilastropilot/apilado/<proyecto>`) con enla
 |---|---|---|---|
 | 1 Análisis | `analizarMaster` | cabecera, estadísticas, detección de estrellas | escala, lineal, fondo 3×3, bordes sin datos (p95 por lado, `cunas_pct`), FWHM y redondez |
 | 5 Recorte | `recortarBordes` | `crop` | rectángulo sin cuñas, píxeles quitados por lado |
+| 5 Alinear masters | `alinearMasters` | `convert`, `setref`, `register`, `seqapplyreg -framing=min` sobre copias FITS de los masters (RGB primero, de referencia) | desplazamiento y giro de cada uno, tamaño común |
+| 7 Dual band OSC | `desmezclarDualBand` | Hα = rojo, OIII = (verde + azul) / 2, en lineal, FITS mono | señal de cada capa en ruidos |
 | 8 Astrometría | `resolverAstrometria` | `platesolve` (catálogo local de Gaia si está instalado: `catalogo: "localgaia"`) | resuelta, AR/Dec, focal, píxel |
 | 9 Gradiente | `gradienteCandidatos` → `aplicarCandidato` | `subsky` polinomio 1 y 2, `subsky -rbf`, GraXpert IA | `copia_objeto`, `objeto_quitado_pct`, `gradiente_restante`, `irregularidad_cielo`, `objeto_campo_pct` |
 | 11/13 Deconvolución | `nitidezLineal` | BlurX por `rc-astro bxt` (solo corregir o completa) | FWHM y redondez antes y después |
 | 12 Color | `listaSPCC`, `calibrarColor`, `equilibrarColor` | `spcc` (sensor de la cabecera o del perfil, filtro y blanco con los nombres que da `listaSPCC`); `pcc` con `fotometrica: true`; sin catálogo, fondo neutro + blanco medio de las estrellas | cielo por canal antes y después, `dominante_cielo_pct`; en el equilibrado, `factores_rgb`, estrellas usadas y su dispersión de color |
+| 10 RGB + banda estrecha | `combinarCandidatos` → `aplicarCandidato` | sobre el RGB lineal calibrado: exceso de Hα en el rojo (y de OIII en azul y verde) escalado a la nebulosa del RGB, sólo donde la banda estrecha tiene señal y sin las estrellas | nebulosa ganada en Hα y OIII, ruido y dominante del cielo, color de las estrellas |
 | 14 Ruido suave | `reducirRuidoCandidatos` | `denoise` a 0,5 / 0,7 / 1,0 (DA3D sólo si es rápido o se pide) y NoiseX 0,5, 0,3 ×2 y 0,5 ×2 por `rc-astro nxt` (si está) | `ruido_rel`, `ruido_grueso_rel`, `detalle_perdido_pct`; ★ = la que más ruido quita con ≤ 2 % de detalle perdido y sin recortes |
 | 15 Estrellas | `estrellasCandidatos` → `aplicarCandidato` | StarNet2 (ejecutable directo) y StarX (`rc-astro sxt`) | `restos_estrellas_pct`, `agujeros_pct`, `objeto_quitado_pct`; ruta de la capa de estrellas |
 | 15 Estrellas (uno solo) | `separarEstrellas` | `starnet` de Siril o StarNet2 directo | starless cargada, capa de estrellas en fichero |
 
 Notas de la fase lineal:
+
+- **Varios masters (RGB + dual band).** Orden: `alinearMasters([rgb, dualband])` → `desmezclarDualBand(dualband_alin)` → cada capa por su fase lineal (gradiente en el RGB y en las capas Hα y OIII; astrometría, color y deconvolución en el RGB) → con el RGB lineal y calibrado cargado, `combinarCandidatos(ha, oiii)` y `aplicarCandidato` → separar estrellas del RGB combinado y seguir. Si ninguna combinación aporta, seguir con el RGB y componer paleta con las capas en no lineal (`paletasCandidatos(ha, oiii)`).
 
 - **Gradiente.** `gradiente_restante` es la inclinación del plano del cielo que queda (después / antes). Cuando la nebulosa ocupa casi todo el campo, el cielo más oscuro también es nebulosa y la cifra no es fiable (en una nebulosa de emisión grande: 0,55–0,75 con modelos limpios): decide por `copia_objeto` y mirando la previa. Con objeto extenso o polvo (más de un 25 % del campo, o `tipo` nebulosa/polvo) el ★ sólo admite modelos que se lleven ≤ 1 % del objeto y, a gradiente parecido, el que menos se lleve.
 - **Color.** No pases sensor a `calibrarColor`: lo toma de la cabecera de la imagen y, si no lo dice, del perfil; sólo si el usuario lo dice (un sensor deducido del modelo de cámara puede ser otro: ASI2600MC es IMX571, no IMX533). Si la foto es de otro equipo, `ignorar_perfil: true`. SPCC necesita la astrometría.
