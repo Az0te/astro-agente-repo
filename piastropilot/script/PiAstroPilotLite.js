@@ -40,6 +40,7 @@ var PL_CLAVE = "PiAstroPilotLite";
 var PL_RUTA_SCRIPT = File.extractDrive(#__FILE__) + File.extractDirectory(#__FILE__);   // .../piastropilot/script
 var PL_TMP = File.systemTempDirectory + "/PiAstroPilotLite";
 var PL_MAX_CORRECCIONES = 3;
+var PL_MAX_SERIE = 60;   // tope de pasos seguidos en una serie («hasta el final»)
 // Ojo: el preprocesador de PJSR toma la barra-asterisco y la doble barra como comentarios aunque estén dentro de
 // cadenas, regex o comentarios de línea. No escribirlas seguidas en este fichero (trocear las cadenas).
 var PL_URL_OLLAMA = "http:/" + "/localhost:11434";
@@ -2010,8 +2011,24 @@ function plConstruirDialogo(aj) {
          return;
       }
       this.ponerPendiente(s);
+      if (cancelado) this.serie = false;
+      if (interpretando && this.serie) {
+         if (/(^|\n)\s*\**PARO:/i.test(resp) || !s) {
+            this.serie = false;
+            this.anotar("Serie de pasos", "Terminada (" + (this.pasosSerie || 0) + " pasos): " +
+                        (s ? "" : "el modelo ha parado; contesta a lo que pregunta y escribe «sigue» para continuar."));
+         } else if ((this.pasosSerie || 0) >= PL_MAX_SERIE) {
+            this.serie = false;
+            this.anotar("Serie de pasos", "Tope de " + PL_MAX_SERIE + " pasos: escribe «sigue hasta el final» para continuar.");
+         } else {
+            ++this.pasosSerie;
+            this.anotar("Serie de pasos", "Paso " + this.pasosSerie + ": ejecuto el siguiente sin esperar (Cancelar para parar).");
+            this.ejecutarPendiente();
+            return;
+         }
+      }
       // Las llamadas se ejecutan solas (Rafael, 9 nov 2026). Las de una interpretación (el paso siguiente) esperan al
-      // enlace «Siguiente paso», para que el usuario revise cada resultado antes de seguir.
+      // enlace «Siguiente paso», para que el usuario revise cada resultado antes de seguir (salvo en una serie de pasos).
       if (s && !interpretando) this.ejecutarPendiente();
    };
 
@@ -2028,6 +2045,12 @@ function plConstruirDialogo(aj) {
       this.ultimoError = null;
       this.scriptFallido = null; this.repetido = false;
       this.pasoEnviado = this.pasoActual();   // las correcciones siguientes usan el mismo paso
+      // Serie de pasos SIEMPRE (Rafael, 11 nov 2026: como si «Ejecutar sin preguntar» estuviera marcada): tras cada
+      // resultado, el paso siguiente que pide el modelo para cumplir la petición se ejecuta solo. Paradas: «PARO:», el
+      // modelo no pide llamadas (petición de un paso o una pregunta), Cancelar, 3 fallos seguidos, exportar o el tope.
+      // «sigue» continúa la misma serie (mismo objetivo y cuenta de pasos).
+      if (/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) && this.objetivoSerie) this.serie = true;
+      else { this.serie = true; this.pasosSerie = 0; this.objetivoSerie = t; }
       this.mensajes.push({ role: "user", content: t });
       this.anotar(plT("Tú"), t, "user");
       this.consultar();
@@ -2041,18 +2064,31 @@ function plConstruirDialogo(aj) {
       plEventos();
       var r = plEjecutarLlamadas(aj, s);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
+      if (this.serie && r.ok && /"exportarFinal"/.test(s)) {   // exportado: fin del procesado
+         this.serie = false;
+         this.anotar("Serie de pasos", "Terminada tras exportar (" + (this.pasosSerie || 0) + " pasos).");
+      }
       // Como en el módulo: un resultado con datos se manda al modelo para que lo interprete y recomiende el paso
       // siguiente, con las líneas «Siguiente paso: ...» que el chat pinta como enlaces.
       if (r.ok && r.texto != "(sin salida)") {
          this.correcciones = 0; this.ultimoError = null; this.scriptFallido = null;
+         var enSerie = this.serie && (this.pasosSerie || 0) < PL_MAX_SERIE;
          this.mensajes.push({ role: "user", content: "Las llamadas han terminado sin errores. Resultado:\n" + r.texto +
-            "\nAhora, sin pedir ninguna llamada, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
-            "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +
-            "demuestra, con su valor) y «Revisar a ojo» (lo que el resultado no mide); nunca des por bueno algo de la segunda.\n" +
-            "Termina con una línea «Siguiente paso: <qué hacer y con qué función de la guía>.» con el paso siguiente en el ORDEN DE LA GUÍA " +
-            "(lista «Orden de los pasos» del principio) y la función exacta de ese paso según la lista de funciones (cada función dice su paso), " +
-            "y si hay alternativas razonables, una lista de líneas que empiecen por «Paso N: ...» (N = número del paso en la guía). " +
-            "Cada una es un enlace que el usuario pulsará para que la hagas." });
+            (enSerie
+              ? "\nSERIE DE PASOS EN MARCHA (el usuario pidió: «" + this.objetivoSerie + "»; pasos hechos en la serie: " +
+                this.pasosSerie + "). Haz el resumen del paso CORTO (como mucho 10 líneas: «Medido» y «Revisar a ojo»). " +
+                "Después, en la misma respuesta, pide las llamadas del SIGUIENTE paso que falte (UNO solo, en el ORDEN DE LA " +
+                "GUÍA, con los ids de vista que acaba de devolver este resultado) en un único bloque ```json: se ejecutarán sin " +
+                "esperar al usuario, así que no le preguntes si sigue. Si ya están hechos todos los pasos pedidos, o una medida " +
+                "indica un problema que el usuario tiene que decidir, NO pidas llamadas: escribe una línea que empiece por " +
+                "«PARO:» con el motivo."
+              : "\nAhora, sin pedir ninguna llamada, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
+                "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +
+                "demuestra, con su valor) y «Revisar a ojo» (lo que el resultado no mide); nunca des por bueno algo de la segunda.\n" +
+                "Termina con una línea «Siguiente paso: <qué hacer y con qué función de la guía>.» con el paso siguiente en el ORDEN DE LA GUÍA " +
+                "(lista «Orden de los pasos» del principio) y la función exacta de ese paso según la lista de funciones (cada función dice su paso), " +
+                "y si hay alternativas razonables, una lista de líneas que empiecen por «Paso N: ...» (N = número del paso en la guía). " +
+                "Cada una es un enlace que el usuario pulsará para que la hagas.") });
          this.anotar("Interpretar el resultado", "Pidiendo al modelo que interprete el resultado y recomiende el paso siguiente…");
          this.interpretando = true;
          this.consultar();
@@ -2069,6 +2105,10 @@ function plConstruirDialogo(aj) {
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.estadoLbl.text = plT(quedan ? "Las llamadas han fallado. Pido la corrección al modelo." :
                                "Las llamadas han fallado " + PL_MAX_CORRECCIONES + " veces seguidas; revisa la petición.");
+         if (!quedan && this.serie) {
+            this.serie = false;
+            this.anotar("Serie de pasos", "Parada: " + PL_MAX_CORRECCIONES + " fallos seguidos. Escribe «sigue» cuando lo revises.");
+         }
          if (quedan) this.pedirCorreccion();
       }
    };
