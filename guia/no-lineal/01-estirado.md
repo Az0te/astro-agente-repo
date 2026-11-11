@@ -34,6 +34,8 @@ Modo color conserva el tono; por canal puede desplazarlo. Histograma con dos cú
 
 - Antes: si la mediana pasa de 0,05, la imagen ya está estirada (no repetir la fase 1; mirar el historial).
 - Fase 1 de referencia: D 2,5; b 12; SP = mediana previa; LP 0; HP 0,95.
+- **SP según el tipo de objeto** (documentación de GHS): en galaxias, con el objeto separado del fondo y un pico estrecho, SP algo a la derecha del pico, donde empiezan el halo y los brazos débiles (sube lo exterior sin dar contraste al fondo ni al núcleo); en nebulosas que llenan el campo, SP en el pico o algo a su izquierda (revela lo difuso y extenso). Cada pasada con un objetivo concreto; que la imagen se vea algo plana tras la primera no es un fallo.
+- GHS elige **intensidades, no zonas**: sobre una imagen ya estirada, SP en el nivel de una estructura y b 3–5 sube su contraste sin máscara; para limitarlo a una región hace falta máscara (Paso 4).
 
 **Estirar al fallo, en pasadas cortas** (método por defecto). Varias pasadas cortas son mejores que una larga: se estira hasta que algo falla y se queda la pasada anterior. Tras la fase 1, pasadas cortas de GHS (D ≈ 1, b 6, SP = cielo, HP 0,92), cada una seguida de un punto negro que devuelve el cielo a ~0,10; se mide tras cada pasada. **Fallo:** ruido del cielo > 15 % del cielo, > 0,05 % de píxeles a 0 o > 0,95. Si una pasada falla, se deshace y se prueba la mitad de corta; cuando ni la más corta cabe, se queda la anterior. En una galaxia grande (nov 2026) da lo mismo que el arcsinh elegido (bulbo 0,75, disco 0,24, ruido del cielo ~12–14 %), mientras que llevar sólo la mediana a 0,10 dejaba la galaxia apagada (bulbo 0,45, disco 0,13).
 

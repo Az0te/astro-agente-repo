@@ -16,7 +16,7 @@ La capa de estrellas (original − starless) lleva PSF, halos, aigrettes y resid
 
 `reducida = ~( ( ~mtf(k, original) / ~mtf(k, starless) ) · ~starless )`
 
-Cuanto más oscurece `mtf`, más se reducen. Como mucho **dos pasadas**. Control: tamaño de las estrellas antes y después (FWHM mediano, o `pix_estrella_pct` de la capa) y que las estrellas no se oscurezcan, cambien de color ni dejen anillo; revisar al 200–400 %. Alternativa equivalente cuando hay capa de estrellas: atenuar la capa (abajo) o estirarla menos en el Paso 1.
+Cuanto más oscurece `mtf`, más se reducen. Como mucho **dos pasadas**. Control: tamaño de las estrellas antes y después (FWHM mediano, o `pix_estrella_pct` de la capa) y que las estrellas no se oscurezcan, cambien de color ni dejen anillo; revisar al 200–400 %. Alternativa equivalente cuando hay capa de estrellas: atenuar la capa (abajo) o estirarla menos en el Paso 1. Si se hincharon por un estirado excesivo con GHS, otra salida es su transformación inversa concentrada en las altas luces ([detalle del Paso 1](../detalle/no-lineal-01-estirado.md)).
 
 **Tamaños distintos por filtro o canal** (mono con varios filtros, o deconvolución sólo en la luminancia): al combinar salen anillos de color o negros alrededor de las estrellas. Igualar antes de combinar: deconvolución en todos los canales (o en la imagen color entera) y, si un canal sigue con estrellas mayores, reducirlas en ese canal.
 

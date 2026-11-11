@@ -15,7 +15,10 @@ Material de apoyo de la ficha: el porqué, las fuentes y los ajustes que sólo h
 - D del interfaz: D 1 → 1,72; D 2 → 6,39; D 3 → 19,1 (real = e^D − 1). D = 0 no hace nada.
 - B controla la forma: −1 logarítmico (suave, ajustes post-estirado), 0 exponencial, 1 = HistogramTransformation, 2–5 hiperbólico (realce focalizado), 5–15 superhiperbólico (primer estirado desde lineal, concentra el contraste en el pico estrecho).
 - SP = punto de máximo contraste; LP y HP protegen sombras y luces con una recta tangente.
-- GHS es reversible (casilla Inverse).
+- GHS es reversible (casilla Inverse) con las transformaciones hiperbólica, arcsinh, de medios tonos y potencia, **sólo en modo RGB/K o por canal y sin recorte**; en modo Colour o con recorte, no. La inversa calcula otra transformación: no es deshacer.
+- **Usos de la inversa** (documentación de GHS): (1) recuperar estrellas que se han hinchado con un estirado excesivo, con una transformación inversa concentrada en las altas luces (SP/LP/HP alrededor de las estrellas) y después una pasada suave para devolver el brillo general; (2) si el separador de estrellas no reconoce estrellas brillantes estiradas con b alto: estirado moderado con b = 0 en RGB/K, separar estrellas y aplicar la inversa para volver a lineal. Lo preferible sigue siendo separar en lineal (Paso 15 lineal).
+- Valores de partida (documentación): 1.ª pasada b 8–10, LP 0, HP 1, D hasta que el pico del histograma quede en ~0,20–0,25; siguientes, b 3–5, D pequeño, SP en la estructura objetivo, HP para estrellas y zonas brillantes, LP si el fondo se oscurece. Histograma en escala logarítmica para ver lo que ocupa pocos píxeles.
+- Modo Colour (mismo factor para los tres canales): conserva la saturación en el primer estirado RGB, pero puede pasar de 1; probar Clip type `RGBBlend` si salen núcleos de estrella quemados o colores alterados.
 
 **GHS a mano en la interfaz.** Con STF desactivado y Real-Time Preview, ampliar el histograma, pulsar en el centro del pico o justo a su izquierda y "Send to SP"; local intensity (b) ≈ 8–8,5 y subir el stretch factor hasta que el pico principal no pase de ~¼ de la altura del gráfico; aplicar y resetear. Segunda pasada: SP sobre la zona a realzar, b ≈ 1–1,5, stretch factor 0,5–1, equilibrando LP/HP.
 
@@ -50,6 +53,8 @@ Documentación citada por el PDF: `ghsastro.co.uk/doc/tools/GeneralizedHyperboli
 - `starStretch` hace `y = 3^A·x / ((3^A − 1)·x + 1)` (A de 0 a 8; 5 por defecto en el script), saturación por tono con ColorSaturation (0,4·s / 0,7·s / 0,4·s) y, si se pide, SCNR del verde. "Color Boost aumenta separación cromática (controlar R:G:B en no saturados, evitar anillos de color). Suprimir verde off salvo dominante real."
 - Objetivo de NOVA: "p90 de la capa en ~0,25 (factor de Star Stretch 1–3, más suave que el 5 por defecto), probando la fuerza con saturación y SCNR fijos."
 - Alternativa arcsinh que conserva color: `f = asinh(k·L)/asinh(k)/L` con `L = max(RGB)` (k ≈ 5000 para muchas estrellas), saturación ×1,6 alrededor de la media, núcleos saturados neutros; o ArcsinhStretch "hasta que se vean claramente sin hincharse (GHS opcional después)".
+
+**Versión.** Desde PixInsight 1.9.4 el script antiguo de GHS no se mantiene: usar el módulo de proceso (GHS 3.2.0 aprovecha la previsualización de 32 bits de PixInsight 1.9.5+). Fuentes: documentación oficial `ghsastro.co.uk/doc/tools/GeneralizedHyperbolicStretch/` y el resumen técnico que pasó Rafael (nov 2026).
 
 **Código.** Un master lineal con pedestal puede pasar de 0,01 de mediana (nebulosa oscura: 0,0102); uno estirado suele estar por encima de 0,1, de ahí el umbral 0,05 de la ficha. En PixInsight anterior a 1.9.6 las constantes de GHS van con `.prototype`.
 
