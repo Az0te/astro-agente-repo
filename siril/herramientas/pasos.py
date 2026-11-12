@@ -2406,7 +2406,10 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
         "HOO_dinamica": ("HOO dinámica (G mezcla Hα y OIII según OIII)", lambda: (Ha, t * Oa + (1 - t) * Ha, Oa)),
     }
     if S is not None:
-        todas["SHO"] = ("SHO", lambda: (S, Ha, Oa))
+        # 12 nov 2026 (Tarántula): el SII es la raya más débil y, estirado por su cuenta, quedaba por debajo del Hα (p90 0,21
+        # frente a 0,33): la SHO salía verde y apagada. Igual que el OIII, se lleva al mismo cielo y recorrido que el Hα.
+        Sa = _igualar(S, Ha, z["cielo_px"])
+        todas["SHO"] = ("SHO", lambda: (Sa, Ha, Oa))
     elegir = list(paletas) if paletas else list(todas)
     cel = z["medidas"]["_celdas"]
     huella = _huella(crudo)
@@ -2438,7 +2441,10 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
             if verde >= verde_max:
                 fal.append(f"verde residual {m['verde_residual_pct']} % ≥ {verde_max} % (SCNR suave después)")
             res = q if info["top_down"] else q[:, ::-1, :]
-            res = _a_siril(res, crudo.dtype).reshape(crudo.shape)
+            # 12 nov 2026 (Tarántula, mono): con una capa mono cargada y las rayas en ficheros, la paleta es RGB y no cabe
+            # en la forma de la imagen cargada («cannot reshape»): se guarda con 3 canales.
+            forma = crudo.shape if (crudo.ndim == 3 and crudo.shape[0] == 3) else (3,) + tuple(crudo.shape[-2:])
+            res = _a_siril(res, crudo.dtype).reshape(forma)
             cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"paleta {k}", "huella_base": huella, "metricas": m})
             r["candidatos"].append({"id": cid, "metodo": nombre, "metricas": m, "no_cumple": fal,
                                     "segundos": _r(time.perf_counter() - t0, 1)})

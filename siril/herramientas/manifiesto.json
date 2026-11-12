@@ -1259,6 +1259,24 @@
    }
   },
   {
+   "nombre": "combinarRGB",
+   "fichero": "multicapa.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "lineal/10-combinacion-rgb-nb.md",
+   "descripcion": "Paso 10 lineal (cámara mono): compone una imagen RGB lineal con tres masters mono ya alineados (rojo, verde, azul), sin escalar canales (el color lo pone después calibrarColor). Sustituye la imagen cargada, con deshacer: carga antes uno de los tres (o una imagen del mismo tamaño) para conservar cabecera y astrometría. Guardar con guardarImagen.",
+   "resumen": "Paso 10: RGB lineal desde tres masters mono alineados.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "r": { "type": "string", "description": "Master rojo alineado (ruta absoluta)." },
+     "g": { "type": "string", "description": "Master verde alineado." },
+     "b": { "type": "string", "description": "Master azul alineado." }
+    },
+    "required": ["r", "g", "b"]
+   }
+  },
+  {
    "nombre": "combinarCandidatos",
    "fichero": "multicapa.py",
    "nivel": "vista",

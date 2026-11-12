@@ -391,5 +391,22 @@ def combinarCandidatos(siril, ha, oiii=None, intensidades=(0.5, 1.0), con_oiii=T
     return r
 
 
+def combinarRGB(siril, r, g, b):
+    """Paso 10 lineal (mono con rueda): compone una imagen RGB con tres masters mono ya alineados (rojo, verde y azul),
+    en lineal y sin escalar ningún canal: el color lo pone después la calibración (SPCC). Sustituye la imagen cargada
+    (con deshacer), que debe ser uno de ellos o una imagen del mismo tamaño (para conservar su cabecera y astrometría).
+    12 nov 2026 (Tarántula, mono): antes no había forma de componer RGB desde mono con las herramientas de la guía."""
+    info = H._info(siril)
+    crudo = P._crudo(siril)
+    canales = [P._canal_fichero(siril, f, info, n) for f, n in ((r, "rojo"), (g, "verde"), (b, "azul"))]
+    q = np.stack(canales).astype(np.float32)
+    x = q if info["top_down"] else q[:, ::-1, :]
+    P._poner(siril, P._a_siril(np.clip(x, 0, 1), crudo.dtype).reshape((3,) + tuple(crudo.shape[-2:])), "SirilAstroPilot: combinarRGB")
+    med = [float(np.median(c[::4, ::4])) for c in canales]
+    return {"rojo": r, "verde": g, "azul": b, "mediana_por_canal": [_r(m, 6) for m in med],
+            "nota": "RGB lineal sin calibrar (cada canal tal cual). Siguiente: gradiente, astrometría y calibrarColor (SPCC con los "
+                    "filtros de la rueda, mono: true). Guárdala con guardarImagen."}
+
+
 LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand,
-                   "combinarCandidatos": combinarCandidatos}
+                   "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB}
