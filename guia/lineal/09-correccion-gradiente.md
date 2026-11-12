@@ -28,7 +28,8 @@ El gradiente es un offset de gran escala que no es del objeto: contamina la cali
 
 - `copia_objeto`: cuánto se parece el modelo al objeto (correlación de la estructura de gran escala, sin estrellas ni gradiente liso). **< 0,15 limpio; > 0,5 se come el objeto.**
 - `objeto_quitado_pct`: % de la señal del objeto que se lleva el modelo.
-- `gradiente_restante`: gradiente del **cielo** que queda (después / antes), medido fuera del objeto. Si el objeto llena el campo, el cielo más oscuro también es nebulosa y la cifra no es fiable: decidir por `copia_objeto` y mirando.
+- `gradiente_restante`: gradiente del **cielo** que queda (después / antes), medido fuera del objeto. Si el objeto llena el campo, el cielo más oscuro también es nebulosa y la cifra no es fiable: decidir por `copia_objeto`, `gradiente_visible` y mirando.
+- `gradiente_visible`: lo que se **verá** del gradiente que queda. Plano robusto sobre las medianas de una rejilla 12×8 (se rechazan las celdas que quedan por encima, que son objeto) y sus esquinas pasadas por un estirado automático (cielo a 0,10): diferencia entre la esquina más clara y la más oscura. < 0,008 plano; 0,008–0,015 leve; > 0,015 se verá al estirar (pixinsight-mcp). Entre los candidatos que no se comen el objeto se prefiere uno que no se vea.
 - Contraste objeto−cielo en cajas de 300 px (≥ 90 % en polvo e IFN).
 
 Se recomienda, entre los que no se comen el objeto (`objeto_quitado_pct` ≤ 3 % y |`copia_objeto`| < 0,3), el que deja el cielo más plano. En una galaxia grande (nov 2026) eso reprodujo la decisión hecha a mano: el modelo por muestras se llevaba el 8,5 %, el de referencia el 1,8 % y el polinomio de grado 2 el 0 % con el cielo igual de plano (13 % del gradiente). Medir el gradiente que queda en toda la imagen, en vez de fuera del objeto, medía la galaxia y daba por bueno al que se la comía.

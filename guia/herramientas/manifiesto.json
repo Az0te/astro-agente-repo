@@ -1171,7 +1171,7 @@
    "fichero": "nucleo.js",
    "nivel": "lectura",
    "timeout_s": 120,
-   "descripcion": "Mide la meseta quemada del núcleo: radio equivalente de lo que pasa de 0,95 alrededor del punto más brillante (con estructura: 0–3 px).",
+   "descripcion": "Mide la meseta quemada del núcleo: radio equivalente de lo que pasa de 0,95 alrededor del punto más brillante (con estructura: 0–3 px). También el color del núcleo (saturacion_nucleo; < 0,04 = núcleo blanco) y, con referencia (vista anterior al paso), cuánto subió su textura fina (textura_nucleo_x; > 3 = núcleo cocinado).",
    "paso": "no-lineal/05-boost.md",
    "params": {
     "type": "object",
@@ -1182,7 +1182,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { umbral: 0.95 }"
+      "description": "Opcional. { umbral: 0.95, radio: 64, tipo: 'galaxia' (núcleo blanco pasa a no_cumple), referencia: '<vista antes del paso>' }"
      }
     },
     "required": [

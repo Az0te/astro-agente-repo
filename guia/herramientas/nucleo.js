@@ -64,13 +64,64 @@ function nuMeseta(a, thr, centro) {
   return { radio_px: +Math.sqrt(k / Math.PI).toFixed(1), pix_total: tot, centro: [bx, by], umbral: thr };
 }
 
+// Color del núcleo (12 nov 2026, idea de pixinsight-mcp): saturación mediana (HSV: (máx − mín) / máx) de los píxeles del
+// núcleo, L > 0,35 en un radio r alrededor del centro. < 0,04 = núcleo blanco (el estirado le quitó el color); en galaxias
+// los núcleos con color dan 0,06–0,18. Sólo en imágenes en color; en gris devuelve null.
+function nuSatNucleo(view, centro, r) {
+  var im = view.image; if (im.numberOfChannels < 3) return null;
+  var W = im.width, H = im.height, x0 = Math.max(0, centro[0] - r), y0 = Math.max(0, centro[1] - r);
+  var x1 = Math.min(W, centro[0] + r), y1 = Math.min(H, centro[1] + r), R = new Rect(x0, y0, x1, y1), n = (x1 - x0) * (y1 - y0);
+  var ch = [new Float32Array(n), new Float32Array(n), new Float32Array(n)], s = [];
+  for (var c = 0; c < 3; ++c) im.getSamples(ch[c], R, c);
+  for (var i = 0; i < n; ++i) {
+    var a = ch[0][i], b = ch[1][i], d = ch[2][i], mx = Math.max(a, b, d), mn = Math.min(a, b, d);
+    var dx = x0 + i % (x1 - x0) - centro[0], dy = y0 + Math.floor(i / (x1 - x0)) - centro[1];
+    if (dx * dx + dy * dy <= r * r && (a + b + d) / 3 > 0.35 && mx > 0) s.push((mx - mn) / mx);
+  }
+  if (s.length < 10) return null;
+  s.sort(function (p, q) { return p - q; });
+  return +s[s.length >> 1].toFixed(3);
+}
+
+// Textura fina del núcleo: mediana de |L − media 3×3| en los píxeles con L > 0,35 en un radio r. Comparada con la de la
+// entrada da cuánto amplificó el paso el grano del núcleo; más de ×3 = núcleo «cocinado» (ruido y artefactos en el bulbo).
+function nuTextura(a, centro, r) {
+  var L = a.L, W = a.W, H = a.H, s = [];
+  for (var y = Math.max(1, centro[1] - r); y < Math.min(H - 1, centro[1] + r); ++y)
+    for (var x = Math.max(1, centro[0] - r); x < Math.min(W - 1, centro[0] + r); ++x) {
+      var dx = x - centro[0], dy = y - centro[1], p = y * W + x;
+      if (dx * dx + dy * dy > r * r || L[p] <= 0.35) continue;
+      var m = (L[p - W - 1] + L[p - W] + L[p - W + 1] + L[p - 1] + L[p] + L[p + 1] + L[p + W - 1] + L[p + W] + L[p + W + 1]) / 9;
+      s.push(Math.abs(L[p] - m));
+    }
+  if (s.length < 10) return null;
+  s.sort(function (p, q) { return p - q; });
+  return s[s.length >> 1];
+}
+
 function medirMeseta(viewId, o) {
   viewId = nuId(viewId); o = o || {};
   var v = View.viewById(viewId);
   if (!v || v.isNull) throw new Error("No existe la vista " + viewId);
-  var m = nuMeseta(nuLum(v), o.umbral || 0.95);
+  var a = nuLum(v), m = nuMeseta(a, o.umbral || 0.95), r = o.radio || 64;
   m.vista = viewId;
   m.no_cumple = m.radio_px > 3 ? ["núcleo quemado: meseta de " + m.radio_px + " px (con estructura: 0–3 px); comprimirNucleo antes de saturar"] : [];
+  // Núcleo blanco y núcleo cocinado (12 nov 2026). o.referencia = vista anterior al paso (misma geometría) para medir
+  // cuánto se amplificó la textura del núcleo.
+  m.saturacion_nucleo = nuSatNucleo(v, m.centro, r);
+  // En una galaxia es no_cumple; en otro tipo (o sin tipo) sólo aviso: el punto más brillante puede ser una estrella blanca.
+  if (m.saturacion_nucleo !== null && m.saturacion_nucleo < 0.04)
+    (/galax/i.test(o.tipo || "") ? m.no_cumple : (m.avisos = m.avisos || [])).push("núcleo blanco: saturación mediana " + m.saturacion_nucleo + " (< 0,04; con color 0,06–0,18): recuperar su color " +
+                     "con las proporciones R:G:B de la imagen lineal en el núcleo, al 30–50 % (ficha no-lineal 05, «Núcleo blanco»)");
+  var ref = o.referencia ? View.viewById(nuId(o.referencia)) : null;
+  if (ref && !ref.isNull && ref.image.width === v.image.width && ref.image.height === v.image.height) {
+    var t0 = nuTextura(nuLum(ref), m.centro, r), t1 = nuTextura(a, m.centro, r);
+    if (t0 > 0 && t1 !== null) {
+      m.textura_nucleo_x = +(t1 / t0).toFixed(2);
+      if (m.textura_nucleo_x > 3) m.no_cumple.push("núcleo cocinado: su textura fina sube ×" + m.textura_nucleo_x + " (máx. ×3) respecto a " +
+                                                  nuId(o.referencia) + ": repetir el paso más suave o con máscara que proteja el núcleo");
+    }
+  }
   return m;
 }
 
@@ -100,7 +151,7 @@ function comprimirNucleo(viewId, o) {
   var capas = o.capas || 7, iter = o.iteraciones || 1, mezcla = (o.mezcla !== undefined) ? o.mezcla : 0.6;
   var desde = (o.mascaraDesde !== undefined) ? o.mascaraDesde : 0.35, ancho = o.mascaraAncho || 0.25, bin = o.bin || 16;
   var W = src.image.width, H = src.image.height, t0 = Date.now();
-  var a0 = nuLum(src), antes = nuMeseta(a0, 0.95);
+  var a0 = nuLum(src), antes = nuMeseta(a0, 0.95), sat0 = nuSatNucleo(src, antes.centro, 64);
 
   // 1. Máscara de bulbo: luminancia de gran escala (binada ×bin y ampliada de nuevo), rampa desde 'desde' con 'ancho'.
   var P = new PixelMath;
@@ -179,6 +230,12 @@ function comprimirNucleo(viewId, o) {
   if (otra) noCumple.push("otra meseta quemada de " + otra.radio_px + " px en [" + otra.centro.join(", ") + "] (¿galaxia satélite o estrella?): " +
     "si es una galaxia, repetir sobre la original con mascaraDesde 0,25 para que la máscara la incluya; si es una estrella, ignorar");
   if (baja > 30) noCumple.push("el bulbo pierde un " + baja.toFixed(0) + " % de brillo medio (> 30 %): queda plano; repetir con mezcla menor");
+  // Núcleo cocinado o blanco (12 nov 2026): la compresión no debe multiplicar el grano del núcleo ni quitarle el color.
+  var rt = Math.max(16, Math.min(300, Math.round(rBulbo))), tx0 = nuTextura(a0, antes.centro, rt), tx1 = nuTextura(a1, antes.centro, rt);
+  var texX = (tx0 > 0 && tx1 !== null) ? +(tx1 / tx0).toFixed(2) : null, sat1 = nuSatNucleo(v, antes.centro, 64);
+  if (texX !== null && texX > 3) noCumple.push("núcleo cocinado: la textura fina del bulbo sube ×" + texX + " (máx. ×3): repetir con mezcla menor (0,4) o capas 6");
+  if (sat1 !== null && sat1 < 0.04 && (sat0 === null || sat0 >= 0.04))
+    noCumple.push("el núcleo se queda blanco (saturación " + sat1 + " < 0,04; antes " + sat0 + "): mezcla menor o recuperar su color de la lineal");
   return {
     vista: v.id, original: viewId, aplicado: true,
     metodo: metodo === "ghc" ? "GradientHDRCompression (exponente " + ((o.exponente !== undefined) ? o.exponente : 0.6) + ")" : "HDRMultiscaleTransform",
@@ -186,9 +243,11 @@ function comprimirNucleo(viewId, o) {
     mascara: { desde: desde, ancho: ancho, bin: bin, radio_bulbo_px: Math.round(rBulbo), vista: maskId },
     meseta_antes: antes, meseta_despues: despues, otra_meseta: otra,
     brillo_bulbo: { antes: +bm0.toFixed(3), despues: +bm1.toFixed(3), baja_pct: +baja.toFixed(1) },
-    anillos_nuevos_px: nuevos, segundos: Math.round((Date.now() - t0) / 1000), no_cumple: noCumple,
+    anillos_nuevos_px: nuevos, textura_nucleo_x: texX, saturacion_nucleo: { antes: sat0, despues: sat1 },
+    segundos: Math.round((Date.now() - t0) / 1000), no_cumple: noCumple,
     control: {
-      medido: { nucleo_con_estructura: despues.radio_px <= 3, sin_anillo_nuevo: nuevos.length === 0, bulbo_no_aplanado: baja <= 30 },
+      medido: { nucleo_con_estructura: despues.radio_px <= 3, sin_anillo_nuevo: nuevos.length === 0, bulbo_no_aplanado: baja <= 30,
+                nucleo_no_cocinado: texX === null || texX <= 3, nucleo_con_color: sat1 === null || sat1 >= 0.04 || (sat0 !== null && sat0 < 0.04) },
       revisar_a_ojo: ["núcleo al 100 %: gradiente suave hacia el centro, sin anillo oscuro ni bulbo gris y plano",
                       "galaxias satélite: sus núcleos también con estructura",
                       "borde de la máscara: sin transición visible en el disco"],
@@ -249,6 +308,7 @@ function nucleoCandidatos(viewId, o) {
       if (!c.r) return { metodo: c.etiqueta, error: c.error, elegido: false };
       return { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null,
                bulbo_baja_pct: c.r.brillo_bulbo ? c.r.brillo_bulbo.baja_pct : null, anillos_nuevos: c.r.anillos_nuevos_px ? c.r.anillos_nuevos_px.length : null,
+               textura_nucleo_x: c.r.textura_nucleo_x, saturacion_nucleo: c.r.saturacion_nucleo ? c.r.saturacion_nucleo.despues : null,
                cumple: !c.r.no_cumple.length, elegido: c === best, previa: c.previa || undefined };
     }),
     recomendado: best.etiqueta, meseta_antes: best.r.meseta_antes, meseta_despues: best.r.meseta_despues,

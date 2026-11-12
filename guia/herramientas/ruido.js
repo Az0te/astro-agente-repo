@@ -174,12 +174,15 @@ function rdNXT(view, o) {
   if (o.frecuencias) {
     var f = o.frecuencias; hechos = ["denoise=" + d];
     N.enable_color_separation = true; N.denoise_color = f.hfColor; hechos.push("denoise_color=" + f.hfColor);
-    rdSet(N, ["enable_frequency_separation"], true, hechos);
-    rdSet(N, ["denoise_high_freq", "denoise_hf"], f.hf, hechos);
-    rdSet(N, ["denoise_low_freq", "denoise_lf"], f.lf, hechos);
-    rdSet(N, ["denoise_color_low_freq", "denoise_low_freq_color", "denoise_lf_color"], f.lfColor, hechos);
-    rdSet(N, ["denoise_color_high_freq", "denoise_high_freq_color", "denoise_hf_color"], f.hfColor, hechos);
-    rdSet(N, ["frequency_scale"], f.escala, hechos);
+    // Nombres: los snake_case son los de la versión instalada en PCMesa (12 nov 2026); los camelCase, los que lee
+    // pixinsight-mcp (aescaffre) de la tabla de cadenas del módulo de RC-Astro (otra versión). Se pone el que exista.
+    rdSet(N, ["enable_frequency_separation", "enableFrequencySeparation"], true, hechos);
+    rdSet(N, ["enable_color_separation", "enableColorSeparation"], true, hechos);
+    rdSet(N, ["denoise_intensity_high_freq"], f.hf, hechos); rdSet(N, ["denoise_high_freq", "denoise_hf"], f.hf, hechos);
+    rdSet(N, ["denoise_intensity_low_freq"], f.lf, hechos); rdSet(N, ["denoise_low_freq", "denoise_lf", "denoiseLf"], f.lf, hechos);
+    rdSet(N, ["denoise_color_low_freq", "denoise_low_freq_color", "denoise_lf_color", "denoiseLfColor"], f.lfColor, hechos);
+    rdSet(N, ["denoise_color_high_freq", "denoise_high_freq_color", "denoise_hf_color", "denoiseColor"], f.hfColor, hechos);
+    rdSet(N, ["frequency_scale", "frequencyScale"], f.escala, hechos);
   }
   if (!N.executeOn(view)) throw new Error("NXT falló");
   return hechos;
@@ -257,7 +260,7 @@ function reducirRuido(viewId, o) {
   var nxtHechos = null, mascaraInfo = null, linealIn = src.image.median() < 0.05;
   if (metodo === "nxt") {
     nxtHechos = rdNXT(v, o);
-    if (o.frecuencias && !nxtHechos.some(function (h) { return /low_freq_color|color_low_freq|lf_color/.test(h); }))
+    if (o.frecuencias && !nxtHechos.some(function (h) { return /low_freq_color|color_low_freq|lf_color|LfColor/.test(h); }))
       aviso = (aviso ? aviso + "; " : "") + "esta versión de NXT no tiene croma de baja frecuencia: se aplicó sin ella (" + nxtHechos.join(", ") + ")";
   }
   else if (metodo === "mascara") {

@@ -325,7 +325,66 @@ function gcScore(base, C, label) {
   var flat = cells.length > 1 ? (cells[cells.length - 1] - cells[0]) / Math.abs(base.signal) : NaN;
   var nearV = gcPick(C, base.near), farV = gcPick(C, base.far);
   var ring = (nearV.length && farV.length) ? (gcMedian(nearV) - gcMedian(farV)) / Math.abs(base.signal) : NaN;
-  return { label: label, eat: eat, keep: keep, flat: flat, ring: ring, cells: cells.length };
+  return { label: label, eat: eat, keep: keep, flat: flat, ring: ring, cells: cells.length, visible: gcVisible(base, C) };
+}
+
+// gradiente_visible (12 nov 2026, idea de pixinsight-mcp): lo que importa del gradiente que queda es cuánto se VERÁ al
+// estirar, no su tamaño en lineal. Plano robusto sobre las medianas de una rejilla 12×8 (sin estrellas ni objeto: se
+// rechazan las celdas que quedan por encima del plano, que son objeto o nebulosa), y sus cuatro esquinas pasadas por un
+// estirado automático (cielo a 0,10). Devuelve la diferencia entre la esquina más clara y la más oscura ya estirada:
+// < 0,008 plano; 0,008–0,015 leve; > 0,015 se ve. Sirve también cuando el objeto llena el campo (no necesita máscara).
+function gcVisible(base, C) {
+  var w = base.O.w, h = base.O.h, gx = 12, gy = 8, pts = [], i, j, k;
+  function rejilla(usarExcl) {
+    var out = [];
+    for (j = 0; j < gy; j++) for (i = 0; i < gx; i++) {
+      var x0 = Math.floor(i * w / gx), x1 = Math.floor((i + 1) * w / gx), y0 = Math.floor(j * h / gy), y1 = Math.floor((j + 1) * h / gy), v = [];
+      for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) { var p = y * w + x; if (!usarExcl || !base.excl[p]) v.push(C[p]); }
+      if (v.length > 0.3 * (x1 - x0) * (y1 - y0)) out.push([(x0 + x1) / 2 / w - 0.5, (y0 + y1) / 2 / h - 0.5, gcMedian(v), true]);
+    }
+    return out;
+  }
+  pts = rejilla(true);
+  if (pts.length < 12) pts = rejilla(false);   // objeto que llena el campo: todas las celdas, y el rechazo quita el objeto
+  if (pts.length < 6) return NaN;
+  var c = [0, 0, 0];
+  for (var it = 0; it < 8; it++) {
+    var S = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], T = [0, 0, 0], n = 0;
+    for (k = 0; k < pts.length; k++) {
+      if (!pts[k][3]) continue;
+      var f = [1, pts[k][0], pts[k][1]];
+      for (var r = 0; r < 3; r++) { T[r] += f[r] * pts[k][2]; for (var s = 0; s < 3; s++) S[r][s] += f[r] * f[s]; }
+      n++;
+    }
+    if (n < 6) break;
+    c = gcSolve3(S, T);
+    var res = [];
+    for (k = 0; k < pts.length; k++) if (pts[k][3]) res.push(pts[k][2] - (c[0] + c[1] * pts[k][0] + c[2] * pts[k][1]));
+    var sd = gcMAD(res, gcMedian(res)), changed = false;
+    for (k = 0; k < pts.length; k++) {
+      var e = pts[k][2] - (c[0] + c[1] * pts[k][0] + c[2] * pts[k][1]);
+      var keep = sd == 0 || (e <= 1.5 * sd && e >= -3 * sd);   // por encima del plano = objeto: se rechaza antes
+      if (keep != pts[k][3]) changed = true;
+      pts[k][3] = keep;
+    }
+    if (!changed) break;
+  }
+  // Estirado automático como el de la previa: punto negro en mediana − 2,8·MAD del cielo y cielo llevado a 0,10.
+  var sky = [];
+  for (k = 0; k < C.length; k += 4) if (!base.excl[k]) sky.push(C[k]);
+  if (sky.length < 100) for (sky = [], k = 0; k < C.length; k += 4) sky.push(C[k]);
+  var med = gcMedian(sky), mad = gcMAD(sky, med), c0 = Math.max(Math.min(med - 2.8 * mad, med), -1);
+  var esc = function (x) { return Math.min(1, Math.max(0, (x - c0) / (1 - c0))); };
+  var xm = esc(med); if (!(xm > 0 && xm < 1)) return NaN;
+  var t = 0.10, m = gcMtf(t, xm);
+  var esq = [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]].map(function (q) { return gcMtf(m, esc(c[0] + c[1] * q[0] + c[2] * q[1])); });
+  return Math.max.apply(null, esq) - Math.min.apply(null, esq);
+}
+
+// Función de transferencia de medios tonos (la del estirado automático).
+function gcMtf(m, x) {
+  if (x <= 0) return 0; if (x >= 1) return 1;
+  return (m - 1) * x / ((2 * m - 1) * x - m);
 }
 
 // control: plano robusto de grado 1 (no puede comerse formas)

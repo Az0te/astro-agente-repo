@@ -24,6 +24,8 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | HDR global cuando sólo el núcleo lo necesita | Mezcla sólo bajo máscara de núcleo (`hdr_core_blend`) |
 | Compresión multiescala sobre núcleos ya recortados | Dejar margen (~0,93–0,97) o tomas cortas |
 | Contraste local + compresión multiescala juntos, contraste local amount > 0,5, radios pequeños con estrellas | Uno u otro; sobre starless o con máscara |
+| Fijar un mínimo absoluto de contraste o de estructura ("el núcleo debe tener al menos X") | Mínimos relativos a la entrada y un máximo de amplificación; un mínimo fijo lleva a cocinar el núcleo (Paso 5 no lineal) |
+| Juzgar la saturación antes del tono y del contraste local, o nitidez después del último NXT | Saturación al final; NXT después de cada contraste local o nitidez (Paso 5 no lineal) |
 | Mapa de "estructuras oscuras" por diferencia de escalas sin mirarlo (en una nebulosa de emisión y reflexión era ruido) | Realce de estructuras oscuras mirando su máscara: sólo si sigue estructuras reales; si no, contraste local con máscara de fondo |
 
 ## F.2 Color
@@ -47,6 +49,7 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | Escala por defecto de sample_free / `-sample_free_simplified true` | sample_free escala 10 (8 si queda gradiente) |
 | Corregir por división un gradiente aditivo (o por sustracción el viñeteo) | Sustracción para contaminación, división para viñeteo |
 | DBE sobre nebulosa | Sólo cielo; nunca sobre señal |
+| Corregir el gradiente sobre la imagen estirada con el objeto en el campo (el estirado agranda una inclinación lineal pequeña y «se ve») | Volver a lineal y medir el gradiente que se verá al estirar; en estirada, el modelo se come el halo por un lado y deja un borde pardo (pixinsight-mcp) |
 | Dar por bueno un modelo sin mirarlo | Liso, sin objeto, sin anillo; `copia_objeto` |
 
 ## F.4 Preprocesado y subs

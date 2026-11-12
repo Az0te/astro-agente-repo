@@ -162,7 +162,7 @@ function grPolyExpr(c) {
 // come_objeto_pct: señal del objeto que se lleva el modelo (gcScore.eat), en % de la señal del objeto.
 function grMeasure(base, modelId, correctedId, range0) {
   var m = gcStructCopy(base, modelId), s = gcMetrics(base, correctedId);
-  if (base.flat0 === undefined) base.flat0 = gcScore(base, base.O.a, "original").flat;
+  if (base.flat0 === undefined) { var s0 = gcScore(base, base.O.a, "original"); base.flat0 = s0.flat; base.vis0 = s0.visible; }
   var fr = s.flat / base.flat0, fuente = "cielo fuera del objeto (rejilla 8x8)";
   // Si el objeto llena el campo no quedan celdas de cielo y la medida sale NaN (8 nov 2026, nebulosa que ocupa todo):
   // entonces se usa la rejilla 4x3 de toda la imagen frente al original (range0), que al menos compara los candidatos.
@@ -172,7 +172,11 @@ function grMeasure(base, modelId, correctedId, range0) {
   // Nombres neutros de la guía (los mismos en todos los programas): copia_objeto, objeto_quitado_pct, gradiente_restante.
   // gcStructCopy, fondoResidual y come_objeto_pct se mantienen como alias durante una versión (nov 2026).
   var corr = +m.corr.toFixed(3), resto = isFinite(fr) ? +fr.toFixed(3) : NaN, come = +(100 * s.eat).toFixed(1);
+  // gradiente_visible (12 nov 2026): desnivel de las esquinas del cielo ya estirado (gcVisible); < 0,008 plano, > 0,015 se ve.
+  var vis = isFinite(s.visible) ? +s.visible.toFixed(4) : NaN;
   return { copia_objeto: corr, objeto_quitado_pct: come, gradiente_restante: resto, fondo_medido_en: fuente, copia: m.copy,
+           gradiente_visible: vis, gradiente_visible_antes: isFinite(base.vis0) ? +base.vis0.toFixed(4) : NaN,
+           se_ve: !isFinite(vis) ? "sin medir" : vis < 0.008 ? "plano" : vis <= 0.015 ? "leve" : "se ve",
            gcStructCopy: corr, fondoResidual: resto, come_objeto_pct: come };
 }
 
@@ -377,6 +381,8 @@ function gradienteCandidatos(viewId, o) {
   r.leyenda = "copia_objeto: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
               "negativo = infla el objeto). objeto_quitado_pct: % de la señal del objeto que se lleva el modelo (menor = mejor). " +
               "gradiente_restante: fracción del gradiente del cielo que queda, medido fuera del objeto (menor = más plano). " +
+              "gradiente_visible: desnivel entre esquinas del cielo tras un estirado automático (< 0,008 plano; > 0,015 se ve; " +
+              "gradiente_visible_antes = el del original). Es la medida que cuenta cuando el objeto llena el campo. " +
               "Mejor: el que deja poco gradiente sin comerse el objeto. (gcStructCopy, come_objeto_pct y fondoResidual: " +
               "nombres antiguos de lo mismo, se quitarán.)";
 
@@ -392,10 +398,19 @@ function gradienteCandidatos(viewId, o) {
   // Una medida que no se pudo calcular (NaN) cuenta como la peor: con NaN, pick() se quedaba con el primero de la
   // lista (8 nov 2026, IC 63: ganó GraXpert 10 con «deja NaN %» sin comparar de verdad).
   function absCorr(x) { var c = Math.abs(x.metricas.gcStructCopy); return isFinite(c) ? c : Infinity; }
-  function resid(x) { var f = x.metricas.fondoResidual; return isFinite(f) ? f : Infinity; }
+  // Sin cielo fuera del objeto (gradiente_restante NaN) se usa el gradiente visible tras estirar respecto al del original.
+  function resid(x) {
+    var f = x.metricas.fondoResidual; if (isFinite(f)) return f;
+    var v = x.metricas.gradiente_visible, v0 = x.metricas.gradiente_visible_antes;
+    return isFinite(v) && v0 > 0 ? v / v0 : Infinity;
+  }
+  function vis(x) { var v = x.metricas.gradiente_visible; return isFinite(v) ? v : Infinity; }
   function eat(x) { var e = x.metricas.come_objeto_pct; return isFinite(e) ? Math.abs(e) : 100; }
   // Primero, no comerse el objeto (≤ 3 % de su señal y modelo limpio); entre esos, el que deja el cielo más plano.
   var safe = r.candidatos.filter(function (x) { return eat(x) <= 3 && absCorr(x) < 0.3; });
+  // Entre los seguros, mejor uno cuyo cielo no se vea desnivelado al estirar (gradiente_visible ≤ 0,015), si lo hay.
+  var noSeVe = safe.filter(function (x) { return vis(x) <= 0.015; });
+  if (noSeVe.length) safe = noSeVe;
   var clean = r.candidatos.filter(function (x) { return absCorr(x) < 0.3; });
   var best = safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(r.candidatos, absCorr);
   if (best) {
@@ -405,7 +420,9 @@ function gradienteCandidatos(viewId, o) {
                (isFinite(best.metricas.fondoResidual) ? Math.round(100 * best.metricas.fondoResidual) + " %" : "(sin medir)") +
                " del gradiente del cielo, se lleva el " + best.metricas.come_objeto_pct + " % del objeto, copia_objeto " + bc.toFixed(3) + " (" +
                (Math.abs(bc) < 0.15 ? "modelo limpio" : Math.abs(bc) > 0.5 ? "copia el objeto: revisar o probar plano robusto"
-                                                                   : "intermedio: revisar el modelo a la vista") + ").";
+                                                                   : "intermedio: revisar el modelo a la vista") + ")" +
+               (isFinite(best.metricas.gradiente_visible) ? "; tras estirar: " + best.metricas.se_ve + " (" + best.metricas.gradiente_visible +
+                 (vis(best) > 0.015 ? "; se verá el desnivel: probar otro candidato o una segunda pasada suave" : "") + ")" : "") + ".";
   } else {
     r.motivo = "Ningún candidato se pudo medir: ver errores.";
   }
@@ -452,6 +469,7 @@ function grCompactar(g, o) {
     var come = isFinite(m.come_objeto_pct) ? m.come_objeto_pct : null, corr = isFinite(m.gcStructCopy) ? m.gcStructCopy : null;
     return { metodo: c.metodo + " " + c.parametros, deja_gradiente_pct: isFinite(f) ? Math.round(100 * f) : null,
              gradiente_restante: isFinite(f) ? f : null, objeto_quitado_pct: come, copia_objeto: corr,
+             gradiente_visible: isFinite(m.gradiente_visible) ? m.gradiente_visible : null,
              come_objeto_pct: come, corr: corr, elegido: c === best,
              previa: c.previa, previa_modelo: c.previa_modelo };
   });

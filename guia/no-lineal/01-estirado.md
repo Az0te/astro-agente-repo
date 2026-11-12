@@ -14,7 +14,7 @@ En una galaxia con mucho cielo alrededor, 0,10 deja el fondo gris: una galaxia g
 | Método | Cuándo |
 |---|---|
 | **GHS** | Control fino (SP, LP/HP): galaxias HDR y starless |
-| **Adaptativo multiescala** | Estructuras multiescala, nebulosas complejas, galaxias; igualar capas antes de combinar (L y RGB) |
+| **Adaptativo multiescala** | Estructuras multiescala, nebulosas complejas, galaxias; igualar capas antes de combinar (L y RGB). Su compresión de rango (0,4) aplana el núcleo de las galaxias hacia el disco (pixinsight-mcp: estructura del núcleo −30 %): bien para nebulosas brillantes tipo HDR; en galaxias, compresión 0,1–0,2 o que decida la comparación |
 | **Arcsinh** | Conserva el color; buen candidato en la comparación |
 | Transformación de histograma | Válida; GHS es mejor en varias pasadas porque LP no vuelve a comprimir las sombras ya trabajadas |
 | **Estirado propio de estrellas** | Sólo la capa de estrellas lineal, en el Paso 8 |
