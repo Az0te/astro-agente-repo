@@ -573,7 +573,9 @@ def apilarCandidatos(siril, carpeta, grupo=None, proyecto=None, rechazos=("w", "
         else:
             r["avisos"].append(f"{cal['grupo']}: sin flats (viñeteo y polvo quedan en el master)")
         if osc:
-            args += ["-cfa", "-equalize_cfa", "-debayer"]
+            # Con drizzle, Bayer drizzle: las calibradas siguen CFA y el drizzle reparte cada fotosito en su canal
+            # (más resolución de color que hacer drizzle sobre las ya debayerizadas).
+            args += ["-cfa", "-equalize_cfa"] + ([] if drizzle else ["-debayer"])
         base = f"light{n_noche}"
         _progreso(f"noche {n_noche}/{len(elegidos)}: calibrar {lg['n']} lights")
         _enlazar(lg["ficheros"], trabajo / base, base)
@@ -608,7 +610,14 @@ def apilarCandidatos(siril, carpeta, grupo=None, proyecto=None, rechazos=("w", "
             r["avisos"].append(f"selección no hecha: {str(e)[:150]}")
     r["seleccion"] = sel
     _progreso("aplicar el registro")
-    cmd("seqapplyreg", seq, "-filter-incl", *(["-drizzle"] if drizzle else []))
+    if drizzle:
+        # drizzle=True es ×2; un número es la escala. pixfrac 1 en OSC (Bayer drizzle: con menos quedan huecos de color).
+        escala = 2.0 if drizzle is True else float(drizzle)
+        pixfrac = 1.0 if osc else 0.9
+        r["drizzle"] = {"escala": escala, "pixfrac": pixfrac, "bayer": osc}
+        cmd("seqapplyreg", seq, "-filter-incl", "-drizzle", f"-scale={escala:g}", f"-pixfrac={pixfrac:g}")
+    else:
+        cmd("seqapplyreg", seq, "-filter-incl")
     # 3) candidatos
     n = 0
     for rej in rechazos:
