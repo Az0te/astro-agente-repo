@@ -12,6 +12,8 @@ Ficha: [no-lineal/01-estirado.md](../../no-lineal/01-estirado.md)
 **Campos llenos de nebulosa.** Cuando más del 60 % de las celdas de 64 px tienen señal sobre el cielo, `estirarCapas` pone el punto de simetría del GHS en la **señal débil** (celdas entre los percentiles 60 y 85), no en el cielo. `r.simetria` dice cuál usó y el % de celdas con señal; `simetria: "debil" | "cielo"` lo fuerza. Con la simetría en el cielo, la nebulosa débil quedaba apagada. En una nebulosa de emisión con RGB + dual band (11 nov 2026, mismo cielo 0,10 y mismo límite de ruido) separó 6,6 ruidos frente a 5,7, y en el recorte de la comparación 8,5 frente a 7,0. En galaxias no se activa sola.
 
 
+**Centro quemado en una nebulosa** (nov 2026): `estirarStarless(raya, { cielo: 0.10, simetria: "debil", altoMax: 0.002 })` repite el GHS al fallo con la simetría en la señal débil, parando cuando más del 0,002 % de los píxeles pasa de 0,95 (por defecto 0,05 %). Mismo método en las tres rayas para no cambiar la paleta.
+
 **Comparar métodos** (`estirarCandidatos(starless, { cielo })`, mismo fichero): prueba sobre copias GHS al fallo (con la simetría en el cielo y en la señal débil, `ghs_debil`), MultiscaleAdaptiveStretch (sin su saturación, que va después) y ArcsinhStretch (factor por bisección y punto negro bajo el cielo del canal más bajo), y los lleva todos al mismo cielo para comparar en igualdad. Gana, entre los que no fallan (ruido del cielo, recortes, dominante), el que más separa la señal débil del fondo: `senal_debil_en_ruidos` = (p90 − cielo) / ruido del cielo. La tabla va en `comparados`; con `cerrar: false` se conservan todos para mirarlos. La capa de estrellas va en el Paso 8.
 
 ```json
