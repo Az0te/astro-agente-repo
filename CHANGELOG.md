@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+- **WBPP con varias noches y un flat por noche** (12 nov 2026, Rafael, `preproceso.js`). `lanzarWBPP` acepta `sesiones` (`"auto"` o lista), `referencia`, `agrupar` (`"global"` por defecto o `"noche"`), `planSolo`, `copiar` y `forzar`. Monta `<salida>/_entrada` con enlaces duros y pone en la ruta el tipo, la noche (`NOCHE_…`, palabra clave de agrupación) y el filtro, que WBPP lee cuando la cabecera no los trae (DWARF). `estadoWBPP` comprueba el flat de cada noche (`flats_por_noche`). `seleccionarSubs` devuelve `mejor_sub`. Nueva `drizzleWBPP` (sólo si se pide): DrizzleIntegration ×2 sobre los `.xdrz` y `.xnml` que deja WBPP, Bayer drizzle en OSC. Siril: `drizzle` acepta la escala (`true` = ×2) y en OSC hace Bayer drizzle.
+  - `ppHeader` tumbaba PixInsight al leer una propiedad XISF que no existe (master flat de la DWARF): ahora sólo lee las que están.
+  - `ExternalProcess.startDetached` con lista de argumentos falla en la versión actual ("String expected"): la segunda instancia se arranca con un `.cmd` y `start`.
+
 - **Probada con cámara monocromo y banda estrecha** (12 nov 2026, Rafael). Nebulosa de la Tarántula: KAF-11000 con rueda, LRGB + Hα, OIII y SII, paleta SHO con estrellas de la RGB. Lo aprendido:
   - **NXT ignoraba el nivel** (`ruido.js`): con sólo `denoise` y `denoise_intensity`, 0,1 y 0,95 daban lo mismo. Ahora `rdNXT` pone también la intensidad por frecuencia (0,1 → −8 %, 0,95 → −67 %). Las comparaciones de niveles de NXT anteriores no valen.
   - `ruidoCandidatos` prefiere los candidatos cuya residual es sólo ruido (`residual_estructura` ≤ 2); antes ganaba TGV 1,0 con 2,98.

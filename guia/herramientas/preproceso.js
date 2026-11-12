@@ -83,8 +83,11 @@ function ppHeader(path) {
   // Masters XISF: a veces sólo llevan propiedades XISF, sin palabras clave FITS.
   var props = { EXPTIME: "Instrument:FrameExposureTime", EXPOSURE: "Instrument:ExposureTime", "CCD-TEMP": "Instrument:Sensor:Temperature", FILTER: "Instrument:Filter:Name",
                 TELESCOP: "Instrument:Telescope:Name", XBINNING: "Instrument:Sensor:XBinning", IMAGETYP: "Instrument:Frame:Type" };
+  // Sólo las propiedades que existen: leer una que no está tumba PixInsight (12-11-2026, master flat XISF de la DWARF).
+  var hay = {};
+  if (F.canStoreImageProperties) try { (f.imageProperties || []).forEach(function (p) { hay[p instanceof Array ? p[0] : p] = true; }); } catch (e) { }
   for (var kp in props)
-    if (o[kp] === undefined && F.canStoreImageProperties) try { var pv = f.readImageProperty(props[kp]); if (pv !== undefined && pv !== null) o[kp] = String(pv); } catch (e) { }
+    if (o[kp] === undefined && hay[props[kp]]) try { var pv = f.readImageProperty(props[kp]); if (pv !== undefined && pv !== null) o[kp] = String(pv); } catch (e) { }
   f.close();
   o.exp = parseFloat(o.EXPTIME || o.EXPOSURE);
   o.temp = parseFloat(o["CCD-TEMP"] || o["SET-TEMP"]);
@@ -93,6 +96,8 @@ function ppHeader(path) {
   // Último recurso, el nombre del fichero ("Master Dark 300s -10C 100Ga 50Of"): exposición, temperatura, gain y offset.
   var nm = File.extractName(path), m;
   if (!isFinite(o.exp) && (m = nm.match(/(\d+(?:\.\d+)?)\s*s(?![a-z])/i))) o.exp = parseFloat(m[1]);
+  if (!isFinite(o.exp) && (m = nm.match(/exp(?:osure|time)?[_ -]?(\d+(?:\.\d+)?)/i))) o.exp = parseFloat(m[1]);   // DWARF: dark_exp_60.000000_...
+  o.expEnCabecera = o.EXPTIME !== undefined || o.EXPOSURE !== undefined;
   if (!isFinite(o.temp) && (m = nm.match(/(-?\d+(?:\.\d+)?)\s*C(?![a-z])/))) o.temp = parseFloat(m[1]);
   if (o.gain === null && (m = nm.match(/(\d+)\s*Ga/i))) o.gain = parseFloat(m[1]);
   if (o.offset === null && (m = nm.match(/(\d+)\s*Of/i))) o.offset = parseFloat(m[1]);
@@ -400,30 +405,375 @@ function inventario(carpeta, o) {
 // automatización de WBPP, Alt+A en su ventana). Por defecto sin plate solve ni modos interactivos; el resto de
 // ajustes (drizzle, normalización local, autocrop...) son los últimos guardados en WBPP.
 // Después: estadoWBPP(salida) hasta que diga terminado, y entonces resume el log.
+//
+// Varias noches (opción sesiones): cada noche se calibra con SU flat y todas se registran a UNA referencia.
+//   sesiones: "auto" (una noche por carpeta de lights; el flat, el de su subcarpeta FLAT o, entre los de flats, el
+//             último de la misma noche o anterior, por DATE-OBS o la fecha del nombre) o una lista
+//             [{ lights, flats, darks, nombre }] con lo de cada noche (darks y nombre opcionales).
+//   agrupar:  "global" (por defecto: calibra por noche y saca UN master; en la prueba A/B/C de NGC 281 fue ~3 % mejor)
+//             o "noche" (un master por noche, todos registrados a la misma referencia; la normalización local la
+//             hace WBPP con una referencia por noche).
+//   referencia: ruta de un light (de los de entrada: WBPP usa su versión calibrada y debayerizada) o de una imagen ya
+//             calibrada; seleccionarSubs devuelve mejor_sub. Sin ella, WBPP elige UNA para todas (auto).
+//   planSolo: true devuelve el plan (noche, lights, flat) sin lanzar nada.
+// Para eso monta <salida>/_entrada con enlaces duros (sin copiar datos; mismo disco que los datos) con el tipo, la
+// noche y el filtro en la ruta (LIGHT/NOCHE_N1-20260911/..., FLAT/NOCHE_N1-20260911/FILTER_Duo-Band/...): WBPP los lee
+// de ahí cuando la cabecera no los trae (lights sin IMAGETYP, flats sin FILTER: DWARF) y empareja cada noche con su
+// flat por la palabra clave NOCHE. Desde otro disco hay que pasar copiar: true (copia los ficheros).
 function lanzarWBPP(o) {
   o = o || {};
   if (!o.salida) throw new Error("Falta la carpeta de salida (opción salida, ruta corta)");
   var salida = o.salida.replace(/\\/g, "/").replace(/\/$/, "");
   if (salida.length > 60) throw new Error("Ruta de salida demasiado larga (" + salida.length + " caracteres): usar una de menos de 60");
+  var plan = null;
+  if (o.sesiones) {
+    plan = ppPlanSesiones(o);
+    if (o.planSolo) { var ps = {}; for (var kp in plan) if (kp != "sesiones") ps[kp] = plan[kp]; return ps; }
+    if (plan.no_cumple.length && !o.forzar)
+      throw new Error("No lanzo WBPP: " + plan.no_cumple.join(" ") + " (ver el plan con planSolo: true; forzar: true para lanzarlo igual).");
+  }
   if (o.carpeta) { o.lights = o.lights || o.carpeta; o.flats = o.flats || o.carpeta; o.flatDarks = o.flatDarks || o.carpeta; }
   o.lights = ppSub(o.lights, "LIGHT"); o.flats = ppSub(o.flats, "FLAT"); o.flatDarks = ppSub(o.flatDarks, "DARK");
-  var files = [].concat(ppList(o.lights), ppList(o.flats), ppList(o.darks), ppList(o.flatDarks), ppList(o.bias));
-  if (ppList(o.lights).length == 0) throw new Error("No hay lights");
+  var files = plan ? null : [].concat(ppList(o.lights), ppList(o.flats), ppList(o.darks), ppList(o.flatDarks), ppList(o.bias));
+  if (!plan && ppList(o.lights).length == 0) throw new Error("No hay lights");
+  if (!File.directoryExists(salida)) File.createDirectory(salida, true);
+  // autoIntegrationMode false: si no, WBPP pasa a FastIntegration los grupos de 200 subs o más (sin normalización
+  // local ni datos de drizzle, y con 349 subs de NGC 281 dejó fuera 10 que no alineó; 12-11-2026).
+  var par = { frameSelectionInteractive: "false", localNormalizationInteractiveMode: "false", platesolve: "false", autoIntegrationMode: "false" };
+  var entrada = null;
+  if (plan) {
+    entrada = ppMontarEntrada(plan, salida, o);
+    files = entrada.ficheros;
+    // keywords va antes que los file=: WBPP agrupa cada fichero al añadirlo, con las palabras clave que haya ya.
+    par.groupingKeywordsEnabled = "true";
+    par.keywords = "NOCHE " + (o.agrupar == "noche" ? "prepost" : "pre");
+    par.detectMasterIncludingFullPath = "true";   // masters sin IMAGETYP (DWARF): "master" en el nombre
+    if (entrada.referencia) { par.bestFrameReferenceMethod = "0"; par.referenceImage = entrada.referencia; }
+    else par.bestFrameReferenceMethod = "1";       // auto: una sola referencia para todas las noches
+  } else if (o.referencia) {
+    par.bestFrameReferenceMethod = "0"; par.referenceImage = String(o.referencia).replace(/\\/g, "/");
+  }
   for (var i = 0; i < files.length; ++i)
     if (files[i].indexOf(",") >= 0) throw new Error("WBPP no admite comas en las rutas: " + files[i]);
-  if (!File.directoryExists(salida)) File.createDirectory(salida, true);
-  var par = { frameSelectionInteractive: "false", localNormalizationInteractiveMode: "false", platesolve: "false" };
   if (o.parametros) for (var k in o.parametros) par[k] = String(o.parametros[k]);
   var r = [CoreApplication.dirPath.replace(/\/bin$/, "") + "/src/scripts/BatchPreprocessing/WBPP.js", "automationMode=true",
            "outputDirectory=" + salida];
   for (var k2 in par) r.push(k2 + "=" + par[k2]);
-  files.forEach(function (f) { r.push("file=" + f.replace(/\\/g, "/")); });
+  // Con _entrada, la carpeta (dir=, recursiva) y no fichero a fichero: la línea de órdenes de Windows se corta a
+  // 32767 caracteres y con ~350 subs se perdían los últimos ficheros y los darks (12-11-2026).
+  if (entrada) r.push("dir=" + salida + "/_entrada");
+  else files.forEach(function (f) { r.push("file=" + f.replace(/\\/g, "/")); });
+  if (r.join(",").length > 30000)
+    throw new Error("Demasiados ficheros para la línea de órdenes de WBPP (" + files.length + "): pasar sesiones: \"auto\" (usa una carpeta de entrada) o carpetas en vez de listas.");
   var inicio = new Date();
-  File.writeTextFile(salida + "/piastropilot_wbpp.json", JSON.stringify({ inicio: inicio.toISOString(), ficheros: files.length, parametros: par }));
-  if (!ExternalProcess.startDetached(CoreApplication.filePath, ["-n", "--automation-mode", "--no-focus-stealing", "-r=" + r.join(","), "--force-exit"]))
-    throw new Error("No se pudo arrancar la segunda instancia de PixInsight");
-  return { salida: salida, ficheros: files.length, lights: ppList(o.lights).length, inicio: inicio.toISOString(), parametros: par,
-           nota: "WBPP corre en otra instancia de PixInsight (se cierra sola). Comprobar con estadoWBPP(\"" + salida + "\")." };
+  var info = { inicio: inicio.toISOString(), ficheros: files.length, parametros: par };
+  if (plan) info.sesiones = plan.sesiones.map(function (s) { return { nombre: s.nombre, lights: s.lights.length, flat: s.flatEtiqueta }; });
+  File.writeTextFile(salida + "/piastropilot_wbpp.json", JSON.stringify(info));
+  ppSegundaInstancia("-r=" + r.join(","), salida);
+  var res = { salida: salida, ficheros: files.length, lights: plan ? plan.lights : ppList(o.lights).length, inicio: inicio.toISOString(), parametros: par,
+              nota: "WBPP corre en otra instancia de PixInsight (se cierra sola). Comprobar con estadoWBPP(\"" + salida + "\")." };
+  if (plan) {
+    res.sesiones = info.sesiones;
+    res.enlaces = entrada.enlazados; res.copiados = entrada.copiados;
+    res.referencia = entrada.referencia || "auto (WBPP elige una para todas las noches)";
+    res.control = plan.control;
+  }
+  return res;
+}
+
+// --- Varias noches -----------------------------------------------------------------------------------------------
+
+// Fecha y hora de un fichero: DATE-OBS de la cabecera o, si no, la del nombre (20260911-205453321, 2026-09-11_20-52-11).
+function ppFechaHora(h) {
+  var s = h["DATE-OBS"], m;
+  if (s && (m = s.match(/^(\d{4})-(\d\d)-(\d\d)(?:[T ](\d\d):(\d\d))?/)))
+    return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 12), +(m[5] || 0)));
+  var n = File.extractName(h.fichero);
+  if ((m = n.match(/(20\d\d)-?(\d\d)-?(\d\d)(?:[-_T ]?(\d\d)[-:]?(\d\d))?/)))
+    return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 12), +(m[5] || 0)));
+  return null;
+}
+
+// Noche de observación (AAAAMMDD de la tarde en que empieza): la hora menos 12 h, para que una toma de la 01:00
+// del 23 sea de la noche del 22 junto con las de las 23:00.
+function ppNoche(h) {
+  var d = ppFechaHora(h);
+  if (!d) return null;
+  d = new Date(d.getTime() - 12 * 3600000);
+  var p = function (x) { return (x < 10 ? "0" : "") + x; };
+  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate());
+}
+
+function ppDir(f) { return (File.extractDrive(f) + File.extractDirectory(f)).replace(/\\/g, "/"); }
+
+// Juegos de flats: cada master por separado y los flats sueltos por carpeta. De un mismo master en .fits y .xisf se
+// queda el .xisf (WBPP sólo acepta masters en XISF).
+function ppJuegosFlats(lista) {
+  var hs = ppList(lista).map(function (f) { try { return ppHeader(f); } catch (e) { return null; } }).filter(function (h) { return h; });
+  var xisf = {};
+  hs.forEach(function (h) { if (/\.xisf$/i.test(h.fichero)) xisf[File.extractName(h.fichero).toLowerCase()] = true; });
+  hs = hs.filter(function (h) { return /\.xisf$/i.test(h.fichero) || !xisf[File.extractName(h.fichero).toLowerCase()]; });
+  var juegos = [], porDir = {};
+  hs.forEach(function (h) {
+    var master = /master/i.test(File.extractName(h.fichero)) || /master/i.test(h.tipo) || (h.ncombine || 0) > 1;
+    if (master) juegos.push({ ficheros: [h.fichero], master: true, h: h, etiqueta: File.extractName(h.fichero) + File.extractExtension(h.fichero) });
+    else {
+      var d = ppDir(h.fichero);
+      if (!porDir[d]) { porDir[d] = { ficheros: [], master: false, h: h, etiqueta: d + " (" + "flats sueltos)" }; juegos.push(porDir[d]); }
+      porDir[d].ficheros.push(h.fichero);
+    }
+  });
+  juegos.forEach(function (j) {
+    j.noche = ppNoche(j.h);
+    j.filtro = j.h.filtro;
+    if (j.master && !/\.xisf$/i.test(j.ficheros[0])) j.soloFits = true;
+    if (!j.master) j.etiqueta = j.etiqueta.replace(" (flats sueltos)", " (" + j.ficheros.length + " flats)");
+  });
+  return juegos;
+}
+
+// Plan de noches: [{ nombre, lights, lightsH, flats, flatEtiqueta, darks, filtro }] y avisos.
+function ppPlanSesiones(o) {
+  var r = { sesiones: [], lights: 0, no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
+  var defs = [];
+  if (o.sesiones instanceof Array) {
+    o.sesiones.forEach(function (s, i) {
+      var L = ppList(ppSub(s.lights, "LIGHT"));
+      if (!L.length) throw new Error("Sesión " + (i + 1) + ": no hay lights en " + s.lights);
+      defs.push({ lights: L, flats: s.flats ? ppList(ppSub(s.flats, "FLAT")) : null, darks: s.darks ? ppList(s.darks) : null, nombre: s.nombre });
+    });
+  } else {
+    // auto: una noche por carpeta de lights (o por fecha si todo está en una carpeta)
+    var Lt = ppList(ppSub(o.lights || o.carpeta, "LIGHT"));
+    if (!Lt.length && typeof (o.lights || o.carpeta) === "string") {
+      // carpeta con una subcarpeta por noche y los lights dentro (DWARF): todas, sin las que empiezan por "_"
+      var raiz = String(o.lights || o.carpeta).replace(/\\/g, "/").replace(/\/$/, "");
+      ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) {
+        ppSearch(raiz + "/" + e, true).forEach(function (f) {
+          var rel = f.replace(/\\/g, "/").substring(raiz.length);
+          if (!/\/_/.test(rel) && !/(^|[^A-Za-z0-9])(flats?|darks?|bias|calibrat\w*|master\w*|registered|debayered|logs)\//i.test(rel)) Lt.push(f);
+        });
+      });
+      Lt.sort();
+    }
+    if (!Lt.length) throw new Error("No hay lights en " + (o.lights || o.carpeta));
+    var porDir = {}, orden = [];
+    Lt.forEach(function (f) { var d = ppDir(f); if (!porDir[d]) { porDir[d] = []; orden.push(d); } porDir[d].push(f); });
+    if (orden.length == 1) {   // una carpeta: por noche de la cabecera
+      porDir = {}; orden = [];
+      Lt.forEach(function (f) { var n = "?"; try { n = ppNoche(ppHeader(f)) || "?"; } catch (e) { } if (!porDir[n]) { porDir[n] = []; orden.push(n); } porDir[n].push(f); });
+    }
+    orden.forEach(function (k) {
+      var L = porDir[k], d = ppDir(L[0]), fl = null;
+      if (/\/LIGHT$/i.test(d) && File.directoryExists(d.replace(/\/LIGHT$/i, "/FLAT"))) fl = ppList(d.replace(/\/LIGHT$/i, "/FLAT"));
+      defs.push({ lights: L, flats: fl && fl.length ? fl : null, darks: null });
+    });
+  }
+  var juegos = ppJuegosFlats(o.flats ? ppSub(o.flats, "FLAT") : []);
+  defs.forEach(function (s) {
+    var h0 = ppHeader(s.lights[0]), hl = ppHeader(s.lights[s.lights.length - 1]);
+    s.noche = ppNoche(h0) || "";
+    s.filtro = h0.filtro || "";
+    s.sinFiltro = !h0.filtro;
+    var j = null;
+    if (s.flats) {
+      var js = ppJuegosFlats(s.flats);
+      if (js.length) { j = js[0]; if (js.length > 1) j = { ficheros: [].concat.apply([], js.map(function (x) { return x.ficheros; })), master: false, etiqueta: js.map(function (x) { return x.etiqueta; }).join(" + "), filtro: js[0].filtro }; }
+    } else if (juegos.length) {
+      // el último juego de la misma noche o anterior; si no hay, el primero posterior. Mismo filtro si el flat lo dice.
+      var cand = juegos.filter(function (x) { return !x.filtro || !s.filtro || x.filtro == s.filtro; });
+      if (!cand.length) cand = juegos;
+      var antes = cand.filter(function (x) { return x.noche && s.noche && x.noche <= s.noche; }).sort(function (a, b) { return a.noche < b.noche ? -1 : 1; });
+      var despues = cand.filter(function (x) { return x.noche && s.noche && x.noche > s.noche; }).sort(function (a, b) { return a.noche < b.noche ? -1 : 1; });
+      j = antes.length ? antes[antes.length - 1] : despues.length ? despues[0] : (cand.length == 1 ? cand[0] : null);
+      if (j && !antes.length) r.control.revisar_a_ojo.push("Noche " + s.noche + ": no hay flat de esa noche ni anterior; uso " + j.etiqueta + " (posterior).");
+      if (j && antes.length && j.noche != s.noche) r.control.medido.push("Noche " + s.noche + ": flat de la noche " + j.noche + " (" + j.etiqueta + ").");
+    }
+    s.flatJuego = j;
+    s.flatEtiqueta = j ? j.etiqueta : "ninguno";
+    if (!j) r.no_cumple.push("Noche " + (s.noche || File.extractName(s.lights[0])) + ": sin flat.");
+    else if (j.soloFits) r.no_cumple.push("Noche " + s.noche + ": el master flat " + j.etiqueta + " sólo está en FITS; WBPP sólo acepta masters en XISF (guardarlo como .xisf).");
+    else if (j.filtro && s.filtro && j.filtro != s.filtro) r.no_cumple.push("Noche " + s.noche + ": flat con filtro '" + j.filtro + "' y lights '" + s.filtro + "'.");
+    if (hl && ppNoche(hl) && ppNoche(hl) != s.noche) r.control.revisar_a_ojo.push("La carpeta " + ppDir(s.lights[0]) + " tiene lights de más de una noche (" + s.noche + " y " + ppNoche(hl) + "): se tratan como una sola.");
+  });
+  defs.sort(function (a, b) { return a.noche < b.noche ? -1 : a.noche > b.noche ? 1 : 0; });
+  defs.forEach(function (s, i) {
+    s.nombre = String(s.nombre || ("N" + (i + 1) + (s.noche ? "-" + s.noche : ""))).replace(/[^-().A-Za-z0-9]/g, "-");
+    r.lights += s.lights.length;
+  });
+  var nombres = ppUnique(defs, function (s) { return s.nombre; });
+  if (nombres.length < defs.length) throw new Error("Dos sesiones con el mismo nombre: " + defs.map(function (s) { return s.nombre; }).join(", "));
+  r.sesiones = defs;
+  r.plan = defs.map(function (s) { return { noche: s.nombre, lights: s.lights.length, filtro: s.filtro || "(sin FILTER)", flat: s.flatEtiqueta }; });
+  r.control.medido.push(defs.length + " noches, " + r.lights + " lights.");
+  return r;
+}
+
+// Nombre seguro para WBPP: sin espacios ni comas y sin las palabras que WBPP lee en la ruta (tipo y "master").
+function ppNombreSeguro(f, esMaster) {
+  // WBPP toma la ÚLTIMA aparición en la ruta: una palabra de tipo en el nombre mandaría sobre la carpeta.
+  var n = File.extractName(f), e = File.extractExtension(f);
+  n = n.replace(/[^A-Za-z0-9._-]+/g, "_");
+  if (!esMaster) n = n.replace(/master/ig, "mstr");
+  n = n.replace(/(^|[^A-Za-z0-9])(bias|darks?|flats?|lights?|filter|insflnam|noche|exptime|exposure)(?=[^A-Za-z0-9]|$)/ig, "$1x$2");
+  return n + e;
+}
+
+// Monta <salida>/_entrada con enlaces duros (o copias con copiar: true) y devuelve los ficheros para WBPP.
+function ppMontarEntrada(plan, salida, o) {
+  if (/(^|[^A-Za-z0-9])(bias|darks?|flats?|lights?|master)([^A-Za-z0-9]|$)|noche_/i.test(salida))
+    throw new Error("La carpeta de salida no puede llevar las palabras light, flat, dark, bias ni master (WBPP las lee en la ruta): " + salida);
+  var base = salida + "/_entrada", pares = [], ficheros = [], referencia = null;
+  var refIn = o.referencia ? String(o.referencia).replace(/\\/g, "/") : null;
+  function poner(src, dir, esMaster) {
+    // Exposición que no está en la cabecera pero sí en el nombre (darks de la DWARF): a la ruta, donde WBPP la lee.
+    var h = null; try { h = ppHeader(src); } catch (e) { }
+    if (h && !h.expEnCabecera && isFinite(h.exp)) dir += "/EXPOSURE_" + h.exp;
+    var dst = base + "/" + dir + "/" + ppNombreSeguro(src, esMaster);
+    pares.push([src.replace(/\\/g, "/"), dst]);
+    ficheros.push(dst);
+    return dst;
+  }
+  plan.sesiones.forEach(function (s) {
+    var dL = "LIGHT/NOCHE_" + s.nombre;
+    s.lights.forEach(function (f) { var d = poner(f, dL, false); if (refIn && f.replace(/\\/g, "/") == refIn) referencia = d; });
+    if (s.flatJuego) {
+      var fil = s.flatJuego.filtro || s.filtro || "NoFilter";
+      var dF = "FLAT/NOCHE_" + s.nombre + "/FILTER_" + fil.replace(/[^- A-Za-z0-9]/g, "-");
+      s.flatJuego.ficheros.forEach(function (f) { poner(f, dF, s.flatJuego.master); });
+    }
+    if (s.darks) s.darks.forEach(function (f) { poner(f, "DARK/NOCHE_" + s.nombre, /master/i.test(File.extractName(f))); });
+  });
+  ppList(o.darks).forEach(function (f) { poner(f, "DARK", /master/i.test(File.extractName(f))); });
+  ppList(ppSub(o.flatDarks, "DARK")).forEach(function (f) { poner(f, "DARK/FLATDARK", /master/i.test(File.extractName(f))); });
+  ppList(o.bias).forEach(function (f) { poner(f, "BIAS", /master/i.test(File.extractName(f))); });
+  if (refIn && !referencia) {
+    if (!File.exists(refIn)) throw new Error("No existe la referencia " + refIn);
+    referencia = refIn;   // imagen de fuera (ya calibrada): WBPP la usa tal cual
+  }
+  // Enlaces duros: mismo disco. Si el disco es otro, copiar sólo con copiar: true.
+  var unidad = function (p) { var m = p.match(/^([A-Za-z]):/); return m ? m[1].toUpperCase() : ""; };
+  var otros = pares.filter(function (p) { return unidad(p[0]) != unidad(p[1]); });
+  if (otros.length && !o.copiar)
+    throw new Error(otros.length + " ficheros están en otro disco que la salida (p. ej. " + otros[0][0] + "): poner la salida en el mismo disco (enlaces sin copiar) o pasar copiar: true.");
+  // Lo de un intento anterior se rehace (los enlaces no ocupan; borrar un enlace no toca el original).
+  if (File.directoryExists(base)) ppBorrarArbol(base);
+  var dirs = ppUnique(pares, function (p) { return ppDir(p[1]); });
+  dirs.forEach(function (d) { File.createDirectory(d, true); });
+  var enlazados = 0, copiados = 0, lineas = [];
+  pares.forEach(function (p) {
+    if (unidad(p[0]) != unidad(p[1])) { File.copyFile(p[1], p[0]); ++copiados; }
+    else lineas.push(p);
+  });
+  if (lineas.length) {
+    var win = /^[A-Za-z]:/.test(salida);
+    var script = salida + (win ? "/piastropilot_enlaces.cmd" : "/piastropilot_enlaces.sh");
+    var txt = win
+      ? "@echo off\r\nchcp 65001 >nul\r\n" + lineas.map(function (p) { return "mklink /H \"" + File.unixPathToWindows(p[1]) + "\" \"" + File.unixPathToWindows(p[0]) + "\" >nul"; }).join("\r\n") + "\r\n"
+      : lineas.map(function (p) { return "ln \"" + p[0] + "\" \"" + p[1] + "\""; }).join("\n") + "\n";
+    File.writeTextFile(script, txt);
+    ppEjecutar(win ? "cmd.exe" : "/bin/sh", win ? ["/c", File.unixPathToWindows(script)] : [script], 10);
+    lineas.forEach(function (p) { if (File.exists(p[1])) ++enlazados; });
+    if (enlazados < lineas.length)
+      throw new Error("Sólo se crearon " + enlazados + " de " + lineas.length + " enlaces en " + base + " (¿disco no NTFS?). Probar con copiar: true.");
+  }
+  return { ficheros: ficheros, referencia: referencia, enlazados: enlazados, copiados: copiados };
+}
+
+// Otra instancia de PixInsight sin ventanas que se cierra sola. ExternalProcess.startDetached con lista de argumentos
+// falla en algunas versiones ("String expected", 12-11-2026 con el motor v8): en Windows se arranca con un .cmd y "start".
+function ppSegundaInstancia(argR, carpeta) {
+  var args = ["-n", "--automation-mode", "--no-focus-stealing", argR, "--force-exit"];
+  try { if (ExternalProcess.startDetached(CoreApplication.filePath, args)) return; } catch (e) { }
+  if (!/^[A-Za-z]:/.test(CoreApplication.filePath)) throw new Error("No se pudo arrancar la segunda instancia de PixInsight");
+  var cmd = carpeta + "/piastropilot_lanzar.cmd";
+  File.writeTextFile(cmd, "@echo off\r\nchcp 65001 >nul\r\nstart \"\" \"" + File.unixPathToWindows(CoreApplication.filePath) + "\" " +
+    args.map(function (a) { return "\"" + a.replace(/%/g, "%%") + "\""; }).join(" ") + "\r\n");
+  var r = ppEjecutar("cmd.exe", ["/c", File.unixPathToWindows(cmd)], 2);
+  if (r.codigo != 0) throw new Error("No se pudo arrancar la segunda instancia de PixInsight: " + r.salida);
+}
+
+function ppBorrarArbol(d) {
+  var ff = new FileFind, subs = [], fs = [];
+  if (ff.begin(d + "/*")) do {
+    if (ff.name == "." || ff.name == "..") continue;
+    if (ff.isDirectory) subs.push(d + "/" + ff.name); else fs.push(d + "/" + ff.name);
+  } while (ff.next());
+  ff.end();
+  fs.forEach(function (f) { File.remove(f); });
+  subs.forEach(ppBorrarArbol);
+  File.removeDirectory(d);
+}
+
+function ppEjecutar(prog, args, maxMinutos) {
+  var P = new ExternalProcess, t0 = Date.now(), out = "";
+  P.onStandardOutputDataAvailable = function () { out += String(this.stdout); };
+  P.onStandardErrorDataAvailable = function () { out += String(this.stderr); };
+  P.start(prog, args);
+  while (P.isStarting) processEvents();
+  while (P.isRunning) {
+    if (Date.now() - t0 > (maxMinutos || 10) * 60000) { P.kill(); throw new Error(prog + ": tiempo agotado\n" + out); }
+    processEvents();
+  }
+  return { codigo: P.exitCode, salida: out };
+}
+
+// Drizzle (×2 por defecto) sobre una salida de WBPP terminada, en otra instancia de PixInsight. WBPP siempre deja
+// los datos de drizzle (.xdrz, con el rechazo y los pesos de su integración) y los de normalización local (.xnml):
+// esto es el mismo DrizzleIntegration que hace WBPP cuando se le activa el drizzle. En OSC, Bayer drizzle (enableCFA:
+// usa los subs calibrados sin debayerizar, que WBPP deja en calibrated/). Sólo si el usuario lo pide.
+// Opciones: escala (2), pixfrac (1 en OSC; 0,9 en mono). Después, estadoWBPP(salida).
+function drizzleWBPP(salida, o) {
+  o = o || {};
+  salida = String(salida).replace(/\\/g, "/").replace(/\/$/, "");
+  var est = estadoWBPP(salida, { abrir: false });
+  if (!est.terminado) throw new Error("WBPP no ha terminado en " + salida + " (estadoWBPP).");
+  var xdrz = ppSearch(salida + "/registered/*.xdrz", true);
+  if (!xdrz.length) throw new Error("No hay ficheros .xdrz en " + salida + "/registered: sin datos de drizzle no se puede.");
+  var cfa = File.directoryExists(salida + "/debayered");
+  var escala = o.escala || 2, pixfrac = o.pixfrac || (cfa ? 1.0 : 0.9);
+  // Carpeta de la guía: la del runner del MCP o la opción guia (<repo>/guia/herramientas).
+  var guia = o.guia || (typeof GUIA_HERRAMIENTAS !== "undefined" ? GUIA_HERRAMIENTAS : "");
+  if (!guia || !File.exists(guia + "/preproceso.js")) throw new Error("No sé dónde está preproceso.js: pasar guia: \"<repo>/guia/herramientas\".");
+  var script = salida + "/piastropilot_drizzle.js", res = salida + "/piastropilot_drizzle.json";
+  if (File.exists(res)) File.remove(res);
+  File.writeTextFile(script,
+    "eval(File.readTextFile(" + JSON.stringify(guia + "/preproceso.js") + "));\n" +
+    "var R; try { R = ppDrizzleGrupos(" + JSON.stringify(salida) + ", " + JSON.stringify({ escala: escala, pixfrac: pixfrac, cfa: cfa }) + "); }\n" +
+    "catch (e) { R = { error: String(e) }; }\n" +
+    "R.fin = (new Date()).toISOString();\n" +
+    "File.writeTextFile(" + JSON.stringify(res) + ", JSON.stringify(R));\n");
+  ppSegundaInstancia("-r=" + script, salida);
+  return { salida: salida, xdrz: xdrz.length, escala: escala, pixfrac: pixfrac, bayer: cfa,
+           nota: "Drizzle ×" + escala + " en otra instancia de PixInsight. Comprobar con estadoWBPP(\"" + salida + "\") hasta que diga drizzle terminado." };
+}
+
+// Corre en la segunda instancia: un DrizzleIntegration por carpeta de registered/ (un grupo de WBPP).
+function ppDrizzleGrupos(salida, o) {
+  var R = { masters: [], avisos: [] };
+  var xnml = {};
+  ppSearch(salida + "/*.xnml", true).forEach(function (f) { xnml[File.extractName(f)] = f; });
+  var grupos = {};
+  ppSearch(salida + "/registered/*.xdrz", true).forEach(function (f) { var d = ppDir(f); (grupos[d] = grupos[d] || []).push(f); });
+  for (var d in grupos) {
+    var fs = grupos[d].sort();
+    if (fs.length < 3) { R.avisos.push(d + ": menos de 3 subs, sin drizzle."); continue; }
+    var conLN = fs.every(function (f) { return !!xnml[File.extractName(f)]; });
+    var DI = new DrizzleIntegration;
+    DI.inputData = fs.map(function (f) { return [true, f, conLN ? xnml[File.extractName(f)] : ""]; });
+    DI.scale = o.escala; DI.dropShrink = o.pixfrac;
+    DI.enableCFA = !!o.cfa;
+    DI.showImages = true;
+    if (!DI.executeGlobal()) { R.avisos.push(d + ": DrizzleIntegration falló."); continue; }
+    var w = ImageWindow.windowById(DI.integrationImageId);
+    var nombre = "masterLight_drizzle" + o.escala + "x_" + d.replace(/.*\/registered\/?/, "").replace(/[^A-Za-z0-9._-]+/g, "_");
+    var out = salida + "/master/" + nombre.substring(0, 120) + ".xisf";
+    w.saveAs(out, false, false, false, false);
+    w.forceClose();
+    ["weightImageId"].forEach(function (k) { try { var ww = ImageWindow.windowById(DI[k]); if (!ww.isNull) ww.forceClose(); } catch (e) { } });
+    R.masters.push({ grupo: d, subs: fs.length, normalizacion_local: conLN, fichero: out });
+  }
+  return R;
 }
 
 // Estado de un WBPP lanzado con lanzarWBPP (o de cualquier carpeta de salida de WBPP) y resumen de su log.
@@ -455,6 +805,29 @@ function estadoWBPP(salida, o) {
     if (used) r.control.medido = r.control.medido.concat(ppUnique(used, function (x) { return x; }));
     if (/Master dark: none/.test(t.split("LIGHT FRAMES CALIBRATION")[1] || "")) r.no_cumple.push("Los lights se calibraron sin master dark.");
     if (/Master flat: none/.test(t.split("LIGHT FRAMES CALIBRATION")[1] || "")) r.no_cumple.push("Los lights se calibraron sin master flat.");
+    // Con noches (lanzarWBPP con sesiones): cada grupo de lights tiene que llevar el flat de SU noche.
+    var bloques = t.split(/\*+ LIGHT FRAMES CALIBRATION \*+/).slice(1);
+    var porNoche = [];
+    bloques.forEach(function (b) {
+      b = b.split(/\n\*{10,}/)[0];
+      var n = b.match(/NOCHE[^A-Za-z0-9]+([-().A-Za-z0-9]+)/), f = b.match(/Master flat: (.*)/), g = b.match(/Group of (\d+) Light/);
+      if (!n) return;
+      var flat = f ? f[1].trim() : "none", fn = flat.match(/NOCHE_([-().A-Za-z0-9]+)/);
+      porNoche.push({ noche: n[1], lights: g ? +g[1] : null, flat: flat == "none" ? "ninguno" : File.extractName(flat) + File.extractExtension(flat) });
+      if (flat == "none") r.no_cumple.push("Noche " + n[1] + ": calibrada sin flat.");
+      else if (fn && fn[1] != n[1]) r.no_cumple.push("Noche " + n[1] + ": calibrada con el flat de la noche " + fn[1] + ".");
+    });
+    if (porNoche.length) r.flats_por_noche = porNoche;
+  }
+  var dz = salida + "/piastropilot_drizzle.json";
+  if (File.exists(salida + "/piastropilot_drizzle.js")) {
+    if (!File.exists(dz)) r.drizzle = { terminado: false, estado: "en marcha" };
+    else {
+      var D = JSON.parse(File.readTextFile(dz));
+      r.drizzle = { terminado: true, masters: D.masters || [], avisos: D.avisos || [], error: D.error || null };
+      if (D.error) r.no_cumple.push("Drizzle: " + D.error);
+      (D.masters || []).forEach(function (m) { if (!m.normalizacion_local) r.control.revisar_a_ojo.push("Drizzle de " + m.grupo + " sin normalización local (faltan .xnml)."); });
+    }
   }
   if (!fin) r.estado = "en marcha: última línea \"" + last.replace(/^\[[^\]]*\]\s*/, "").substring(0, 120) + "\"";
   if (r.errores.length) r.no_cumple.push(r.errores.length + " errores en el log (ver errores).");
@@ -462,7 +835,8 @@ function estadoWBPP(salida, o) {
   if (fin && !r.masters.some(function (x) { return /^Light/i.test(x); })) r.no_cumple.push("No se generó ningún master de lights.");
   // Terminado: abre los masters de lights (el recortado si lo hay) con un STF automático; abrir: false para no abrirlos.
   if (fin && (!o || o.abrir !== false)) {
-    var lights = r.masters.filter(function (x) { return /^autocrop:/i.test(x); });
+    var lights = r.drizzle && r.drizzle.terminado ? r.drizzle.masters.map(function (m) { return "Light: " + m.fichero; }) : [];
+    if (!lights.length) lights = r.masters.filter(function (x) { return /^autocrop:/i.test(x); });
     if (!lights.length) lights = r.masters.filter(function (x) { return /^Light:/i.test(x); });
     r.vistas = lights.map(function (x) { var p = x.replace(/^[^:]+:\s*/, ""); return File.exists(p) ? ppAbrirSTF(p, File.extractName(p).substring(0, 60)) : null; })
                      .filter(function (v) { return v; });
@@ -574,6 +948,10 @@ function seleccionarSubs(x, o) {
   var r = { grupos: resumen, n_medidos: subs.length, n_aprobados: apr.length, lista_aprobados: lista,
             rechazados: rech.map(function (s) { return { sub: s.nombre, motivos: s.motivos }; }),
             no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
+  // Mejor sub (mayor PSF Signal Weight de todos los aprobados): la referencia común para lanzarWBPP con varias noches.
+  var mejor = null;
+  apr.forEach(function (s) { if (s.psf_signal_weight && (!mejor || s.psf_signal_weight > mejor.psf_signal_weight)) mejor = s; });
+  if (mejor) { r.mejor_sub = mejor.fichero; r.control.medido.push("Mejor sub (PSF Signal Weight " + mejor.psf_signal_weight.toFixed(3) + ", FWHM " + mejor.fwhm_px + " px): " + mejor.nombre + "."); }
   if (o.tabla) r.tabla = subs.map(function (s) { var t = {}; for (var k in s) if (k != "fichero" && k != "motivos" && k != "dudas") t[k] = s[k]; return t; });
   // En el mismo script también vale r.aprobados_rutas (no sale en JSON.stringify).
   Object.defineProperty(r, "aprobados_rutas", { value: apr.map(function (s) { return s.fichero; }), enumerable: false });

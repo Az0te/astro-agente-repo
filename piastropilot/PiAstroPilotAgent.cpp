@@ -984,7 +984,10 @@ static String HelperBlock( const PiAstroPilotStep& step, const String& viewId, c
       { "lineal/04-preprocesado.md", u"revisarCalibracion {calibracion: {lights: ..., flats: ..., flatDarks: ..., darks: ...}} (no usa ninguna vista). "
         u"En esta respuesta SÓLO revisarCalibracion: nunca lances WBPP en el mismo bloque. "
         u"Cuando el usuario haya visto la revisión y te pida seguir, en otra respuesta lanzarWBPP {wbpp: {lights: ..., flats: ..., flatDarks: ..., darks: ..., salida: <ruta corta>}} "
-        u"y después estadoWBPP {salida: <salida>} hasta que devuelva terminado: true" },
+        u"y después estadoWBPP {salida: <salida>} hasta que devuelva terminado: true. "
+        u"Con varias noches: primero lanzarWBPP {wbpp: {sesiones: \"auto\", lights: <carpeta del objeto>, flats: ..., darks: ..., salida: ..., referencia: <mejor_sub de seleccionarSubs>, planSolo: true}} "
+        u"y enseña el plan (qué flat va con cada noche); cuando el usuario lo acepte, lo mismo sin planSolo (agrupar \"global\" salvo que pida un master por noche). "
+        u"Drizzle sólo si el usuario lo pide: drizzleWBPP {salida, opciones: {escala: 2}} con WBPP ya terminado, y estadoWBPP hasta drizzle.terminado" },
    };
    for ( const Helper& h : helpers )
       if ( step.file == h.file )

@@ -255,14 +255,15 @@
    "fichero": "preproceso.js",
    "nivel": "disco",
    "timeout_s": 60,
-   "descripcion": "Paso 4 lineal: lanza WBPP en una segunda instancia de PixInsight sin ventanas (se cierra sola). Después, estadoWBPP(salida) hasta que diga terminado. Rutas sin comas y cortas (<256 caracteres con los nombres de WBPP).",
+   "descripcion": "Paso 4 lineal: lanza WBPP en una segunda instancia de PixInsight sin ventanas (se cierra sola). Después, estadoWBPP(salida) hasta que diga terminado. Rutas sin comas y cortas (<256 caracteres con los nombres de WBPP). Varias noches: sesiones \"auto\" (o una lista) calibra cada noche con SU flat y registra todas a UNA referencia (referencia: mejor_sub de seleccionarSubs); agrupar \"global\" (por defecto, un master) o \"noche\" (un master por noche). Primero planSolo: true para enseñar al usuario qué flat va con cada noche. Monta <salida>/_entrada con enlaces duros: la salida en el mismo disco que los datos.",
+   "resumen": "Paso 4 lineal: lanza WBPP en otra instancia. Varias noches: sesiones \"auto\", referencia común, flat de cada noche; planSolo para ver el plan.",
    "paso": "lineal/04-preprocesado.md",
    "params": {
     "type": "object",
     "properties": {
      "wbpp": {
       "type": "object",
-      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, salida (carpeta), parametros: { nombre: valor de la automatización de WBPP } }"
+      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), planSolo, copiar (otro disco), forzar, parametros: { nombre: valor de la automatización de WBPP } }"
      }
     },
     "required": [
@@ -275,7 +276,7 @@
    "fichero": "preproceso.js",
    "nivel": "lectura",
    "timeout_s": 60,
-   "descripcion": "Estado de un WBPP lanzado (o de cualquier carpeta de salida de WBPP): terminado sí/no, duración, fallidos, rechazados y masters usados, resumen del log.",
+   "descripcion": "Estado de un WBPP lanzado (o de cualquier carpeta de salida de WBPP): terminado sí/no, duración, fallidos, rechazados y masters usados, resumen del log; con noches, el flat que usó cada una (flats_por_noche); y el estado de drizzleWBPP.",
    "paso": "lineal/04-preprocesado.md",
    "params": {
     "type": "object",
@@ -287,6 +288,31 @@
      "opciones": {
       "type": "object",
       "description": "Opcional. { abrir: true para abrir los masters al terminar }"
+     }
+    },
+    "required": [
+     "salida"
+    ]
+   }
+  },
+  {
+   "nombre": "drizzleWBPP",
+   "fichero": "preproceso.js",
+   "nivel": "disco",
+   "timeout_s": 60,
+   "descripcion": "Paso 4 lineal, SÓLO si el usuario pide drizzle: DrizzleIntegration (×2 por defecto) sobre una salida de WBPP terminada, en otra instancia de PixInsight, con los .xdrz (rechazo y pesos de la integración de WBPP) y la normalización local; en OSC, Bayer drizzle. Es lo mismo que hace WBPP con el drizzle activado. Deja masterLight_drizzle2x_* en <salida>/master. Después, estadoWBPP(salida) hasta drizzle.terminado.",
+   "resumen": "Sólo si se pide: drizzle ×2 (Bayer en OSC) sobre una salida de WBPP terminada. Después estadoWBPP.",
+   "paso": "lineal/04-preprocesado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "salida": {
+      "type": "string",
+      "description": "Carpeta de salida de WBPP (terminado)."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { escala: 2, pixfrac: 1 en OSC / 0.9 en mono }"
      }
     },
     "required": [
