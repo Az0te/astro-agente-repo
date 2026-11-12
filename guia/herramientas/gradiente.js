@@ -180,22 +180,93 @@ function grMeasure(base, modelId, correctedId, range0) {
            gcStructCopy: corr, fondoResidual: resto, come_objeto_pct: come };
 }
 
+// 12 nov 2026 (Rafael): con 2+ masters se alinea y recorta SIEMPRE, salvo que ya vengan alineados: mismo tamaño, sin bordes
+// sin datos y las estrellas en el mismo sitio. Eso se comprueba aquí; si se cumple, sigue sin pedir el Paso 5.
+// Luminancia del centro (2n×2n px, binada ×2), con paso alto (menos su media 5×5) y recortada a [0, p99,9]: quedan las estrellas.
+function grLumCentro(id, n) {
+  var im = View.viewById(id).image, W = im.width, H = im.height, s = 2 * n;
+  var w = Math.min(s, W) & ~1, h = Math.min(s, H) & ~1, x0 = (W - w) >> 1, y0 = (H - h) >> 1, nc = im.numberOfChannels;
+  var buf = new Float32Array(w * h), L = new Float32Array(w * h), i, x, y;
+  for (var c = 0; c < nc; ++c) { im.getSamples(buf, new Rect(x0, y0, x0 + w, y0 + h), c); for (i = 0; i < L.length; ++i) L[i] += buf[i] / nc; }
+  var bw = w >> 1, bh = h >> 1, B = new Float32Array(bw * bh);
+  for (y = 0; y < bh; ++y) for (x = 0; x < bw; ++x) {
+    var p = 2 * y * w + 2 * x; B[y * bw + x] = 0.25 * (L[p] + L[p + 1] + L[p + w] + L[p + w + 1]);
+  }
+  var A = new Float32Array(bw * bh), muestra = [];
+  for (y = 0; y < bh; ++y) for (x = 0; x < bw; ++x) {
+    var s5 = 0, k = 0;
+    for (var yy = Math.max(0, y - 2); yy <= Math.min(bh - 1, y + 2); ++yy) for (var xx = Math.max(0, x - 2); xx <= Math.min(bw - 1, x + 2); ++xx) { s5 += B[yy * bw + xx]; ++k; }
+    var d = B[y * bw + x] - s5 / k; A[y * bw + x] = d > 0 ? d : 0;
+    if (((y * bw + x) % 7) === 0) muestra.push(A[y * bw + x]);
+  }
+  muestra.sort(function (a, b) { return a - b; });
+  var tope = muestra[Math.floor(0.999 * (muestra.length - 1))] || 1;
+  for (i = 0; i < A.length; ++i) if (A[i] > tope) A[i] = tope;
+  return { a: A, w: bw, h: bh };
+}
+
+// Correlación normalizada de A y B desplazada (dx, dy), en la zona común (margen 4).
+function grNCC(A, B, dx, dy) {
+  var w = A.w, h = A.h, m = 4, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, n = 0;
+  for (var y = m; y < h - m; ++y) for (var x = m; x < w - m; ++x) {
+    var a = A.a[y * w + x], b = B.a[(y + dy) * w + (x + dx)];
+    sa += a; sb += b; saa += a * a; sbb += b * b; sab += a * b; ++n;
+  }
+  var va = saa - sa * sa / n, vb = sbb - sb * sb / n;
+  return (va > 0 && vb > 0) ? (sab - sa * sb / n) / Math.sqrt(va * vb) : 0;
+}
+
+// ¿Están las estrellas de idB en el mismo sitio que las de idA? Pico de correlación en desplazamiento 0 y claramente por
+// encima de los desplazamientos de 3–4 px binados (girada o a otra escala no hay pico).
+function grEstrellasCoinciden(idA, idB) {
+  var A = grLumCentro(idA, 512), B = grLumCentro(idB, 512), best = -2, bx = 0, by = 0, anillo = -2, c0 = 0;
+  for (var dy = -4; dy <= 4; ++dy) for (var dx = -4; dx <= 4; ++dx) {
+    var c = grNCC(A, B, dx, dy);
+    if (c > best) { best = c; bx = dx; by = dy; }
+    if (dx === 0 && dy === 0) c0 = c;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= 3 && c > anillo) anillo = c;
+  }
+  return { coinciden: bx === 0 && by === 0 && c0 > 0.3 && c0 > 2 * Math.max(anillo, 0.01),
+           desplazamiento_px: [2 * bx, 2 * by], correlacion: +c0.toFixed(3), correlacion_lejos: +anillo.toFixed(3) };
+}
+
 // 8 nov 2026: con dos masters abiertos, Qwen desmezcló y corrigió el gradiente sin pasar por alinearMasters (Paso 5).
-// Si la vista es un master abierto desde disco (tiene fichero y no es un _alin) y hay otro master así abierto, se para.
+// Si la vista es un master abierto desde disco (tiene fichero y no es un _alin) y hay otro master así abierto, se para,
+// salvo que ya coincidan (mismo tamaño, sin bordes sin datos, estrellas en el mismo sitio). Devuelve null o la comprobación.
 function grExigirAlineado(id, o) {
-  if (o && (o.sinAlinear || o.alineados)) return;
+  if (o && (o.sinAlinear || o.alineados)) return null;
   var w = ImageWindow.windowById(id);
-  if (w.isNull || !w.filePath || /_alin/i.test(id + " " + w.filePath)) return;
+  if (w.isNull || !w.filePath || /_alin/i.test(id + " " + w.filePath)) return null;
   var otros = [], ws = ImageWindow.windows;
   for (var i = 0; i < ws.length; ++i) {
     var x = ws[i];
     if (x.mainView.id === id || !x.filePath || /_alin/i.test(x.mainView.id + " " + x.filePath)) continue;
     if (/\.(xisf|fits?|fts)$/i.test(x.filePath) && x.mainView.image.width > 1000) otros.push(x.mainView.id);
   }
-  if (otros.length)
-    throw new Error("Hay " + (otros.length + 1) + " masters abiertos sin alinear (" + [id].concat(otros).join(", ") + "). Primero el Paso 5: " +
-                    "alinearMasters([\"" + [id].concat(otros).join("\", \"") + "\"]) y después todo sobre las vistas _alin que devuelve (r.vistas). " +
-                    "Si ya salieron alineados y recortados del mismo WBPP y el usuario lo confirma, repetir con { sinAlinear: true }.");
+  if (!otros.length) return null;
+  var motivos = [], detalle = {}, im0 = w.mainView.image;
+  try {
+    [id].concat(otros).forEach(function (x) {
+      if (typeof bordesSinDatos !== "function") throw new Error("falta bordesSinDatos (analisis.js)");
+      if (bordesSinDatos(x).hay) motivos.push(x + " tiene bordes sin datos");
+    });
+    otros.forEach(function (x) {
+      var im = View.viewById(x).image;
+      if (im.width !== im0.width || im.height !== im0.height) {
+        motivos.push(x + " tiene otro tamaño (" + im.width + "×" + im.height + " frente a " + im0.width + "×" + im0.height + ")");
+        return;
+      }
+      var c = grEstrellasCoinciden(id, x);
+      detalle[x] = c;
+      if (!c.coinciden) motivos.push("las estrellas de " + x + " no coinciden con las de " + id + " (" + JSON.stringify(c) + ")");
+    });
+  } catch (e) { motivos.push("no se pudo comprobar si ya están alineados (" + e + ")"); }
+  if (!motivos.length)
+    return { masters: [id].concat(otros), ya_alineados: true, detalle: detalle,
+             nota: "Mismo tamaño, sin bordes sin datos y estrellas en el mismo sitio: se salta el alineado (Paso 5)." };
+  throw new Error("Hay " + (otros.length + 1) + " masters abiertos sin alinear (" + [id].concat(otros).join(", ") + "): " + motivos.join("; ") +
+                  ". Primero el Paso 5: alinearMasters([\"" + [id].concat(otros).join("\", \"") + "\"]) y después todo sobre las vistas _alin " +
+                  "que devuelve (r.vistas). Si el otro master es de otro proyecto y el usuario lo confirma, repetir con { sinAlinear: true }.");
 }
 
 function gradienteCandidatos(viewId, o) {
@@ -203,7 +274,7 @@ function gradienteCandidatos(viewId, o) {
   if (viewId instanceof Array) return gradienteVarias(viewId, o);
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
-  grExigirAlineado(viewId, o);
+  var yaAlineados = grExigirAlineado(viewId, o);
   // Por defecto se comparan los tres métodos (no hay uno preferido: se aplica el que mejor mida en cada imagen).
   var scalesGX = o.graxpert || [10, 8];
   var scalesMGC = o.mgc || [1024, 2048];
@@ -213,6 +284,7 @@ function gradienteCandidatos(viewId, o) {
                    (typeof o.polinomio === "number" ? [o.polinomio] : o.polinomio);
   var bin = o.bin || 8;
   var r = { vista: viewId, candidatos: [], intermedias: [], recomendado: "", motivo: "", errores: [] };
+  if (yaAlineados) r.alineado = yaAlineados;
 
   var win = ImageWindow.windowById(viewId);
   if (win.isNull) throw new Error("No existe la vista " + viewId);
