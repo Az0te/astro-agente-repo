@@ -4,6 +4,8 @@
 
 **Por qué.** Todos los masters (RGB y banda estrecha) tienen que estar en la misma rejilla de píxeles antes de combinarse; y hay que recortar los bordes de apilado antes de corregir gradientes, porque un borde negro se convierte en un gradiente artificial. "Las tomas RGB y NB pueden estar giradas entre sí y a escala distinta".
 
+**Regla (Rafael, 12 nov 2026).** Con dos o más masters, alinear y recortar **siempre** antes del gradiente. Se puede saltar sólo si ya vienen alineados: **mismo tamaño, sin bordes sin datos y las estrellas en el mismo sitio** (p. ej., registrados sobre la misma referencia en el mismo apilado). Las herramientas paran el gradiente si hay varios masters abiertos sin alinear.
+
 **Registro**
 
 - Registrar los masters como ficheros, con una carpeta de salida.

@@ -405,6 +405,17 @@ def ruta_legible(p):
     return Path(fits), f"XISF leído como FITS propio ({fits}); guarda las versiones en .fit"
 
 
+# Paso 5 (Rafael, 12 nov 2026): masters abiertos en esta sesión con abrirImagen, para que el gradiente se pare si hay dos
+# o más sin alinear. Siril sólo tiene una imagen cargada, así que se recuerdan aquí (sobrevive a la recarga del módulo).
+# Clave: ruta en minúsculas; valor: ruta original. Los ficheros con «_alin» (salida de alinearMasters) no cuentan.
+MASTERS_ABIERTOS = globals().get("MASTERS_ABIERTOS", {})
+GUARDADOS = globals().get("GUARDADOS", set())   # versiones guardadas en esta sesión: al reabrirlas no son otro master
+
+
+def _es_alineado(nombre):
+    return bool(re.search(r"(?i)_alin", str(nombre or "")))
+
+
 def abrirImagen(siril, fichero):
     """Carga un fichero en Siril (sustituye la imagen cargada). Devuelve sus datos."""
     p = _ruta(fichero)
@@ -412,11 +423,16 @@ def abrirImagen(siril, fichero):
         raise FileNotFoundError(f"No existe: {p}")
     if p.suffix.lower() not in EXT_ABRIR:
         raise ValueError(f"Extensión no admitida: {p.suffix}")
+    original = p
     p, aviso = ruta_legible(p)
     siril.cmd("load", _arg_cmd(p))
     r = _info(siril)
     if aviso:
         r["aviso"] = aviso
+    if (r.get("ancho") or 0) > 1000 and not _es_alineado(original) and str(original).lower() not in GUARDADOS \
+            and original.suffix.lower() in (".fit", ".fits", ".fts", ".xisf"):
+        MASTERS_ABIERTOS[str(original).lower()] = str(original)
+        MASTERS_ABIERTOS[str(p).lower()] = str(original)      # el FITS propio de un XISF es el mismo master
     return r
 
 
@@ -450,6 +466,7 @@ def guardarImagen(siril, fichero, sobrescribir=False):
               and os.path.getmtime(str(base) + e) != antes.get(str(base) + e)]
     if not hechos:
         raise RuntimeError(f"Siril no ha escrito {base}{ext}.")
+    GUARDADOS.update(h.lower() for h in hechos)
     return {"fichero": hechos[0], "bytes": os.path.getsize(hechos[0])}
 
 

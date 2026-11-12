@@ -16,7 +16,7 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 | L1 Análisis | `analizarMaster`, `estrellas`; con internet `documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` |
 | L2 Inventario | `inventarioSubs` (sólo cabeceras) |
 | L3–L4 Selección, calibración y apilado | `revisarCalibracion` → **`apilarCandidatos`** (deja el master cargado) |
-| L5 Recorte | `recortarBordes` |
+| L5 Alineado y recorte | con 2 o más masters, `alinearMasters` (alinea y recorta todos; después se trabaja con los `_alin`); con uno, `recortarBordes`. `gradienteCandidatos` se para si se han abierto varios masters sin alinear, salvo que ya coincidan (mismo tamaño, sin bordes vacíos, estrellas en el mismo sitio) |
 | L8 Astrometría | `resolverAstrometria` |
 | L9 Gradiente | **`gradienteCandidatos`** → `aplicarCandidato` |
 | L11 / L13 Deconvolución | `nitidezLineal` (solo corregir o completa) |

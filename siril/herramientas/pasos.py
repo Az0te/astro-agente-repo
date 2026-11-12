@@ -609,10 +609,93 @@ def _graxpert_denoise(siril, crudo, fuerza=0.5, timeout=1800):
     return _a_siril(np.clip(_de_siril(x), 0, 1), crudo.dtype).reshape(crudo.shape), " ".join(["GraXpert", *cmd[2:4], "denoising", "-strength", f"{float(fuerza):.2f}"])
 
 
+def _lum_fichero(siril, ruta, info):
+    """Luminancia (alto, ancho) de un fichero, sin cambiar la imagen cargada."""
+    return _leer_fichero(siril, H.ruta_legible(Path(ruta))[0], info).mean(axis=0)
+
+
+def _tiene_bordes_vacios(L):
+    p95, _, cunas = H._zonas_vacias(L, float(np.median(L)))
+    return max(p95.values()) > 2 or cunas > 0.2
+
+
+def _estrellas_coinciden(a, b):
+    """Correlación de fase de la luminancia binada ×2 en el centro (1024×1024 binados como mucho): el pico tiene que caer
+    en desplazamiento 0 (≤ 1 px) y destacar claramente sobre el resto. Si están giradas o a otra escala no hay pico limpio."""
+    def prep(L):
+        h, w = (L.shape[0] // 2) * 2, (L.shape[1] // 2) * 2
+        x = L[:h, :w].reshape(h // 2, 2, w // 2, 2).mean(axis=(1, 3))
+        n = 1024
+        cy, cx = x.shape[0] // 2, x.shape[1] // 2
+        x = x[max(0, cy - n // 2):cy + n // 2, max(0, cx - n // 2):cx + n // 2]
+        x = x - np.median(x)
+        return np.clip(x, 0, np.percentile(x, 99.9))      # pesan las estrellas, sin que una saturada lo domine
+    A, B = prep(a), prep(b)
+    if A.shape != B.shape:
+        return False, None
+    R = np.fft.fft2(A) * np.conj(np.fft.fft2(B))
+    r = np.fft.ifft2(R / np.maximum(np.abs(R), 1e-12)).real
+    iy, ix = np.unravel_index(int(np.argmax(r)), r.shape)
+    dy = iy if iy <= r.shape[0] // 2 else iy - r.shape[0]
+    dx = ix if ix <= r.shape[1] // 2 else ix - r.shape[1]
+    pico = float(r[iy, ix])
+    resto = np.abs(r.copy())
+    resto[np.ix_([(iy + k) % r.shape[0] for k in range(-3, 4)], [(ix + k) % r.shape[1] for k in range(-3, 4)])] = 0
+    nitido = pico > 4 * float(resto.max())
+    return bool(nitido and abs(dy) <= 0 and abs(dx) <= 0), {"desplazamiento_px": [2 * int(dx), 2 * int(dy)],
+                                                            "pico": _r(pico, 3), "pico_sobre_resto": _r(pico / max(float(resto.max()), 1e-9), 1)}
+
+
+def _exigir_alineado(siril, info, sin_alinear=False):
+    """Paso 5 (Rafael, 12 nov 2026): con dos o más masters abiertos en la sesión sin pasar por alinearMasters, se para
+    antes del gradiente. Todo lo que viene después (desmezcla, combinación, paletas) necesita la misma rejilla y el mismo
+    recorte, y un borde de apilado dentro del recorte se convierte en gradiente. Se puede saltar (Rafael) si ya vienen
+    alineados: mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio; eso se comprueba aquí y entonces sigue.
+    Devuelve None o la comprobación hecha."""
+    if sin_alinear:
+        return None
+    actual = str(info.get("fichero") or "")
+    if not actual or H._es_alineado(actual):
+        return None
+    yo = H.MASTERS_ABIERTOS.get(actual.lower(), actual)
+    otros = sorted({v for v in H.MASTERS_ABIERTOS.values() if v.lower() != yo.lower() and Path(v).is_file()})
+    if not otros:
+        return None
+    todos = [yo] + otros
+    motivos, detalle = [], {}
+    try:
+        L0 = _lum_fichero(siril, actual, info)
+        if _tiene_bordes_vacios(L0):
+            motivos.append(f"{Path(yo).name} tiene bordes sin datos")
+        for o in otros:
+            L = _lum_fichero(siril, o, info)
+            if L.shape != L0.shape:
+                motivos.append(f"{Path(o).name} tiene otro tamaño ({L.shape[1]}×{L.shape[0]} frente a {L0.shape[1]}×{L0.shape[0]})")
+                continue
+            if _tiene_bordes_vacios(L):
+                motivos.append(f"{Path(o).name} tiene bordes sin datos")
+            ok, d = _estrellas_coinciden(L0, L)
+            detalle[Path(o).name] = d
+            if not ok:
+                motivos.append(f"las estrellas de {Path(o).name} no coinciden con las de {Path(yo).name} ({d})")
+            del L
+    except Exception as e:
+        motivos.append(f"no se pudo comprobar si ya están alineados ({e})")
+    if not motivos:
+        return {"masters": todos, "ya_alineados": True, "detalle": detalle,
+                "nota": "Mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio: se salta el alineado (Paso 5)."}
+    raise RuntimeError(
+        f"Hay {len(todos)} masters abiertos en esta sesión sin alinear ({', '.join(Path(x).name for x in todos)}): "
+        + "; ".join(motivos) + ". Primero el Paso 5: alinearMasters con todos ellos (" + "; ".join(todos) + "), y después "
+        "todo sobre los ficheros _alin que devuelve (abrirImagen del _alin). Si el otro master es de otro proyecto y el "
+        "usuario lo confirma, repetir con sin_alinear: true.")
+
+
 def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True, muestras=20, tolerancia=1.0,
-                        ignorar_cunas=False, tipo=None):
+                        ignorar_cunas=False, tipo=None, sin_alinear=False):
     """Paso 9 lineal: compara subsky (polinomio y RBF) y GraXpert IA, mide y recomienda. La imagen no cambia."""
     info = H._info(siril)
+    alineado = _exigir_alineado(siril, info, sin_alinear)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
     if not _lineal(p):
@@ -623,6 +706,8 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
     grupo = "gradiente"
     _limpiar_grupo(grupo)
     r = {"candidatos": [], "errores": [], "recomendado": None, "motivo": ""}
+    if alineado:
+        r["alineado"] = alineado
     lista = [("subsky", f"polinomio {g}", ["subsky", str(int(g)), f"-samples={int(muestras)}", f"-tolerance={float(tolerancia)}"])
              for g in (polinomio or [])]
     lista += [("subsky", f"RBF suavizado {s}", ["subsky", "-rbf", f"-samples={int(muestras)}", f"-tolerance={float(tolerancia)}",

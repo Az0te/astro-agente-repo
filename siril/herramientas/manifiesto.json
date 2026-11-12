@@ -212,8 +212,11 @@
       "description": "MAD desde la mediana para descartar (por defecto 2,5)."
      },
      "drizzle": {
-      "type": "boolean",
-      "description": "Registro con drizzle (más lento; sólo si está submuestreado)."
+      "type": [
+       "boolean",
+       "number"
+      ],
+      "description": "Sólo si el usuario lo pide. true = drizzle ×2; un número es la escala (1.5, 3). En OSC hace Bayer drizzle (calibradas sin debayer, pixfrac 1). Más lento y ficheros 4 veces más grandes."
      },
      "excluir": {
       "type": "array",
@@ -547,7 +550,7 @@
    "nivel": "lectura",
    "timeout_s": 1200,
    "paso": "lineal/09-correccion-gradiente.md",
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (subsky de Siril con polinomio de grado 1 y 2 y con RBF, y GraXpert IA por su CLI si está instalado), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (subsky de Siril con polinomio de grado 1 y 2 y con RBF, y GraXpert IA por su CLI si está instalado), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Si en la sesión se han abierto dos o más masters sin alinear, comprueba si ya vienen alineados (mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio); si no, se para y pide alinearMasters (Paso 5). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
    "resumen": "Paso 9: compara subsky polinomio/RBF y GraXpert IA, mide y recomienda; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -581,6 +584,10 @@
      "ignorar_cunas": {
       "type": "boolean",
       "description": "Seguir aunque haya cuñas sin datos (no recomendado)."
+     },
+     "sin_alinear": {
+      "type": "boolean",
+      "description": "No exigir el Paso 5 aunque haya otros masters abiertos sin alinear (sólo si son de otro proyecto y el usuario lo confirma)."
      },
      "tipo": {
       "type": "string",
