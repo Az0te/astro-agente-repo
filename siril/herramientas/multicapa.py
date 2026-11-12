@@ -182,7 +182,7 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None):
             ruta = destino / f"{base}_{etiqueta}_{k}.fit"
             k += 1
         siril.save_image_file(capa, cab, str(ruta))
-        H.GUARDADOS.add(str(ruta).lower())             # capa de un master, no otro master (freno del Paso 5)
+        H.GUARDADOS.add(H._clave(ruta))             # capa de un master, no otro master (freno del Paso 5)
         c = P._cielo(capa[np.newaxis])
         ruido = c["ruido_rel"] * c["cielo"]
         senal = float(np.percentile(capa[::3, ::3], 99.5)) - c["cielo"]
