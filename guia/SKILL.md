@@ -105,6 +105,10 @@ Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en e
 | Llamar SHO a una paleta sólo de Hα/OIII | "pseudo-SHO" |
 | Contraste local y compresión multiescala juntos en la misma zona, contraste local fuerte (amount > 0,5) o de radio pequeño con estrellas | Uno u otro por zona (compresión en el bulbo, contraste local en el disco), sobre la starless o con máscara |
 | Núcleo de galaxia quemado (meseta > 3 px) o más rondas de estirado para "arreglarlo" | Comprimir el núcleo antes de saturar (Paso 5 no lineal) |
+| Centro de una nebulosa quemado y cambiar de método de estirado para arreglarlo | El mismo método con un límite de luces más estricto: otro estirado cambia la relación entre canales y la paleta (Paso 1 no lineal) |
+| Dar por buena una comparación con varios niveles idénticos | El parámetro no llega al proceso: probar dos valores extremos antes de elegir |
+| Datos de otra persona procesados con el equipo del perfil | El texto del autor y las cabeceras (Paso 1 lineal) |
+| Estrellas de una RGB con canales desequilibrados (pocos subs o FWHM distintos en un canal) | La RGB con canales equilibrados, aunque sea más corta (Paso 12 lineal) |
 | Dar por buena una recombinación porque el fondo no cambia | Mirar `aporte_estrellas_pct` (≥ 0,5 %); estrellas con el mismo estirado |
 | Seguir con un `no_cumple` sin resolver o inventar otro umbral | Corregirlo en el paso que dice el mensaje; los umbrales son los de la herramienta |
 | Reducción de ruido o quitar verde para manchas de color grandes en no lineal | Venir de una lineal neutra y con una reducción de ruido lineal moderada; bajar saturación |
