@@ -9,8 +9,9 @@
 // Entrada: la capa de estrellas YA ESTIRADA (estirarEstrellas, Paso 8), sin la starless. estirarEstrellasCandidatos la llama sola.
 // Opciones (por defecto, lo que dice la ficha):
 //   limpieza   0.005   umbral de residuos de SXT: iif($T < limpieza, 0, $T)
-//   suelo      true    punto negro por canal = mediana + 2·MAD, reescalando para no tocar los núcleos
-//   saturacion true    curva de saturación [[0,0],[0.40,0.65],[0.70,0.90],[1,1]]
+//   suelo      "color" punto negro común (máx. de mediana + 2·MAD de los canales) sobre el máximo de R, G y B, que conserva
+//                      el tono; "canal" = el antiguo suelo por canal (cambia el color de las estrellas débiles); false = sin suelo
+//   saturacion true    curva de saturación [[0,0],[0.40,0.65],[0.70,0.90],[1,1]]; un número s = c' = L + s·(c − L); false = no
 //   maximo     0.97    techo de los núcleos (control: < 0,98), con compresión suave por encima de 'rodilla'
 //   rodilla    0.80    a partir de aquí se comprimen las luces hasta 'maximo' (sin recorte brusco)
 //   halosMagenta false G = iif(min(R,B) > G, min(R,B), G)
@@ -82,7 +83,9 @@ function prepararEstrellas(viewId, o) {
   sim.resetSelections();
   if (!o.forzar && sim.median() > 0.05)
     throw new Error(viewId + " no es una capa de estrellas (mediana " + sim.median().toFixed(3) + "; una capa de estrellas estirada tiene el fondo casi a 0): " +
-                    "pasa la capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas), nunca la starless, la paleta ni la imagen saturada");
+                    "pasa la capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas), nunca la starless, la paleta ni la imagen saturada. " +
+                    "Si SÍ es la capa de estrellas de un campo muy denso (Nubes de Magallanes, Vía Láctea), las estrellas débiles " +
+                    "llenan el fondo: estirarla con un k menor (estirarEstrellas con k 300–1000) o recombinarla sin este paso");
   // Capa LINEAL (sin estirar): fondo ~1e-6 (una estirada lo tiene ~1e-3). Qwen pasó la «_stars» en vez de la «_stars_estiradas».
   var stMedMax = 0; for (var c0 = 0; c0 < 3; ++c0) { sim.selectedChannel = c0; stMedMax = Math.max(stMedMax, sim.median()); } sim.resetSelections();
   if (!o.forzar && stMedMax < 2e-5) {
@@ -120,15 +123,24 @@ function prepararEstrellas(viewId, o) {
     tmp.forceClose();
   }
 
-  // 2. Suelo por canal (mediana + 2·MAD), reescalando para que los núcleos no cambien.
+  // 2. Suelo (mediana + 2·MAD), reescalando para que los núcleos no cambien.
+  // 12 nov 2026 (Tarántula, campo denso de la LMC): restar un suelo DISTINTO a cada canal cambiaba el color de las estrellas
+  // débiles (el suelo cae casi a su altura): la relación B/R media de la capa subió de 1,23 a 1,82 y la final salió azul.
+  // Por defecto (suelo: "color") se resta UN suelo común sobre el máximo de los canales y se escala cada píxel por igual
+  // en R, G y B: el tono de cada estrella no cambia. suelo: "canal" recupera el suelo por canal anterior.
   if (o.suelo !== false) {
     var m = stMeasure(v), ex = [], floors = [];
-    for (var c = 0; c < 3; ++c) {
-      var f = m[c].mediana + 2 * m[c].MAD;
-      floors.push(+f.toPrecision(3));
-      ex.push(f > 0 ? "max(0, ($T - " + f + ") / (1 - " + f + "))" : "$T");
+    for (var c = 0; c < 3; ++c) floors.push(+(m[c].mediana + 2 * m[c].MAD).toPrecision(3));
+    if (floors[0] > 0 || floors[1] > 0 || floors[2] > 0) {
+      if (o.suelo === "canal") {
+        for (var c1 = 0; c1 < 3; ++c1) ex.push(floors[c1] > 0 ? "max(0, ($T - " + floors[c1] + ") / (1 - " + floors[c1] + "))" : "$T");
+        stPM(v, ex); pasos.push("suelo por canal R/G/B " + floors.join(" / "));
+      } else {
+        var fc = Math.max(floors[0], floors[1], floors[2]), Mx = "max($T[0], $T[1], $T[2])";
+        stPM(v, ["$T * max(0, " + Mx + " - " + fc + ") / ((1 - " + fc + ") * max(" + Mx + ", 0.000001))"]);
+        pasos.push("suelo común " + fc + " sobre el máximo de los canales (conserva el color; por canal serían " + floors.join(" / ") + ")");
+      }
     }
-    if (floors[0] > 0 || floors[1] > 0 || floors[2] > 0) { stPM(v, ex); pasos.push("suelo R/G/B " + floors.join(" / ")); }
     else pasos.push("suelo: no hace falta (fondo ya a 0)");
   }
 
@@ -136,7 +148,12 @@ function prepararEstrellas(viewId, o) {
   if (o.halosMagenta) { stPM(v, ["$T", "iif(min($T[0], $T[2]) > $T, min($T[0], $T[2]), $T)", "$T"]); pasos.push("halos magenta"); }
 
   // 4. Color: curva de saturación de la ficha.
-  if (o.saturacion !== false) {
+  // saturacion numérica (12 nov 2026: antes se trataba como true y se ignoraba): c' = L + s·(c − L), L = media de los canales.
+  if (typeof o.saturacion === "number") {
+    var s = o.saturacion, Lm = "(($T[0] + $T[1] + $T[2]) / 3)";
+    stPM(v, [Lm + " + " + s + " * ($T - " + Lm + ")"]);
+    pasos.push("saturación ×" + s + " alrededor de la media de los canales");
+  } else if (o.saturacion !== false) {
     var C = new CurvesTransformation;
     C.S = [[0, 0], [0.40, 0.65], [0.70, 0.90], [1, 1]];
     C.St = stK(CurvesTransformation, "AkimaSubsplines");

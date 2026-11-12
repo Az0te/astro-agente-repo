@@ -352,6 +352,8 @@ Ficha: [lineal/12-spcc.md](../../lineal/12-spcc.md)
 - Verificación: medianas del cielo por canal parecidas tras SPCC (Statistics en previews de cielo limpio).
 - Curvas: `pxSPCC()` de `herramientas/procesos.js` las carga por su nombre desde la base de filtros de PixInsight (`filters.xspd`). "Un `new SpectrophotometricColorCalibration` sin más usa curvas genéricas, no las de la cámara".
 - Referencia de blanco: `P.whiteReferenceName` ("Average Spiral Galaxy" por defecto). `P.whiteReferenceSpectrum` es la tabla de datos (longitud de onda, valor), **no** el nombre: da "Parsing 32-bit floating point expression: conversion error".
+- Mono con filtros Astrodon (nov 2026): en `filters.xspd` están «Astrodon E-series R/G/B» e «I-series R/G/B»; de Kodak sólo hay QE de KAF-8300, KAF-16200 y KAF-16803. Sin la QE del sensor: «Ideal QE curve». Para ver qué nombres hay, buscar `name="` en `<PixInsight>/library/filters.xspd`.
+- `calibrarColor` mide qué parte del campo tiene señal (la misma medida que el estirado): por encima del 60 %, el «cielo no neutro» va en `aviso`, no en `no_cumple`.
 - Narrowband dual band: `SPCC_HA_O3_5nn`. En modo narrowband, la recomendación oficial es referencia de blanco **«Photon Flux»** en vez de «Average Spiral Galaxy» (astroimagetw); compararla si el resultado sale con dominante.
 - Sin SPCC: BackgroundNeutralization + ColorCalibration.
 
@@ -411,6 +413,7 @@ Ficha: [lineal/14-noisex-suave.md](../../lineal/14-noisex-suave.md)
 **A mano en PixInsight (valores de referencia)**
 
 - NoiseXTerminator: `denoise` 0,50 (pasada ligera antes de SXT), `detail` 0,15, `iterations` 2. Parámetros comprobados en 1.9.6: `iterations`, `enable_frequency_separation`, `denoise_high_freq`, `denoise_low_freq`, `frequency_scale`, `overlap`.
+- **La intensidad va también en los parámetros por frecuencia** (12 nov 2026): la versión instalada usa `denoise_intensity_high_freq` / `_low_freq` (y `denoise_high_freq` / `_low_freq`) aunque la separación de frecuencias esté apagada. Poniendo sólo `denoise` y `denoise_intensity`, NXT daba lo mismo con 0,1 que con 0,95 (−62 % de ruido siempre). `reducirRuido` pone ya todos a la vez (0,1 → −8 %, 0,95 → −67 %). Las comparaciones de niveles de NXT anteriores a esta fecha no son válidas.
 - BXT con PSF manual: SPFC deja `PCL:SPFC:FWHMx/FWHMy` para `nonstellar_diameter` (Paso 13).
 
 ```json

@@ -1306,7 +1306,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { limpieza: 0.005, suelo, saturacion, maximo: 0.97, rodilla: 0.8, halosMagenta, atenuar, nuevaVista }"
+      "description": "Opcional. { limpieza: 0.005, suelo: \"color\" (común, conserva el tono) | \"canal\" | false, saturacion: true (curva) | número s (c' = L + s·(c − L)) | false, maximo: 0.97, rodilla: 0.8, halosMagenta, atenuar, nuevaVista }"
      }
     },
     "required": [

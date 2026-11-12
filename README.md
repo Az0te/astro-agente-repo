@@ -24,7 +24,7 @@ El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para
 - **Funciones de la guía en vez de procesos sueltos** (`guia/herramientas/`): análisis, gradiente con candidatos, estirado «al fallo», estrellas, saturación, paletas… cada una con su control de calidad. El servidor MCP solo ejecuta las que están en su lista blanca.
 - **BlindSolver integrado**: `resolverAstrometria` resuelve la astrometría a ciegas para SPCC, SPFC y MGC sin lanzar el script. También incluye **Star Stretch, ScreenStars, DarkStructureEnhance y BackgroundEnhance** (`guia/herramientas/realces.js`), reimplementados con resultado idéntico al de los scripts.
 - **Trabajos largos sin bloquear**: las llamadas de más de 45 s devuelven un id y el resultado se recoge con `estado(trabajo)`.
-- **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC.
+- **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC. Probada también con **cámara monocromo y banda estrecha** (LRGB + Hα, OIII y SII, paleta SHO).
 
 ## Empezar con PiAstroPilot Lite
 
@@ -88,7 +88,7 @@ Con PixInsight abierto, pide al asistente el paso que quieras (o usa los botones
 
 - Los **scripts** de PixInsight con interfaz (DBXtract, AutoDBE…) no se pueden lanzar desde una función de la guía; WBPP sí, con `lanzarWBPP` (en una segunda instancia), y BlindSolver va integrado (`resolverAstrometria`).
 - PiAstroPilot y la ruta por defecto de PixInsight están pensados para Windows: en macOS o Linux hay que adaptarlos.
-- La guía se ha probado sobre todo con una cámara OSC (IMX571) y varios filtros: sin filtro, tribanda y dual band Hα/OIII, SII/OIII y SII/Hβ. Para otros equipos, sus valores son puntos de partida.
+- La guía se ha probado con una cámara OSC (IMX571) y varios filtros (sin filtro, tribanda y dual band Hα/OIII, SII/OIII y SII/Hβ) y con **cámara monocromo y banda estrecha**: la Nebulosa de la Tarántula (KAF-11000 con rueda de filtros, LRGB + Hα, OIII y SII de 7–8,5 nm, SHO con estrellas de la RGB). Para otros equipos, sus valores son puntos de partida.
 
 ## ⚠️ Seguridad
 

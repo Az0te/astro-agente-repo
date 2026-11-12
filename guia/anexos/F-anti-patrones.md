@@ -13,6 +13,11 @@ Lo que **no** se hace. Se lee antes de empezar y se consulta cuando algo "no sal
 | Seguir adelante cuando falla gradiente, SPCC, BXT o estirado | Parar; no marcarlo como "resuelto con alternativa" |
 | Trabajar sobre el master | Copia con nombre de versión |
 | Aplicar un proceso y fiarse del "success" | Comprobar estadísticas e historial `view.processing` |
+| Dar por buena una comparación en la que varios niveles salen idénticos (NXT 0,3 / 0,5 / 0,7 con el mismo ruido) | Es que el parámetro no llega al proceso: probar dos valores extremos y arreglar la herramienta antes de elegir |
+| Usar el equipo y las curvas del perfil con datos de otra persona | Leer el texto del autor y las cabeceras (Paso 1 lineal) |
+| Restar a la capa de estrellas un suelo distinto por canal | Un suelo común que conserve el tono (Paso 8 no lineal) |
+| Quedarse con el estirado que más separa la señal débil aunque queme el núcleo de una nebulosa | Medir la meseta y pasar al siguiente candidato (MAS) |
+| Estrellas de una RGB con canales desequilibrados (pocos subs en un canal, FWHM distintos) | La RGB con canales equilibrados, aunque sea más corta |
 | Encadenar resize + registro + rotación | Interpolar una sola vez (Lanczos-3, 32 bits) |
 | Confundir la composición HDR (lineal) con la compresión multiescala del rango (no lineal) | Cada uno en su fase |
 | HDR global cuando sólo el núcleo lo necesita | Mezcla sólo bajo máscara de núcleo (`hdr_core_blend`) |

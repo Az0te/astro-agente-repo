@@ -136,6 +136,13 @@ function calibrarColor(viewId, o) {
 
   var wb = ccProperty(v, "PCL:SPCC:WhiteBalanceFactors");
   var visibles = despues.diferencia_en_sigmas > 0.5;
+  // 12 nov 2026 (Tarántula, LMC): con el campo lleno de nebulosa, las celdas «más oscuras» siguen siendo emisión (Hα roja)
+  // y el «cielo no neutro» es señal real: se avisa, sin no_cumple. Misma medida que el estirado (esCeldasDebiles, > 60 %).
+  var campoLleno = null;
+  if (visibles && typeof esCeldasDebiles === "function") {
+    try { campoLleno = esCeldasDebiles(v).fraccion_con_senal; } catch (e) { campoLleno = null; }
+  }
+  var lleno = campoLleno !== null && campoLleno > 0.6;
   return {
     vista: id, original: viewId, segundos: +seg.toFixed(1),
     filtros: { r: P.redFilterName, g: P.greenFilterName, b: P.blueFilterName, qe: P.deviceQECurveName,
@@ -144,7 +151,11 @@ function calibrarColor(viewId, o) {
                referencia_fondo: ref ? ("bloque más oscuro de " + ref.lado + " px en x " + ref.x + ", y " + ref.y) : (opts.backgroundReferenceViewId || "toda la imagen") },
     factores_balance_blancos: wb,
     cielo_antes: antes, cielo_despues: despues,
-    no_cumple: visibles ? ["CIELO NO NEUTRO tras SPCC: el " + despues.canal_alto + " queda " + despues.diferencia_en_sigmas +
+    campo_con_senal_pct: campoLleno !== null ? +(100 * campoLleno).toFixed(1) : undefined,
+    aviso: lleno ? "El " + (100 * campoLleno).toFixed(0) + " % del campo tiene señal sobre el cielo: el «cielo» medido (" +
+                   despues.canal_alto + " " + despues.diferencia_en_sigmas + " sigmas por encima) es probablemente emisión del objeto. " +
+                   "No neutralizar sin un trozo de cielo limpio (neutralizarCielo con rect); si sólo se usan las estrellas de esta RGB, da igual" : undefined,
+    no_cumple: (visibles && !lleno) ? ["CIELO NO NEUTRO tras SPCC: el " + despues.canal_alto + " queda " + despues.diferencia_en_sigmas +
                            " sigmas por encima (" + despues.diferencia_pct + " %); al estirar saldrá como dominante. Revisar " +
                            "gradiente, flats o la referencia de fondo antes de seguir"] : [],
     control: {

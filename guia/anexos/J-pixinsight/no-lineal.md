@@ -220,7 +220,7 @@ Devuelve `candidatos` (vista, `tamano_x` y `saturacion_x` conseguidos frente a l
 
 **`starStretch`** (Star Stretch de SetiAstro, mismo resultado que el script): `starStretch("Stars_v1", { amount: 2, saturation: 1, removeGreen: false })` sobre una copia, sólo si se pide. Alternativa: ArcsinhStretch.
 
-**Preparación sola** (`prepararEstrellas`, la usa `estirarEstrellasCandidatos` en cada candidato): sobre una copia de la capa ya estirada hace la limpieza de residuos, el suelo por canal (reescalando), la curva de saturación y comprime las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco); opcionales `halosMagenta: true` y `atenuar: 0.35`. Devuelve las medidas antes y después y el control. El p90 depende del estirado de la capa.
+**Preparación sola** (`prepararEstrellas`, la usa `estirarEstrellasCandidatos` en cada candidato): sobre una copia de la capa ya estirada hace la limpieza de residuos, el suelo (por defecto `suelo: "color"`: uno común sobre el máximo de R, G y B, que conserva el tono; `"canal"` = el suelo por canal anterior, que exagera el tono de las estrellas débiles en campos densos; `false` = sin suelo), la saturación (`saturacion: true` = la curva; un número s = `c' = L + s·(c − L)`; `false` = nada; antes de nov 2026 los números se ignoraban) y comprime las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco); opcionales `halosMagenta: true` y `atenuar: 0.35`. Devuelve las medidas antes y después y el control. El p90 depende del estirado de la capa.
 
 ```json
 {"llamadas": [

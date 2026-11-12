@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+- **Probada con cámara monocromo y banda estrecha** (12 nov 2026, Rafael). Nebulosa de la Tarántula: KAF-11000 con rueda, LRGB + Hα, OIII y SII, paleta SHO con estrellas de la RGB. Lo aprendido:
+  - **NXT ignoraba el nivel** (`ruido.js`): con sólo `denoise` y `denoise_intensity`, 0,1 y 0,95 daban lo mismo. Ahora `rdNXT` pone también la intensidad por frecuencia (0,1 → −8 %, 0,95 → −67 %). Las comparaciones de niveles de NXT anteriores no valen.
+  - `ruidoCandidatos` prefiere los candidatos cuya residual es sólo ruido (`residual_estructura` ≤ 2); antes ganaba TGV 1,0 con 2,98.
+  - **`prepararEstrellas` cambiaba el color** de las estrellas débiles: el suelo por canal exageraba su tono (azul/rojo medio de 1,23 a 1,82 en un campo denso). Ahora, por defecto, un suelo común sobre el máximo de R, G y B (`suelo: "color"`; `"canal"` = antiguo). `saturacion` acepta un número (antes se ignoraba). Mensaje para campos muy densos.
+  - `calibrarColor`: con más del 60 % del campo con señal, el «cielo no neutro» pasa a `aviso`.
+  - `alinearMasters`: los `_alin` se guardan con id `<nombre>_alin` (antes `alCROP`, `alCROP1`…). Sin probar en una alineación nueva.
+  - Fichas: datos de terceros y campos densos (Paso 1 lineal), filtros mono sin QE del sensor, campo lleno de nebulosa y dos RGB que no coinciden (Paso 12), meseta del núcleo en nebulosas y MAS como alternativa (Paso 1 no lineal), suelo común y campos densos (Paso 8 no lineal), cinco anti-patrones nuevos (Anexo F), notas de NXT y SPCC mono (Anexo J). README: probado con mono y banda estrecha.
+
 - **Estrellas, color y nitidez para elegir** (11 nov 2026, Rafael).
   - **Estrellas en el Paso 8 no lineal.** El Paso 1 sólo estira la starless; la capa de estrellas se queda lineal y se estira justo antes de recombinar. Nueva `estirarEstrellasCandidatos` (estrellas.js): estirado de la guía (galaxias, el mismo que la starless; resto, arcsinh k 3000) y tres candidatos para elegir: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 %. Tamaño por área de estrellas (subiendo las alas débiles, sin dilatar); previa combinada con la starless terminada, recorte al 100 % y aporte.
   - `estirarCapas` ya no estira las estrellas (`estrellas_pendientes`; `estirarEstrellas: true` = modo antiguo) y la capa de estrellas es opcional. El registro del GHS al fallo se guarda también en un fichero temporal (el MCP arranca un script nuevo en cada llamada) con lo sumado al neutralizar el cielo.

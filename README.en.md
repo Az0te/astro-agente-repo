@@ -24,7 +24,7 @@ Alain Escaffre's original project is an **autonomous** pipeline designed for mac
 - **Guide functions instead of loose processes** (`guia/herramientas/`): analysis, gradient with candidates, stretching «to failure», stars, saturation, palettes… each with its quality check. The MCP server only runs the ones on its whitelist.
 - **Built-in BlindSolver**: `resolverAstrometria` solves the astrometry blindly for SPCC, SPFC and MGC without launching the script. It also includes **Star Stretch, ScreenStars, DarkStructureEnhance and BackgroundEnhance** (`guia/herramientas/realces.js`), reimplemented with the same result as the scripts.
 - **Long jobs without blocking**: calls longer than 45 s return an id and the result is collected with `estado(trabajo)`.
-- **Processing guide** aimed at OSC + dual band from urban skies, HDR with short exposures, bright star halos, DBXtract emulation with PixelMath, continuum subtraction and mixing mono and OSC cameras.
+- **Processing guide** aimed at OSC + dual band from urban skies, HDR with short exposures, bright star halos, DBXtract emulation with PixelMath, continuum subtraction and mixing mono and OSC cameras. Also tested with a **monochrome camera and narrowband filters** (LRGB + Hα, OIII and SII, SHO palette).
 
 ## Getting started with PiAstroPilot Lite
 
@@ -89,7 +89,7 @@ With PixInsight open, ask the assistant for the step you want (or use the [PiAst
 
 - PixInsight **scripts** with a user interface (DBXtract, AutoDBE…) cannot be launched from a guide function; WBPP can, with `lanzarWBPP` (in a second instance), and BlindSolver is built in (`resolverAstrometria`).
 - PiAstroPilot and PixInsight's default path are designed for Windows: on macOS or Linux they need adapting (PiAstroPilot Lite should work there, except parts of the voice features).
-- The guide has been tested mostly with an OSC camera (IMX571) and several filters: no filter, tri-band and dual band Hα/OIII, SII/OIII and SII/Hβ. For other equipment, its values are starting points.
+- The guide has been tested with an OSC camera (IMX571) and several filters (no filter, tri-band and dual band Hα/OIII, SII/OIII and SII/Hβ) and with a **monochrome camera and narrowband filters**: the Tarantula Nebula (KAF-11000 with a filter wheel, LRGB + 7–8.5 nm Hα, OIII and SII, SHO with stars from the RGB). For other equipment, its values are starting points.
 
 ## ⚠️ Security
 

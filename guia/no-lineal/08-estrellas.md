@@ -26,7 +26,8 @@ La capa de estrellas (original − starless) lleva PSF, halos, aigrettes y resid
 **Preparación de la capa** (se aplica a cada candidato)
 
 - Limpiar residuos: poner a 0 lo que esté por debajo de 0,005, **sólo si se lleva poco brillo** (≤ 10 %). Si se llevara más, lo que borra son estrellas débiles de una capa poco estirada: no limpiar, avisarlo en `no_cumple` y arreglarlo en el Paso 1. Recuperar color con la curva de saturación `[[0,0],[0.40,0.65],[0.70,0.90],[1,1]]`.
-- **Suelo antes del screen:** punto negro por canal = mediana + 2·MAD de la capa, reescalando para no tocar los núcleos. En campos densos ese "grano" pueden ser estrellas débiles reales: no subir el suelo hasta borrarlas.
+- **Suelo antes del screen:** punto negro = mediana + 2·MAD de la capa, reescalando para no tocar los núcleos. **Un solo suelo para los tres canales**, restado sobre el máximo de R, G y B y escalando cada píxel por igual: así no cambia el tono de ninguna estrella. Un suelo distinto por canal cae casi a la altura de las estrellas débiles y exagera su tono: en un campo denso (Tarántula, nov 2026) la relación azul/rojo media de la capa pasó de 1,23 a 1,82 y las estrellas salieron azules. En campos densos ese "grano" pueden ser estrellas débiles reales: no subir el suelo hasta borrarlas.
+- **Campos muy densos** (Nubes de Magallanes, Vía Láctea): con k 3000 la capa queda con la mediana por encima de 0,05 (las estrellas débiles llenan el fondo) y no se puede preparar. Bajar k (300–1000) y, si aun así el color se exagera, preparar sin la curva de saturación o recombinar la capa estirada directamente. La capa ocupará ~10 % de los píxeles: es el campo, no una capa hinchada. El fondo subirá algo al recombinar (≈ 0,01–0,02): medirlo y decirlo.
 - Contenerlas atenuando el brillo (por encima de 0,02, × 0,65), nunca con erosión ni transformaciones morfológicas (anillos).
 - Comprimir las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco).
 

@@ -27,6 +27,9 @@
 6. Régimen de muestreo: submuestreado / bien muestreado / sobremuestreado (drizzle 2x), que condiciona BXT, NXT y nitidez.
 7. **¿Bordes sin datos?** (`bordes_sin_datos` del análisis). Un master registrado sin recortar tiene cuñas en los bordes; el preprocesado puede rellenarlas con un valor constante, no con 0, y a ojo se confunden con cielo oscuro. Con varios masters, lo primero es el [Paso 5: alinear y recortar](05-staralignment-crop.md); con uno solo, recortar los bordes. Gradiente, BXT, SPCC o desmezcla con cuñas dan resultados falsos (la comparación de gradientes se niega).
 
+8. **¿De quién son los datos?** Si junto a los masters hay un texto del autor (equipo, filtros, exposiciones, escala, notas) o las cabeceras dicen otra cámara y otro telescopio, son **datos de terceros**: el equipo, los filtros y las curvas salen de ese texto y de las cabeceras, **nunca del perfil del usuario**. Leer también sus notas: «subs cortos para el color de las estrellas», «flats mal hechos en tal canal», canales binados y reescalados. Ejemplo (nebulosa de la Tarántula, mono, nov 2026): el texto daba la RGB corta de 30 s para las estrellas, y la RGB larga, con sólo 5 subs en azul, daba las estrellas azules.
+9. **¿Campo muy denso en estrellas?** (Nubes de Magallanes, plano de la Vía Láctea). La capa de estrellas no tendrá el fondo a cero y la preparación de estrellas y la recombinación se adaptan (Paso 8 no lineal).
+
 **Estado de partida del master**
 
 - Por canal: mediana, máximo y MAD; además canales, bits por muestra, si es color y si tiene solución astrométrica.

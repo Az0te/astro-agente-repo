@@ -344,6 +344,10 @@ function alinearMasters(lista, o) {
     [0, im.height - 1].forEach(function (yy) { im.getSamples(row, new Rect(0, yy, im.width, yy + 1), 0); for (var i = 0; i < im.width; ++i) { ++n; if (row[i] <= 0) ++cero; } });
     e.salida = salida + "/" + File.extractName(e.entrada) + "_alin.xisf";
     e.wcs = w.hasAstrometricSolution;
+    // 12 nov 2026: el id interno era "alCROP" y al reabrir los _alin salían alCROP, alCROP1… Id = nombre del fichero.
+    var idAlin = (File.extractName(e.entrada) + "_alin").replace(/[^A-Za-z0-9_]/g, "_");
+    if (!/^[A-Za-z_]/.test(idAlin)) idAlin = "_" + idAlin;
+    try { w.mainView.id = idAlin; } catch (x) { }
     e.bordes_a_cero_pct = +(100 * cero / n).toFixed(2);
     w.saveAs(e.salida, false, false, false, false);
     w.forceClose();

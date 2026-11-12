@@ -161,6 +161,11 @@ function rdNXT(view, o) {
   var d = (o.denoise !== undefined) ? o.denoise : 0.50;
   if (o.frecuencias && o.frecuencias.hf !== undefined) d = o.frecuencias.hf;
   N.denoise = d; N.denoise_intensity = d;
+  // 12 nov 2026 (Tarántula): con sólo denoise y denoise_intensity, NXT daba el mismo resultado con 0,1 y con 0,95. La
+  // versión instalada guarda también la intensidad por frecuencia (denoise_intensity_high_freq / _low_freq,
+  // denoise_high_freq / _low_freq) y la usa aunque la separación de frecuencias esté apagada: se ponen todas a d.
+  rdSet(N, ["denoise_intensity_high_freq"], d, []); rdSet(N, ["denoise_intensity_low_freq"], d, []);
+  rdSet(N, ["denoise_high_freq"], d, []); rdSet(N, ["denoise_low_freq"], d, []);
   N.detail = (o.detail !== undefined) ? o.detail : 0.15;
   N.iterations = o.iterations || 2;
   if (o.croma !== undefined) { N.enable_color_separation = true; N.denoise_color = o.croma; }
@@ -433,6 +438,10 @@ function ruidoCandidatos(viewId, o) {
     catch (e) { cands.push({ etiqueta: p.etiqueta, orden: n, error: String(e && e.message ? e.message : e) }); }
   });
   var ok = cands.filter(function (c) { return c.r && !c.r.no_cumple.length; }), best = null;
+  // 12 nov 2026 (Tarántula): ganaba TGV 1,0 con residual_estructura 2,98 (residual_solo_ruido: false) frente a TGV 0,5 con
+  // 1,98. Si algún candidato que cumple deja una residual de sólo ruido (≤ 2), se elige entre ésos.
+  var soloRuido = ok.filter(function (c) { var re = c.r.medidas.residual_estructura; return re === null || re === undefined || re <= 2; });
+  if (soloRuido.length) ok = soloRuido;
   function baja(c) { return c.r.medidas.ruido_baja_pct; }
   function mas(l) { return l.reduce(function (x, c) { return x === null || baja(c) > baja(x) ? c : x; }, null); }
   function menos(l) { return l.reduce(function (x, c) { return x === null || baja(c) < baja(x) ? c : x; }, null); }
