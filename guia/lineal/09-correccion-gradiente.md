@@ -4,6 +4,8 @@
 
 El gradiente es un offset de gran escala que no es del objeto: contamina la calibración de color, aplasta el polvo y el IFN y sale como velo al estirar. Se corrige **en lineal, por canal si los canales vienen de noches, filtros o cámaras distintos**, y antes de combinar (Paso 10: canales de filtros distintos, L, RGB, banda estrecha) y de la deconvolución de corrección.
 
+**Manchas en el cielo (medidas, no a ojo).** Un candidato que no se come el objeto puede dejar manchas de color de gran escala (en M31, 13 nov 2026, el polinomio de grado 2 se llevaba un 0,1 % de la galaxia pero dejaba manchas verdes y violetas que salían al estirar). `gradienteCandidatos` lo mide en `manchas_color` (≤ 20 limpio, ≤ 30 leve, más = se ven) y, a los candidatos seguros con manchas, les pasa una **segunda pasada** de GraXpert encima (otro candidato: «Polinomio + GraXpert IA»). Elige primero entre los seguros sin manchas. Si el recomendado aún deja manchas que se verán, sale en `no_cumple`: repetir antes de seguir, nunca continuar con ellas.
+
 **Excepción: varios masters RGB de distinta exposición** (60 s y 120 s, por ejemplo). Esos no se combinan en el Paso 10: van a la HDR (Paso 6) y el gradiente se quita **una vez, sobre la HDR**, no en cada master (`gradienteCandidatos` sobre la vista HDR, no `gradienteVarias` sobre los masters). Orden: alinear → recortar → HDR → gradiente.
 
 **Sin método fijo: se comparan siempre los candidatos y se aplica el que mejor funcione en esa imagen**: el que quita el gradiente copiando menos el objeto en su modelo. Ningún método gana siempre:

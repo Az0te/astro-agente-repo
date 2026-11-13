@@ -25,6 +25,9 @@
 // Las herramientas gradcompare.js y procesos.js se cargan desde la misma carpeta que este fichero. Si se
 // usa desde otra ubicación, definir antes del eval: var GUIA_HERRAMIENTAS = "<ruta>/guia/herramientas";
 
+// Umbrales de manchas_color (grManchas), medidos en M31 (13 nov 2026): GraXpert IA 13, GraXpert 8 21, polinomio 2 38
+// (manchas verdes y violetas que se veían en la miniatura), polinomio 1 53.
+var GR_MANCHAS_LEVE = 20, GR_MANCHAS_SE_VEN = 30;
 var GR_DIR = (typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS
            : File.homeDirectory + "/astro-agente-repo/guia/herramientas";
 if (typeof gcPrepare !== "function") eval(File.readTextFile(GR_DIR + "/gradcompare.js"));
@@ -160,6 +163,44 @@ function grPolyExpr(c) {
 // al original. Antes era la rejilla 4×3 de toda la imagen, que en objetos grandes (galaxia grande) medía la galaxia y no el
 // gradiente, y hacía ganar a GraXpert aunque se comiera parte de ella (5 nov 2026).
 // come_objeto_pct: señal del objeto que se lleva el modelo (gcScore.eat), en % de la señal del objeto.
+// Manchas de gran escala que deja la corrección (13 nov 2026, M31: el polinomio de grado 2 se llevaba menos objeto que
+// nadie pero dejaba manchas verdes y violetas en el cielo; Opus las vio en la miniatura, los Qwen no pueden verlas).
+// Celdas de 128 px del cielo (el 40 % más oscuro por luminancia, para no medir el objeto): mediana por celda de R−G,
+// B−G y de la luminancia; dispersión robusta (MAD) entre celdas, en unidades del ruido por píxel del cielo, ×100 para
+// leerlo cómodo. Plano = 0; cuanto más alto, más manchas al estirar. Un gradiente liso que quede también sube la de
+// luminancia, por eso se lee junto con gradiente_restante.
+function grManchas(viewId) {
+  try {
+    var v = View.viewById(viewId), im = v.image, W = im.width, H = im.height, nc = im.numberOfChannels, S = 128, st = 4;
+    var nch = Math.min(3, nc), ch = [];
+    for (var c = 0; c < nch; ++c) ch.push(new Float32Array(S * S));
+    var med = function (a) { var s = a.slice().sort(function (p, q) { return p - q; }); return s[s.length >> 1]; };
+    var mad = function (a) { var m = med(a); return 1.4826 * med(a.map(function (x) { return Math.abs(x - m); })); };
+    var cells = [];
+    for (var y0 = S; y0 + 2 * S <= H; y0 += S) for (var x0 = S; x0 + 2 * S <= W; x0 += S) {   // sin el borde exterior
+      var L = [], rg = [], bg = [];
+      for (var c2 = 0; c2 < nch; ++c2) im.getSamples(ch[c2], new Rect(x0, y0, x0 + S, y0 + S), c2);
+      for (var y = 0; y < S; y += st) for (var x = 0; x < S; x += st) {
+        var i = y * S + x, l = 0;
+        for (var k = 0; k < ch.length; ++k) l += ch[k][i];
+        L.push(l / ch.length);
+        if (ch.length >= 3) { rg.push(ch[0][i] - ch[1][i]); bg.push(ch[2][i] - ch[1][i]); }
+      }
+      var mL = med(L);
+      if (mL <= 0) continue;   // bordes sin datos
+      cells.push({ L: mL, rg: rg.length ? med(rg) : 0, bg: bg.length ? med(bg) : 0, ruido: mad(L) });
+    }
+    if (cells.length < 12) return null;
+    cells.sort(function (p, q) { return p.L - q.L; });
+    var sky = cells.slice(0, Math.max(8, Math.floor(0.4 * cells.length)));
+    var ruido = med(sky.map(function (c) { return c.ruido; }));
+    if (!(ruido > 0)) return null;
+    var col = ch.length >= 3 ? Math.max(mad(sky.map(function (c) { return c.rg; })), mad(sky.map(function (c) { return c.bg; }))) : 0;
+    var lum = mad(sky.map(function (c) { return c.L; }));
+    return { color: +(100 * col / ruido).toFixed(1), luminancia: +(100 * lum / ruido).toFixed(1), celdas: sky.length };
+  } catch (e) { return null; }
+}
+
 function grMeasure(base, modelId, correctedId, range0) {
   var m = gcStructCopy(base, modelId), s = gcMetrics(base, correctedId);
   if (base.flat0 === undefined) { var s0 = gcScore(base, base.O.a, "original"); base.flat0 = s0.flat; base.vis0 = s0.visible; }
@@ -174,7 +215,8 @@ function grMeasure(base, modelId, correctedId, range0) {
   var corr = +m.corr.toFixed(3), resto = isFinite(fr) ? +fr.toFixed(3) : NaN, come = +(100 * s.eat).toFixed(1);
   // gradiente_visible (12 nov 2026): desnivel de las esquinas del cielo ya estirado (gcVisible); < 0,008 plano, > 0,015 se ve.
   var vis = isFinite(s.visible) ? +s.visible.toFixed(4) : NaN;
-  return { copia_objeto: corr, objeto_quitado_pct: come, gradiente_restante: resto, fondo_medido_en: fuente, copia: m.copy,
+  var mn = grManchas(correctedId);
+  return { manchas_color: mn ? mn.color : null, manchas_luminancia: mn ? mn.luminancia : null, copia_objeto: corr, objeto_quitado_pct: come, gradiente_restante: resto, fondo_medido_en: fuente, copia: m.copy,
            gradiente_visible: vis, gradiente_visible_antes: isFinite(base.vis0) ? +base.vis0.toFixed(4) : NaN,
            se_ve: !isFinite(vis) ? "sin medir" : vis < 0.008 ? "plano" : vis <= 0.015 ? "leve" : "se ve",
            gcStructCopy: corr, fondoResidual: resto, come_objeto_pct: come };
@@ -450,7 +492,52 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
-  r.leyenda = "copia_objeto: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
+  // Segunda pasada (13 nov 2026, M31; Rafael: «el poly es el que menos señal se lleva pero deja manchas»): a cada
+  // candidato que no se come el objeto pero deja manchas (manchas_color > GR_MANCHAS_LEVE) se le pasa encima GraXpert
+  // (IA y sample_free 10), que limpia las manchas de gran escala; el resultado es otro candidato, medido contra el
+  // original con el modelo total (original − final). segundaPasada: false para no hacerlo.
+  if (o.segundaPasada !== false) {
+    var primeros = r.candidatos.slice();
+    primeros.forEach(function (c0) {
+      var m0 = c0.metricas;
+      if (!(m0.manchas_color > GR_MANCHAS_LEVE) || !(Math.abs(m0.come_objeto_pct) <= 3) || !(Math.abs(m0.gcStructCopy) < 0.3)) return;
+      [{ ia: true, nombre: "GraXpert IA" }, { ia: false, s: 10, nombre: "GraXpert sample_free 10" }].forEach(function (sp) {
+        try {
+          before = grIds();
+          var G2 = new GraXpert;
+          G2.backgroundExtraction = true; G2.backgroundExtractionSampleFree = !sp.ia;
+          if (!sp.ia) G2.sampleFreeScale = sp.s;
+          G2.correction = "Subtraction"; G2.createBackground = true; G2.replaceImage = false;
+          if (!G2.executeOn(View.viewById(c0.vista))) throw new Error("GraXpert devolvió false");
+          var nv = grNew(before), c2 = null;
+          for (var k2 = 0; k2 < nv.length; ++k2) {
+            if (nv[k2].indexOf("background_extraction") >= 0) c2 = nv[k2];
+            else { var wb = ImageWindow.windowById(nv[k2]); if (!wb.isNull) wb.forceClose(); }   // su modelo parcial
+          }
+          if (!c2) throw new Error("no encuentro la salida de GraXpert");
+          c2 = grRename(c2, c0.vista + (sp.ia ? "_GXIA" : "_GX" + sp.s));
+          try { ImageWindow.windowById(c2).keywords = win.keywords; } catch (e) { }
+          // Modelo total = original − final (lo que se ha quitado entre las dos pasadas).
+          var m2 = grFreeId(c2 + "_modelo"), PMt = new PixelMath;
+          PMt.expression = "$T - " + c2; PMt.useSingleExpression = true; PMt.createNewImage = true; PMt.showNewImage = true;
+          PMt.newImageId = m2; PMt.newImageWidth = 0; PMt.newImageHeight = 0; PMt.rescale = false; PMt.truncate = false;
+          PMt.newImageSampleFormat = gcK(PixelMath, "f32");
+          PMt.newImageColorSpace = nch >= 3 ? gcK(PixelMath, "RGB") : gcK(PixelMath, "Gray");
+          if (!PMt.executeOn(win.mainView)) throw new Error("PixelMath del modelo total falló");
+          r.candidatos.push({ vista: c2, modelo: m2, metodo: c0.metodo + " + " + sp.nombre,
+                              parametros: c0.parametros + "; segunda pasada " + sp.nombre + " para quitar las manchas",
+                              metricas: grMeasure(base, m2, c2, range0),
+                              notas: "Segunda pasada sobre " + c0.vista + " (manchas_color " + m0.manchas_color + ")." });
+        } catch (e) {
+          r.errores.push("Segunda pasada " + sp.nombre + " sobre " + c0.vista + ": " + e);
+        }
+      });
+    });
+  }
+
+  r.leyenda = "manchas_color / manchas_luminancia: manchas de gran escala del cielo (celdas de 128 px) en % del ruido por " +
+              "píxel; ≤ " + GR_MANCHAS_LEVE + " limpio, hasta " + GR_MANCHAS_SE_VEN + " leve, más se ven al estirar (lo que un modelo sin " +
+              "vista no puede ver en la miniatura). copia_objeto: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
               "negativo = infla el objeto). objeto_quitado_pct: % de la señal del objeto que se lleva el modelo (menor = mejor). " +
               "gradiente_restante: fracción del gradiente del cielo que queda, medido fuera del objeto (menor = más plano). " +
               "gradiente_visible: desnivel entre esquinas del cielo tras un estirado automático (< 0,008 plano; > 0,015 se ve; " +
@@ -483,6 +570,12 @@ function gradienteCandidatos(viewId, o) {
   // Entre los seguros, mejor uno cuyo cielo no se vea desnivelado al estirar (gradiente_visible ≤ 0,015), si lo hay.
   var noSeVe = safe.filter(function (x) { return vis(x) <= 0.015; });
   if (noSeVe.length) safe = noSeVe;
+  // Y sin manchas: entre los seguros, los que dejan el cielo limpio (manchas_color ≤ leve); si ninguno, los que no
+  // pasan de «se ven». El de menos manchas manda sobre el de menos gradiente cuando las del otro se verían.
+  function manchas(x) { var m = x.metricas.manchas_color; return (m === null || m === undefined || !isFinite(m)) ? 0 : m; }
+  var limpios = safe.filter(function (x) { return manchas(x) <= GR_MANCHAS_LEVE; });
+  var leves = safe.filter(function (x) { return manchas(x) <= GR_MANCHAS_SE_VEN; });
+  if (limpios.length) safe = limpios; else if (leves.length) safe = leves;
   var clean = r.candidatos.filter(function (x) { return absCorr(x) < 0.3; });
   var best = safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(r.candidatos, absCorr);
   if (best) {
@@ -494,7 +587,13 @@ function gradienteCandidatos(viewId, o) {
                (Math.abs(bc) < 0.15 ? "modelo limpio" : Math.abs(bc) > 0.5 ? "copia el objeto: revisar o probar plano robusto"
                                                                    : "intermedio: revisar el modelo a la vista") + ")" +
                (isFinite(best.metricas.gradiente_visible) ? "; tras estirar: " + best.metricas.se_ve + " (" + best.metricas.gradiente_visible +
-                 (vis(best) > 0.015 ? "; se verá el desnivel: probar otro candidato o una segunda pasada suave" : "") + ")" : "") + ".";
+                 (vis(best) > 0.015 ? "; se verá el desnivel: probar otro candidato o una segunda pasada suave" : "") + ")" : "") +
+               (best.metricas.manchas_color !== null && best.metricas.manchas_color !== undefined ? "; manchas de color " + best.metricas.manchas_color +
+                 (manchas(best) > GR_MANCHAS_SE_VEN ? " (se verán al estirar)" : manchas(best) > GR_MANCHAS_LEVE ? " (leves)" : " (cielo limpio)") : "") + ".";
+    if (manchas(best) > GR_MANCHAS_SE_VEN)
+      (r.no_cumple = r.no_cumple || []).push("El recomendado deja manchas de color en el cielo (" + best.metricas.manchas_color +
+        " > " + GR_MANCHAS_SE_VEN + ") y ningún candidato seguro las quita: repetir gradienteCandidatos sobre " + best.vista +
+        " (segunda pasada) o probar otras escalas ({ graxpert: [6, 12] }); no seguir con manchas que se verán al estirar.");
   } else {
     r.motivo = "Ningún candidato se pudo medir: ver errores.";
   }
