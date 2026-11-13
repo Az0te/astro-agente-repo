@@ -859,6 +859,27 @@ def quitarVerde(ctx, vista=None, cantidad=1.0, modo="avg"):
     return procesoSAS(ctx, "remove_green", {"amount": float(cantidad), "mode": modo, "preserve_lightness": True}, vista)
 
 
+def _color(d):
+    """Cielo por canal (celdas más oscuras), dominante del cielo y medianas por canal: para ver qué hizo un paso de color."""
+    p = _p(d.image)[:, ::2, ::2]
+    if p.shape[0] < 3:
+        return None
+    c = M.cielo(p)
+    cie = M.cielo_por_canal(p, c["_celdas"])
+    m = sum(cie) / 3 or 1e-9
+    return {"cielo_RGB": [_r(x, 6) for x in cie], "dominante_cielo_pct": _r(100 * (max(cie) - min(cie)) / m, 1),
+            "mediana_RGB": [_r(float(np.median(p[i, ::2, ::2])), 6) for i in range(3)]}
+
+
+def _con_color(ctx, vista, proceso, preset):
+    d = _doc(ctx, vista)
+    antes = _color(d)
+    r = procesoSAS(ctx, proceso, preset, vista)
+    if antes:
+        r["antes"], r["despues"] = antes, _color(d)
+    return r
+
+
 def neutralizarFondo(ctx, vista=None, rect=None):
     """Neutraliza el fondo (Background Neutralization). rect opcional [x0, y0, x1, y1] de cielo limpio."""
     d = _doc(ctx, vista)
@@ -867,12 +888,12 @@ def neutralizarFondo(ctx, vista=None, rect=None):
         h, w = d.image.shape[:2]
         x0, y0, x1, y1 = _rect(rect, w, h)
         preset = {"mode": "rect", "rect_norm": [x0 / w, y0 / h, (x1 - x0) / w, (y1 - y0) / h]}
-    return procesoSAS(ctx, "background_neutral", preset, vista)
+    return _con_color(ctx, vista, "background_neutral", preset)
 
 
 def calibrarColor(ctx, vista=None, modo="star", umbral=50.0):
     """L12 color: White Balance de SASpro (modo star: con las estrellas; auto; manual con ayudaProceso)."""
-    return procesoSAS(ctx, "white_balance", {"mode": modo, "threshold": float(umbral)}, vista)
+    return _con_color(ctx, vista, "white_balance", {"mode": modo, "threshold": float(umbral)})
 
 
 def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucionador="both"):
@@ -902,7 +923,33 @@ def separarEstrellas(ctx, vista=None, motor="starnet", lineal=None):
     else:
         raise ValueError("motor: starnet, darkstar o syqon.")
     r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
+    # SASpro deja activa la vista nueva de estrellas: sin esto, las llamadas siguientes sin 'vista' irían a ella.
+    r["vista_activa"] = _reactivar(ctx, d)
     return r
+
+
+def activarVista(ctx, vista):
+    """Pone activa una vista (las llamadas sin 'vista' trabajan sobre la activa)."""
+    d = _doc(ctx, vista)
+    a = _reactivar(ctx, d)
+    if a != _nombre(d):
+        raise RuntimeError(f"SASpro no ha activado '{_nombre(d)}' (activa: {a}). Indica 'vista' en cada llamada.")
+    return {"vista_activa": a}
+
+
+def _reactivar(ctx, d):
+    """Vuelve a poner activa la vista d (uid o nombre). Devuelve el nombre de la vista activa al terminar."""
+    uid = getattr(d, "uid", None)
+    for clave in (uid, _nombre(d)):
+        if not clave:
+            continue
+        try:
+            ctx.activate_view(clave)
+            break
+        except Exception:
+            continue
+    a = _activo(ctx)
+    return _nombre(_base(a)) if a is not None else None
 
 
 LISTA = {
@@ -919,6 +966,7 @@ LISTA = {
     "deshacer": deshacer,
     "rehacer": rehacer,
     "duplicarVista": duplicarVista,
+    "activarVista": activarVista,
     "procesoSAS": procesoSAS,
     "ayudaProceso": ayudaProceso,
     "gradienteCandidatos": gradienteCandidatos,

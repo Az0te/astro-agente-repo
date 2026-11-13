@@ -178,7 +178,9 @@ class Puente:
                 if nombre == "__detener":
                     puente.parar.set()
                     return self.enviar({"estado": "ok", "resultado": "El puente se detiene."})
-                if nombre not in puente.H.LISTA:
+                # Una herramienta recién añadida aún no está en la LISTA cargada: si los ficheros han cambiado, se deja
+                # pasar y _ejecutar recarga y vuelve a comprobar la lista en el hilo de Qt.
+                if nombre not in puente.H.LISTA and _sello_herramientas() <= puente.sello:
                     return self.enviar({"estado": "error", "error": f"Herramienta no permitida: {nombre}"})
                 t = Trabajo(p.get("id"), nombre, p.get("args"))
                 puente.cola.put(t)

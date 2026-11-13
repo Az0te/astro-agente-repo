@@ -61,17 +61,25 @@ def autoestirar(q, objetivo=0.25, sombras=-2.8, enlazado=False):
     Por canal salvo enlazado=True (mismos parámetros para los tres, conserva el color)."""
     q = np.asarray(q, dtype=np.float32)
     out = np.empty_like(q)
+
+    def med_mad(x):
+        x = x.ravel()
+        m = float(np.median(x))
+        s = 1.4826 * float(np.median(np.abs(x - m)))
+        if s <= 1e-9:                      # imagen de solo estrellas: fondo a 0 -> se mide en los píxeles con señal
+            pos = x[x > 1e-6]
+            if pos.size > 100:
+                m = float(np.median(pos))
+                s = 1.4826 * float(np.median(np.abs(pos - m)))
+                m = max(0.0, m - 2.8 * s) + 1e-6  # que el fondo quede en negro y las estrellas débiles se vean
+        return m, s
+
     if enlazado:
-        meds = [float(np.median(q[c][::4, ::4])) for c in range(q.shape[0])]
-        mads = [1.4826 * float(np.median(np.abs(q[c][::4, ::4] - meds[c]))) for c in range(q.shape[0])]
-        med, mad = float(np.mean(meds)), float(np.mean(mads))
+        pp = [med_mad(q[c][::4, ::4]) for c in range(q.shape[0])]
+        med, mad = float(np.mean([a for a, _ in pp])), float(np.mean([b for _, b in pp]))
         pares = [(med, mad)] * q.shape[0]
     else:
-        pares = []
-        for c in range(q.shape[0]):
-            x = q[c][::4, ::4]
-            m = float(np.median(x))
-            pares.append((m, 1.4826 * float(np.median(np.abs(x - m)))))
+        pares = [med_mad(q[c][::4, ::4]) for c in range(q.shape[0])]
     for c, (med, mad) in enumerate(pares):
         c0 = min(max(0.0, med + sombras * mad), 0.99)
         y = np.clip((q[c] - c0) / (1 - c0), 0, 1)

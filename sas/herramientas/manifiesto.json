@@ -285,6 +285,25 @@
    }
   },
   {
+   "nombre": "activarVista",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 30,
+   "descripcion": "Pone activa una vista: las llamadas sin 'vista' trabajan sobre la activa. separarEstrellas ya deja activa la starless.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas)."
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
    "nombre": "procesoSAS",
    "fichero": "herramientas.py",
    "nivel": "vista",
