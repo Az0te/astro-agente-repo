@@ -720,7 +720,7 @@
    "nivel": "vista",
    "timeout_s": 900,
    "paso": "lineal/08-plate-solve.md",
-   "descripcion": "L8 astrometría: plate solve de SASpro. Por defecto con la semilla de la cabecera; ciega: true sin semilla, con el índice Gaia de SASpro (resuelve M31 en 5 s dando la escala). Necesita estrellas: no lo uses en una starless. Con ra/dec da semilla manual.",
+   "descripcion": "L8 astrometría con el índice Gaia local de SASpro (gaia_only por defecto; ASTAP y astrometry.net sólo si se piden y están configurados). Semilla de la cabecera (RA/DEC, OBJCTRA/OBJCTDEC, FOCALLEN + XPIXSZ) o la dada; ciega: true sin semilla. Si la vista no tiene estrellas (starless), resuelve otra vista abierta del mismo tamaño con estrellas (la imagen completa antes que la capa de estrellas) y copia su astrometría. Sin escala la resolución ciega casi nunca encuentra: pásala (sale de analizarMaster).",
    "params": {
     "type": "object",
     "properties": {
@@ -736,16 +736,17 @@
      },
      "escala": {
       "type": "number",
-      "description": "Escala en \"/px (ayuda mucho a la ciega; sale de analizarMaster)."
+      "description": "Escala en \"/px."
      },
      "solucionador": {
       "type": "string",
       "enum": [
-       "both",
        "gaia_only",
+       "both",
        "astap_only",
        "astrometry_only"
-      ]
+      ],
+      "description": "Por defecto gaia_only (índice local de SASpro)."
      },
      "ciega": {
       "type": "boolean",

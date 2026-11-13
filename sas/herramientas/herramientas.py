@@ -417,6 +417,7 @@ def analizarMaster(ctx, vista=None):
         "fondo_rejilla_3x3": rejilla,
         "senal_pct": _r(100.0 * float((L > med + 5 * 1.4826 * mad).mean()), 2),
         "vacio_por_lado_px": bordes, "vacio_max_px": bordes_max, "cunas_pct": cunas,
+        "estrellas_pct": _r(_pct_estrellas(d), 3),
     }
 
 
@@ -1327,18 +1328,89 @@ def calibrarColor(ctx, vista=None, modo="star", umbral=50.0):
     return _con_color(ctx, vista, "white_balance", {"mode": modo, "threshold": float(umbral)})
 
 
-def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucionador="both", ciega=False):
-    """L8: plate solve de SASpro. solucionador: both (Gaia de SASpro y luego ASTAP/astrometry.net si están
-    configurados), gaia_only, astap_only, astrometry_only. ciega: sin semilla de la cabecera (índice Gaia de SASpro)."""
-    preset = {"solver": solucionador}
-    if ciega:
-        preset["seed_mode"] = "none"
-    if ra is not None and dec is not None:
-        preset.update(seed_mode="manual", ra=str(ra), dec=str(dec))
-    if escala:
-        preset["scale"] = float(escala)
-    r = procesoSAS(ctx, "plate_solve", preset, vista)
-    r["astrometria"] = _tiene_wcs(_doc(ctx, vista))
+def _pct_estrellas(d):
+    """% de píxeles de estrella (picos compactos > 5σ): ~0 en una starless."""
+    p = _p(d.image)[:, ::2, ::2]
+    return float(M.zonas_objeto_cielo(p)["est_px"].mean() * 100.0)
+
+
+def _gemelas_con_estrellas(ctx, d):
+    """Otras vistas abiertas del mismo tamaño y con estrellas. Primero las imágenes completas (master, versiones con
+    estrellas) y al final las de sólo estrellas: en M31 el resolvedor Gaia no encontró nada en la capa de estrellas
+    lineal y sí en la imagen completa."""
+    forma = np.shape(d.image)[:2]
+    cands = [x for x in _docs(ctx) if x is not d and np.shape(x.image)[:2] == forma]
+    cands = [x for x in cands if _pct_estrellas(x) > 0.5]
+    cands.sort(key=lambda x: (1 if ("estrell" in _nombre(x).lower() or "stars" in _nombre(x).lower()) else 0))
+    return cands
+
+
+def _copiar_wcs(origen, destino):
+    mo, md = _meta(origen), _meta(destino)
+    for k in ("wcs", "wcs_header", "sip_wcs", "original_wcs"):
+        if mo.get(k) is not None:
+            md[k] = mo[k]
+    h, w = md.get("fits_header") or md.get("original_header"), mo.get("wcs_header")
+    if h is not None and w is not None:
+        try:
+            for k in w.keys():
+                if k not in ("SIMPLE", "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "NAXIS3", "EXTEND", "COMMENT", "HISTORY", ""):
+                    h[k] = w[k]
+        except Exception:
+            pass
+
+
+def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucionador="gaia_only", ciega=False):
+    """L8: plate solve de SASpro. Por defecto con su índice Gaia local (gaia_only): ASTAP y astrometry.net sólo si se
+    piden y están configurados en SASpro. Semilla: ra/dec/escala dados, o los de la cabecera (RA/DEC u OBJCTRA/OBJCTDEC,
+    FOCALLEN + XPIXSZ); ciega: true sin semilla. Una starless no tiene estrellas: se resuelve la vista gemela con
+    estrellas (misma forma) y se copia su astrometría."""
+    d = _doc(ctx, vista)
+    if solucionador not in ("gaia_only", "both", "astap_only", "astrometry_only"):
+        raise ValueError("solucionador: gaia_only, both, astap_only o astrometry_only.")
+    pct = _pct_estrellas(d)
+    objetivos = [d]
+    if pct < 0.5:                 # M31: starless 0,05–0,19 %, con estrellas 3,6–4,7 %
+        objetivos = _gemelas_con_estrellas(ctx, d)
+        if not objetivos:
+            raise RuntimeError(f"'{_nombre(d)}' no tiene estrellas ({pct:.3f} % de píxeles de estrella: ¿starless?) y no hay "
+                               "otra vista abierta del mismo tamaño con estrellas: abre la de estrellas o el master y "
+                               "resuelve ese (se copia la astrometría).")
+    fallos, r = [], None
+    for objetivo in objetivos:
+        cab = _cabecera(objetivo) or _cabecera(d)
+        esc = escala if escala is not None else _escala(cab)
+        ra1, dec1 = ra, dec
+        if not ciega and (ra1 is None or dec1 is None):
+            ra1 = ra1 if ra1 is not None else cab.get("RA") or cab.get("OBJCTRA") or cab.get("CRVAL1")
+            dec1 = dec1 if dec1 is not None else cab.get("DEC") or cab.get("OBJCTDEC") or cab.get("CRVAL2")
+        preset = {"solver": solucionador}
+        if ciega or ra1 is None or dec1 is None:
+            preset["seed_mode"] = "none"
+        else:
+            preset.update(seed_mode="manual", ra=str(ra1), dec=str(dec1))
+        if esc:
+            preset["scale"] = float(esc)
+        try:
+            r = procesoSAS(ctx, "plate_solve", preset, getattr(objetivo, "uid", None) or _nombre(objetivo))
+            break
+        except Exception as e:
+            fallos.append(f"'{_nombre(objetivo)}' (estrellas {_pct_estrellas(objetivo):.2f} %, semilla "
+                          f"{preset.get('seed_mode')}, escala {esc}): {e}")
+    if r is None:
+        pista = ("" if escala else " Sin escala la resolución ciega casi nunca encuentra: pasa escala (\"/px, de "
+                 "analizarMaster o de FOCALLEN y XPIXSZ).")
+        raise RuntimeError("No se ha podido resolver. " + " | ".join(fallos) + pista)
+    r_extra = {}
+    if objetivo is not d:
+        r_extra = {"resuelta_en": _nombre(objetivo), "nota": "La vista no tiene estrellas: se resolvió una gemela con "
+                                                             "estrellas y se copió su astrometría."}
+    if fallos:
+        r_extra["intentos_fallidos"] = fallos
+    if objetivo is not d and _tiene_wcs(objetivo):
+        _copiar_wcs(objetivo, d)
+    r.update(r_extra, semilla=preset.get("seed_mode"), escala_usada=_r(escala, 3) if escala else None,
+             vista=_nombre(d), astrometria=_tiene_wcs(d))
     r.pop("aviso", None)
     return r
 
