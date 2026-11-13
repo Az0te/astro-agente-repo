@@ -140,7 +140,9 @@ function calibrarColor(viewId, o) {
     var avisoFiltro = "La imagen no lleva FILTER en la cabecera: SPCC en banda ancha. Si es el Triband, pasar spcc.narrowband del perfil.";
   if (opts.narrowband === true) delete opts.narrowband;
   var preajuste = null;
-  if (esTriband && !opts.narrowband && !o.bandaAncha) {
+  // Rafael (13 nov 2026): si el Triband es la única imagen (galaxia o nebulosa) se procesa como RGB, SPCC en banda ancha;
+  // las bandas estrechas del perfil sólo cuando se combina con otros datos (triband: "estrecha").
+  if (esTriband && !opts.narrowband && o.triband === "estrecha") {
     opts.narrowband = [[656.0, 30], [501.0, 35], [496.0, 35]];
     if (!opts.qe) opts.qe = "Sony IMX411/455/461/533/571";
     preajuste = "Triband (perfil): banda estrecha Hα 656/30, OIII 501/35, 496/35 nm y QE Sony IMX455";

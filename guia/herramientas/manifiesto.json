@@ -665,7 +665,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { spcc: { r, g, b, qe, narrowband: [[nm, ancho] x3] } (vacío = OSC sin filtro; con FILTER Triband se usa sola la banda estrecha del perfil), bandaAncha (NO usar salvo que el usuario lo pida: el Triband es de banda estrecha y va con sus bandas también en galaxias), nuevaVista, fondoAuto (experimental), forzarBandaAncha (dual band) }"
+      "description": "Opcional. { spcc: { r, g, b, qe, narrowband: [[nm, ancho] x3] } (vacío = OSC sin filtro; el Triband como única imagen se calibra como RGB, en banda ancha), triband: \"estrecha\" (sólo si el Triband se combina con otros datos: usa sus bandas del perfil), nuevaVista, fondoAuto (experimental), forzarBandaAncha (dual band) }"
      }
     },
     "required": [
