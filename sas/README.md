@@ -92,7 +92,7 @@ Variables opcionales: `SETIASTROPILOT_PUERTO` (puente, por defecto 48733; hay qu
 
 ## Validar en el PC
 
-1. Abre un master en SASpro y lanza el script. En la consola de SASpro debe salir «escuchando en 127.0.0.1:48733. Herramientas: 31».
+1. Abre un master en SASpro y lanza el script. En la consola de SASpro debe salir «escuchando en 127.0.0.1:48733. Herramientas: 41».
 2. Desde la raíz del repo: `node sas/pruebas/prueba-mcp.mjs ping` y luego `node sas/pruebas/prueba-mcp.mjs vistas`. El recorrido completo (`node sas/pruebas/prueba-mcp.mjs` sin argumentos) **cambia la vista activa** (aplica gradiente, estirado y SCNR): úsalo con una copia.
 3. Mientras corre una comparación, comprueba que SASpro termina cada proceso sin abrir diálogos que esperen un clic. Si alguno lo hace, anota cuál.
 
@@ -100,12 +100,12 @@ Sin SASpro (solo para desarrollo): `python sas/pruebas/puente_falso.py` lanza el
 
 ## Pendiente
 
-- WaveScale HDR (y quizá WaveScale Dark Enhance) sin ventana: averiguar por qué se cuelga.
-- Probar en SASpro real: `nitidezCandidatos` (Cosmic Clarity sharpen) y `resolverAstrometria` con el índice Gaia de SASpro.
-- `quitarVerde` con `preserve_lightness` sube R y B en vez de bajar G (en M31 el cielo pasó de G +4 % a G −3,5 %): valorar un SCNR propio que solo baje G.
-- El estirado estadístico de SASpro a mediana > 0,15: averiguar por qué deja la imagen negra (¿punto negro con bp σ 5 en imágenes con el fondo muy bajo tras Background Neutralization?).
-- Calibración de color por espectros (SFCC) y Halo-B-Gon: en SASpro solo tienen ventana, no comando sin ventana.
-- Herramientas de Siril que aún no están: alinear y combinar masters, dual band, HDR, contraste local, chat dentro de SASpro.
+- Fallos de SASpro 1.24.2 encontrados, con borradores para su autor en `notas/bugs_saspro.md` (no publicados): `base_document`, `stat_stretch` sin ventana (en M31 deja negro a 0,2–0,3; en IC 1396 se pasa: 0,15 → 0,245), WaveScale HDR sin ventana, Cosmic Clarity sin PyTorch, guardar XISF sin WCS. Las herramientas los esquivan.
+- SFCC (color por espectros Gaia): sólo tiene ventana; `sfcc.py` tiene funciones sueltas (fotometría, curvas) pero no una entrada sin ventana. Mientras, `calibrarColor` (White Balance con estrellas).
+- Halo-B-Gon: no existe en la rama main de GitHub ni hay comando; sin herramienta.
+- Apilado (Stacking Suite): SASpro no tiene comando sin ventana para apilar ni para registrar por estrellas (`star_align` sólo aparece como alias). Se apila con WBPP en PixInsight o con `apilarCandidatos` de SirilAstroPilot; aquí se empieza desde el master. `alinearMasters` alinea por astrometría.
+- Herramientas de Siril que aún no están: HDR con tomas cortas, contraste local (CLAHE u ondículas), paletas de banda estrecha.
+- Comparación de IC 1396 SASpro / Siril / PixInsight: el resultado de SASpro está en `D:\Astronomia\Master\master\IC1396\SetiAstroPilot_20261114` (13–14 nov 2026).
 
 ## Desarrollo
 

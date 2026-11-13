@@ -1291,7 +1291,7 @@ def aplicarCandidato(ctx, id, vista=None):
 
 # --- Pasos sencillos (un proceso de SASpro con lo que pide la guía) -----------------------------------------
 
-def quitarVerde(ctx, vista=None, cantidad=1.0, modo="avg", metodo="propio"):
+def quitarVerde(ctx, vista=None, cantidad=1.0, modo="avg", metodo="propio", forzar=False):
     """NL3 SCNR. metodo 'propio' (por defecto): el SCNR clásico, solo baja G hasta la media (avg) o el máximo (max) de
     R y B; no toca R ni B. metodo 'sas': Remove Green de SASpro con preserve_lightness, que en M31 subió R y B (cielo de
     G +4 % a G −3,5 %, magenta). Con deshacer; devuelve cielo por canal y dominante antes y después."""
@@ -1308,6 +1308,13 @@ def quitarVerde(ctx, vista=None, cantidad=1.0, modo="avg", metodo="propio"):
     # positiva del ruido y deja el cielo con G por debajo de R y B (M31: dominante del 2,8 % al 5,9 %, magenta; con caja
     # 5×5 aún 3,7 %). El verde verdadero (dominante o ruido de color grueso) es de escala grande y no se pierde.
     exceso = np.maximum(M.suave((g - tope).astype(np.float32), 16), 0)
+    antes0 = _color(d)
+    cie = antes0["cielo_RGB"] if antes0 else None
+    if cie and cie[1] <= (max(cie[0], cie[2]) if modo == "max" else 0.5 * (cie[0] + cie[2])) and not forzar:
+        # IC 1396 (14 nov 2026): el cielo ya tenía G por debajo de R y B y el SCNR subió la dominante de 1,2 a 2,1 %.
+        return {"vista": _nombre(d), "aplicado": False, "antes": antes0,
+                "aviso": "El cielo no tiene exceso de verde (G ≤ media de R y B): no hace falta SCNR. forzar: true para "
+                         "aplicarlo igualmente (p. ej. verde sólo en la nebulosa)."}
     q = p.copy()
     q[1] = np.clip(g - k * exceso, 0, 1)
     antes = _color(d)
