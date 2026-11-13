@@ -1,0 +1,22 @@
+{
+  "name": "setiastropilot-mcp",
+  "version": "0.1.0",
+  "description": "Servidor MCP de SetiAstroPilot: herramientas de procesado para Seti Astro Suite Pro a través de un puente dentro de SASpro",
+  "type": "module",
+  "main": "dist/setiastropilot-mcp.mjs",
+  "bin": { "setiastropilot-mcp": "dist/setiastropilot-mcp.mjs" },
+  "scripts": {
+    "check": "tsc -p . --noEmit",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node18 \"--banner:js=import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --outfile=dist/setiastropilot-mcp.mjs"
+  },
+  "author": "Rafael Vidal",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.6.0"
+  }
+}

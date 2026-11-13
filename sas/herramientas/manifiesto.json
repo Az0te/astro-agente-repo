@@ -1,0 +1,606 @@
+{
+ "version": 1,
+ "nota": "Herramientas que el MCP setiastropilot ofrece al modelo. El puente (sas/puente/puente.py, dentro de SASpro) solo ejecuta las que están en LISTA de sas/herramientas/herramientas.py; este fichero describe sus parámetros. Mismo formato que siril/herramientas/manifiesto.json. Niveles: lectura (no cambia nada), vista (cambia una vista, con deshacer), disco (lee o escribe ficheros).",
+ "funciones": [
+  {
+   "nombre": "ping",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 15,
+   "descripcion": "Comprueba que SASpro responde a través del puente: versión de las herramientas y de SASpro, número de vistas abiertas y vista activa.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "vistas",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 15,
+   "descripcion": "Vistas abiertas en SASpro (como en PixInsight, puede haber varias): nombre, uid, ancho, alto, canales, fichero, pasos de deshacer, último paso y cuál está activa.",
+   "resumen": "Vistas abiertas: nombre, uid, tamaño, canales, fichero, activa.",
+   "params": {
+    "type": "object",
+    "properties": {}
+   }
+  },
+  {
+   "nombre": "imagen",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 20,
+   "descripcion": "Datos de una vista: tamaño, canales, fichero, palabras clave útiles de la cabecera (OBJECT, FILTER, EXPTIME, FOCALLEN, XPIXSZ…), si tiene astrometría y los últimos 10 pasos de su historial.",
+   "resumen": "Datos de una vista: tamaño, cabecera, astrometría, historial.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "estadisticas",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Mediana, MAD, media, mínimo y máximo por canal en 0–1 (vista entera o un rectángulo). Sirve para saber si está lineal (medianas < 0,05), comprobar el fondo o medir zonas. Con bordes mide franjas de los cuatro bordes frente al centro (viñeteo, cuñas, zonas con menos subs).",
+   "resumen": "Mediana, MAD, media, mín. y máx. por canal (entera o rect); con bordes, franjas frente al centro.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "rect": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Zona [x0, y0, x1, y1] en píxeles, (0,0) arriba a la izquierda; x1 e y1 excluidos. Sin él, toda la imagen."
+     },
+     "bordes": {
+      "type": "number",
+      "description": "Ancho en píxeles de las franjas de borde (p. ej. 200)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "previa",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 60,
+   "descripcion": "Guarda un JPG para ver la vista sin tocarla (en ~/.setiastropilot/previas): autoestirado STF si es lineal (por canal por defecto) o tal cual si ya está estirada. Con rect, recorte. Con candidato=<id>, la previa de un candidato de la última comparación. Devuelve la ruta del fichero: ábrelo para mirarlo.",
+   "resumen": "JPG de la vista (autoestirado si es lineal) o de un candidato.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "lado": {
+      "type": "number",
+      "description": "Lado mayor en píxeles (por defecto 1600)."
+     },
+     "rect": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Zona [x0, y0, x1, y1] en píxeles, (0,0) arriba a la izquierda; x1 e y1 excluidos. Sin él, toda la imagen."
+     },
+     "enlazado": {
+      "type": "boolean",
+      "description": "Autoestirado enlazado (conserva el color). Por defecto: por canal si es lineal."
+     },
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta del JPG (opcional)."
+     },
+     "candidato": {
+      "type": "string",
+      "description": "Id de un candidato (gradiente_2, estirado_1…)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "analizarMaster",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 120,
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "descripcion": "Paso 1 lineal: cabecera, escala (\"/px) y campo, astrometría, estadísticas por canal con saturados y ceros, si está lineal, fondo en rejilla 3×3, % de señal y zonas sin datos por lado (cuñas del registrado).",
+   "resumen": "Paso 1: cabecera, escala, estadísticas, saturados, lineal, fondo 3×3, cuñas.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "registro",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 15,
+   "descripcion": "Últimas líneas de la consola de SASpro: todas, solo errores o avisos, o las que contengan un texto.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "n": {
+      "type": "number",
+      "description": "Líneas (por defecto 40, máx. 500)."
+     },
+     "solo_errores": {
+      "type": "boolean"
+     },
+     "filtro": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  {
+   "nombre": "abrirImagen",
+   "fichero": "herramientas.py",
+   "nivel": "disco",
+   "timeout_s": 120,
+   "descripcion": "Abre un fichero (FITS, XISF, TIFF, PNG, JPG, RAW) en una vista nueva de SASpro y la deja activa. Devuelve sus datos.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta."
+     }
+    },
+    "required": [
+     "fichero"
+    ]
+   }
+  },
+  {
+   "nombre": "guardarImagen",
+   "fichero": "herramientas.py",
+   "nivel": "disco",
+   "timeout_s": 120,
+   "descripcion": "Guarda una vista; el formato va por la extensión (.fits, .xisf, .tif, .png, .jpg). No sobrescribe salvo sobrescribir: true. Por defecto 32 bits flotante en FITS/XISF/TIFF, 16 en PNG, 8 en JPG. Guarda versiones (v1, v2…) antes de cada paso.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fichero": {
+      "type": "string",
+      "description": "Ruta absoluta con extensión."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "sobrescribir": {
+      "type": "boolean"
+     },
+     "bits": {
+      "type": "string",
+      "enum": [
+       "8-bit",
+       "16-bit",
+       "32-bit unsigned",
+       "32-bit floating point"
+      ]
+     }
+    },
+    "required": [
+     "fichero"
+    ]
+   }
+  },
+  {
+   "nombre": "exportarFinal",
+   "fichero": "herramientas.py",
+   "nivel": "disco",
+   "timeout_s": 180,
+   "paso": "no-lineal/10-recorte-exportacion.md",
+   "descripcion": "NL10 entrega: TIFF de 16 bits y JPG calidad 95 como <nombre>_final, junto al fichero de la vista o en carpeta, sin sobrescribir (_2, _3…). Se niega si la imagen sigue lineal.",
+   "resumen": "Entrega: TIFF 16 bits + JPG 95 como <nombre>_final.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de salida (ruta absoluta)."
+     },
+     "nombre": {
+      "type": "string"
+     },
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "deshacer",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 30,
+   "descripcion": "Deshace el último paso de la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "rehacer",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 30,
+   "descripcion": "Rehace el último paso deshecho de la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "duplicarVista",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 30,
+   "descripcion": "Copia una vista en otra nueva (sin fichero).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "nombre": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  {
+   "nombre": "procesoSAS",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 1800,
+   "descripcion": "Lanza un proceso de SASpro de la lista blanca sobre una vista con su preset (claves y valores: ayudaProceso). Ejemplos: abe, graxpert, background_neutral, white_balance, remove_green, stat_stretch, star_stretch, ghs, curves, wavescale_hdr, wavescale_dark_enhance, cosmic_clarity, convo, syqon_starless, remove_stars, plate_solve, geometría. Con deshacer. Avisa si la imagen no cambia.",
+   "resumen": "Lanza un proceso de SASpro (lista blanca) con su preset.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "proceso": {
+      "type": "string",
+      "description": "Id del proceso (ayudaProceso sin parámetros los lista)."
+     },
+     "preset": {
+      "type": "object",
+      "description": "Parámetros del proceso (ayudaProceso con proceso)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    },
+    "required": [
+     "proceso"
+    ]
+   }
+  },
+  {
+   "nombre": "ayudaProceso",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 15,
+   "descripcion": "Sin proceso: lista los procesos permitidos (nombre, grupo, si sirven en lineal/no lineal/mono). Con proceso: sus claves de preset con tipo, valor por defecto, mínimo, máximo y valores admitidos.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "proceso": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  {
+   "nombre": "gradienteCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "lineal/09-correccion-gradiente.md",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente de SASpro (ABE polinomio 1 y 2, ABE con RBF y GraXpert IA), mide cada una con los criterios de la guía (copia_objeto, objeto_quitado_pct, gradiente_restante, irregularidad_cielo) y recomienda. La vista NO cambia: el elegido se pone con aplicarCandidato(id). Cada candidato trae previa y previa_quita (el modelo restado).",
+   "resumen": "Paso 9: compara ABE poli/RBF y GraXpert, mide y recomienda; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "polinomio": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Grados de ABE (por defecto [1, 2]; [] = ninguno)."
+     },
+     "rbf": {
+      "type": "boolean",
+      "description": "Probar ABE grado 2 con RBF (por defecto true)."
+     },
+     "usar_graxpert": {
+      "type": "boolean",
+      "description": "Probar GraXpert IA (por defecto true; usa la ruta configurada en SASpro)."
+     },
+     "muestras": {
+      "type": "number",
+      "description": "Muestras de ABE (por defecto 120)."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "nombre": "estirarCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/01-estirado.md",
+   "descripcion": "NL1 estirado: compara el estirado estadístico de SASpro (enlazado y por canal, a varias medianas) y GHS con el pivote en el cielo; mide cielo, ruido relativo, recortes a negro y a blanco y dominante del cielo, y recomienda. La vista NO cambia (aplicarCandidato).",
+   "resumen": "NL1: compara estirado estadístico y GHS; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "medianas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Medianas objetivo (por defecto [0.15, 0.25])."
+     },
+     "ghs": {
+      "type": "boolean",
+      "description": "Probar GHS (por defecto true)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "ruidoCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 3600,
+   "paso": "no-lineal/06-noisex.md",
+   "descripcion": "L14/NL6 ruido: compara Cosmic Clarity denoise a varias fuerzas y GraXpert denoise; mide el ruido del cielo frente a antes y el detalle perdido (< 10 %) y recomienda. La vista NO cambia (aplicarCandidato).",
+   "resumen": "Ruido: compara Cosmic Clarity y GraXpert denoise; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "fuerzas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas de Cosmic Clarity 0–1 (por defecto [0.3, 0.5, 0.7])."
+     },
+     "usar_graxpert": {
+      "type": "boolean"
+     }
+    }
+   }
+  },
+  {
+   "nombre": "aplicarCandidato",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 120,
+   "descripcion": "Pone en la vista el candidato id de la última comparación: exactamente el array que se midió, con deshacer. Se niega si la vista ha cambiado desde la comparación.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "description": "Id del candidato (gradiente_2, estirado_1, ruido_3…)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    },
+    "required": [
+     "id"
+    ]
+   }
+  },
+  {
+   "nombre": "quitarVerde",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 120,
+   "paso": "no-lineal/03-scnr.md",
+   "descripcion": "NL3 SCNR: Remove Green de SASpro conservando la luminosidad.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "cantidad": {
+      "type": "number",
+      "description": "0–1 (por defecto 1)."
+     },
+     "modo": {
+      "type": "string",
+      "enum": [
+       "avg",
+       "max",
+       "min"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "nombre": "neutralizarFondo",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 120,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "Neutraliza el color del fondo (Background Neutralization de SASpro), automático o con un rectángulo de cielo limpio.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "rect": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Zona [x0, y0, x1, y1] en píxeles, (0,0) arriba a la izquierda; x1 e y1 excluidos. Sin él, toda la imagen."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "calibrarColor",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "L12 color: White Balance de SASpro (modo star: equilibra con las estrellas; auto; manual con procesoSAS y ganancias).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "modo": {
+      "type": "string",
+      "enum": [
+       "star",
+       "auto",
+       "manual"
+      ]
+     },
+     "umbral": {
+      "type": "number",
+      "description": "Umbral de detección de estrellas (por defecto 50)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "resolverAstrometria",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 900,
+   "paso": "lineal/08-plate-solve.md",
+   "descripcion": "L8 astrometría: plate solve de SASpro (ASTAP, astrometry.net o los dos, según su configuración). Con ra/dec da semilla manual.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "ra": {
+      "type": "string"
+     },
+     "dec": {
+      "type": "string"
+     },
+     "escala": {
+      "type": "number",
+      "description": "\"/px"
+     },
+     "solucionador": {
+      "type": "string",
+      "enum": [
+       "both",
+       "gaia_only",
+       "astap_only",
+       "astrometry_only"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "nombre": "separarEstrellas",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 1800,
+   "paso": "lineal/15-starx.md",
+   "descripcion": "L15 estrellas: separa con StarNet o DarkStar (remove_stars) o SyQon. La starless queda en la vista y las estrellas en una vista nueva (vistas_nuevas).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "motor": {
+      "type": "string",
+      "enum": [
+       "starnet",
+       "darkstar",
+       "syqon"
+      ]
+     },
+     "lineal": {
+      "type": "boolean",
+      "description": "Si la imagen es lineal (por defecto se detecta)."
+     }
+    }
+   }
+  }
+ ]
+}
