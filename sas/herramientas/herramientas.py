@@ -481,6 +481,30 @@ def _libre(p: Path) -> Path:
         n += 1
 
 
+_CLAVES_WCS = ("CTYPE1", "CTYPE2", "CRVAL1", "CRVAL2", "CRPIX1", "CRPIX2", "CD1_1", "CD1_2", "CD2_1", "CD2_2",
+               "CDELT1", "CDELT2", "PC1_1", "PC1_2", "PC2_1", "PC2_2", "A_ORDER", "B_ORDER")
+
+
+def cabecera(ctx, vista=None, todas=False):
+    """Metadatos de una vista: claves de metadata, palabras clave de la cabecera (todas o las principales) y si tiene
+    astrometría (y de dónde sale). Solo lectura."""
+    d = _doc(ctx, vista)
+    m = _meta(d)
+    h = m.get("original_header") or m.get("fits_header")
+    claves = []
+    try:
+        claves = list(h.keys()) if h is not None else []
+    except Exception:
+        pass
+    r = {"vista": _nombre(d), "metadata": sorted(str(k) for k in m.keys()), "n_palabras": len(claves),
+         "wcs_en_cabecera": [k for k in _CLAVES_WCS if k in claves],
+         "wcs_en_metadata": [k for k in ("wcs", "wcs_header", "original_wcs", "sip_wcs") if m.get(k) is not None],
+         "astrometria": _tiene_wcs(d), "principales": _cabecera(d)}
+    if todas and h is not None:
+        r["cabecera"] = {k: _r(h.get(k), 6) if isinstance(h.get(k), float) else str(h.get(k)) for k in claves[:400]}
+    return r
+
+
 def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
     """Guarda una vista (formato por la extensión: .fits, .xisf, .tif, .png, .jpg). No sobrescribe salvo
     sobrescribir: true. bits: '16-bit', '32-bit floating point'… (por defecto 32 bits flotante en FITS/XISF/TIFF)."""
@@ -496,11 +520,41 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
         bits = "8-bit" if fmt in ("jpg",) else "16-bit" if fmt == "png" else "32-bit floating point"
     m = _meta(d)
     img = d.image
-    ctx.save_image(img, str(p), original_format=fmt, bit_depth=bits, original_header=m.get("original_header"),
-                   is_mono=(np.ndim(img) == 2), image_meta=m.get("image_meta"), file_meta=m.get("file_meta"))
+    cab = _cabecera_para_guardar(m)
+    # En SASpro la cabecera está en metadata["fits_header"] (no en "original_header") y la astrometría en "wcs_header".
+    # Antes se pasaba original_header (None) y el fichero salía con 7 palabras clave: sin OBJECT, exposición ni WCS
+    # (M31, 13 nov 2026). image_meta no se pasa en XISF: con ella SASpro copia las palabras de la XISF original y
+    # descarta la solución astrométrica; sin ella las escribe desde la cabecera, WCS incluido.
+    ctx.save_image(img, str(p), original_format=fmt, bit_depth=bits, original_header=cab,
+                   is_mono=(np.ndim(img) == 2), image_meta=None if fmt == "xisf" else m.get("xisf_meta"),
+                   file_meta=m.get("file_meta"))
     if not p.exists():
         raise RuntimeError(f"SASpro no ha escrito {p}.")
-    return {"fichero": str(p), "formato": fmt, "bits": bits, "bytes": p.stat().st_size, "vista": _nombre(d)}
+    return {"fichero": str(p), "formato": fmt, "bits": bits, "bytes": p.stat().st_size, "vista": _nombre(d),
+            "palabras_cabecera": len(cab) if cab is not None else 0,
+            "astrometria_guardada": bool(cab is not None and "CTYPE1" in cab)}
+
+
+def _cabecera_para_guardar(m):
+    """Cabecera FITS de la vista (fits_header u original_header) con la astrometría de wcs_header encima, sin tocar el
+    original. None si no hay cabecera."""
+    h = m.get("original_header") or m.get("fits_header")
+    if h is None:
+        return None
+    try:
+        h = h.copy()
+    except Exception:
+        return h
+    w = m.get("wcs_header")
+    if w is not None:
+        try:
+            for k in w.keys():
+                if k in ("SIMPLE", "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "NAXIS3", "EXTEND", "COMMENT", "HISTORY", ""):
+                    continue
+                h[k] = w[k]
+        except Exception:
+            pass
+    return h
 
 
 def exportarFinal(ctx, carpeta=None, nombre=None, vista=None):
@@ -931,7 +985,20 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False):
     return _galeria(r, p, "diferencia")
 
 
-def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(), radio=None, desde=None,
+def _wavescale_hdr(p, compresion=1.5, escalas=5, gamma_mascara=5.0):
+    """WaveScale HDR de SASpro llamando a su función pura (setiastro.saspro.wavescale_hdr.compute_wavescale_hdr). El
+    comando sin ventana (run_wavescale_hdr_via_preset) abre un diálogo con exec() que no se cierra tras aplicar y deja
+    SASpro colgado (1.24.2)."""
+    from setiastro.saspro.wavescale_hdr import compute_wavescale_hdr
+    rgb = np.ascontiguousarray(np.moveaxis(p, 0, -1) if p.shape[0] == 3 else np.repeat(np.moveaxis(p, 0, -1), 3, -1))
+    out = compute_wavescale_hdr(rgb.astype(np.float32), n_scales=int(escalas), compression_factor=float(compresion),
+                                mask_gamma=float(gamma_mascara))
+    out = out[0] if isinstance(out, tuple) else out
+    q = np.moveaxis(np.asarray(out, dtype=np.float32), -1, 0)
+    return np.clip(q if p.shape[0] == 3 else q[:1], 0, 1)
+
+
+def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5), radio=None, desde=None,
                      brillo_min=0.85, anillos_max=1.5):
     """NL5 núcleo de galaxia (no lineal, antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias
     fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo. La vista no cambia."""
@@ -943,8 +1010,8 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(), radio=N
     m0 = M.medir_nucleo(p, n)
     lista = [(f"comprimir el bulbo ×{k:g}", "nucleo_propio", {"k": float(k)},
               (lambda q, k: M.comprimir_nucleo(q, n, k))) for k in (fuerzas or [])]
-    lista += [(f"WaveScale HDR compresión {c:g}", "wavescale_hdr", {"n_scales": 5, "compression_factor": float(c),
-                                                                     "mask_gamma": 5.0}) for c in (hdr or [])]
+    lista += [(f"WaveScale HDR compresión {c:g}", "wavescale_hdr", {"compresion": float(c)},
+               (lambda q, compresion: _wavescale_hdr(q, compresion))) for c in (hdr or [])]
     r = _comparar(ctx, d, "nucleo", lista, lambda q: M.medir_nucleo(q, n))
     for x in r["candidatos"]:
         m1, fal = x["metricas"], []
@@ -1274,6 +1341,40 @@ def separarEstrellas(ctx, vista=None, motor="starnet", lineal=None):
     return r
 
 
+def cerrarVista(ctx, vista, sin_guardar=False):
+    """Cierra una vista. Por seguridad sólo si no tiene pasos de deshacer (sin cambios), salvo sin_guardar: true; aun
+    así SASpro podría preguntar si guardar, y un diálogo bloquearía el puente, así que la vista se marca como guardada
+    antes. ScriptContext no tiene cerrar: se cierra su subventana."""
+    d = _doc(ctx, vista)
+    nombre = _nombre(d)
+    n = _n_deshacer(d) or 0
+    if n and not sin_guardar:
+        raise RuntimeError(f"'{nombre}' tiene {n} pasos sin guardar: guárdala (guardarImagen) o pasa sin_guardar: true.")
+    sw = None
+    for f in ("_find_subwindow_for_doc",):
+        try:
+            sw = getattr(ctx, f)(d)
+        except Exception:
+            sw = None
+    if isinstance(sw, tuple):                 # SASpro 1.24 devuelve (subventana, vista)
+        sw = next((x for x in sw if hasattr(x, "close") and hasattr(x, "widget")), None) or \
+            next((x for x in sw if hasattr(x, "close")), None)
+    if sw is None:
+        raise RuntimeError("No encuentro la ventana de esa vista en SASpro.")
+    for marca in ("setModified", "set_modified"):
+        try:
+            getattr(d, marca)(False)
+        except Exception:
+            pass
+    try:
+        d.dirty = False
+    except Exception:
+        pass
+    sw.close()
+    abiertas = [_nombre(x) for x in _docs(ctx)]
+    return {"cerrada": nombre, "abiertas": abiertas}
+
+
 def activarVista(ctx, vista):
     """Pone activa una vista (las llamadas sin 'vista' trabajan sobre la activa)."""
     d = _doc(ctx, vista)
@@ -1302,6 +1403,7 @@ LISTA = {
     "ping": ping,
     "vistas": vistas,
     "imagen": imagen,
+    "cabecera": cabecera,
     "estadisticas": estadisticas,
     "previa": previa,
     "analizarMaster": analizarMaster,
@@ -1313,6 +1415,7 @@ LISTA = {
     "rehacer": rehacer,
     "duplicarVista": duplicarVista,
     "activarVista": activarVista,
+    "cerrarVista": cerrarVista,
     "procesoSAS": procesoSAS,
     "ayudaProceso": ayudaProceso,
     "gradienteCandidatos": gradienteCandidatos,

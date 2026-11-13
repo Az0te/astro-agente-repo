@@ -43,6 +43,26 @@
    }
   },
   {
+   "nombre": "cabecera",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 30,
+   "descripcion": "Metadatos de una vista: palabras clave principales de la cabecera, cuántas hay, si tiene astrometría (en la cabecera o en los metadatos de SASpro) y, con todas: true, la cabecera entera.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "todas": {
+      "type": "boolean",
+      "description": "Devolver todas las palabras clave (por defecto false)."
+     }
+    }
+   }
+  },
+  {
    "nombre": "estadisticas",
    "fichero": "herramientas.py",
    "nivel": "lectura",
@@ -304,6 +324,29 @@
    }
   },
   {
+   "nombre": "cerrarVista",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 30,
+   "descripcion": "Cierra una vista para liberar memoria (cada master abierto ocupa cientos de MB; abrir un master de WBPP abre también sus mapas de rechazo). Se niega si la vista tiene pasos sin guardar, salvo sin_guardar: true.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas)."
+     },
+     "sin_guardar": {
+      "type": "boolean",
+      "description": "Cerrar aunque tenga cambios sin guardar (se pierden)."
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
    "nombre": "procesoSAS",
    "fichero": "herramientas.py",
    "nivel": "vista",
@@ -460,7 +503,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Núcleo de galaxia (no lineal, después de estirar y antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias fuerzas (y WaveScale HDR de SASpro si se pide); mide meseta quemada, anillos, brillo y estructura del bulbo, y recomienda el que baja la meseta sin apagar el bulbo ni crear anillos. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "Núcleo de galaxia (no lineal, después de estirar y antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo, y recomienda el que baja la meseta sin apagar el bulbo ni crear anillos. La vista NO cambia (aplicarCandidato).",
    "resumen": "Núcleo: compara comprimir el bulbo y WaveScale HDR; no cambia la vista.",
    "params": {
     "type": "object",
@@ -481,7 +524,7 @@
       "items": {
        "type": "number"
       },
-      "description": "compression_factor de WaveScale HDR (por defecto []: sin ventana se cuelga en SASpro 1.24.2)."
+      "description": "compression_factor de WaveScale HDR (por defecto [1.5, 2.5]; [] para no probarlo). Se llama a su función pura: el comando sin ventana se cuelga en SASpro 1.24.2."
      },
      "radio": {
       "type": "number",
