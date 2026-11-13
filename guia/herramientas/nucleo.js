@@ -273,7 +273,12 @@ function comprimirNucleo(viewId, o) {
   for (var j = 0; j < mb.length; j += 3) if (mb[j] > 0.5) { bm0 += a0.L[j]; bm1 += a1.L[j]; ++nb; }
   bm0 = nb ? bm0 / nb : 0; bm1 = nb ? bm1 / nb : 0;
   var baja = bm0 > 0 ? 100 * (1 - bm1 / bm0) : 0, noCumple = [];
-  if (despues.radio_px > 3) noCumple.push("el núcleo sigue quemado (meseta " + despues.radio_px + " px): repetir sobre la original con mezcla 0,8 o capas 8");
+  // Si la original no estaba quemada, la compresión es la que crea la meseta: no se comprime (Qwen 64k repitió con
+  // mezcla 0,8 y capas 8, empeoró las dos veces y se paró; M31, 13 nov 2026).
+  if (despues.radio_px > 3 && antes.radio_px <= 3)
+    noCumple.push("la compresión CREA una meseta de " + despues.radio_px + " px y la original no estaba quemada (" + antes.radio_px +
+                  " px): no comprimir; seguir con " + viewId + (sat0 !== null && sat0 < 0.04 ? " y, si el núcleo es blanco, recuperarColorNucleo" : "") + ". No repetir con más mezcla ni más capas");
+  else if (despues.radio_px > 3) noCumple.push("el núcleo sigue quemado (meseta " + despues.radio_px + " px): repetir sobre la original con mezcla 0,8 o capas 8");
   if (nuevos.length) noCumple.push("anillo oscuro nuevo a " + nuevos.join(", ") + " px del centro: repetir con mezcla menor (0,4) o capas 6");
   if (otra) noCumple.push("otra meseta quemada de " + otra.radio_px + " px en [" + otra.centro.join(", ") + "] (¿galaxia satélite o estrella?): " +
     "si es una galaxia, repetir sobre la original con mascaraDesde 0,25 para que la máscara la incluya; si es una estrella, ignorar");
