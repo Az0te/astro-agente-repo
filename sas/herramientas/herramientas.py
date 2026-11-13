@@ -849,7 +849,23 @@ def _estirado_mtf(p, mediana=0.2, enlazado=True):
     return M.autoestirar(p, objetivo=float(mediana), enlazado=bool(enlazado))
 
 
-LOCALES = {"estirado_mtf": _estirado_mtf}
+def _estirado_sas_directo(p, mediana=0.2, enlazado=True):
+    """Estirado estadístico de SASpro llamando a su función (imageops.stretch.stretch_color_image / stretch_mono_image)
+    sin el comando sin ventana, que en 1.24.2 deja algunas imágenes negras a mediana 0,2–0,3."""
+    import inspect
+    from setiastro.saspro.imageops import stretch as S
+    a = np.ascontiguousarray(np.moveaxis(p, 0, -1) if p.shape[0] == 3 else p[0]).astype(np.float32)
+    fn = S.stretch_color_image if a.ndim == 3 else S.stretch_mono_image
+    kw = {"linked": bool(enlazado), "normalize": False, "apply_curves": False, "curves_boost": 0.0,
+          "blackpoint_sigma": 5.0, "no_black_clip": False, "hdr_compress": False}
+    acepta = inspect.signature(fn).parameters
+    kw = {k: v for k, v in kw.items() if k in acepta}
+    out = fn(a, float(mediana), **kw) if "target_median" not in acepta else fn(a, target_median=float(mediana), **kw)
+    out = np.asarray(out[0] if isinstance(out, tuple) else out, dtype=np.float32)
+    return np.clip(np.moveaxis(out, -1, 0) if out.ndim == 3 else out[None], 0, 1)
+
+
+LOCALES = {"estirado_mtf": _estirado_mtf, "estirado_sas_directo": _estirado_sas_directo}
 
 
 def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True):
@@ -869,6 +885,8 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
                           {"target_median": float(m), "linked": False}))
         if propio:
             lista.append((f"estirado MTF propio enlazado {m}", "estirado_mtf", {"mediana": float(m), "enlazado": True}))
+            lista.append((f"estadístico de SASpro, función directa, enlazado {m}", "estirado_sas_directo",
+                          {"mediana": float(m), "enlazado": True}))
     if ghs:
         c = M.cielo(p)
         sp = float(c["cielo"])
