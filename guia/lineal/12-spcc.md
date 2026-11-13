@@ -17,6 +17,8 @@
 | Mono | Curva QE real del sensor y los filtros de la rueda. Si el sensor no está en la base (p. ej. KAF-11000), «Ideal QE curve» y los filtros reales (Astrodon: «Astrodon E-series R/G/B» o «I-series»); decirlo en el informe |
 | Narrowband | El filtro dual band de la base de filtros; en mono, combinar S,H,O (o H,O,O) en RGB, SPCC en modo narrowband con longitud de onda y ancho de cada filtro, y volver a extraer los canales |
 
+**Filtro Triband (Antlia Triband RGB).** Es antipolución pero también de banda estrecha (tres bandas de 20–35 nm): SPCC va **siempre en modo banda estrecha** con sus bandas (656/30, 501/35, 496/35 nm y la QE del sensor), **también en galaxias**, aunque se use en ellas por lo suave que es (Rafael, 13 nov 2026). `calibrarColor` lo hace sola al ver FILTER Triband; no pasar `bandaAncha` salvo que el usuario lo pida (en M31 los tres modelos la pidieron «porque es una galaxia»).
+
 **Si SPCC falla.** "Si SPCC falla, SCNR como recurso (aescaffre 0,65 en verde; nosotros preferimos suave)". No es una alternativa válida a la calibración: es un recurso estético posterior.
 
 **Si no hay calibración fotométrica posible.** Antes de parar, en este orden:
