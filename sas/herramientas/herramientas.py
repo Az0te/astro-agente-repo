@@ -1098,6 +1098,124 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5),
     return _galeria(r, p, "diferencia")
 
 
+def _con_luminancia(p, L1):
+    """Pone la luminancia L1 conservando el color (canales × L1/L, sin pasar de 1)."""
+    L = M.lum(p)
+    if p.shape[0] == 1:
+        return np.clip(L1[None], 0, 1).astype(np.float32)
+    q = p * (L1 / np.maximum(L, 1e-6))[None]
+    mx = q.max(axis=0)
+    q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
+def _clahe(p, mezcla=0.25, rejilla=8, limite=0.01):
+    """CLAHE en la luminancia (skimage, va con SASpro), mezclado con la original. El CLAHE de skimage solo, aun con
+    clip_limit bajo, iguala el histograma de cada zona: en IC 1396 subía el cielo de 0,10 a 0,18 y el ruido × 3,3
+    (14 nov 2026). Una parte (mezcla) del resultado da el realce local sin levantar el fondo."""
+    from skimage.exposure import equalize_adapthist
+    L = np.clip(M.lum(p), 0, 1)
+    k = (max(8, L.shape[0] // int(rejilla)), max(8, L.shape[1] // int(rejilla)))
+    C = equalize_adapthist(L, kernel_size=k, clip_limit=float(limite)).astype(np.float32)
+    # Sólo la banda de escalas medias (4–64 px) del CLAHE: su fondo grueso cambia el nivel del cielo y su escala fina
+    # amplifica el ruido (con toda la banda fina, ruido del cielo × 1,8 a 25 %).
+    det_c = M.suave(C, 4) - M.suave(C, 64)
+    det_l = M.suave(L, 4) - M.suave(L, 64)
+    L1 = L + float(mezcla) * (det_c - det_l)
+    return _con_luminancia(p, L1)
+
+
+def _ondiculas(p, pesos=(1.0, 1.15, 1.3, 1.3, 1.1)):
+    """Realce por escalas (pirámide de cajas, como wavelet + wrecons de Siril): capa i = caja(2^(i-1)) − caja(2^i);
+    se multiplica cada capa por su peso y se suma el resto."""
+    L = M.lum(p)
+    capas, prev = [], L
+    for i, _ in enumerate(pesos):
+        b = M._caja(L, 2 ** i) if i > 0 else M._caja(L, 1)
+        capas.append(prev - b)
+        prev = b
+    L1 = prev + sum(w * c for w, c in zip(pesos, capas))
+    return _con_luminancia(p, L1)
+
+
+def _enfoque(p, sigma=2.0, cantidad=0.3):
+    """Máscara de enfoque en la luminancia (σ en px, cantidad como en Siril)."""
+    L = M.lum(p)
+    return _con_luminancia(p, L + float(cantidad) * (L - M.suave(L, 2 * float(sigma))))
+
+
+CONTRASTE = {
+    "clahe_suave": ("CLAHE (25 % del detalle local)", lambda q: _clahe(q, 0.25)),
+    "clahe_medio": ("CLAHE (50 % del detalle local)", lambda q: _clahe(q, 0.5)),
+    "ondiculas": ("ondículas: escalas 2–4 × 1,15–1,3", _ondiculas),
+    "enfoque": ("máscara de enfoque σ 2, 0,3", _enfoque),
+}
+
+
+def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque"), ruido_max=None,
+                        tipo=None):
+    """Contraste local (no lineal, antes de saturar): compara CLAHE, realce de escalas medias por ondículas y máscara
+    de enfoque (propios, como en Siril). Mide el contraste local en el objeto, el ruido del cielo, la dominante y los
+    recortes, y recomienda el de más contraste por ruido añadido. La vista no cambia."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if M.lineal(p[:, ::8, ::8]):
+        raise RuntimeError("La imagen parece lineal: el contraste local va después de estirar.")
+    if ruido_max is None:                                  # en galaxias el fondo admite menos ruido nuevo (M31, Siril)
+        ruido_max = 1.10 if str(tipo or "") == "galaxia" else 1.25
+    z = M.zonas_objeto_cielo(p)
+    cel = z["medidas"]["_celdas"]
+    obj = z["obj_px"]
+    k0 = M.contraste_local(M.lum(p), obj)
+    r0 = float(z["medidas"]["ruido"])
+    rec0 = M.recortes(p)
+
+    def dom(q):
+        if q.shape[0] != 3:
+            return 0.0
+        rgb = M.cielo_por_canal(q, cel)
+        return 100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6)
+
+    dom0 = dom(p)
+
+    def medir(q):
+        L = M.lum(q)
+        k1 = M.contraste_local(L, obj)
+        c = M.cielo(q)
+        return {"contraste_ganado_pct": _r(100 * (k1 / k0 - 1), 1) if k0 and k1 else None,
+                "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), "dominante_cielo_pct": _r(dom(q), 2),
+                "cielo": c["cielo"], **M.recortes(q)}
+
+    lista = []
+    for mt in metodos or []:
+        if mt in CONTRASTE:
+            nombre, f = CONTRASTE[mt]
+            lista.append((nombre, mt, {}, (lambda q, f=f: f(q))))
+    r = _comparar(ctx, d, "contraste", lista, medir)
+    for x in r["candidatos"]:
+        m, fal = x["metricas"], []
+        if m["ruido_rel"] > ruido_max:
+            fal.append(f"ruido del cielo × {m['ruido_rel']} > {ruido_max}")
+        if m["altos_pct"] - rec0["altos_pct"] > 0.01 or m["ceros_pct"] - rec0["ceros_pct"] > 0.05:
+            fal.append("recortes nuevos")
+        if m["dominante_cielo_pct"] - dom0 > 1.0:
+            fal.append(f"el cielo gana color: dominante {_r(dom0, 1)} → {m['dominante_cielo_pct']} %")
+        x["no_cumple"] = fal
+    ok = [x for x in r["candidatos"] if not x["no_cumple"] and (x["metricas"]["contraste_ganado_pct"] or 0) > 0]
+    if ok:
+        mejor = max(ok, key=lambda x: (x["metricas"]["contraste_ganado_pct"] / 100.0) / max(x["metricas"]["ruido_rel"], 1.0))
+        mm = mejor["metricas"]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: +{mm['contraste_ganado_pct']} % de contraste local en el objeto con el ruido del "
+                       f"cielo × {mm['ruido_rel']} y sin recortes nuevos (el mejor contraste por ruido añadido). Míralo con previa.")
+    else:
+        r["motivo"] = "Ninguno sube el contraste sin pasarse de ruido o recortar: no aplicar contraste local."
+    r["antes"] = {"contraste_objeto": _r(k0, 5), "dominante_cielo_pct": _r(dom0, 2)}
+    r["leyenda"] = ("contraste_ganado_pct: estructura de escala media (≈ 33 px) en el objeto, después / antes − 1. ruido_rel: "
+                    f"ruido del cielo después / antes (límite {ruido_max}). La vista NO ha cambiado: aplicarCandidato(id).")
+    return _galeria(r, p, "diferencia")
+
+
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75), proteger_cielo=True, dominante_max=5.0):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
     cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
@@ -1586,6 +1704,7 @@ LISTA = {
     "estirarCandidatos": estirarCandidatos,
     "ruidoCandidatos": ruidoCandidatos,
     "nucleoCandidatos": nucleoCandidatos,
+    "contrasteCandidatos": contrasteCandidatos,
     "saturacionCandidatos": saturacionCandidatos,
     "nitidezCandidatos": nitidezCandidatos,
     "estirarEstrellas": estirarEstrellas,

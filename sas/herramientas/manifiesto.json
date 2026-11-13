@@ -667,6 +667,43 @@
    }
   },
   {
+   "nombre": "contrasteCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "Contraste local (no lineal, después del núcleo y antes de saturar): compara CLAHE (25 % y 50 % del detalle de escalas medias, sin levantar el fondo), realce por ondículas de las escalas 2–4 y máscara de enfoque; mide el contraste local en el objeto, el ruido del cielo (≤ ×1,25; ×1,10 en galaxias), la dominante y los recortes, y recomienda el de más contraste por ruido añadido. La vista NO cambia (aplicarCandidato).",
+   "resumen": "Contraste local: compara CLAHE, ondículas y enfoque; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "metodos": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "clahe_suave",
+        "clahe_medio",
+        "ondiculas",
+        "enfoque"
+       ]
+      }
+     },
+     "tipo": {
+      "type": "string",
+      "description": "galaxia, nebulosa…: en galaxias el límite de ruido es más estricto."
+     },
+     "ruido_max": {
+      "type": "number"
+     }
+    }
+   }
+  },
+  {
    "nombre": "saturacionCandidatos",
    "fichero": "herramientas.py",
    "nivel": "lectura",
