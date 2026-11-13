@@ -15,6 +15,7 @@
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -220,23 +221,36 @@ def _tiene_wcs(doc):
         return False
 
 
-def _jpg(p, ruta, calidad=90):
-    """(canales, alto, ancho) 0–1 -> JPG. PIL (va con SASpro) o, si no está, QImage."""
+def _jpg(p, ruta, calidad=90, lado=None):
+    """(canales, alto, ancho) 0–1 -> JPG. PIL (va con SASpro) o, si no está, QImage.
+    Con lado, el lado largo queda exactamente en 'lado' px si la imagen es mayor (remuestreo de calidad)."""
     a = (np.clip(p, 0, 1) * 255 + 0.5).astype(np.uint8)
     a = np.ascontiguousarray(a[0] if a.shape[0] == 1 else np.moveaxis(a, 0, -1))
+    h, w = a.shape[:2]
+    nuevo = None
+    if lado and max(h, w) > int(lado):
+        f = int(lado) / max(h, w)
+        nuevo = (max(1, round(w * f)), max(1, round(h * f)))
     try:
         from PIL import Image
-        Image.fromarray(a).save(ruta, "JPEG", quality=calidad)
+        im = Image.fromarray(a)
+        if nuevo:
+            im = im.resize(nuevo, Image.LANCZOS)
+        im.save(ruta, "JPEG", quality=calidad)
     except ImportError:
+        from PyQt6.QtCore import Qt
         from PyQt6.QtGui import QImage
-        h, w = a.shape[:2]
         fmt = QImage.Format.Format_Grayscale8 if a.ndim == 2 else QImage.Format.Format_RGB888
-        QImage(a.data, w, h, a.strides[0], fmt).save(str(ruta), "JPG", calidad)
+        qi = QImage(a.data, w, h, a.strides[0], fmt)
+        if nuevo:
+            qi = qi.scaled(nuevo[0], nuevo[1], Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        qi.save(str(ruta), "JPG", calidad)
     return str(ruta)
 
 
 def _reducir(p, lado):
-    paso = max(1, int(np.ceil(max(p.shape[1], p.shape[2]) / max(64, int(lado)))))
+    """Promedia bloques enteros sin bajar de 'lado' en el lado largo (el ajuste fino lo hace _jpg)."""
+    paso = max(1, int(max(p.shape[1], p.shape[2]) // max(64, int(lado))))
     if paso == 1:
         return p
     h, w = p.shape[1] // paso * paso, p.shape[2] // paso * paso
@@ -249,18 +263,44 @@ def _seguro(nombre):
 
 # --- Herramientas: lectura ---------------------------------------------------------------------------------
 
-def ping(ctx):
-    """Comprueba que el puente y SASpro responden."""
+def _version_sas():
+    """Versión de SASpro. El instalador de Windows deja los metadatos del paquete Python atrasados (1.23.2 en una
+    1.24.2.post2), así que primero se mira el registro de desinstalación y luego el paquete."""
     try:
-        from setiastro.saspro import __version__ as v_sas
+        from setiastro.saspro import __version__ as v
+        return str(v)
     except Exception:
-        v_sas = None
-    if v_sas is None:
+        pass
+    if sys.platform == "win32":
         try:
-            from importlib.metadata import version
-            v_sas = version("setiastrosuitepro")
+            import winreg
+            for raiz in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                for ruta in (r"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+                             r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"):
+                    try:
+                        k = winreg.OpenKey(raiz, ruta)
+                    except OSError:
+                        continue
+                    for i in range(winreg.QueryInfoKey(k)[0]):
+                        try:
+                            sk = winreg.OpenKey(k, winreg.EnumKey(k, i))
+                            nombre = str(winreg.QueryValueEx(sk, "DisplayName")[0])
+                            if "setiastro" in nombre.lower().replace(" ", ""):
+                                return str(winreg.QueryValueEx(sk, "DisplayVersion")[0])
+                        except OSError:
+                            continue
         except Exception:
             pass
+    try:
+        from importlib.metadata import version
+        return version("setiastrosuitepro")
+    except Exception:
+        return None
+
+
+def ping(ctx):
+    """Comprueba que el puente y SASpro responden."""
+    v_sas = _version_sas()
     d = _activo(ctx)
     act = _nombre(_base(d)) if d is not None else None
     return {"herramientas": VERSION, "saspro": v_sas, "vistas_abiertas": len(_docs(ctx)), "vista_activa": act}
@@ -338,9 +378,13 @@ def previa(ctx, vista=None, lado=1600, rect=None, enlazado=None, fichero=None, c
         q = M.autoestirar(q, enlazado=bool(enlazado))
     PREVIAS.mkdir(parents=True, exist_ok=True)
     ruta = _ruta(fichero) if fichero else PREVIAS / (f"{base}_{x0}_{y0}.jpg" if rect else f"{base}.jpg")
-    _jpg(q, ruta)
-    return {"fichero": str(ruta), "ancho": int(q.shape[2]), "alto": int(q.shape[1]), "lineal": bool(lin),
-            "autoestirado": bool(lin), "enlazado": bool(enlazado), "escala": _r(q.shape[2] / (x1 - x0), 3),
+    _jpg(q, ruta, lado=lado)
+    hq, wq = int(q.shape[1]), int(q.shape[2])
+    if max(hq, wq) > int(lado):
+        f = int(lado) / max(hq, wq)
+        hq, wq = max(1, round(hq * f)), max(1, round(wq * f))
+    return {"fichero": str(ruta), "ancho": wq, "alto": hq, "lineal": bool(lin),
+            "autoestirado": bool(lin), "enlazado": bool(enlazado), "escala": _r(wq / (x1 - x0), 3),
             "rect": [x0, y0, x1, y1] if rect else None}
 
 
