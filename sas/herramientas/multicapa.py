@@ -145,6 +145,13 @@ def _cabecera_recortada(cab, w, x0, y0):
         except Exception:
             pass
     if w is not None:
+        import re as _re
+        for k in list(h.keys()):                   # el WCS propio (otro marco) fuera: manda el de la referencia
+            if _re.match(r"^(CTYPE|CRVAL|CRPIX|CUNIT|CD\d_|PC\d_|CDELT|CROTA|A_|B_|AP_|BP_|LONPOLE|LATPOLE|WCSAXES|RADESYS|EQUINOX)", str(k)):
+                try:
+                    del h[k]
+                except Exception:
+                    pass
         wc = w.deepcopy()
         wc.wcs.crpix = [wc.wcs.crpix[0] - x0, wc.wcs.crpix[1] - y0]
         for k, v in wc.to_header(relax=True).items():
@@ -208,7 +215,9 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
     salidas = []
     for f, p, cab in alineados:
         rec = np.ascontiguousarray(p[:, y0:y1, x0:x1], dtype=np.float32)
-        h = _cabecera_recortada(cab if f == fs[iref] else cref, wref, x0, y0)
+        # Su propia cabecera (filtro, exposición, objeto…) con el WCS de la referencia recortado encima. Con la de la
+        # referencia, el HaO3 de IC 1396 salía como «sin filtro» (14 nov 2026).
+        h = _cabecera_recortada(cab if cab is not None else cref, wref, x0, y0)
         dst = H._libre(destino / f"{f.stem}_alin.xisf")
         img = rec[0] if rec.shape[0] == 1 else np.moveaxis(rec, 0, -1)
         ctx.save_image(np.ascontiguousarray(img), str(dst), original_format="xisf", bit_depth="32-bit floating point",
