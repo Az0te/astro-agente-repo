@@ -2510,6 +2510,9 @@ function plPasada(proveedor, modelo, carpeta, ficheroPeticion, maxSigue) {
    var aj = new PLAjustes();
    aj.cargar();
    aj.guardar = function () {};   // nada de lo que cambie la pasada llega a los ajustes guardados
+   // La guía de al lado del script, no la de los ajustes: así una pasada puede correr desde una copia congelada del
+   // repo aunque se cambie de rama a mitad (13 nov 2026: un cambio a main a mitad de la etapa 2 la invalidó).
+   aj.guia = plPadre(plPadre(PL_RUTA_SCRIPT)) + "/guia";
    aj.proveedor = proveedor; aj.ponerModelo(modelo);
    aj.internet = false; aj.voz = false;
    aj.carpetaInformes = carpeta;
