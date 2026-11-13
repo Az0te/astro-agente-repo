@@ -1345,6 +1345,27 @@ def _gemelas_con_estrellas(ctx, d):
     return cands
 
 
+def _a_grados(v, es_ra):
+    """RA/Dec en cualquier formato habitual -> grados (float) o None. Un número va en grados (como RA, DEC y CRVAL en
+    FITS); un texto sexagesimal ('00h42m44s', '0 42 44.3', '00:42:44') va en horas para la RA y en grados para la Dec
+    ('+41d16m09s', '+41°16′09″'). SASpro rechazaba '00h42m44s' («RA/Dec fields are invalid/empty»)."""
+    if v is None or v == "":
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().lower()
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    signo = -1.0 if s.startswith("-") else 1.0
+    nums = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", s)]
+    if not nums:
+        return None
+    g = nums[0] + (nums[1] / 60 if len(nums) > 1 else 0) + (nums[2] / 3600 if len(nums) > 2 else 0)
+    return g * 15.0 if es_ra else signo * g
+
+
 def _copiar_wcs(origen, destino):
     mo, md = _meta(origen), _meta(destino)
     for k in ("wcs", "wcs_header", "sip_wcs", "original_wcs"):
@@ -1385,10 +1406,11 @@ def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucio
             ra1 = ra1 if ra1 is not None else cab.get("RA") or cab.get("OBJCTRA") or cab.get("CRVAL1")
             dec1 = dec1 if dec1 is not None else cab.get("DEC") or cab.get("OBJCTDEC") or cab.get("CRVAL2")
         preset = {"solver": solucionador}
-        if ciega or ra1 is None or dec1 is None:
+        ra_g, dec_g = _a_grados(ra1, True), _a_grados(dec1, False)
+        if ciega or ra_g is None or dec_g is None:
             preset["seed_mode"] = "none"
         else:
-            preset.update(seed_mode="manual", ra=str(ra1), dec=str(dec1))
+            preset.update(seed_mode="manual", ra=f"{ra_g:.6f}", dec=f"{dec_g:.6f}")
         if esc:
             preset["scale"] = float(esc)
         try:
