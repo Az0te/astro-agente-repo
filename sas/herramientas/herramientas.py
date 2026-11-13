@@ -716,7 +716,10 @@ def _comparar(ctx, doc, grupo, lista, medir):
     for n, (nombre, proceso, preset) in enumerate(lista, 1):
         t0 = time.perf_counter()
         try:
-            res = _probar(ctx, doc, proceso, preset)
+            if proceso in LOCALES:            # cálculo propio en numpy: no toca la vista
+                res = _a_sas(LOCALES[proceso](_p(doc.image), **(preset or {})), doc.image)
+            else:
+                res = _probar(ctx, doc, proceso, preset)
             m = medir(_p(res))
             cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "proceso": proceso, "preset": preset,
                                                      "huella_base": h0, "uid": getattr(doc, "uid", None),
@@ -753,9 +756,20 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
     return _galeria(r, p, "modelo")
 
 
-def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.25), ghs=True):
-    """Paso NL1: estirado estadístico de SASpro (enlazado y por canal, varias medianas) y GHS, medidos con los
-    criterios de la ficha: cielo, ruido relativo, recortes en negro y en blanco. La vista no cambia."""
+def _estirado_mtf(p, mediana=0.2, enlazado=True):
+    """Estirado propio: punto negro a mediana − 2,8 MAD y tonos medios que llevan la mediana a 'mediana' (como el STF
+    de las previas). Exacto y repetible; sirve de referencia cuando el estadístico de SASpro no llega a su objetivo."""
+    return M.autoestirar(p, objetivo=float(mediana), enlazado=bool(enlazado))
+
+
+LOCALES = {"estirado_mtf": _estirado_mtf}
+
+
+def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True):
+    """Paso NL1: estirado estadístico de SASpro (enlazado y por canal, varias medianas), GHS y un estirado MTF propio,
+    medidos con los criterios de la ficha: cielo, ruido relativo, recortes en negro y en blanco. La vista no cambia.
+    Un estirado estadístico que no llega a su mediana objetivo se descarta (en SASpro 1.24.2 algunas medianas dejan la
+    imagen casi negra)."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if not M.lineal(p[:, ::8, ::8]):
@@ -766,6 +780,8 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.25), ghs=True):
         if p.shape[0] == 3:
             lista.append((f"estirado estadístico por canal {m}", "stat_stretch",
                           {"target_median": float(m), "linked": False}))
+        if propio:
+            lista.append((f"estirado MTF propio enlazado {m}", "estirado_mtf", {"mediana": float(m), "enlazado": True}))
     if ghs:
         c = M.cielo(p)
         sp = float(c["cielo"])
@@ -781,6 +797,15 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.25), ghs=True):
         return r
 
     r = _comparar(ctx, d, "estirado", lista, medir)
+    buenos = []
+    for x in r["candidatos"]:
+        med, obj = x["metricas"].get("mediana") or 0, (x.get("preset") or {}).get("target_median")
+        if med < 0.02 or (obj and abs(med - obj) > 0.5 * obj):
+            r["errores"].append(f"{x['metodo']}: no estira (mediana {med}"
+                                + (f", objetivo {obj}" if obj else "") + "); descartado.")
+        else:
+            buenos.append(x)
+    r["candidatos"] = buenos
 
     def nota(x):
         m = x["metricas"]

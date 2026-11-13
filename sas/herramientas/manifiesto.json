@@ -398,8 +398,8 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/01-estirado.md",
-   "descripcion": "NL1 estirado: compara el estirado estadístico de SASpro (enlazado y por canal, a varias medianas) y GHS con el pivote en el cielo; mide cielo, ruido relativo, recortes a negro y a blanco y dominante del cielo, y recomienda. La vista NO cambia (aplicarCandidato).",
-   "resumen": "NL1: compara estirado estadístico y GHS; no cambia la vista.",
+   "descripcion": "NL1 estirado: compara el estirado estadístico de SASpro (enlazado y por canal, a varias medianas), GHS con el pivote en el cielo y un estirado MTF propio (exacto, como las previas); mide cielo, ruido relativo, recortes a negro y a blanco y dominante del cielo, y recomienda. Descarta los que no llegan a su mediana objetivo (en SASpro 1.24.2 el estadístico a 0,2–0,3 deja algunas imágenes casi negras). La vista NO cambia (aplicarCandidato).",
+   "resumen": "NL1: compara estirado estadístico, GHS y MTF propio; no cambia la vista.",
    "params": {
     "type": "object",
     "properties": {
@@ -412,11 +412,15 @@
       "items": {
        "type": "number"
       },
-      "description": "Medianas objetivo (por defecto [0.15, 0.25])."
+      "description": "Medianas objetivo (por defecto [0.15, 0.2])."
      },
      "ghs": {
       "type": "boolean",
       "description": "Probar GHS (por defecto true)."
+     },
+     "propio": {
+      "type": "boolean",
+      "description": "Añadir el estirado MTF propio enlazado (por defecto true)."
      }
     }
    }
