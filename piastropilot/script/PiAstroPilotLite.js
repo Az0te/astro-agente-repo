@@ -860,7 +860,19 @@ function plRecortarHistorial(mensajes) {
       out.unshift(mensajes[i]);
    }
    while (out.length > 1 && out[0].role != "user") out.shift();
+   // La última petición del usuario (no un resultado, una corrección ni «sigue») no se pierde nunca: con resultados
+   // grandes (seleccionarSubs) el recorte la dejaba fuera y el modelo olvidaba rutas y objetivo (13 nov 2026).
+   var peticion = null;
+   for (var j = mensajes.length - 1; j >= 0 && !peticion; --j)
+      if (plEsPeticion(mensajes[j])) peticion = mensajes[j];
+   if (peticion && out.indexOf(peticion) < 0)
+      out.unshift({ role: "user", content: "[Petición del usuario que sigue en marcha (recortada del historial)]\n" + peticion.content },
+                  { role: "assistant", content: "Entendido; sigo con esa petición." });
    return out;
+}
+function plEsPeticion(m) {
+   return m.role == "user" && !/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(m.content) &&
+          !/^(Las llamadas han|Resultado de tus llamadas|Tus llamadas han fallado|\[Petición del usuario)/.test(m.content);
 }
 
 // paso = clave del paso de la guía elegido en la pestaña Prompt ("" = prompt libre); decide el modelo con pesos N.
