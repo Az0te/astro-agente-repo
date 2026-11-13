@@ -450,6 +450,15 @@ function pprJsonTolerante(texto) {
 // oscura». Se pasan a minúsculas, sin acentos y con «_» en vez de espacios antes de llamar a la función (11 nov 2026:
 // metodo "NXT" acababa en la rama equivocada). No se tocan nombres propios ni ids (paleta, vista, ficheros, canal).
 var PPR_ENUMS = { tipo: 1, metodo: 1, metodos: 1, modo: 1, estrellas: 1, metodoEstrellas: 1, objetivo: 1, referencia: 1 };
+// «referencia» es una enumeración en unas funciones y una ruta o un id de vista en otras (alinearMasters): una ruta o
+// un id no se normalizan. Antes salía «d:\cmp_ref\…\masterlight_bin-1_…_antlia_triband_rgb_ultra_ii_rgb.xisf» y
+// alinearMasters no encontraba ni el fichero ni la vista (M31, 13 nov 2026, Opus dos veces).
+function pprEsRutaOId(v) {
+   if (typeof v !== "string") return false;
+   if (/[\/\\:]|\.(xisf|fits?|fts|tiff?)$/i.test(v)) return true;
+   try { if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(v) && !ImageWindow.windowById(v).isNull) return true; } catch (e) { }
+   return false;
+}
 function pprNormalizarEnum(v) {
    if (typeof v === "string") {
       var s = v.trim().toLowerCase(), de = "áéíóúüñ", a = "aeiouun";
@@ -465,7 +474,7 @@ function pprNormalizarOpciones(p) {
    if (!p || typeof p !== "object" || p instanceof Array) return p;
    var o = p.opciones;
    if (o && typeof o === "object" && !(o instanceof Array))
-      for (var k in o) if (o.hasOwnProperty(k) && PPR_ENUMS.hasOwnProperty(k)) o[k] = pprNormalizarEnum(o[k]);
+      for (var k in o) if (o.hasOwnProperty(k) && PPR_ENUMS.hasOwnProperty(k) && !pprEsRutaOId(o[k])) o[k] = pprNormalizarEnum(o[k]);
    pprCorregirIds(p);
    return p;
 }

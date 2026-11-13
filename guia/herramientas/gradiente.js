@@ -612,6 +612,19 @@ function gradienteCandidatos(viewId, o) {
       analisis: o.analisis || "", candidatos: r.candidatos, intermedias: r.intermedias,
       recomendado: r.recomendado, motivo: r.motivo, informe: "", errores: r.errores }, null, 2));
   }
+  // Se cierran los candidatos no recomendados y sus modelos (con la segunda pasada son ~20 vistas y los Qwen gastaban
+  // 30–40 llamadas en cerrarlas una a una, M31 13 nov 2026). Sus medidas y miniaturas quedan en el resultado; para
+  // aplicar otro, repetir con { dejarCandidatos: true }.
+  if (!o.dejarCandidatos && r.recomendado) {
+    var cerrados = 0;
+    r.candidatos.forEach(function (c) {
+      if (c.vista === r.recomendado) return;
+      [c.vista, c.modelo].forEach(function (id) { if (!id) return; var w = ImageWindow.windowById(id); if (!w.isNull) { w.forceClose(); ++cerrados; } });
+    });
+    (r.intermedias || []).forEach(function (id) { var w = ImageWindow.windowById(id); if (!w.isNull) { w.forceClose(); ++cerrados; } });
+    if (cerrados) r.nota_vistas = "Cerradas " + cerrados + " vistas de los demás candidatos y auxiliares; queda abierto el recomendado (" +
+                                  r.recomendado + ") y su modelo. Para aplicar otro candidato: gradienteCandidatos(vista, { dejarCandidatos: true }).";
+  }
   grPrevios.push(r);
   if (grPrevios.length > 1 && !o.noCompactar) grPrevios.forEach(function (g) { grCompactar(g, o); });
   return r;

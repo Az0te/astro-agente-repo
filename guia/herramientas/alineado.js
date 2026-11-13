@@ -230,10 +230,10 @@ function alinearMasters(lista, o) {
     c.saveAs(out, false, false, false, false); c.forceClose();
     return out;
   };
-  var files = [], porId = {};
+  var files = [], porId = {}, entradasAbiertas = [];
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
     var fv = vistaAFichero(x);
-    if (fv) { files.push(fv); porId[String(x).toLowerCase()] = fv; return; }
+    if (fv) { files.push(fv); porId[String(x).toLowerCase()] = fv; if (typeof x === "string") entradasAbiertas.push(x); return; }
     var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
     if (File.directoryExists(p))
       files = files.concat(alSearch(p + "/" + "*.xisf", false).filter(function (f) {
@@ -414,6 +414,18 @@ function alinearMasters(lista, o) {
       // Sin blindSolve (script ejecutado fuera de PiAstroPilot o del watcher): que se vea, no en silencio.
       r.astrometria = { resuelta: false, motivo: "blindSolve no está disponible en este script: resolver con resolverAstrometria(r.vista) y copiar con copyAstrometricSolution" };
       r.no_cumple.push("Astrometría sin resolver (blindSolve no disponible): Paso 8 sobre " + r.vista + " y copiar a las demás.");
+    }
+    // Las vistas de entrada (masters sin alinear, abiertos) quedan sustituidas por las _alin: se cierran. Abiertas,
+    // gradienteCandidatos se negaba («masters abiertos sin alinear») y los modelos gastaban llamadas en cerrarlas
+    // (M31, 13 nov 2026). cerrarEntradas: false para dejarlas.
+    if (o.cerrarEntradas !== false && entradasAbiertas.length) {
+      r.cerradas = [];
+      entradasAbiertas.forEach(function (id) {
+        var w = ImageWindow.windowById(id);
+        if (w.isNull) { var bajo = id.toLowerCase(), ws = ImageWindow.windows; for (var i = 0; i < ws.length; ++i) if (ws[i].mainView.id.toLowerCase() == bajo) w = ws[i]; }
+        if (!w.isNull && r.vistas.indexOf(w.mainView.id) < 0) { r.cerradas.push(w.mainView.id); w.forceClose(); }
+      });
+      if (r.cerradas.length) r.control.medido.push("Cerradas las vistas de entrada ya alineadas (" + r.cerradas.join(", ") + "): sigue con " + r.vistas.join(", ") + ".");
     }
   }
   return r;
