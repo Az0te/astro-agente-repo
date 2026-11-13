@@ -221,8 +221,13 @@ def medir_gradiente(base, pc):
     C = binar(lum(pc), base["b"])
     M = base["L"] - C
     v, cie, obj = base["valido"], base["cielo"], base["obj"]
-    M2 = ajuste_poli(M, v, 2)
-    m_hp = (M - M2)[v]
+    # Algunos programas reescalan toda la imagen al corregir (el ABE de SASpro normaliza a máximo 1: × 0,998). Ese
+    # factor uniforme deja en M una copia α·L de toda la imagen, estrellas incluidas, y la correlación sale ≈ 1 aunque el
+    # modelo sea un polinomio limpio. Se ajusta M = α·L + polinomio de grado 2 y se quita α·L antes de correlacionar.
+    alfa = escala_uniforme(M, base["L"], v)
+    Ms = M - alfa * base["L"]
+    M2 = ajuste_poli(Ms, v, 2)
+    m_hp = (Ms - M2)[v]
     o_hp = base["O_hp"][v]
     corr = float(np.corrcoef(m_hp, o_hp)[0, 1]) if m_hp.std() > 1e-12 and o_hp.std() > 1e-12 else 0.0
     exceso = M - ajuste_poli(M, cie, 2)
@@ -230,7 +235,18 @@ def medir_gradiente(base, pc):
     irreg = rango_rejilla(C, cie) / base["rango0"] if base["rango0"] and base["rango0"] > 0 else float("nan")
     resid = amplitud_plano(C, cie, v) / base["plano0"] if base["plano0"] > 0 else float("nan")
     return {"copia_objeto": _r(corr, 3), "objeto_quitado_pct": _r(come, 1), "gradiente_restante": _r(resid, 3),
-            "irregularidad_cielo": _r(irreg, 3), "negativos_pct": _r(100.0 * float((pc < 0).mean()), 3)}
+            "irregularidad_cielo": _r(irreg, 3), "negativos_pct": _r(100.0 * float((pc < 0).mean()), 3),
+            "escala_pct": _r(100.0 * alfa, 2)}
+
+
+def escala_uniforme(M, L, valido):
+    """Reescalado uniforme α que el programa aplica a toda la imagen, medido SOLO en las escalas de las estrellas
+    (L − media en caja 5×5): un modelo de fondo, aunque se coma el halo del objeto, es liso a esa escala y no entra
+    en α; un factor global sí, porque copia cada estrella. Se limita a |α| ≤ 5 %."""
+    sl = (L - _caja(L, 2))[valido].astype(np.float64)
+    sm = (M - _caja(M, 2))[valido].astype(np.float64)
+    den = float((sl * sl).sum())
+    return float(np.clip((sl * sm).sum() / den, -0.05, 0.05)) if den > 0 else 0.0
 
 
 def elegir_gradiente(c, objeto_campo_pct, tipo=None):
