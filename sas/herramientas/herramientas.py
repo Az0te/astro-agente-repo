@@ -421,30 +421,56 @@ def analizarMaster(ctx, vista=None):
     }
 
 
-def registro(ctx, n=40, solo_errores=False, filtro=None):
-    """Últimas líneas de la consola de SASpro (si la ventana las expone)."""
-    texto = ""
+def _textos_registro(ctx):
+    """Texto de los paneles de registro de SASpro: «System Log» y «Consola / Estado» (QDockWidget con un QPlainTextEdit,
+    QTextEdit o QListWidget dentro). En 1.24.2 no hay atributo directo en la ventana: se buscan los paneles."""
+    textos = {}
     for attr in ("console", "log_widget", "_console", "_log_widget", "log_view"):
         w = getattr(ctx.app, attr, None)
-        if w is not None:
-            for m in ("toPlainText", "text"):
-                f = getattr(w, m, None)
-                if callable(f):
-                    try:
-                        texto = f()
-                        break
-                    except Exception:
-                        pass
-        if texto:
-            break
+        f = getattr(w, "toPlainText", None) if w is not None else None
+        if callable(f):
+            try:
+                textos[attr] = f()
+            except Exception:
+                pass
+    try:
+        from PyQt6.QtWidgets import QDockWidget, QListWidget, QPlainTextEdit, QTextEdit
+        for dock in ctx.app.findChildren(QDockWidget):
+            titulo = dock.windowTitle() or dock.objectName() or "panel"
+            if not re.search(r"(?i)log|consola|console|registro", titulo):
+                continue
+            partes = []
+            for w in dock.findChildren(QPlainTextEdit) + dock.findChildren(QTextEdit):
+                try:
+                    partes.append(w.toPlainText())
+                except Exception:
+                    pass
+            for w in dock.findChildren(QListWidget):
+                try:
+                    partes.append("\n".join(w.item(i).text() for i in range(w.count())))
+                except Exception:
+                    pass
+            if any(partes):
+                textos[titulo] = "\n".join(p for p in partes if p)
+    except Exception:
+        pass
+    return textos
+
+
+def registro(ctx, n=40, solo_errores=False, filtro=None, panel=None):
+    """Últimas líneas de los registros de SASpro (System Log y Consola / Estado). panel: parte del título."""
+    textos = _textos_registro(ctx)
+    if panel:
+        textos = {k: v for k, v in textos.items() if str(panel).lower() in k.lower()}
+    texto = "\n".join(textos.values())
     if not texto:
-        return {"lineas": [], "aviso": "No he encontrado la consola de SASpro en esta versión."}
+        return {"lineas": [], "aviso": "No he encontrado los paneles de registro de SASpro.", "paneles": list(textos)}
     ls = [l for l in texto.splitlines() if l.strip()]
     if solo_errores:
         ls = [l for l in ls if re.search(r"(?i)error|fail|warn|aviso|traceback|exception", l)]
     if filtro:
         ls = [l for l in ls if str(filtro).lower() in l.lower()]
-    return {"lineas": ls[-max(1, min(500, int(n))):]}
+    return {"paneles": list(textos), "lineas": ls[-max(1, min(500, int(n))):]}
 
 
 # --- Herramientas: disco -----------------------------------------------------------------------------------
@@ -1366,6 +1392,22 @@ def _a_grados(v, es_ra):
     return g * 15.0 if es_ra else signo * g
 
 
+def _sexagesimal(grados, es_ra):
+    """Grados -> 'HH:MM:SS.ss' (RA, en horas) o '±DD:MM:SS.s' (Dec). SASpro acepta la RA «en horas o grados» y un
+    número ≤ 24 lo toma por horas: 10,68° se leía como 10,68 h = 160° y la pasada con semilla fallaba (M31)."""
+    v = (grados / 15.0) % 24.0 if es_ra else abs(grados)
+    h = int(v)
+    m = int((v - h) * 60)
+    s = (v - h - m / 60.0) * 3600.0
+    if s >= 59.995:
+        s, m = 0.0, m + 1
+    if m >= 60:
+        m, h = 0, h + 1
+    if es_ra:
+        return f"{h % 24:02d}:{m:02d}:{s:05.2f}"
+    return f"{'-' if grados < 0 else '+'}{h:02d}:{m:02d}:{s:04.1f}"
+
+
 def _copiar_wcs(origen, destino):
     mo, md = _meta(origen), _meta(destino)
     for k in ("wcs", "wcs_header", "sip_wcs", "original_wcs"):
@@ -1410,7 +1452,7 @@ def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucio
         if ciega or ra_g is None or dec_g is None:
             preset["seed_mode"] = "none"
         else:
-            preset.update(seed_mode="manual", ra=f"{ra_g:.6f}", dec=f"{dec_g:.6f}")
+            preset.update(seed_mode="manual", ra=_sexagesimal(ra_g, True), dec=_sexagesimal(dec_g, False))
         if esc:
             preset["scale"] = float(esc)
         try:

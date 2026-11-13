@@ -157,19 +157,24 @@
    "fichero": "herramientas.py",
    "nivel": "lectura",
    "timeout_s": 15,
-   "descripcion": "Últimas líneas de la consola de SASpro: todas, solo errores o avisos, o las que contengan un texto.",
+   "descripcion": "Últimas líneas de los registros de SASpro (paneles System Log y Consola / Estado): para ver qué hizo un proceso, por qué falló el plate solve, avisos de la aceleración, etc.",
    "params": {
     "type": "object",
     "properties": {
      "n": {
-      "type": "number",
-      "description": "Líneas (por defecto 40, máx. 500)."
+      "type": "integer",
+      "description": "Número de líneas (por defecto 40, máximo 500)."
      },
      "solo_errores": {
       "type": "boolean"
      },
      "filtro": {
-      "type": "string"
+      "type": "string",
+      "description": "Sólo las líneas que contengan este texto (p. ej. PlateSolver, GAIA, RT)."
+     },
+     "panel": {
+      "type": "string",
+      "description": "Parte del título del panel: 'System Log' o 'Consola'. Sin él, los dos."
      }
     }
    }
