@@ -787,8 +787,20 @@ function plOllamaChat(aj, sistema, mensajes, estado) {
    }
    var j = JSON.parse(r.texto);
    if (j.error) throw new Error("Ollama: " + j.error);
-   return { texto: String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "").trim(),
-            uso: { entrada: j.prompt_eval_count || 0, salida: j.eval_count || 0, cache: j.prompt_eval_cached_count || 0, coste: 0 } };
+   var crudo = String(j.message && j.message.content || "");
+   var texto = crudo.replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "").replace(/<think>[\s\S]*$/, "").trim();
+   var uso = { entrada: j.prompt_eval_count || 0, salida: j.eval_count || 0, cache: j.prompt_eval_cached_count || 0, coste: 0 };
+   // Respuesta vacía: todo era razonamiento (<think>…) aunque think vaya apagado. Qwen 64k gastó 5 500 tokens así y la
+   // serie se paró sin decir nada (M31, 13 nov 2026). Se repite una vez pidiendo la respuesta sin razonar (/no_think).
+   if (!texto && !estado.reintentoVacio) {
+      estado.reintentoVacio = true;
+      var m2 = mensajes.slice(), u = m2[m2.length - 1];
+      if (u && u.role == "user") m2[m2.length - 1] = { role: "user", content: u.content + "\n\nTu respuesta anterior llegó vacía. " +
+                                                       "Responde ya, sin razonar en voz alta: resumen corto y, si toca, el bloque ```json. /no_think" };
+      try { var r2 = plOllamaChat(aj, sistema, m2, estado); r2.uso.entrada += uso.entrada; r2.uso.salida += uso.salida; return r2; }
+      finally { estado.reintentoVacio = false; }
+   }
+   return { texto: texto, uso: uso };
 }
 
 // Lanza una CLI con el prompt por stdin (fichero) y la salida a fichero, sin congelar el diálogo.
