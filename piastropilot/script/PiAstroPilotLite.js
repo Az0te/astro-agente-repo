@@ -40,6 +40,7 @@ var PL_CLAVE = "PiAstroPilotLite";
 var PL_RUTA_SCRIPT = File.extractDrive(#__FILE__) + File.extractDirectory(#__FILE__);   // .../piastropilot/script
 var PL_TMP = File.systemTempDirectory + "/PiAstroPilotLite";
 var PL_MAX_CORRECCIONES = 3;
+var PL_ESPERA_WBPP_MIN = 180;   // espera máxima de estadoWBPP a que termine WBPP
 var PL_MAX_SERIE = 60;   // tope de pasos seguidos en una serie («hasta el final»)
 // Ojo: el preprocesador de PJSR toma la barra-asterisco y la doble barra como comentarios aunque estén dentro de
 // cadenas, regex o comentarios de línea. No escribirlas seguidas en este fichero (trocear las cadenas).
@@ -973,6 +974,17 @@ function plEjecutarLlamadas(aj, texto) {
       console.noteln("[PiAstroPilotLite] " + ll.funcion + " " + JSON.stringify(p));
       try {
          var v = L[ll.funcion](p), s;
+         // WBPP va en otra instancia y tarda decenas de minutos: si no ha terminado, se espera aquí (mirando cada
+         // 30 s, hasta PL_ESPERA_WBPP_MIN) en vez de devolver «sin terminar» al modelo, que en una serie de pasos
+         // gastaba un paso y una consulta en cada vistazo (13 nov 2026).
+         if (ll.funcion == "estadoWBPP") {
+            var tW = Date.now();
+            while (v && typeof v === "object" && v.terminado === false && Date.now() - tW < PL_ESPERA_WBPP_MIN * 60000) {
+               for (var w = 0; w < 300; ++w) { plEventos(); plDormir(100); }
+               v = L[ll.funcion](p);
+            }
+            if (v && typeof v === "object") v.esperado_min = Math.round((Date.now() - tW) / 6000) / 10;
+         }
          try { s = typeof v === "string" ? v : JSON.stringify(v === undefined ? null : v, null, 1); } catch (x) { s = String(v); }
          salida.push(ll.funcion + ":\n" + s);
       } catch (e) {
@@ -2496,6 +2508,13 @@ function plPasada(proveedor, modelo, carpeta, ficheroPeticion) {
 function plMain() {
    var args = (typeof Runtime !== "undefined" && Runtime.jsArguments) ? Runtime.jsArguments :
               (typeof jsArguments !== "undefined") ? jsArguments : [];
+   // Llamadas de la guía sin chat (mismo validador y runner que el chat):  -r=<Lite>,--llamadas,<llamadas.json>,<salida.txt>
+   if (args.length >= 3 && String(args[0]) == "--llamadas") {
+      var ajL = new PLAjustes(); ajL.cargar(); ajL.guardar = function () {};
+      var rL = plEjecutarLlamadas(ajL, String(File.readTextFile(String(args[1]))));
+      File.writeTextFile(String(args[2]), (rL.ok ? "OK" : "ERROR") + "\n" + rL.texto);
+      return;
+   }
    if (args.length >= 5 && String(args[0]) == "--pasada") {
       plPasada(String(args[1]), String(args[2]), String(args[3]), String(args[4]));
       return;
