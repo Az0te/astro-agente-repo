@@ -460,7 +460,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Núcleo de galaxia (no lineal, después de estirar y antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo, y recomienda el que baja la meseta sin apagar el bulbo ni crear anillos. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "Núcleo de galaxia (no lineal, después de estirar y antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias fuerzas (y WaveScale HDR de SASpro si se pide); mide meseta quemada, anillos, brillo y estructura del bulbo, y recomienda el que baja la meseta sin apagar el bulbo ni crear anillos. La vista NO cambia (aplicarCandidato).",
    "resumen": "Núcleo: compara comprimir el bulbo y WaveScale HDR; no cambia la vista.",
    "params": {
     "type": "object",
@@ -481,7 +481,7 @@
       "items": {
        "type": "number"
       },
-      "description": "compression_factor de WaveScale HDR (por defecto [1.5, 2.5]; [] para no probarlo)."
+      "description": "compression_factor de WaveScale HDR (por defecto []: sin ventana se cuelga en SASpro 1.24.2)."
      },
      "radio": {
       "type": "number",

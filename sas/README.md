@@ -2,7 +2,7 @@
 
 Equivalente de PiAstroPilot y SirilAstroPilot para **Seti Astro Suite Pro (SASpro)**: un servidor MCP que deja a Claude Code, Codex o un modelo local procesar en SASpro con herramientas de una lista blanca, siguiendo la misma guía (`guia/`). Desarrollado por **Rafael Vidal** (2026). Licencia MIT.
 
-> Estado (13 nov 2026): versión 0.1.0. Copia la estructura de `siril/` (puente + MCP + herramientas + manifiesto). Probada con un SASpro simulado (`pruebas/falso`) y **en SASpro 1.24.2.post2 de verdad** con un master de M31 (ASI2600MC, 322 × 60 s): gradiente, color, StarNet y estirado funcionan; ruido, núcleo, saturación, estrellas y recombinación están en prueba.
+> Estado (13 nov 2026): versión 0.1.0. Copia la estructura de `siril/` (puente + MCP + herramientas + manifiesto). Probada con un SASpro simulado (`pruebas/falso`) y **en SASpro 1.24.2.post2 de verdad** con un master de M31 (ASI2600MC, 322 × 60 s), de principio a fin: gradiente (ABE 2), color (Background Neutralization + White Balance), StarNet, estirado MTF, Cosmic Clarity denoise 0,3 (GPU, DirectML), núcleo ×0,25, saturación +0,75, estrellas arcsinh, recombinación por screen, SCNR y exportación.
 
 ## Cómo funciona
 
@@ -40,7 +40,7 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 | L15 Estrellas | `separarEstrellas` | StarNet o DarkStar (remove_stars), SyQon; deja activa la starless (SASpro activaba la de estrellas) |
 | NL1 Estirado | `estirarCandidatos` → `aplicarCandidato` | estirado estadístico enlazado y por canal, GHS con pivote en el cielo y un estirado MTF propio; descarta los que no llegan a su mediana |
 | NL3 SCNR | `quitarVerde` | Remove Green conservando la luminosidad |
-| Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | compresor del bulbo propio (como en Siril) y WaveScale HDR; meseta, anillos, brillo y estructura del bulbo |
+| Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | compresor del bulbo propio (como en Siril); WaveScale HDR solo si se pide; meseta, anillos, brillo y estructura del bulbo |
 | NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | saturación propia que conserva la luminancia, cielo protegido; dominante < 5 %, sin recortes nuevos |
 | L11 / NL7 Nitidez | `nitidezCandidatos` → `aplicarCandidato` | Cosmic Clarity sharpen; detalle ganado y ruido del cielo ≤ ×1,15 |
 | L14 / NL6 Ruido | `ruidoCandidatos` → `aplicarCandidato` | Cosmic Clarity denoise a varias fuerzas, GraXpert denoise; detalle perdido < 10 % |
@@ -57,6 +57,8 @@ Los candidatos pueden ser procesos de SASpro o cálculos propios en numpy (el cu
 - `remove_stars` deja **activa la vista nueva de estrellas**: `separarEstrellas` vuelve a activar la starless.
 - El **estirado estadístico** a mediana 0,2–0,3 deja algunas imágenes casi negras (0,15 sí funciona; reproducible). `estirarCandidatos` comprueba la mediana de cada candidato y añade el MTF propio.
 - **Cosmic Clarity, SyQon, aberration_ai y DarkStar** necesitan el entorno de IA (PyTorch en `%LOCALAPPDATA%\SASpro\runtime\py312\venv`). Sin él, el comando sin ventana no termina nunca y solo lo dice el System Log. `procesoSAS` lo comprueba antes y da un error claro; si PyTorch se instaló después de arrancar SASpro, pide reiniciar. Con una AMD, SASpro instala torch-directml (DirectML).
+- **WaveScale HDR** sin ventana se queda colgado (0 % de CPU, más de 30 min) en M31: fuera de los candidatos por defecto de `nucleoCandidatos` (se puede pedir con `hdr: [1.5]`). Hubo que cerrar SASpro.
+- Cosmic Clarity denoise con DirectML en una RX 7900 XTX: unos 67 s por pasada en 6248 × 4176.
 - Los metadatos del paquete dicen 1.23.2 en una 1.24.2.post2: `ping` lee la versión del registro de Windows.
 
 Comparar en SASpro: cada candidato se hace **sobre la propia vista** con su proceso, se copia el resultado, se mide y se guarda en `~/.setiastropilot/trabajo/`, y se deshace. La vista vuelve a como estaba (se comprueba con una huella de los píxeles) y la pila de rehacer queda vacía. `aplicarCandidato(id)` pone el elegido, exactamente el que se midió, con un paso de deshacer. Las métricas (`herramientas/medidas.py`) son las mismas que en Siril, copiadas de `siril/herramientas`: si se cambia un criterio, hay que cambiarlo en los dos sitios.
@@ -96,7 +98,9 @@ Sin SASpro (solo para desarrollo): `python sas/pruebas/puente_falso.py` lanza el
 
 ## Pendiente
 
-- Probar en SASpro real con la aceleración instalada: `ruidoCandidatos`, `nitidezCandidatos`, `nucleoCandidatos` (WaveScale HDR), `estirarEstrellas` (Star Stretch), `recombinarEstrellas` y `exportarFinal`.
+- WaveScale HDR (y quizá WaveScale Dark Enhance) sin ventana: averiguar por qué se cuelga.
+- Probar en SASpro real: `nitidezCandidatos` (Cosmic Clarity sharpen) y `resolverAstrometria` con el índice Gaia de SASpro.
+- `quitarVerde` con `preserve_lightness` sube R y B en vez de bajar G (en M31 el cielo pasó de G +4 % a G −3,5 %): valorar un SCNR propio que solo baje G.
 - El estirado estadístico de SASpro a mediana > 0,15: averiguar por qué deja la imagen negra (¿punto negro con bp σ 5 en imágenes con el fondo muy bajo tras Background Neutralization?).
 - Calibración de color por espectros (SFCC) y Halo-B-Gon: en SASpro solo tienen ventana, no comando sin ventana.
 - Herramientas de Siril que aún no están: alinear y combinar masters, dual band, HDR, contraste local, chat dentro de SASpro.

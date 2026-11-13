@@ -959,10 +959,17 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(), radio=N
         x["no_cumple"] = fal
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
     if ok:
-        def nota(x):
-            caida = 100.0 * (1 - (x["metricas"]["brillo_bulbo"] or 0) / max(m0["brillo_bulbo"] or 1e-6, 1e-6))
-            return (x["estructura_ganada_pct"] or 0) - 2.0 * (x["metricas"]["meseta_radio_px"] or 0) - 1.5 * max(caida, 0)
-        mejor = max(ok, key=nota)
+        # La más suave que deja la meseta en su mínimo (M31 en SASpro, 13 nov 2026: las tres llegaban a 0 px y la
+        # puntuación por estructura elegía ×0,55, con el bulbo gris y plano). Si ninguna la quita, como en Siril.
+        m_min = min(x["metricas"]["meseta_radio_px"] or 0 for x in ok)
+        bajan = [x for x in ok if (x["metricas"]["meseta_radio_px"] or 0) <= m_min + 1.0]
+        if m_min < (m0["meseta_radio_px"] or 0):
+            mejor = max(bajan, key=lambda x: x["metricas"]["brillo_bulbo"] or 0)
+        else:
+            def nota(x):
+                caida = 100.0 * (1 - (x["metricas"]["brillo_bulbo"] or 0) / max(m0["brillo_bulbo"] or 1e-6, 1e-6))
+                return (x["estructura_ganada_pct"] or 0) - 2.0 * (x["metricas"]["meseta_radio_px"] or 0) - 1.5 * max(caida, 0)
+            mejor = max(ok, key=nota)
         mm = mejor["metricas"]
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: meseta {m0['meseta_radio_px']} → {mm['meseta_radio_px']} px, estructura del "
@@ -1097,10 +1104,12 @@ def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0)
     if not 0 < k <= 2:
         raise ValueError("factor entre 0 y 2 (1 = estrellas tal cual; 0,5–0,6 para estrellas discretas).")
     Lb = M.lum(b)
-    mk = M.px_estrella(Lb)
-    if M.lineal(a[:, ::8, ::8]) is False and float(np.percentile(Lb[mk], 90)) < 0.05:
-        return {"aplicado": False, "aviso": "La vista de estrellas parece lineal (p90 de las estrellas < 0,05) y la starless "
-                "está estirada: estira antes las estrellas (estirarEstrellas)."}
+    # ¿Estrellas lineales? p99,5 de la capa (en una capa de estrellas el ~90 % es 0 y la máscara por MAD no sirve).
+    p995 = float(np.percentile(Lb.ravel()[::7], 99.5))
+    if not M.lineal(a[:, ::8, ::8]) and p995 < 0.02:
+        return {"aplicado": False, "p99_5_estrellas": _r(p995, 4),
+                "aviso": "La vista de estrellas parece lineal (p99,5 < 0,02) y la starless está estirada: estira antes las "
+                         "estrellas (estirarEstrellas)."}
     res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(k * b, 0, 1)) if metodo == "screen" else a + k * b
     res = np.clip(res, 0, 1).astype(np.float32)
     cel = M.cielo(a)["_celdas"]
