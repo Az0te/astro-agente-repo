@@ -341,6 +341,25 @@ function nucleoCandidatos(viewId, o) {
     if (mc !== ma) return mc < ma ? c : a;
     return c.r.brillo_bulbo.baja_pct < a.r.brillo_bulbo.baja_pct ? c : a;
   }, null);
+  // «Sin comprimir» también es un candidato (13 nov 2026, M31): el estirado no tenía meseta (0 px) y las tres compresiones
+  // la creaban (5–8 px); Opus y Qwen 32k se pararon dos veces repitiendo el arreglo. Si el mejor comprimido deja más
+  // meseta que la original y la original no está quemada, se recomienda no comprimir.
+  var m0 = best.r.meseta_antes ? best.r.meseta_antes.radio_px : null;
+  if (m0 !== null && m0 <= 3 && best.r.meseta_despues.radio_px > Math.max(3, m0)) {
+    if (o.cerrar !== false) conVista.forEach(function (c) { var w = ImageWindow.windowById(c.r.vista); if (!w.isNull) w.forceClose(); });
+    var sat0 = best.r.saturacion_nucleo ? best.r.saturacion_nucleo.antes : null;
+    return {
+      vista: viewId, original: viewId, aplicado: false, recomendado: "sin comprimir",
+      comparados: cands.map(function (c) { return c.r ? { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null, cumple: !c.r.no_cumple.length, elegido: false } : { metodo: c.etiqueta, error: c.error }; })
+        .concat([{ metodo: "sin comprimir", meseta_px: m0, elegido: true }]),
+      meseta_antes: best.r.meseta_antes,
+      motivo: "La original no está quemada (meseta " + m0 + " px) y todas las compresiones crean meseta (la mejor " + best.r.meseta_despues.radio_px +
+              " px): no se comprime; se sigue con " + viewId + ".",
+      no_cumple: (sat0 !== null && sat0 < 0.04) ? ["núcleo blanco (saturación " + sat0 + "): recuperarColorNucleo(\"" + viewId + "\", { lineal: <starless lineal> }) antes de saturar"] : [],
+      segundos: Math.round((Date.now() - t0) / 1000),
+      control: { medido: { nucleo_con_estructura: true }, revisar_a_ojo: ["núcleo al 100 %: gradiente suave hacia el centro"], nota: "No comprimir es un resultado válido." }
+    };
+  }
   var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_nucleo"), vista = null;
   conVista.forEach(function (c) {
     var w = ImageWindow.windowById(c.r.vista);
