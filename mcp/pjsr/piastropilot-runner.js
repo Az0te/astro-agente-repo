@@ -390,6 +390,40 @@ var LISTA = {
    backgroundEnhance:    function (a) { return backgroundEnhance(a.vista, a.opciones || {}); }
 };
 
+// Las vistas nuevas heredan la cabecera de la vista de entrada (FILTER, INSTRUME, EXPTIME…). Muchas funciones crean la
+// copia con new ImageWindow y la cabecera se perdía: tras bxtCorrectOnly, calibrarColor ya no sabía que era el Triband y
+// Opus se paró a pedir las bandas (M31, 13 nov 2026). Se hace aquí, una vez, para todas las funciones.
+function pprHeredarCabecera(a, antes) {
+   var origen = null;
+   [a && a.vista, a && a.starless, a && a.original, a && a.a].forEach(function (x) {
+      if (origen || typeof x !== "string") return;
+      try { var w = ImageWindow.windowById(x); if (!w.isNull && w.keywords.length) origen = w; } catch (e) { }
+   });
+   if (!origen) return;
+   ImageWindow.windows.forEach(function (w) {
+      try {
+         if (antes.indexOf(w.mainView.id) >= 0) return;
+         if (/mask|mascara|modelo|model|_rejection|ccFondoRef/i.test(w.mainView.id)) return;
+         // Las copias nuevas suelen traer unas pocas palabras clave de PixInsight (8 en una capa de estrellas), pero no
+         // FILTER: se añaden las del origen que falten, sin tocar las que ya tiene.
+         var ya = {}; w.keywords.forEach(function (k) { ya[k.name] = true; });
+         if (ya.FILTER) return;
+         var faltan = origen.keywords.filter(function (k) { return !ya[k.name] && !/^(SIMPLE|BITPIX|NAXIS\d*|EXTEND|BZERO|BSCALE)$/.test(k.name); });
+         if (faltan.length) w.keywords = w.keywords.concat(faltan);
+      } catch (e) { }
+   });
+}
+(function () {
+   for (var n in LISTA) if (LISTA.hasOwnProperty(n)) (function (n, f) {
+      LISTA[n] = function (a) {
+         var antes = []; try { antes = ImageWindow.windows.map(function (w) { return w.mainView.id; }); } catch (e) { }
+         var v = f(a);
+         try { pprHeredarCabecera(a, antes); } catch (e) { }
+         return v;
+      };
+   })(n, LISTA[n]);
+})();
+
 // ---------------------------------------------------------------------------------------------------------------
 // Llamadas propuestas por un modelo sin herramientas (módulo PiAstroPilot): {"llamadas":[{"funcion","parametros"}]}.
 // Son DATOS, no código: cada llamada se comprueba contra el manifiesto de la guía y la lista blanca antes de

@@ -117,7 +117,11 @@ function componerHDR(lista, o) {
   if (ins[0].win.hasAstrometricSolution && !hdrW.hasAstrometricSolution) try { hdrW.copyAstrometricSolution(ins[0].win); } catch (e) { }
   // Cabecera de la toma larga (FILTER, INSTRUME, TELESCOP…): sin ella, calibrarColor no reconocía el filtro Triband de
   // la HDR y hacía SPCC de banda ancha (M31, 13 nov 2026). EXPTIME queda el de la larga.
-  try { if (!hdrW.keywords.length) hdrW.keywords = ins[0].win.keywords; } catch (e) { }
+  try {
+    var ya = {}; hdrW.keywords.forEach(function (k) { ya[k.name] = true; });
+    var faltan = ins[0].win.keywords.filter(function (k) { return !ya[k.name] && !/^(SIMPLE|BITPIX|NAXIS\d*|EXTEND|BZERO|BSCALE)$/.test(k.name); });
+    if (faltan.length) hdrW.keywords = hdrW.keywords.concat(faltan);
+  } catch (e) { }
   r.vista = hdrW.mainView.id;
   r.mascaras = masks.map(function (w) { return w.mainView.id; });
   if (masks.length != ins.length - 1)
