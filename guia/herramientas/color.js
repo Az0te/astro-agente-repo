@@ -124,14 +124,36 @@ function calibrarColor(viewId, o) {
   var v = w.mainView, antes = ccSky(v), t0 = Date.now();
 
   var opts = {}, sp = o.spcc || {}, ref = null;
-  for (var k in sp) opts[k] = sp[k];
+  // Valores vacíos = sin indicar (Qwen 64k, M31 13 nov 2026: { r: "", g: "", b: "" } y { r: [], … } daban «filtro "" no
+  // encontrado» y «Cannot read properties of undefined (reading '0')»); narrowband: true = el preajuste del filtro.
+  for (var k in sp) {
+    var vk = sp[k];
+    if (vk === "" || vk === null || vk === undefined || vk === false || (vk instanceof Array && !vk.length)) continue;
+    opts[k] = vk;
+  }
+  // Antlia Triband RGB (perfil de Rafael, «SPCC Triband»): tres bandas de 20–35 nm → SPCC en modo banda estrecha con
+  // esas bandas y la QE del sensor, salvo bandaAncha: true. Opus lo hizo en banda ancha (sin perfil) y Qwen intentó el
+  // del perfil con narrowband: true, que la función no entendía (13 nov 2026).
+  if (!filt) { var fp = ccProperty(src.mainView, "Instrument:Filter:Name"); if (fp) filt = String(fp).toUpperCase(); }
+  var esTriband = /TRI.?BAND/.test(filt);
+  if (!filt && !o.bandaAncha && !(opts.narrowband instanceof Array))
+    var avisoFiltro = "La imagen no lleva FILTER en la cabecera: SPCC en banda ancha. Si es el Triband, pasar spcc.narrowband del perfil.";
+  if (opts.narrowband === true) delete opts.narrowband;
+  var preajuste = null;
+  if (esTriband && !opts.narrowband && !o.bandaAncha) {
+    opts.narrowband = [[656.0, 30], [501.0, 35], [496.0, 35]];
+    if (!opts.qe) opts.qe = "Sony IMX411/455/461/533/571";
+    preajuste = "Triband (perfil): banda estrecha Hα 656/30, OIII 501/35, 496/35 nm y QE Sony IMX455";
+  }
   if (o.fondoAuto === true && !opts.backgroundReferenceViewId) {
     ref = ccMakeReference(v, o.ladoFondo || 512);
     opts.backgroundReferenceViewId = ref.window.mainView.id;
   }
-  var P = pxSPCC(opts), ok = false;
-  try { ok = P.executeOn(v); } finally { if (ref) ref.window.forceClose(); }
-  if (!ok) throw new Error("SPCC falló (mira la consola: estrellas insuficientes, catálogo o filtros)");
+  var P = null, ok = false;
+  try { P = pxSPCC(opts); ok = P.executeOn(v); }
+  catch (e) { w.forceClose(); if (ref) ref.window.forceClose(); throw e; }   // sin dejar la copia _spcc suelta
+  if (ref) ref.window.forceClose();
+  if (!ok) { w.forceClose(); throw new Error("SPCC falló (mira la consola: estrellas insuficientes, catálogo o filtros)"); }
   var seg = (Date.now() - t0) / 1000, despues = ccSky(v);
 
   var wb = ccProperty(v, "PCL:SPCC:WhiteBalanceFactors");
@@ -144,7 +166,7 @@ function calibrarColor(viewId, o) {
   }
   var lleno = campoLleno !== null && campoLleno > 0.6;
   return {
-    vista: id, original: viewId, segundos: +seg.toFixed(1),
+    vista: id, original: viewId, segundos: +seg.toFixed(1), preajuste: preajuste || undefined, aviso_filtro: avisoFiltro || undefined,
     filtros: { r: P.redFilterName, g: P.greenFilterName, b: P.blueFilterName, qe: P.deviceQECurveName,
                banda_estrecha: P.narrowbandMode, referencia_blanco: P.whiteReferenceName,
                neutralizar_fondo: P.neutralizeBackground,
