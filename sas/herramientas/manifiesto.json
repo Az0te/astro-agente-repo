@@ -441,6 +441,130 @@
    }
   },
   {
+   "nombre": "alinearMasters",
+   "fichero": "multicapa.py",
+   "nivel": "disco",
+   "timeout_s": 1800,
+   "paso": "lineal/05-staralignment-crop.md",
+   "descripcion": "L5 varios masters (noches o filtros distintos): los alinea contra el de referencia por su ASTROMETRÍA (los de WBPP vienen resueltos; si no, resolverAstrometria antes), los recorta a la zona común con datos en todos y los guarda como <nombre>_alin.xisf en una carpeta nueva. No abre vistas ni toca los originales: ábrelos después con abrirImagen.",
+   "resumen": "L5: alinea masters por astrometría y recorta a la zona común.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ficheros": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Rutas absolutas de los masters (2 o más)."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de salida (por defecto <carpeta del primero>/alineados_sas)."
+     },
+     "referencia": {
+      "type": "integer",
+      "description": "Número (1 = el primero) del master de referencia."
+     }
+    },
+    "required": [
+     "ficheros"
+    ]
+   }
+  },
+  {
+   "nombre": "desmezclarDualBand",
+   "fichero": "multicapa.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "lineal/07-extraccion-canales.md",
+   "descripcion": "L7 dual band: de una vista OSC con filtro dual band (Hα + OIII), en lineal, crea dos vistas mono nuevas: <vista>_Ha (rojo) y <vista>_OIII (media de verde y azul), con su cielo, ruido y señal. Con carpeta, también las guarda como XISF.",
+   "resumen": "L7: separa Hα y OIII de un dual band en vistas nuevas.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "La vista dual band (nombre o uid). Sin ella, la activa."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta para guardar las capas (opcional)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "combinarCandidatos",
+   "fichero": "multicapa.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "lineal/10-combinacion-rgb-nb.md",
+   "descripcion": "L10 combinar banda estrecha con el RGB: sobre la vista RGB lineal (ya con gradiente y color), compara añadir el exceso de Hα al rojo (y de OIII a verde y azul) a varias intensidades, escalado por las estrellas; mide nebulosa ganada, ruido y dominante del cielo y color de las estrellas, y recomienda. Las capas deben estar alineadas (mismo tamaño). La vista NO cambia (aplicarCandidato).",
+   "resumen": "L10: compara cómo añadir Hα/OIII al RGB; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ha": {
+      "type": "string",
+      "description": "Vista de la capa Hα (nombre o uid)."
+     },
+     "oiii": {
+      "type": "string",
+      "description": "Vista de la capa OIII (opcional)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "La vista RGB lineal. Sin ella, la activa."
+     },
+     "intensidades": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Por defecto [0.5, 1.0]."
+     },
+     "con_oiii": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "ha"
+    ]
+   }
+  },
+  {
+   "nombre": "combinarRGB",
+   "fichero": "multicapa.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "lineal/10-combinacion-rgb-nb.md",
+   "descripcion": "L10 (mono con rueda): compone una vista RGB nueva con tres vistas mono alineadas (rojo, verde, azul), en lineal y sin escalar canales; el color lo pone después calibrarColor.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "r": {
+      "type": "string"
+     },
+     "g": {
+      "type": "string"
+     },
+     "b": {
+      "type": "string"
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre de la vista nueva (por defecto RGB)."
+     }
+    },
+    "required": [
+     "r",
+     "g",
+     "b"
+    ]
+   }
+  },
+  {
    "nombre": "estirarCandidatos",
    "fichero": "herramientas.py",
    "nivel": "lectura",

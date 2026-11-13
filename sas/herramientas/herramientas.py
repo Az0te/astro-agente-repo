@@ -1596,3 +1596,8 @@ LISTA = {
 import web as _web  # noqa: E402  (web importa este módulo: va al final)
 
 LISTA.update(_web.LISTA_WEB)
+
+# Varios masters (alinear por astrometría, dual band, combinar con el RGB): en multicapa.py, como en Siril.
+import multicapa as _multicapa  # noqa: E402
+
+LISTA.update(_multicapa.LISTA_MULTICAPA)
