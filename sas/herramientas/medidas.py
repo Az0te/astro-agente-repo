@@ -300,6 +300,149 @@ def _caja(x, r):
     return (s / (k * k)).astype(np.float32)
 
 
+def suave(x, r):
+    """Desenfoque casi gaussiano (tres cajas de radio r/2), como _suave de Siril."""
+    k = max(1, int(round(r / 2)))
+    return _caja(_caja(_caja(x, k), k), k)
+
+
+def recortes(p):
+    n = p.size
+    return {"altos_pct": _r(100.0 * float((p >= 0.999).sum()) / n, 4), "ceros_pct": _r(100.0 * float((p <= 0.0).sum()) / n, 4)}
+
+
+def saturacion(p):
+    """Saturación HSV por píxel: (máx − mín) / máx."""
+    mx, mn = p.max(axis=0), p.min(axis=0)
+    return np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0).astype(np.float32)
+
+
+def contraste_local(L, m, r=16):
+    """σ de la estructura de escala media (L − caja de 2r+1 px) dentro de la máscara."""
+    if m is None or not m.any():
+        return None
+    d = (L - _caja(L, r))[m]
+    return float(np.sqrt(np.mean(d ** 2)))
+
+
+def px_estrella(Lb):
+    """Píxeles de estrella de una capa de estrellas: > mediana + 5σ (MAD); al menos el 0,5 % más brillante."""
+    v = Lb.ravel()[::7]
+    med = float(np.median(v))
+    sig = 1.4826 * float(np.median(np.abs(v - med)))
+    m = Lb > med + 5 * max(sig, 1e-6)
+    if m.mean() < 0.005:
+        m = Lb >= np.percentile(v, 99.5)
+    return m
+
+
+def zonas_objeto_cielo(p, S=64):
+    """Píxeles de cielo (celdas más oscuras) y de objeto (cuartil alto de celdas, > cielo + ruido), sin estrellas."""
+    c = cielo(p, S)
+    L = lum(p)
+    m = celdas(L, S)
+    ys, xs, _ = c["_celdas"]
+    cie = np.zeros(m.shape, dtype=bool)
+    cie[ys, xs] = True
+    val = m > 1e-6
+    obj = val & (m >= np.percentile(m[val], 75)) & (m > c["cielo"] + c["ruido"]) & ~cie
+    hp = L - _caja(L, 5)
+    est = hp > max(5 * max(c["ruido"], 1e-6), float(np.percentile(hp.ravel()[::7], 99.5)))
+    est = _caja(est.astype(np.float32), 2) > 0
+
+    def a_px(mc):
+        out = np.zeros(L.shape, dtype=bool)
+        h, w = mc.shape[0] * S, mc.shape[1] * S
+        out[:h, :w] = np.repeat(np.repeat(mc, S, 0), S, 1)
+        return out
+
+    return {"medidas": c, "cielo_px": a_px(cie) & ~est, "obj_px": a_px(obj) & ~est}
+
+
+# --- Núcleo de galaxias (como siril/herramientas/nucleo.py) ------------------------------------------------
+
+def _pico(B, borde=None):
+    b = borde or max(16, min(B.shape) // 20)
+    C = B.copy()
+    C[:b] = C[-b:] = 0
+    C[:, :b] = C[:, -b:] = 0
+    return np.unravel_index(int(np.argmax(C)), C.shape)
+
+
+def _perfil(L, centro, rmax, paso=2):
+    y0, x0 = centro
+    y1, y2 = max(0, y0 - rmax), min(L.shape[0], y0 + rmax + 1)
+    x1, x2 = max(0, x0 - rmax), min(L.shape[1], x0 + rmax + 1)
+    sub = L[y1:y2, x1:x2]
+    yy, xx = np.mgrid[y1:y2, x1:x2]
+    rr = np.hypot(yy - y0, xx - x0)
+    out = []
+    for r in range(0, rmax, paso):
+        m = (rr >= r) & (rr < r + paso)
+        if m.sum() < 4:
+            break
+        out.append(float(np.median(sub[m])))
+    return np.array(out)
+
+
+def _anillos(prof):
+    if len(prof) < 4 or prof[0] <= 0:
+        return 0.0
+    return float(100.0 * np.max(prof - np.minimum.accumulate(prof)) / prof[0])
+
+
+def preparar_nucleo(p, radio=None, desde=None):
+    """Base del bulbo, centro, umbral y máscara suave. Error si no hay núcleo brillante."""
+    L = lum(p)
+    W = max(L.shape)
+    r_b = int(radio or max(6, round(W / 160)))
+    B = suave(L, 2 * r_b)
+    centro = _pico(B)
+    pico = float(B[centro])
+    u = float(desde) if desde is not None else max(0.45, min(0.80, pico - 0.30))
+    if pico <= u + 0.03:
+        raise RuntimeError(f"No hay núcleo brillante que comprimir (pico de la base {pico:.2f}, umbral {u:.2f}): no aplica.")
+    t = np.clip((B - u) / max(pico - u, 1e-6), 0, 1)
+    mascara = suave((t * t * (3 - 2 * t)).astype(np.float32), max(2, r_b))
+    return {"L": L, "B": B, "centro": centro, "u": u, "r_b": r_b, "mascara": mascara,
+            "rmax": int(min(W // 6, max(40, 6 * r_b)))}
+
+
+def medir_nucleo(q, n):
+    L = lum(q)
+    mk = n["mascara"]
+    dentro = mk > 0.5
+    return {"meseta_radio_px": _r(np.sqrt(((L >= 0.95) & (mk > 0.05)).sum() / np.pi), 1),
+            "brillo_bulbo": _r(float(np.median(L[dentro])) if dentro.any() else None, 4),
+            "estructura_bulbo": _r(contraste_local(L, dentro, r=4), 5),
+            "anillos_pct": _r(_anillos(_perfil(L, n["centro"], n["rmax"])), 2)}
+
+
+def comprimir_nucleo(p, n, k):
+    """Resta k·(base − umbral) dentro de la máscara del bulbo y refuerza su detalle; color por L'/L sin pasar de 1."""
+    L, B, mk, u = n["L"], n["B"], n["mascara"], n["u"]
+    Lo = np.clip(L - k * mk * np.maximum(B - u, 0) + 0.5 * k * mk * (L - B), 0, 1)
+    if p.shape[0] == 3:
+        q = p * (Lo / np.maximum(L, 1e-6))[None]
+        mx = q.max(axis=0)
+        q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
+    else:
+        q = Lo[None]
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
+def saturar(p, k, fondo=None):
+    """Satura conservando la luminancia: c' = L + (1 + k)·(c − L). Con fondo (nivel de cielo), el aumento se reduce
+    en el cielo (peso que sube de 0 en el cielo a 1 en cielo + 0,1)."""
+    L = lum(p)[None]
+    g = 1.0 + float(k)
+    if fondo is not None:
+        w = np.clip((L - fondo) / 0.1, 0, 1)
+        g = 1.0 + float(k) * w
+    q = L + g * (p - L)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
 def energia_detalle(L, banda=(1, 4)):
     """Energía de las escalas finas (diferencia de cajas) fuera del cielo: lo que un denoise no debería borrar."""
     a, b = banda

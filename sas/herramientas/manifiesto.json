@@ -454,6 +454,108 @@
    }
   },
   {
+   "nombre": "nucleoCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "Núcleo de galaxia (no lineal, después de estirar y antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo, y recomienda el que baja la meseta sin apagar el bulbo ni crear anillos. La vista NO cambia (aplicarCandidato).",
+   "resumen": "Núcleo: compara comprimir el bulbo y WaveScale HDR; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "fuerzas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas del compresor propio (por defecto [0.25, 0.4, 0.55])."
+     },
+     "hdr": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "compression_factor de WaveScale HDR (por defecto [1.5, 2.5]; [] para no probarlo)."
+     },
+     "radio": {
+      "type": "number",
+      "description": "Radio de la base del bulbo en px (por defecto lado mayor / 160)."
+     },
+     "desde": {
+      "type": "number",
+      "description": "Umbral de brillo desde el que se comprime (por defecto pico − 0,30, entre 0,45 y 0,80)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "saturacionCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, con el cielo protegido; mide saturación del objeto y del cielo, dominante del cielo (< 5 %) y recortes nuevos, y recomienda la mayor que cumple. La vista NO cambia (aplicarCandidato).",
+   "resumen": "NL5: compara saturaciones; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "cantidades": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Aumentos de saturación (por defecto [0.25, 0.5, 0.75]; 0,5 = ×1,5)."
+     },
+     "proteger_cielo": {
+      "type": "boolean",
+      "description": "Reducir el aumento en el cielo (por defecto true)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "nitidezCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 3600,
+   "paso": "no-lineal/07-nitidez.md",
+   "descripcion": "L11/NL7 nitidez: compara Cosmic Clarity sharpen de SASpro a varias cantidades; mide el detalle fino ganado en el objeto, el ruido del cielo (≤ ×1,15) y los recortes, y recomienda. La vista NO cambia (aplicarCandidato).",
+   "resumen": "Nitidez: compara Cosmic Clarity sharpen; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "cantidades": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Cantidad para estrellas y nebulosa, 0–1 (por defecto [0.3, 0.5])."
+     },
+     "modo": {
+      "type": "string",
+      "enum": [
+       "Both",
+       "Stellar Only",
+       "Non-Stellar Only"
+      ]
+     }
+    }
+   }
+  },
+  {
    "nombre": "aplicarCandidato",
    "fichero": "herramientas.py",
    "nivel": "vista",
@@ -623,6 +725,74 @@
       "description": "Si la imagen es lineal (por defecto se detecta)."
      }
     }
+   }
+  },
+  {
+   "nombre": "estirarEstrellas",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/08-estrellas.md",
+   "descripcion": "Estrellas: estira la vista de solo estrellas. Compara Star Stretch de SASpro a varios factores y un arcsinh propio que lleva el p90 de las estrellas a ~0,10; mide brillo de las estrellas y recortes. La vista NO cambia (aplicarCandidato).",
+   "resumen": "Estrellas: compara Star Stretch y arcsinh; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "La vista de estrellas (la que creó separarEstrellas)."
+     },
+     "factores": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "stretch_factor de Star Stretch (por defecto [3, 5])."
+     },
+     "color": {
+      "type": "number",
+      "description": "color_boost de Star Stretch, 0–2 (por defecto 1)."
+     }
+    },
+    "required": [
+     "vista"
+    ]
+   }
+  },
+  {
+   "nombre": "recombinarEstrellas",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "no-lineal/09-recombinacion.md",
+   "descripcion": "NL9: une la starless (vista) con la vista de estrellas por screen (o suma), con deshacer en la starless. Las dos deben estar estiradas: si las estrellas siguen lineales, se niega y pide estirarEstrellas. Informa del aporte de las estrellas, el fondo y los recortes.",
+   "resumen": "NL9: starless + estrellas por screen, con deshacer.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "estrellas": {
+      "type": "string",
+      "description": "Vista de estrellas (nombre o uid)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "La starless. Sin ella, la vista activa."
+     },
+     "metodo": {
+      "type": "string",
+      "enum": [
+       "screen",
+       "suma"
+      ]
+     },
+     "factor": {
+      "type": "number",
+      "description": "Peso de las estrellas, 0–2 (1 tal cual; 0,5–0,6 para estrellas discretas)."
+     }
+    },
+    "required": [
+     "estrellas"
+    ]
    }
   }
  ]

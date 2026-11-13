@@ -545,6 +545,7 @@ def duplicarVista(ctx, vista=None, nombre=None):
     nombre = nombre or f"{_nombre(d)}_copia"
     m = dict(_meta(d))
     m.pop("file_path", None)
+    m["display_name"] = nombre          # si no, la copia hereda el nombre de la original
     nuevo = ctx.open_new_document(np.array(d.image, copy=True), metadata=m, name=nombre)
     return _info(_base(nuevo)) if nuevo is not None else {"vista": nombre}
 
@@ -713,11 +714,13 @@ def _comparar(ctx, doc, grupo, lista, medir):
     h0 = M.huella(doc.image)
     _limpiar_grupo(grupo)
     r = {"vista": _nombre(doc), "candidatos": [], "errores": [], "recomendado": None, "motivo": ""}
-    for n, (nombre, proceso, preset) in enumerate(lista, 1):
+    for n, item in enumerate(lista, 1):
+        nombre, proceso, preset = item[:3]
+        funcion = item[3] if len(item) > 3 else LOCALES.get(proceso)
         t0 = time.perf_counter()
         try:
-            if proceso in LOCALES:            # cálculo propio en numpy: no toca la vista
-                res = _a_sas(LOCALES[proceso](_p(doc.image), **(preset or {})), doc.image)
+            if funcion is not None:           # cálculo propio en numpy: no toca la vista
+                res = _a_sas(funcion(_p(doc.image), **(preset or {})), doc.image)
             else:
                 res = _probar(ctx, doc, proceso, preset)
             m = medir(_p(res))
@@ -859,6 +862,225 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=(0.3, 0.5, 0.7), usar_graxpert=True
     return _galeria(r, p, "diferencia")
 
 
+def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5), radio=None, desde=None,
+                     brillo_min=0.85, anillos_max=1.5):
+    """NL5 núcleo de galaxia (no lineal, antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias
+    fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo. La vista no cambia."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if M.lineal(p[:, ::8, ::8]):
+        raise RuntimeError("La imagen parece lineal: el núcleo se trabaja después de estirar (y antes de saturar).")
+    n = M.preparar_nucleo(p, radio, desde)
+    m0 = M.medir_nucleo(p, n)
+    lista = [(f"comprimir el bulbo ×{k:g}", "nucleo_propio", {"k": float(k)},
+              (lambda q, k: M.comprimir_nucleo(q, n, k))) for k in (fuerzas or [])]
+    lista += [(f"WaveScale HDR compresión {c:g}", "wavescale_hdr", {"n_scales": 5, "compression_factor": float(c),
+                                                                     "mask_gamma": 5.0}) for c in (hdr or [])]
+    r = _comparar(ctx, d, "nucleo", lista, lambda q: M.medir_nucleo(q, n))
+    for x in r["candidatos"]:
+        m1, fal = x["metricas"], []
+        if m0["brillo_bulbo"] and (m1["brillo_bulbo"] or 0) < brillo_min * m0["brillo_bulbo"]:
+            fal.append(f"el bulbo se apaga: brillo {m1['brillo_bulbo']} < {brillo_min} × {m0['brillo_bulbo']}")
+        if (m1["anillos_pct"] or 0) - (m0["anillos_pct"] or 0) > anillos_max:
+            fal.append(f"anillos nuevos: el perfil sube hacia fuera un {m1['anillos_pct']} % (antes {m0['anillos_pct']} %)")
+        if (m0["meseta_radio_px"] or 0) > 2 and (m1["meseta_radio_px"] or 0) >= m0["meseta_radio_px"]:
+            fal.append("la meseta no baja")
+        x["estructura_ganada_pct"] = (_r(100.0 * (m1["estructura_bulbo"] / m0["estructura_bulbo"] - 1), 1)
+                                      if m0["estructura_bulbo"] and m1["estructura_bulbo"] else None)
+        x["no_cumple"] = fal
+    ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if ok:
+        def nota(x):
+            caida = 100.0 * (1 - (x["metricas"]["brillo_bulbo"] or 0) / max(m0["brillo_bulbo"] or 1e-6, 1e-6))
+            return (x["estructura_ganada_pct"] or 0) - 2.0 * (x["metricas"]["meseta_radio_px"] or 0) - 1.5 * max(caida, 0)
+        mejor = max(ok, key=nota)
+        mm = mejor["metricas"]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: meseta {m0['meseta_radio_px']} → {mm['meseta_radio_px']} px, estructura del "
+                       f"bulbo {mejor['estructura_ganada_pct']:+} %, brillo {m0['brillo_bulbo']} → {mm['brillo_bulbo']}, "
+                       "sin anillos nuevos.")
+    else:
+        r["motivo"] = "Ninguno cumple (ver no_cumple): deja el núcleo como está o prueba otro umbral (desde) o radio."
+    cy, cx = n["centro"]
+    r.update(antes=m0, centro_px=[int(cx), int(cy)], umbral=_r(n["u"], 3), radio_base_px=n["r_b"])
+    r["leyenda"] = ("meseta_radio_px: radio equivalente de lo que pasa de 0,95 en el bulbo (menos = menos quemado). "
+                    "anillos_pct: mayor subida del perfil radial hacia fuera (halo o anillo artificial). brillo_bulbo: "
+                    f"mediana en el bulbo (no debe caer por debajo del {int(brillo_min * 100)} %). estructura_bulbo: "
+                    "detalle de 4 px en el bulbo. La vista NO ha cambiado: aplicarCandidato(id).")
+    return _galeria(r, p, "diferencia")
+
+
+def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75), proteger_cielo=True, dominante_max=5.0):
+    """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
+    cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if p.shape[0] != 3:
+        raise RuntimeError("La saturación necesita una imagen en color.")
+    if M.lineal(p[:, ::8, ::8]):
+        raise RuntimeError("La imagen parece lineal: la saturación va después de estirar.")
+    z = M.zonas_objeto_cielo(p)
+    cel = z["medidas"]["_celdas"]
+    fondo = float(z["medidas"]["cielo"]) if proteger_cielo else None
+    pmax0 = p.max(axis=0)
+    cerca = M._caja((pmax0 >= 0.9).astype(np.float32), 3) > 0
+
+    def medir(q):
+        s = M.saturacion(q)
+        rgb = M.cielo_por_canal(q, cel)
+        dom = 100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6)
+        nuevos = (q.max(axis=0) >= 0.999) & (pmax0 < 0.9) & ~cerca
+        return {"sat_objeto": _r(float(np.mean(s[z["obj_px"]])), 4) if z["obj_px"].any() else None,
+                "sat_cielo": _r(float(np.mean(s[z["cielo_px"]])), 4) if z["cielo_px"].any() else None,
+                "dominante_cielo_pct": _r(dom, 2), "recorte_nuevo_pct": _r(100.0 * float(nuevos.mean()), 4),
+                **M.recortes(q)}
+
+    m0 = medir(p)
+    lista = [(f"saturar +{k:g}", "saturar_propio", {"k": float(k), "fondo": fondo},
+              (lambda q, k, fondo: M.saturar(q, k, fondo))) for k in (cantidades or [])]
+    r = _comparar(ctx, d, "saturacion", lista, medir)
+    for x in r["candidatos"]:
+        m, fal = x["metricas"], []
+        go = (m["sat_objeto"] / m0["sat_objeto"] - 1) * 100 if m0["sat_objeto"] and m["sat_objeto"] else None
+        gc = (m["sat_cielo"] / max(m0["sat_cielo"] or 0, 1e-6) - 1) * 100 if m["sat_cielo"] is not None else 0.0
+        m.update(ganancia_objeto_pct=_r(go, 1), ganancia_cielo_pct=_r(gc, 1))
+        if m["dominante_cielo_pct"] >= dominante_max:
+            fal.append(f"dominante del cielo {m['dominante_cielo_pct']} % ≥ {dominante_max} %")
+        if m["recorte_nuevo_pct"] > 0.01:
+            fal.append(f"recorte alto nuevo fuera de lo ya brillante {m['recorte_nuevo_pct']} %")
+        if m["ceros_pct"] - m0["ceros_pct"] > 0.05:
+            fal.append("canales a 0 nuevos (colores fuera de rango)")
+        if go is not None and gc > max(go, 5.0):
+            fal.append("el cielo gana más color que el objeto")
+        x["no_cumple"] = fal
+    ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if ok:
+        mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
+        mm = mejor["metricas"]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: el objeto gana un {mm['ganancia_objeto_pct']} % de saturación, el cielo queda "
+                       f"con dominante {mm['dominante_cielo_pct']} % y sin recortes nuevos. Es la mayor que cumple: mírala "
+                       "con previa antes de aplicarla.")
+    else:
+        r["motivo"] = "Ninguna cumple (ver no_cumple): no satures más o corrige antes la dominante del cielo."
+    r["antes"] = m0
+    if m0["dominante_cielo_pct"] >= dominante_max:
+        r["aviso"] = f"El cielo ya tiene una dominante del {m0['dominante_cielo_pct']} %: saturar la amplifica."
+    return _galeria(r, p)
+
+
+def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.10):
+    """NL estrellas: estira la vista de solo estrellas. Compara Star Stretch de SASpro a varios factores y un arcsinh
+    propio que lleva el p90 de los píxeles de estrella a ~p90_objetivo. La vista no cambia (aplicarCandidato)."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    Lb = M.lum(p)
+    mk = M.px_estrella(Lb)
+
+    def asinh(q, p90):
+        vals = q[:, mk].mean(axis=0)
+        lo, hi = 0.0, float(np.log(1e5))
+        for _ in range(30):
+            s = float(np.exp((lo + hi) / 2))
+            if float(np.percentile(np.arcsinh(s * vals) / np.arcsinh(s), 90)) < p90:
+                lo = np.log(s)
+            else:
+                hi = np.log(s)
+        s = float(np.exp((lo + hi) / 2))
+        return (np.arcsinh(s * np.clip(q, 0, 1)) / np.arcsinh(s)).astype(np.float32)
+
+    lista = [(f"Star Stretch {f:g}", "star_stretch", {"stretch_factor": float(f), "color_boost": float(color),
+                                                      "scnr_green": False}) for f in (factores or [])]
+    lista.append((f"arcsinh propio (p90 estrellas {p90_objetivo:g})", "asinh_propio", {"p90": float(p90_objetivo)}, asinh))
+
+    def medir(q):
+        L = M.lum(q)
+        v = L[mk]
+        return {"p50_estrellas": _r(float(np.percentile(v, 50)), 4), "p90_estrellas": _r(float(np.percentile(v, 90)), 4),
+                "fondo": _r(float(np.median(L[~mk][::7])), 5), **M.recortes(q)}
+
+    r = _comparar(ctx, d, "estrellas", lista, medir)
+    if r["candidatos"]:
+        mejor = min(r["candidatos"], key=lambda x: abs((x["metricas"]["p90_estrellas"] or 0) - p90_objetivo)
+                    + 5 * (x["metricas"]["altos_pct"] or 0))
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: p90 de las estrellas {mejor['metricas']['p90_estrellas']}, "
+                       f"{mejor['metricas']['altos_pct']} % a 1. Mira la previa: estrellas sin halos ni núcleos quemados.")
+    r["leyenda"] = "p50/p90_estrellas: brillo de los píxeles de estrella. fondo: mediana fuera de ellas. La vista NO ha cambiado."
+    return _galeria(r, p)
+
+
+def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0):
+    """NL9: une la starless (vista) con la vista de estrellas (screen o suma), con deshacer en la starless.
+    Ambas deben estar estiradas; si la de estrellas sigue lineal, estírala antes con estirarEstrellas."""
+    d = _doc(ctx, vista)
+    e = _doc(ctx, estrellas)
+    if d is e:
+        raise ValueError("'estrellas' y 'vista' son la misma vista.")
+    a, b = _p(d.image), _p(e.image)
+    if a.shape[1:] != b.shape[1:]:
+        raise RuntimeError(f"La vista de estrellas mide {b.shape[2]}×{b.shape[1]} y la starless {a.shape[2]}×{a.shape[1]}.")
+    if b.shape[0] != a.shape[0]:
+        b = np.repeat(b, a.shape[0], axis=0) if b.shape[0] == 1 else b[:1].repeat(a.shape[0], axis=0)
+    if metodo not in ("screen", "suma"):
+        raise ValueError("metodo: screen o suma.")
+    k = float(factor)
+    if not 0 < k <= 2:
+        raise ValueError("factor entre 0 y 2 (1 = estrellas tal cual; 0,5–0,6 para estrellas discretas).")
+    Lb = M.lum(b)
+    mk = M.px_estrella(Lb)
+    if M.lineal(a[:, ::8, ::8]) is False and float(np.percentile(Lb[mk], 90)) < 0.05:
+        return {"aplicado": False, "aviso": "La vista de estrellas parece lineal (p90 de las estrellas < 0,05) y la starless "
+                "está estirada: estira antes las estrellas (estirarEstrellas)."}
+    res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(k * b, 0, 1)) if metodo == "screen" else a + k * b
+    res = np.clip(res, 0, 1).astype(np.float32)
+    cel = M.cielo(a)["_celdas"]
+    f0, f1 = float(np.mean(M.cielo_por_canal(a, cel))), float(np.mean(M.cielo_por_canal(res, cel)))
+    rec0, rec1 = M.recortes(a), M.recortes(res)
+    d.apply_edit(_a_sas(res, d.image), metadata={}, step_name=f"SetiAstroPilot: recombinar estrellas ({metodo} ×{k:g})")
+    r = {"aplicado": True, "vista": _nombre(d), "estrellas": _nombre(e), "metodo": metodo, "factor": k,
+         "aporte_estrellas_pct": _r(100.0 * float((M.lum(res) - M.lum(a)).mean()) / max(float(M.lum(res).mean()), 1e-9), 2),
+         "fondo_antes": _r(f0, 5), "fondo_despues": _r(f1, 5), "recortes_antes": rec0, "recortes_despues": rec1,
+         "nota": "Con deshacer. Guarda la versión con guardarImagen."}
+    if rec1["altos_pct"] - rec0["altos_pct"] > 0.05:
+        r["aviso"] = "recorte alto nuevo (núcleos de estrella a 1): deshaz y baja factor"
+    return r
+
+
+def nitidezCandidatos(ctx, vista=None, cantidades=(0.3, 0.5), modo="Both", superficie=True):
+    """L11/NL7 nitidez: compara Cosmic Clarity sharpen a varias cantidades. Mide el detalle fino del objeto, el ruido del
+    cielo y los recortes. La vista no cambia."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    z = M.zonas_objeto_cielo(p) if not M.lineal(p[:, ::8, ::8]) else None
+    c0 = M.cielo(p)
+    L0 = M.lum(p)
+    obj = z["obj_px"] if z is not None and z["obj_px"].any() else None
+    e0 = M.contraste_local(L0, obj, r=2) if obj is not None else M.energia_detalle(L0)
+    lista = [(f"Cosmic Clarity sharpen {a:g}", "cosmic_clarity",
+              {"mode": "sharpen", "sharpening_mode": modo, "auto_psf": True, "stellar_amount": float(a),
+               "nonstellar_amount": float(a), "create_new_view": False}) for a in (cantidades or [])]
+
+    def medir(q):
+        c = M.cielo(q)
+        L = M.lum(q)
+        e = M.contraste_local(L, obj, r=2) if obj is not None else M.energia_detalle(L)
+        return {"detalle_ganado_pct": _r(100.0 * (e / max(e0, 1e-12) - 1), 1),
+                "ruido_vs_antes": _r(c["ruido"] / max(c0["ruido"], 1e-9), 3), **M.recortes(q)}
+
+    r = _comparar(ctx, d, "nitidez", lista, medir)
+    ok = [x for x in r["candidatos"] if (x["metricas"]["ruido_vs_antes"] or 9) <= 1.15
+          and (x["metricas"]["altos_pct"] or 0) - M.recortes(p)["altos_pct"] <= 0.02]
+    if ok:
+        mejor = max(ok, key=lambda x: x["metricas"]["detalle_ganado_pct"] or 0)
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: +{mejor['metricas']['detalle_ganado_pct']} % de detalle fino con el ruido del "
+                       f"cielo a ×{mejor['metricas']['ruido_vs_antes']}. Mira un recorte con previa (anillos, artefactos).")
+    else:
+        r["motivo"] = "Ninguno gana detalle sin subir el ruido del cielo más de un 15 % o quemar: mejor no aplicar."
+    return _galeria(r, p, "diferencia")
+
+
 def aplicarCandidato(ctx, id, vista=None):
     """Pone en la vista el candidato 'id' de la última comparación (exactamente el que se midió, con deshacer)."""
     a, datos = _cargar_candidato(id)
@@ -997,6 +1219,11 @@ LISTA = {
     "gradienteCandidatos": gradienteCandidatos,
     "estirarCandidatos": estirarCandidatos,
     "ruidoCandidatos": ruidoCandidatos,
+    "nucleoCandidatos": nucleoCandidatos,
+    "saturacionCandidatos": saturacionCandidatos,
+    "nitidezCandidatos": nitidezCandidatos,
+    "estirarEstrellas": estirarEstrellas,
+    "recombinarEstrellas": recombinarEstrellas,
     "aplicarCandidato": aplicarCandidato,
     "quitarVerde": quitarVerde,
     "neutralizarFondo": neutralizarFondo,
