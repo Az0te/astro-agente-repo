@@ -135,7 +135,8 @@ function combinarMasters(lista, o) {
     var w = abierta;
     if (!w) {
       if (!File.exists(f)) throw new Error("No existe la vista ni el fichero " + f);
-      w = ImageWindow.open(f)[0];
+      var wsAb = ImageWindow.open(f); w = wsAb[0];
+      for (var q = 1; q < wsAb.length; ++q) try { wsAb[q].forceClose(); } catch (e) { }   // mapas de rechazo de WBPP
       if (!w || w.isNull) throw new Error("No se pudo abrir " + f);
     }
     var cl = (o.clases && (o.clases[f] || o.clases[File.extractName(f)])) || cbClase(w, esVista ? "" : f);

@@ -849,7 +849,8 @@ function ppAbrirSTF(path, id) {
   var ws = ImageWindow.windows, w = null;
   for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == path) w = ws[i];
   if (!w) {
-    w = ImageWindow.open(path)[0];
+    var wsAb = ImageWindow.open(path); w = wsAb[0];
+    for (var q = 1; q < wsAb.length; ++q) try { wsAb[q].forceClose(); } catch (e) { }   // mapas de rechazo de WBPP
     if (id) { var n = id.replace(/[^A-Za-z0-9_]/g, "_"); if (/^[0-9]/.test(n)) n = "_" + n; if (ImageWindow.windowById(n).isNull) w.mainView.id = n; }
   }
   // STF enlazado (mismos parámetros en todos los canales): por canal desequilibra los colores.

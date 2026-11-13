@@ -128,7 +128,7 @@ function abrirConSTF(path, id) {
   var ws = ImageWindow.windows, w = null;
   for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == path) w = ws[i];
   if (!w) {
-    w = ImageWindow.open(path)[0];
+    w = alAbrir(path);
     if (id) { var n = id.replace(/[^A-Za-z0-9_]/g, "_"); if (/^[0-9]/.test(n)) n = "_" + n; if (ImageWindow.windowById(n).isNull) w.mainView.id = n; }
   }
   // STF enlazado (mismos parámetros en todos los canales): por canal desequilibra los colores.
@@ -165,9 +165,18 @@ function astrometriaLineal(win) {
   return true;
 }
 
+// Abre sólo la imagen principal de un fichero: los masters de WBPP traen también los mapas de rechazo (rejection_low,
+// rejection_high) y ImageWindow.open los abre todos; antes se cerraba sólo la [0] y quedaban ~30 vistas sueltas
+// (M31, 13 nov 2026: Opus se paró por ellas y Qwen gastó 30 llamadas en cerrarlas).
+function alAbrir(path, id) {
+  var ws = id ? ImageWindow.open(path, id, "verbosity 0", true) : ImageWindow.open(path);
+  for (var i = 1; i < ws.length; ++i) try { ws[i].forceClose(); } catch (e) { }
+  return ws[0];
+}
+
 function alScale(path) {
   // Escala en "/px: de la astrometría si la hay; si no, de XPIXSZ, FOCALLEN y XBINNING.
-  var w = ImageWindow.open(path, "alSCALE", "verbosity 0", true)[0];
+  var w = alAbrir(path, "alSCALE");
   if (!w || w.isNull) throw new Error("No se pudo abrir «" + path + "» (¿es un fichero .xisf existente?)");
   var r = { ancho: w.mainView.image.width, alto: w.mainView.image.height, canales: w.mainView.image.numberOfChannels, wcs: w.hasAstrometricSolution };
   var s = NaN;
@@ -204,7 +213,12 @@ function alinearMasters(lista, o) {
     var id = (x && typeof x === "object") ? (x.mainView ? x.mainView.id : x.id) : String(x);
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id)) return null;   // una ruta no es un id (windowById lanzaría un error)
     var w = ImageWindow.windowById(id);
-    if (w.isNull) return null;
+    if (w.isNull) {   // el id sin distinguir mayúsculas (Qwen 32k escribió «masterlight_…», 13 nov 2026)
+      var todas = ImageWindow.windows, bajo = id.toLowerCase();
+      for (var i = 0; i < todas.length && w.isNull; ++i) if (todas[i].mainView.id.toLowerCase() == bajo) w = todas[i];
+      if (w.isNull) return null;
+      id = w.mainView.id;
+    }
     var fp = String(w.filePath || "").replace(/\\/g, "/");
     if (fp && File.exists(fp) && !w.mainView.isModified && /\.xisf$/i.test(fp)) return fp;
     var dir = File.systemTempDirectory.replace(/\\/g, "/") + "/piastropilot_alin";
@@ -219,7 +233,7 @@ function alinearMasters(lista, o) {
   var files = [], porId = {};
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
     var fv = vistaAFichero(x);
-    if (fv) { files.push(fv); porId[String(x)] = fv; return; }
+    if (fv) { files.push(fv); porId[String(x).toLowerCase()] = fv; return; }
     var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
     if (File.directoryExists(p))
       files = files.concat(alSearch(p + "/" + "*.xisf", false).filter(function (f) {
@@ -234,7 +248,7 @@ function alinearMasters(lista, o) {
   // abrir («Cannot read properties of undefined (reading 'mainView')»).
   if (o.referencia) {
     var rk = String(o.referencia);
-    if (porId[rk]) o.referencia = porId[rk];
+    if (porId[rk.toLowerCase()]) o.referencia = porId[rk.toLowerCase()];
     else if (!File.exists(rk.replace(/\\/g, "/"))) {
       var rv = vistaAFichero(o.referencia);
       if (!rv) throw new Error("La referencia «" + rk + "» no es un fichero ni una vista abierta: pasa uno de los masters de la lista (o nada, y se elige sola)");
@@ -264,7 +278,7 @@ function alinearMasters(lista, o) {
     var fuente = f;
     if (sRef && info[f].escala && Math.abs(info[f].escala / sRef - 1) > 0.03) {
       var k = info[f].escala / sRef;   // >1: píxeles más grandes que la referencia → ampliar
-      var w = ImageWindow.open(f, "alRES", "verbosity 0", true)[0];
+      var w = alAbrir(f, "alRES");
       astrometriaLineal(w);   // sin esto, una solución con splines abre un diálogo y para el script
       var R = new Resample;
       R.xSize = k; R.ySize = k; R.mode = 0;   // relativo
@@ -302,7 +316,7 @@ function alinearMasters(lista, o) {
   var W = info[ref].ancho, H = info[ref].alto, valid = new Uint8Array(W * H), buf = new Float32Array(W * H);
   for (var i = 0; i < W * H; ++i) valid[i] = 1;
   reg.forEach(function (f) {
-    var w = ImageWindow.open(f, "alVAL", "verbosity 0", true)[0], im = w.mainView.image;
+    var w = alAbrir(f, "alVAL"), im = w.mainView.image;
     if (im.width != W || im.height != H) { w.forceClose(); throw new Error("Tamaño distinto tras registrar: " + f); }
     var vac = mascaraSinDatos(im);   // 0 y también el relleno constante de WBPP (no es 0)
     for (var i = 0; i < W * H; ++i) if (vac[i]) valid[i] = 0;
@@ -324,7 +338,7 @@ function alinearMasters(lista, o) {
   // Dos pasadas: tras recortar la franja más ancha puede asomar otra más estrecha en otro master (nebulosa dual band SO3 abajo).
   var franja = { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
   if (o.franjas !== false) {
-    var abiertos = reg.map(function (f, i) { return ImageWindow.open(f, "alBAND" + i, "verbosity 0", true)[0]; });
+    var abiertos = reg.map(function (f, i) { return alAbrir(f, "alBAND" + i); });
     for (var pasada = 0; pasada < 2; ++pasada) {
       var b2 = { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
       abiertos.forEach(function (w) {
@@ -347,7 +361,7 @@ function alinearMasters(lista, o) {
   var porSalida = {};
   r.ficheros.forEach(function (e) { porSalida[e.entrada == ref ? ref : e.registrado] = e; });
   reg.forEach(function (f) {
-    var e = porSalida[f], w = ImageWindow.open(f, "alCROP", "verbosity 0", true)[0];
+    var e = porSalida[f], w = alAbrir(f, "alCROP");
     if (astrometriaLineal(w)) e.splines_quitados = true;
     var C = new Crop; C.mode = 1;   // AbsolutePixels
     C.leftMargin = -x0; C.topMargin = -y0; C.rightMargin = -(W - 1 - x1); C.bottomMargin = -(H - 1 - y1);

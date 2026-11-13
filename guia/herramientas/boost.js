@@ -81,7 +81,9 @@ function bsMascara(view) {
   var mw = ImageWindow.windowById(id), mi = mw.mainView.image;
   var med = mi.median(), sig = 1.4826 * mi.MAD(), a = Math.max(0, med - 1.5 * sig), b = Math.max(a + 1e-3, mi.maximum());
   var Q = new PixelMath;
-  Q.expression = "pow(max(0, min(1, ($T - " + a + ") / " + (b - a) + ")), 0.5)"; Q.useSingleExpression = true; Q.createNewImage = false; Q.truncate = true;
+  // PixelMath no tiene pow(): con pow la expresión fallaba siempre y saturarAlFallo / nitidezCandidatos con máscara
+  // daban «Máscara de luminancia (reescalado) falló» (M31, 13 nov 2026). Raíz = sqrt.
+  Q.expression = "sqrt(max(0, min(1, ($T - " + a.toFixed(6) + ") / " + (b - a).toFixed(6) + ")))"; Q.useSingleExpression = true; Q.createNewImage = false; Q.truncate = true;
   if (!Q.executeOn(mw.mainView)) throw new Error("Máscara de luminancia (reescalado) falló");
   return mw;
 }

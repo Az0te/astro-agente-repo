@@ -274,10 +274,17 @@ function pprPrevia(id, o) {
 
 function pprAbrir(f) {
    if (!f || !File.exists(f)) throw new Error("No existe el fichero " + f);
-   var ws = ImageWindow.open(f), ids = [];
-   for (var i = 0; i < ws.length; ++i) { ws[i].show(); ids.push(ws[i].mainView.id); }
+   var ws = ImageWindow.open(f), ids = [], cerradas = [];
+   // Los masters de WBPP traen los mapas de rechazo (…_rejection_low/high, slope): no son imágenes para procesar y los
+   // modelos los arrastraban o gastaban llamadas en cerrarlos (M31, 13 nov 2026). Se abre sólo la principal.
+   for (var i = 0; i < ws.length; ++i) {
+      if (i > 0 && /rejection|slope|weight/i.test(ws[i].mainView.id)) { cerradas.push(ws[i].mainView.id); ws[i].forceClose(); continue; }
+      ws[i].show(); ids.push(ws[i].mainView.id);
+   }
    if (!ids.length) throw new Error("PixInsight no ha podido abrir " + f);
-   return { fichero: f, vistas: ids };
+   var r = { fichero: f, vistas: ids, vista: ids[0] };
+   if (cerradas.length) r.nota = "Cerrados los mapas de rechazo de WBPP que trae el fichero (" + cerradas.length + "): sólo queda la imagen principal.";
+   return r;
 }
 
 function pprGuardar(id, f, sobrescribir) {

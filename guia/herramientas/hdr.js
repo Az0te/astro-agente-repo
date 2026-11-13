@@ -28,7 +28,8 @@ function hdrOpen(x, id) {
     if (v && !v.isNull) return { win: v.window, view: v, tmp: false };
     throw new Error("No existe la vista ni el fichero " + s);
   }
-  var w = ImageWindow.open(s, id || "hdrIN", "verbosity 0", true)[0];
+  var ws = ImageWindow.open(s, id || "hdrIN", "verbosity 0", true), w = ws[0];
+  for (var i = 1; i < ws.length; ++i) try { ws[i].forceClose(); } catch (e) { }   // mapas de rechazo de WBPP
   return { win: w, view: w.mainView, tmp: true, path: s };
 }
 
