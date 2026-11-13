@@ -373,6 +373,7 @@ var LISTA = {
    crearMascara:         function (a) { return crearMascara(a.vista, a.opciones || {}); },
    aplicarConMascara:    function (a) { return aplicarConMascara(a.vista, a.opciones || {}); },
    comprimirNucleo:      function (a) { return comprimirNucleo(a.vista, a.opciones || {}); },
+   recuperarColorNucleo: function (a) { return recuperarColorNucleo(a.vista, a.opciones || {}); },
    medirMeseta:          function (a) { return medirMeseta(a.vista, a.opciones || {}); },
    saturarAlFallo:       function (a) { return saturarAlFallo(a.vista, a.opciones || {}); },
    colorCandidatos:      function (a) { return colorCandidatos(a.vista, a.opciones || {}); },

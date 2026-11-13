@@ -1144,6 +1144,23 @@
    }
   },
   {
+   "nombre": "recuperarColorNucleo",
+   "fichero": "nucleo.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 5 no lineal, núcleo blanco (saturación del núcleo < 0,04 en medirMeseta o nucleoCandidatos): devuelve al núcleo estirado el color medido en la lineal (proporciones R:G:B de la misma imagen antes de estirar), mezclado al 30–50 % con máscara de luminancia, en una copia. Mide la saturación y la meseta antes y después.",
+   "resumen": "Paso 5 no lineal: color del núcleo blanco desde la lineal (proporciones R:G:B), en una copia.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": { "type": "string", "description": "Id de la starless estirada (con el núcleo blanco)." },
+     "opciones": { "type": "object", "description": "{ lineal: fichero o id de la misma imagen antes de estirar (la starless lineal del checkpoint; obligatorio), fuerza: 0.4 (0,3–0,5), desde: 0.35, ancho: 0.30, nuevaVista }" }
+    },
+    "required": ["vista"]
+   }
+  },
+  {
    "nombre": "comprimirNucleo",
    "fichero": "nucleo.js",
    "nivel": "copias",
