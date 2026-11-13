@@ -15,7 +15,7 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 
 | Paso | Herramientas |
 |---|---|
-| L1 Análisis | `analizarMaster`, `estadisticas`, `previa` |
+| L1 Análisis | `analizarMaster`, `cabecera`, `estadisticas`, `previa`; con internet `documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` |
 | L8 Astrometría | `resolverAstrometria` (resolvedor de SASpro con su índice Gaia; ASTAP o astrometry.net si están configurados) |
 | L9 Gradiente | **`gradienteCandidatos`** (ABE polinomio 1 y 2, ABE con RBF, GraXpert IA) → `aplicarCandidato` |
 | L12 Color | `neutralizarFondo` → `calibrarColor` (White Balance con las estrellas); devuelven el cielo por canal antes y después |
@@ -29,7 +29,7 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 | NL9 Recombinación | `recombinarEstrellas` (starless + vista de estrellas, screen) |
 | NL10 Exportación | `exportarFinal` |
 
-**Siempre disponibles:** `ping`, `vistas`, `imagen`, `estadisticas`, `previa` (también de un candidato y de un recorte), `registro`, `abrirImagen`, `guardarImagen`, `duplicarVista`, `activarVista`, `deshacer`, `rehacer`, `procesoSAS`, `ayudaProceso`, `estado` (trabajos largos).
+**Siempre disponibles:** `ping`, `vistas`, `imagen`, `cabecera`, `estadisticas`, `previa` (también de un candidato y de un recorte), `registro`, `abrirImagen`, `guardarImagen`, `duplicarVista`, `activarVista`, `cerrarVista`, `deshacer`, `rehacer`, `procesoSAS`, `ayudaProceso`, `estado` (trabajos largos).
 
 **Guardar.** Las versiones van en `.xisf` (32 bits en coma flotante) con nombre nuevo, en una carpeta nueva junto al master. Nunca sobre el master.
 

@@ -856,6 +856,105 @@
      "estrellas"
     ]
    }
+  },
+  {
+   "nombre": "documentarObjeto",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 90,
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "internet": true,
+   "descripcion": "Paso 1 lineal, con internet: identifica el objeto de la vista por OBJECT (aunque lleve texto de más) o por la astrometría, y devuelve su tipo, tamaño y magnitud (SIMBAD), la señal esperada según el tipo (rayas y banda ancha o estrecha), un resumen de Wikipedia y las estrellas brillantes del campo (mag < 7; avisa con mag < 4 por halos y reflejos). Sólo con la casilla Internet marcada.",
+   "resumen": "Paso 1: ficha del objeto por OBJECT o astrometría (SIMBAD, Wikipedia, señal esperada, estrellas brillantes). Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "objeto": {
+      "type": "string",
+      "description": "Nombre si OBJECT no sirve, p. ej. «M 31»."
+     },
+     "idioma": {
+      "type": "string",
+      "description": "es o en (Wikipedia; por defecto es)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "simbad",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 45,
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "internet": true,
+   "descripcion": "Tipo (SIMBAD), coordenadas, tamaño en minutos de arco, magnitud V y señal esperada de un objeto por su nombre. Con internet.",
+   "resumen": "SIMBAD: tipo, coordenadas, tamaño, magnitud de un objeto. Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "objeto": {
+      "type": "string",
+      "description": "Nombre, p. ej. «IC 1396»."
+     }
+    },
+    "required": [
+     "objeto"
+    ]
+   }
+  },
+  {
+   "nombre": "wikipedia",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 45,
+   "paso": "lineal/01-analisis-del-objeto.md",
+   "internet": true,
+   "descripcion": "Resumen del artículo de Wikipedia (español o inglés; si no hay, inglés) de un objeto, cámara, telescopio o filtro. Con internet.",
+   "resumen": "Resumen de Wikipedia (es/en). Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "texto": {
+      "type": "string"
+     },
+     "idioma": {
+      "type": "string",
+      "description": "es o en."
+     }
+    },
+    "required": [
+     "texto"
+    ]
+   }
+  },
+  {
+   "nombre": "leerWeb",
+   "fichero": "web.py",
+   "nivel": "lectura",
+   "timeout_s": 45,
+   "internet": true,
+   "descripcion": "Texto limpio (sin etiquetas, scripts ni estilos) de una página https, recortado a 'maximo' caracteres (por defecto 8000). Para documentación de equipos, filtros o técnicas. Con internet.",
+   "resumen": "Texto limpio de una página https. Con internet.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string",
+      "description": "Dirección https://."
+     },
+     "maximo": {
+      "type": "number",
+      "description": "Caracteres máximos (500–20000)."
+     }
+    },
+    "required": [
+     "url"
+    ]
+   }
   }
  ]
 }

@@ -26,9 +26,11 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 
 | Nivel | Herramientas |
 |---|---|
-| lectura | `ping`, `vistas`, `imagen`, `estadisticas` (0–1, rect, bordes), `previa` (JPG con autoestirado STF si es lineal, o de un candidato), `analizarMaster`, `registro`, `ayudaProceso` |
+| lectura | `ping`, `vistas`, `imagen`, `cabecera`, `estadisticas` (0–1, rect, bordes), `previa` (JPG con autoestirado STF si es lineal, o de un candidato), `analizarMaster`, `registro`, `ayudaProceso` |
 | disco | `abrirImagen`, `guardarImagen` (no sobrescribe), `exportarFinal` |
-| vista | `deshacer`, `rehacer`, `duplicarVista`, `activarVista`, `procesoSAS` (lista blanca de procesos de SASpro con su preset) |
+| vista | `deshacer`, `rehacer`, `duplicarVista`, `activarVista`, `cerrarVista`, `procesoSAS` (lista blanca de procesos de SASpro con su preset) |
+
+| internet | `documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` (como en Siril; se niegan con la casilla Internet del chat desmarcada) |
 
 ### Por paso de la guía
 

@@ -1590,3 +1590,9 @@ LISTA = {
     "resolverAstrometria": resolverAstrometria,
     "separarEstrellas": separarEstrellas,
 }
+
+# Consultas a internet (SIMBAD, Wikipedia, una página): en web.py, como en Siril. Se niegan si la casilla Internet del
+# chat está desmarcada (~/.setiastropilot/sin-internet).
+import web as _web  # noqa: E402  (web importa este módulo: va al final)
+
+LISTA.update(_web.LISTA_WEB)
