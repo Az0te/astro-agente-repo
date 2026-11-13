@@ -720,7 +720,7 @@
    "nivel": "vista",
    "timeout_s": 900,
    "paso": "lineal/08-plate-solve.md",
-   "descripcion": "L8 astrometría: plate solve de SASpro (ASTAP, astrometry.net o los dos, según su configuración). Con ra/dec da semilla manual.",
+   "descripcion": "L8 astrometría: plate solve de SASpro. Por defecto con la semilla de la cabecera; ciega: true sin semilla, con el índice Gaia de SASpro (resuelve M31 en 5 s dando la escala). Necesita estrellas: no lo uses en una starless. Con ra/dec da semilla manual.",
    "params": {
     "type": "object",
     "properties": {
@@ -736,7 +736,7 @@
      },
      "escala": {
       "type": "number",
-      "description": "\"/px"
+      "description": "Escala en \"/px (ayuda mucho a la ciega; sale de analizarMaster)."
      },
      "solucionador": {
       "type": "string",
@@ -746,6 +746,10 @@
        "astap_only",
        "astrometry_only"
       ]
+     },
+     "ciega": {
+      "type": "boolean",
+      "description": "Sin semilla de la cabecera (por defecto false)."
      }
     }
    }

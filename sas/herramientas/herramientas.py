@@ -1309,9 +1309,12 @@ def calibrarColor(ctx, vista=None, modo="star", umbral=50.0):
     return _con_color(ctx, vista, "white_balance", {"mode": modo, "threshold": float(umbral)})
 
 
-def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucionador="both"):
-    """L8: plate solve de SASpro (ASTAP/astrometry.net según su configuración)."""
+def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucionador="both", ciega=False):
+    """L8: plate solve de SASpro. solucionador: both (Gaia de SASpro y luego ASTAP/astrometry.net si están
+    configurados), gaia_only, astap_only, astrometry_only. ciega: sin semilla de la cabecera (índice Gaia de SASpro)."""
     preset = {"solver": solucionador}
+    if ciega:
+        preset["seed_mode"] = "none"
     if ra is not None and dec is not None:
         preset.update(seed_mode="manual", ra=str(ra), dec=str(dec))
     if escala:
