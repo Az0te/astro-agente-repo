@@ -2448,7 +2448,10 @@ function plPrueba(salida, cli) {
 //   PixInsight.exe -n --automation-mode --no-focus-stealing
 //      -r=<Lite>,--pasada,<ollama|claude|codex>,<modelo>,<carpeta>,<peticion.txt> --force-exit
 var PL_MAX_SIGUE = 6;
-function plPasada(proveedor, modelo, carpeta, ficheroPeticion) {
+function plPasada(proveedor, modelo, carpeta, ficheroPeticion, maxSigue) {
+   // maxSigue: «sigue» automáticos como mucho (por defecto PL_MAX_SIGUE; 0 en una comparación por etapas, donde la
+   // etapa acaba cuando el modelo para y cada etapa sigue desde la mejor salida de los dos modelos).
+   var topeSigue = maxSigue !== undefined && maxSigue !== null && isFinite(parseInt(maxSigue, 10)) ? parseInt(maxSigue, 10) : PL_MAX_SIGUE;
    carpeta = plCarpeta(String(carpeta).replace(/\\/g, "/").replace(/[\/]+$/, ""));
    var peticion = String(File.readTextFile(ficheroPeticion)).replace(/^﻿/, "").trim();
    var aj = new PLAjustes();
@@ -2487,12 +2490,12 @@ function plPasada(proveedor, modelo, carpeta, ficheroPeticion) {
          out.temperatura = aj.temperatura;
          out.modeloEfectivo = aj.modelo();
          var texto = peticion;
-         for (var v = 0; v <= PL_MAX_SIGUE; ++v) {
+         for (var v = 0; v <= topeSigue; ++v) {
             d.enviarTexto(texto);
             guardar(d);
             if (out.exportado) break;
             texto = "sigue hasta el final";
-            if (v < PL_MAX_SIGUE) ++out.sigue;
+            if (v < topeSigue) ++out.sigue;
          }
          out.informe = d.crearInforme();
       } catch (e) { out.error = String(e && e.message ? e.message : e); }
@@ -2516,7 +2519,7 @@ function plMain() {
       return;
    }
    if (args.length >= 5 && String(args[0]) == "--pasada") {
-      plPasada(String(args[1]), String(args[2]), String(args[3]), String(args[4]));
+      plPasada(String(args[1]), String(args[2]), String(args[3]), String(args[4]), args.length > 5 ? String(args[5]) : null);
       return;
    }
    if (args.length && String(args[0]) == "--prueba") {
