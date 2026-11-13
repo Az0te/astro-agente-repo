@@ -48,6 +48,21 @@ def _base(doc):
     return doc
 
 
+def _activo(ctx):
+    """Documento activo. En SASpro 1.24.2 ctx.base_document() falla (llama a active_document con un
+    argumento que no acepta), así que cada intento va por separado y, si no hay ventana activa, se usa
+    la única vista abierta."""
+    for f in ("base_document", "active_document"):
+        try:
+            d = getattr(ctx, f)()
+        except Exception:
+            d = None
+        if d is not None:
+            return d
+    docs = _docs(ctx)
+    return docs[0] if len(docs) == 1 else None
+
+
 def _doc(ctx, vista=None):
     if vista:
         d = ctx.get_document(str(vista))
@@ -57,8 +72,10 @@ def _doc(ctx, vista=None):
             nombres = ", ".join(_nombre(x) for x in _docs(ctx)) or "ninguna"
             raise RuntimeError(f"No hay ninguna vista '{vista}'. Abiertas: {nombres}.")
     else:
-        d = ctx.base_document() or ctx.active_document()
+        d = _activo(ctx)
         if d is None:
+            if _docs(ctx):
+                raise RuntimeError("Hay varias vistas abiertas y ninguna activa: indica 'vista'.")
             raise RuntimeError("No hay ninguna imagen abierta en SASpro. Usa abrirImagen.")
     d = _base(d)
     if getattr(d, "image", None) is None:
@@ -238,22 +255,21 @@ def ping(ctx):
         from setiastro.saspro import __version__ as v_sas
     except Exception:
         v_sas = None
-    act = None
-    try:
-        d = ctx.base_document() or ctx.active_document()
-        act = _nombre(_base(d)) if d is not None else None
-    except Exception:
-        pass
+    if v_sas is None:
+        try:
+            from importlib.metadata import version
+            v_sas = version("setiastrosuitepro")
+        except Exception:
+            pass
+    d = _activo(ctx)
+    act = _nombre(_base(d)) if d is not None else None
     return {"herramientas": VERSION, "saspro": v_sas, "vistas_abiertas": len(_docs(ctx)), "vista_activa": act}
 
 
 def vistas(ctx):
     """Vistas abiertas en SASpro: nombre, uid, tamaño, canales, fichero, pasos de deshacer, si está activa."""
-    activa = None
-    try:
-        activa = _base(ctx.base_document() or ctx.active_document())
-    except Exception:
-        pass
+    d = _activo(ctx)
+    activa = _base(d) if d is not None else None
     r = []
     for d in _docs(ctx):
         i = _info(d)
