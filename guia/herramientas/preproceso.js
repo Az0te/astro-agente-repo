@@ -570,14 +570,17 @@ function ppPlanSesiones(o) {
     });
   }
   var juegos = ppJuegosFlats(o.flats ? ppSub(o.flats, "FLAT") : []);
+  var al = o.aliasFiltros || {}, alias = function (f) { return (f !== undefined && al[f] !== undefined) ? al[f] : f; };
+  juegos.forEach(function (x) { x.filtro = alias(x.filtro); });
   defs.forEach(function (s) {
     var h0 = ppHeader(s.lights[0]), hl = ppHeader(s.lights[s.lights.length - 1]);
     s.noche = ppNoche(h0) || "";
-    s.filtro = h0.filtro || "";
+    s.filtro = alias(h0.filtro) || "";
     s.sinFiltro = !h0.filtro;
     var j = null;
     if (s.flats) {
       var js = ppJuegosFlats(s.flats);
+      js.forEach(function (x) { x.filtro = alias(x.filtro); });
       if (js.length) { j = js[0]; if (js.length > 1) j = { ficheros: [].concat.apply([], js.map(function (x) { return x.ficheros; })), master: false, etiqueta: js.map(function (x) { return x.etiqueta; }).join(" + "), filtro: js[0].filtro }; }
     } else if (juegos.length) {
       // el último juego de la misma noche o anterior; si no hay, el primero posterior. Mismo filtro si el flat lo dice.
@@ -630,6 +633,11 @@ function ppMontarEntrada(plan, salida, o) {
     var h = null; try { h = ppHeader(src); } catch (e) { }
     if (h && !h.expEnCabecera && isFinite(h.exp)) dir += "/EXPOSURE_" + h.exp;
     var dst = base + "/" + dir + "/" + ppNombreSeguro(src, esMaster);
+    // aliasFiltros: FILTER mal puesto en la captura (M31, 13 nov 2026: una noche con el Triband RGB guardada como
+    // «Antlia Triband 20-30nm»). WBPP agrupa por la cabecera, así que ese fichero no se enlaza: se reescribe una copia
+    // XISF con el FILTER bueno (el original no se toca).
+    var alias = o.aliasFiltros && h && h.filtro !== undefined && o.aliasFiltros[h.filtro] !== undefined ? o.aliasFiltros[h.filtro] : null;
+    if (alias !== null) { dst = dst.replace(/\.(fits?|fts|xisf)$/i, "") + ".xisf"; pares.push([src.replace(/\\/g, "/"), dst, alias]); ficheros.push(dst); return dst; }
     pares.push([src.replace(/\\/g, "/"), dst]);
     ficheros.push(dst);
     return dst;
@@ -660,9 +668,17 @@ function ppMontarEntrada(plan, salida, o) {
   if (File.directoryExists(base)) ppBorrarArbol(base);
   var dirs = ppUnique(pares, function (p) { return ppDir(p[1]); });
   dirs.forEach(function (d) { File.createDirectory(d, true); });
-  var enlazados = 0, copiados = 0, lineas = [];
+  var enlazados = 0, copiados = 0, reescritos = 0, lineas = [];
   pares.forEach(function (p) {
-    if (unidad(p[0]) != unidad(p[1])) { File.copyFile(p[1], p[0]); ++copiados; }
+    if (p.length > 2) {   // alias de filtro: copia XISF con el FILTER corregido
+      var ws = ImageWindow.open(p[0], "ppALIAS", "verbosity 0", true);
+      if (!ws.length || ws[0].isNull) throw new Error("No se pudo abrir " + p[0] + " para corregir su FILTER");
+      for (var q = 1; q < ws.length; ++q) ws[q].forceClose();
+      var w = ws[0];
+      w.keywords = w.keywords.map(function (k) { return k.name == "FILTER" ? new FITSKeyword("FILTER", "'" + p[2] + "'", k.comment) : k; });
+      try { w.mainView.setPropertyValue("Instrument:Filter:Name", p[2]); } catch (e) { }
+      w.saveAs(p[1], false, false, false, false); w.forceClose(); ++reescritos;
+    } else if (unidad(p[0]) != unidad(p[1])) { File.copyFile(p[1], p[0]); ++copiados; }
     else lineas.push(p);
   });
   if (lineas.length) {
@@ -677,7 +693,7 @@ function ppMontarEntrada(plan, salida, o) {
     if (enlazados < lineas.length)
       throw new Error("Sólo se crearon " + enlazados + " de " + lineas.length + " enlaces en " + base + " (¿disco no NTFS?). Probar con copiar: true.");
   }
-  return { ficheros: ficheros, referencia: referencia, enlazados: enlazados, copiados: copiados };
+  return { ficheros: ficheros, referencia: referencia, enlazados: enlazados, copiados: copiados, filtro_corregido: reescritos };
 }
 
 // Otra instancia de PixInsight sin ventanas que se cierra sola. ExternalProcess.startDetached con lista de argumentos

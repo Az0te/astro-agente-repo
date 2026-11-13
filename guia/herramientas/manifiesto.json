@@ -263,7 +263,7 @@
     "properties": {
      "wbpp": {
       "type": "object",
-      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), planSolo, copiar (otro disco), forzar, parametros: { nombre: valor de la automatización de WBPP } }"
+      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), aliasFiltros: { \"FILTER mal puesto\": \"filtro real\" } (reescribe esos ficheros como XISF con el FILTER bueno), planSolo, copiar (otro disco), forzar, parametros: { nombre: valor de la automatización de WBPP } }"
      }
     },
     "required": [
@@ -1667,7 +1667,7 @@
    "fichero": null,
    "nivel": "disco",
    "timeout_s": 30,
-   "descripcion": "Cierra una vista. Si tiene cambios sin guardar no la cierra salvo descartar: true.",
+   "descripcion": "Cierra una o VARIAS vistas en una sola llamada (vista: id o lista de ids, como los candidatos no elegidos de una comparación). Si tienen cambios sin guardar no las cierra salvo descartar: true.",
    "params": {
     "type": "object",
     "properties": {

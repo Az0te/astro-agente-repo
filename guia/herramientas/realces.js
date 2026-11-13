@@ -466,8 +466,18 @@ function contrasteCandidatos(viewId, o) {
       vista = w.mainView.id;
     } else if (o.cerrar !== false) w.forceClose();
   });
+  // El contraste local sube el cielo (LHE: de 0,070 a 0,078 en M31, 13 nov 2026; la final de Opus quedó 0,008 por encima
+  // del objetivo). Se devuelve el cielo a su nivel de entrada con un ajuste lineal que deja fijo el blanco:
+  // (x − c1)·(1 − c0)/(1 − c1) + c0. mantenerCielo: false para no hacerlo.
+  var cieloRestaurado = null;
+  if (vista && o.mantenerCielo !== false && best && Math.abs(best.medidas.cielo - base.cielo) > 0.002) {
+    var c1 = best.medidas.cielo, c0 = base.cielo, Pc = new PixelMath;
+    Pc.expression = "max(0, ($T - " + c1 + ")*" + ((1 - c0) / (1 - c1)).toFixed(6) + " + " + c0 + ")";
+    Pc.useSingleExpression = true; Pc.createNewImage = false; Pc.truncate = true; Pc.truncateLower = 0; Pc.truncateUpper = 1;
+    if (Pc.executeOn(View.viewById(vista))) cieloRestaurado = { antes: c1, despues: rzMedidasContraste(View.viewById(vista)).cielo, objetivo: c0 };
+  }
   return {
-    vista: vista, original: viewId, entrada: base,
+    vista: vista, original: viewId, entrada: base, cielo_restaurado: cieloRestaurado || undefined,
     comparados: cands.map(function (c) {
       if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
       return { metodo: c.etiqueta, sel: c.sel, contraste_ganado_pct: +(100 * (c.contraste_x - 1)).toFixed(1), ruido_rel: c.ruido_x,
