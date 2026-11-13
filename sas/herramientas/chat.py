@@ -695,11 +695,16 @@ class Ventana(QMainWindow):
         self.c_final = QCheckBox()
         self.c_final.setChecked(bool(self.ajustes.get("hasta_final")))
         self.c_final.toggled.connect(lambda v: self.guardar(hasta_final=bool(v)))
+        # Dos filas: en una sola, con los textos en español, la barra no cabía en 760 px y se cortaba por la derecha.
         for w in (self.l_modelo, self.modelo, self.internet, self.c_elegir, self.c_final):
             arriba.addWidget(w)
         arriba.addStretch(1)
-        for w in (self.l_idioma, self.idioma, self.c_abrir, self.b_informe, self.b_limpiar):
-            arriba.addWidget(w)
+        arriba2 = QHBoxLayout()
+        for w in (self.l_idioma, self.idioma, self.c_abrir):
+            arriba2.addWidget(w)
+        arriba2.addStretch(1)
+        for w in (self.b_informe, self.b_limpiar):
+            arriba2.addWidget(w)
 
         self.chat = QTextBrowser()
         self.chat.setOpenLinks(False)
@@ -738,6 +743,7 @@ class Ventana(QMainWindow):
         pie.addWidget(self.l_total)
         caja = QVBoxLayout()
         caja.addLayout(arriba)
+        caja.addLayout(arriba2)
         caja.addWidget(self.chat, 1)
         caja.addLayout(abajo)
         caja.addLayout(pie)
