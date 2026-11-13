@@ -565,6 +565,54 @@
    }
   },
   {
+   "nombre": "paletasCandidatos",
+   "fichero": "multicapa.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/02-lrgb-paleta.md",
+   "descripcion": "NL2 paletas de banda estrecha con capas YA ESTIRADAS y alineadas (vistas mono: ha, oiii y opcional sii; de desmezclarDualBand y estirarCandidatos de cada una): HOO, HOO suave, HOO con OIII realzado, HOO dinámica, SHO y Foraxx. Mide dominante del cielo, verde residual, saturación y separación de tonos, y recomienda la que más separa los tonos con el cielo neutro (una que sólo falla por verde vale, con quitarVerde forzar: true después). La paleta va en 'vista' (RGB del mismo tamaño) o en una vista nueva «paleta». La vista NO cambia (aplicarCandidato). Si las capas tienen estrellas, la paleta también: no recombines estrellas después.",
+   "resumen": "NL2: compara paletas HOO, SHO y Foraxx; no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ha": {
+      "type": "string",
+      "description": "Vista de la capa Hα estirada."
+     },
+     "oiii": {
+      "type": "string",
+      "description": "Vista de la capa OIII estirada."
+     },
+     "sii": {
+      "type": "string",
+      "description": "Vista de la capa SII estirada (opcional: SHO y Foraxx)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Vista RGB donde poner la paleta (si no, una nueva «paleta»)."
+     },
+     "paletas": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "HOO",
+        "HOO_suave",
+        "HOO_realzado",
+        "HOO_dinamica",
+        "SHO",
+        "Foraxx"
+       ]
+      }
+     }
+    },
+    "required": [
+     "ha",
+     "oiii"
+    ]
+   }
+  },
+  {
    "nombre": "estirarCandidatos",
    "fichero": "herramientas.py",
    "nivel": "lectura",
@@ -821,6 +869,10 @@
        "sas"
       ],
       "description": "propio (por defecto) o el Remove Green de SASpro."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Aplicar aunque el cielo no tenga exceso de verde (p. ej. tras una paleta SHO o Foraxx)."
      }
     }
    }
@@ -988,7 +1040,7 @@
    "nivel": "vista",
    "timeout_s": 300,
    "paso": "no-lineal/09-recombinacion.md",
-   "descripcion": "NL9: une la starless (vista) con la vista de estrellas por screen (o suma), con deshacer en la starless. Las dos deben estar estiradas: si las estrellas siguen lineales, se niega y pide estirarEstrellas. Informa del aporte de las estrellas, el fondo y los recortes.",
+   "descripcion": "NL9: une la starless (vista) con la vista de estrellas por screen (o suma), con deshacer en la starless. Las dos deben estar estiradas: si las estrellas siguen lineales, se niega y pide estirarEstrellas. Se niega también si la 'starless' ya tiene estrellas (> 0,5 % de píxeles de estrella), p. ej. una paleta hecha con capas con estrellas, salvo forzar: true. Informa del aporte de las estrellas, el fondo y los recortes.",
    "resumen": "NL9: starless + estrellas por screen, con deshacer.",
    "params": {
     "type": "object",
@@ -1011,6 +1063,10 @@
      "factor": {
       "type": "number",
       "description": "Peso de las estrellas, 0–2 (1 tal cual; 0,5–0,6 para estrellas discretas)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Recombinar aunque la vista ya tenga estrellas."
      }
     },
     "required": [

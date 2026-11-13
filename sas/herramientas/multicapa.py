@@ -458,5 +458,104 @@ def combinarRGB(ctx, r, g, b, nombre="RGB"):
             "nota": "RGB lineal sin calibrar. Siguiente: gradiente, neutralizarFondo y calibrarColor."}
 
 
+# --- NL2: paletas de banda estrecha (criterios de Siril) ---------------------------------------------------
+
+def _igualar(o, ha, cielo_px=None):
+    """Capa débil (OIII, SII) llevada al mismo cielo y al mismo recorrido cielo→p99 que Hα."""
+    m = cielo_px if cielo_px is not None and cielo_px.any() else np.ones(o.shape, bool)
+    mo, mh = float(np.median(o[m])), float(np.median(ha[m]))
+    so = float(np.percentile(o[::4, ::4], 99)) - mo
+    sh = float(np.percentile(ha[::4, ::4], 99)) - mh
+    return np.clip(mh + (o - mo) * (sh / max(so, 1e-6)), 0, 1)
+
+
+def _tonos(p, m):
+    """Separación de tonos: desviación circular del tono (grados), ponderada por saturación, en la máscara m."""
+    R, G, B = p[0][m], p[1][m], p[2][m]
+    h = np.arctan2(np.sqrt(3) * (G - B), 2 * R - G - B)
+    w = (np.maximum(np.maximum(R, G), B) - np.minimum(np.minimum(R, G), B)) + 1e-9
+    rb = abs(np.sum(w * np.exp(1j * h))) / np.sum(w)
+    return float(np.degrees(np.sqrt(-2 * np.log(max(rb, 1e-9)))))
+
+
+def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominante_max=5.0, verde_max=5.0):
+    """NL2: compone paletas de banda estrecha con capas YA ESTIRADAS (vistas mono alineadas: ha, oiii y opcional sii)
+    y las compara. La paleta se pone en 'vista' (RGB del mismo tamaño) o, si no se da o es mono, en una vista RGB nueva
+    «paleta». La vista no cambia hasta aplicarCandidato(id)."""
+    dh = H._doc(ctx, ha)
+    Ha = H._p(dh.image)
+    Ha = Ha[0] if Ha.shape[0] == 1 else Ha.mean(axis=0)
+    forma = Ha.shape
+    if M.lineal(Ha[None, ::8, ::8]):
+        raise RuntimeError("La capa Hα parece lineal: las paletas se componen con capas ya estiradas (estirarCandidatos "
+                           "de cada capa antes).")
+    O = _capa(ctx, oiii, forma)
+    S = _capa(ctx, sii, forma) if sii else None
+    d = H._doc(ctx, vista) if vista else None
+    if d is None or H._p(d.image).shape[0] != 3 or H._p(d.image).shape[1:] != forma:
+        m = dict(H._meta(dh))
+        m.pop("file_path", None)
+        m.update(display_name="paleta", mono=False)
+        base = np.ascontiguousarray(np.repeat(Ha[:, :, None], 3, axis=2))
+        d = H._base(ctx.open_new_document(base, metadata=m, name="paleta"))
+    p3 = np.stack([Ha, Ha, Ha])
+    z = M.zonas_objeto_cielo(p3)
+    cpx = z["cielo_px"]
+    Oa = _igualar(O, Ha, cpx)
+    t = np.clip((Oa - float(np.median(Oa[cpx])) if cpx.any() else Oa) * 4, 0, 1)
+    todas = {
+        "HOO": ("HOO", lambda: (Ha, O, O)),
+        "HOO_suave": ("HOO suave (G = 0,6·Hα + 0,4·OIII)", lambda: (Ha, 0.6 * Ha + 0.4 * O, O)),
+        "HOO_realzado": ("HOO con OIII realzado", lambda: (Ha, Oa, Oa)),
+        "HOO_dinamica": ("HOO dinámica (G mezcla Hα y OIII según OIII)", lambda: (Ha, t * Oa + (1 - t) * Ha, Oa)),
+    }
+    if S is not None:
+        Sa = _igualar(S, Ha, cpx)
+        todas["SHO"] = ("SHO", lambda: (Sa, Ha, Oa))
+        todas["Foraxx"] = ("Foraxx (R = SII+Hα, G = Hα·OIII, B = OIII)",
+                           lambda: (np.clip(0.5 * (Sa + Ha), 0, 1), np.clip(np.sqrt(np.maximum(Ha * Oa, 0)), 0, 1), Oa))
+    elegir = [k for k in (paletas or list(todas)) if k in todas]
+    cel = z["medidas"]["_celdas"]
+    mo = z["obj_px"] if z["obj_px"].any() else np.ones(forma, bool)
+
+    def medir(q):
+        rgb = M.cielo_por_canal(q, cel)
+        dom = 100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6)
+        Lo = float(M.lum(q)[mo].mean())
+        verde = 100.0 * float(np.maximum(q[1] - np.maximum(q[0], q[2]), 0)[mo].mean()) / max(Lo, 1e-6)
+        return {"dominante_cielo_pct": _r(dom, 1), "verde_residual_pct": _r(verde, 1),
+                "sat_objeto": _r(float(M.saturacion(q)[mo].mean()), 3), "separacion_tonos_grados": _r(_tonos(q, mo), 1),
+                **M.recortes(q)}
+
+    lista = [(todas[k][0], f"paleta_{k}", {}, (lambda q, fn=todas[k][1]: np.clip(np.stack(fn()).astype(np.float32), 0, 1)))
+             for k in elegir]
+    r = H._comparar(ctx, d, "paleta", lista, medir)
+    for x in r["candidatos"]:
+        m, fal = x["metricas"], []
+        if m["dominante_cielo_pct"] >= dominante_max:
+            fal.append(f"cielo teñido: dominante {m['dominante_cielo_pct']} % ≥ {dominante_max} %")
+        if m["verde_residual_pct"] >= verde_max:
+            fal.append(f"verde residual {m['verde_residual_pct']} % ≥ {verde_max} % (quitarVerde después)")
+        x["no_cumple"] = fal
+    # El verde residual se arregla con quitarVerde: una paleta que sólo falla por verde vale, con ese paso después
+    # (IC 1396, 14 nov 2026: sin esto ganaba una HOO oliva de 7,7° frente a Foraxx con 47,8° y un 7 % de verde).
+    def solo_verde(x):
+        return x["no_cumple"] and all(f.startswith("verde residual") for f in x["no_cumple"])
+    ok = [x for x in r["candidatos"] if not x["no_cumple"] or solo_verde(x)]
+    if r["candidatos"]:
+        mejor = max(ok or r["candidatos"], key=lambda x: x["metricas"]["separacion_tonos_grados"] or 0)
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: la que más separa los tonos ({mejor['metricas']['separacion_tonos_grados']}°) "
+                       "con el cielo neutro" + ("" if ok else " (NINGUNA cumple: ver no_cumple)")
+                       + (" — después quitarVerde (forzar: true) por el verde residual" if solo_verde(mejor) else "")
+                       + ". Una paleta es una convención, no el color real: la elección es estética; mírala en la galería.")
+    r["vista_paleta"] = H._nombre(d)
+    r["leyenda"] = ("separacion_tonos_grados: variedad de tonos en el objeto (más = más zonas distinguibles). "
+                    "verde_residual_pct: verde por encima de rojo y azul en el objeto. dominante_cielo_pct: el cielo debe "
+                    "quedar neutro. La vista NO ha cambiado: aplicarCandidato(id).")
+    return H._galeria(r, H._p(d.image))
+
+
 LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand,
-                   "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB}
+                   "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB,
+                   "paletasCandidatos": paletasCandidatos}

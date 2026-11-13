@@ -1316,7 +1316,7 @@ def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.
     return _galeria(r, p)
 
 
-def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0):
+def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0, forzar=False):
     """NL9: une la starless (vista) con la vista de estrellas (screen o suma), con deshacer en la starless.
     Ambas deben estar estiradas; si la de estrellas sigue lineal, estírala antes con estirarEstrellas."""
     d = _doc(ctx, vista)
@@ -1333,6 +1333,12 @@ def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0)
     k = float(factor)
     if not 0 < k <= 2:
         raise ValueError("factor entre 0 y 2 (1 = estrellas tal cual; 0,5–0,6 para estrellas discretas).")
+    pct = _pct_estrellas(d)
+    if pct > 0.5 and not forzar:
+        # IC 1396 (14 nov 2026): la paleta salía de capas con estrellas y se recombinaron otra vez: estrellas dobles.
+        return {"aplicado": False, "estrellas_en_vista_pct": _r(pct, 2),
+                "aviso": f"'{_nombre(d)}' ya tiene estrellas ({pct:.1f} % de píxeles de estrella; una starless da < 0,5 %): "
+                         "recombinar las duplicaría. forzar: true si de verdad quieres sumarlas."}
     Lb = M.lum(b)
     # ¿Estrellas lineales? p99,5 de la capa (en una capa de estrellas el ~90 % es 0 y la máscara por MAD no sirve).
     p995 = float(np.percentile(Lb.ravel()[::7], 99.5))
