@@ -860,39 +860,78 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
     return _galeria(r, p)
 
 
-def ruidoCandidatos(ctx, vista=None, fuerzas=(0.3, 0.5, 0.7), usar_graxpert=True):
+def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False):
     """Pasos L14/NL6: Cosmic Clarity denoise a varias fuerzas y GraXpert denoise frente a no hacer nada: ruido del
     cielo y detalle que se pierde (< 10 %). La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
+    lineal = M.lineal(p[:, ::8, ::8])
+    if fuerzas is None:                     # en no lineal, más suave (como en Siril)
+        fuerzas = (0.3, 0.5, 0.7) if lineal else (0.15, 0.25, 0.35)
     c0 = M.cielo(p)
-    det0 = M.energia_detalle(M.lum(p))
+    z = M.zonas_objeto_cielo(p)
+    L0 = M.lum(p)
+    # Detalle (como en Siril, 10 nov 2026): energía de 2–8 px en la parte brillante del objeto. La medida de 1–4 px en
+    # toda la imagen contaba el ruido como detalle y cualquier denoise «perdía» un 30–70 % (M31 en SASpro, 13 nov).
+    zb = M.zona_brillante(L0, z)
+    cpx = z["cielo_px"]
+    e0 = M.energia_brillante(L0, zb, cpx) if zb is not None else None
+    if e0 is not None and e0 <= 0:
+        e0 = None
     lista = [(f"Cosmic Clarity denoise {f}", "cosmic_clarity",
-              {"mode": "denoise", "denoise_luma": float(f), "denoise_color": float(f), "create_new_view": False})
-             for f in fuerzas or []]
+              {"mode": "denoise", "denoise_luma": float(f), "denoise_color": float(f), "create_new_view": False,
+               "gpu": True}) for f in fuerzas or []]
     if usar_graxpert:
         lista.append(("GraXpert denoise 0,5", "graxpert", {"op": "denoise", "strength": 0.5}))
 
     def medir(q):
         c = M.cielo(q)
-        det = M.energia_detalle(M.lum(q))
+        L = M.lum(q)
+        e1 = M.energia_brillante(L, zb, cpx) if zb is not None else None
+        perd = max(0.0, 100.0 * (1.0 - e1 / e0)) if e0 and e1 is not None else None
         return {"ruido_rel": c["ruido_rel"], "ruido_vs_antes": _r(c["ruido"] / max(c0["ruido"], 1e-9), 3),
-                "detalle_perdido_pct": _r(100.0 * (1 - det / max(det0, 1e-12)), 1), "cielo": c["cielo"]}
+                "detalle_perdido_pct": _r(perd, 1), "cielo": c["cielo"], **M.recortes(q)}
 
     r = _comparar(ctx, d, "ruido", lista, medir)
-    buenos = [x for x in r["candidatos"] if (x["metricas"]["detalle_perdido_pct"] or 100) < 10]
-    if buenos:
-        mejor = min(buenos, key=lambda x: x["metricas"]["ruido_vs_antes"] or 9)
+    # Recomendación (como en Siril): el que más ruido quita sin perder más del 2 % de detalle ni recortar; si ninguno,
+    # el que menos detalle pierde entre los que bajan el ruido ≥ 20 % y pierden < 10 %. En no lineal no bajar de la mitad
+    # del ruido (fondo plástico); en lineal, del 25 %.
+    minimo = 0.25 if lineal else 0.5
+    rec0 = M.recortes(p)
+    for x in r["candidatos"]:
+        m = x["metricas"]
+        x["no_cumple"] = []
+        if (m["ruido_vs_antes"] or 1) < minimo:
+            x["no_cumple"].append(f"fondo muerto: deja el {round(100 * m['ruido_vs_antes'])} % del ruido (mínimo "
+                                  f"{round(100 * minimo)} %)")
+        if m["altos_pct"] - rec0["altos_pct"] > 0.01 or m["ceros_pct"] - rec0["ceros_pct"] > 0.01:
+            x["no_cumple"].append("recortes nuevos")
+    ok = [x for x in r["candidatos"] if not x["no_cumple"] and x["metricas"]["detalle_perdido_pct"] is not None]
+    limpios = [x for x in ok if x["metricas"]["detalle_perdido_pct"] <= 2.0]
+    medios = [x for x in ok if x["metricas"]["detalle_perdido_pct"] < 10 and x["metricas"]["ruido_vs_antes"] <= 0.8]
+    mejor = (min(limpios, key=lambda x: x["metricas"]["ruido_vs_antes"]) if limpios
+             else min(medios, key=lambda x: x["metricas"]["detalle_perdido_pct"]) if medios else None)
+    if mejor:
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: deja el {round(100 * mejor['metricas']['ruido_vs_antes'])} % del ruido y "
-                       f"pierde el {mejor['metricas']['detalle_perdido_pct']} % del detalle (< 10 %).")
+                       f"pierde el {mejor['metricas']['detalle_perdido_pct']} % del detalle de 2–8 px del objeto.")
     else:
-        r["motivo"] = "Ningún candidato baja el ruido sin perder ≥ 10 % del detalle: mejor no aplicar o probar más suave."
-    r["antes"] = {"ruido_rel": c0["ruido_rel"]}
+        r["motivo"] = ("Ningún candidato baja el ruido sin perder ≥ 10 % del detalle ni dejar el fondo muerto: mejor no "
+                       "aplicar o probar más suave.")
+    if e0 is None:
+        r["aviso"] = ("En la parte brillante del objeto no hay detalle de 2–8 px por encima del ruido del cielo (o no hay "
+                      "zona brillante): la pérdida de detalle no se puede medir. Mira un recorte 1:1 con previa(candidato).")
+        sin_medida = [x for x in r["candidatos"] if not x["no_cumple"]]
+        if sin_medida:                     # la pasada moderada: la que deja más cerca del 70 % del ruido
+            mejor = min(sin_medida, key=lambda x: abs((x["metricas"]["ruido_vs_antes"] or 1) - 0.7))
+            r["recomendado"] = mejor["id"]
+            r["motivo"] = (f"{mejor['metodo']}: deja el {round(100 * mejor['metricas']['ruido_vs_antes'])} % del ruido "
+                           "(pasada moderada; el detalle no se pudo medir: compruébalo en un recorte 1:1).")
+    r["antes"] = {"ruido_rel": c0["ruido_rel"], "fase": "lineal" if lineal else "no lineal"}
     return _galeria(r, p, "diferencia")
 
 
-def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5), radio=None, desde=None,
+def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(), radio=None, desde=None,
                      brillo_min=0.85, anillos_max=1.5):
     """NL5 núcleo de galaxia (no lineal, antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias
     fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo. La vista no cambia."""

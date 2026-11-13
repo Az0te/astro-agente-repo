@@ -356,7 +356,31 @@ def zonas_objeto_cielo(p, S=64):
         out[:h, :w] = np.repeat(np.repeat(mc, S, 0), S, 1)
         return out
 
-    return {"medidas": c, "cielo_px": a_px(cie) & ~est, "obj_px": a_px(obj) & ~est}
+    return {"medidas": c, "cielo_px": a_px(cie) & ~est, "obj_px": a_px(obj) & ~est, "obj_c": obj, "celdas_m": m,
+            "est_px": est, "S": S, "a_px": a_px}
+
+
+def zona_brillante(L, z):
+    """Parte brillante del objeto (celdas de objeto entre la mediana y el p97: disco, sin núcleo) sin estrellas. Ahí el
+    detalle de 2–8 px domina sobre el ruido (como _zona_brillante de Siril)."""
+    oc, m = z["obj_c"], z["celdas_m"]
+    if not oc.any():
+        return None
+    v = m[oc]
+    sel = oc & (m >= np.percentile(v, 50)) & (m <= np.percentile(v, 97))
+    px = z["a_px"](sel) & ~z["est_px"]
+    return px if px.sum() > 2000 else None
+
+
+def energia_brillante(L, px, cielo_px=None):
+    """Energía de la banda 2–8 px (caja 5 − caja 17) en la zona brillante: el detalle que un denoise no debe borrar.
+    Con cielo_px se le resta la del cielo en la misma banda (el ruido que queda tras promediar): en una starless
+    estirada el ruido sigue pesando en 2–8 px y, sin restarlo, quitar ruido contaba como perder detalle (M31, SASpro)."""
+    D = _caja(L, 2) - _caja(L, 8)
+    e = float(np.mean(D[px] ** 2))
+    if cielo_px is not None and cielo_px.any():
+        e -= float(np.mean(D[cielo_px] ** 2))
+    return e
 
 
 # --- Núcleo de galaxias (como siril/herramientas/nucleo.py) ------------------------------------------------
@@ -375,13 +399,21 @@ def _perfil(L, centro, rmax, paso=2):
     x1, x2 = max(0, x0 - rmax), min(L.shape[1], x0 + rmax + 1)
     sub = L[y1:y2, x1:x2]
     yy, xx = np.mgrid[y1:y2, x1:x2]
-    rr = np.hypot(yy - y0, xx - x0)
+    anillo = (np.hypot(yy - y0, xx - x0) // paso).astype(np.int64).ravel()
+    v = sub.ravel()
+    n = rmax // paso
+    dentro = anillo < n
+    anillo, v = anillo[dentro], v[dentro]
+    # Mediana por anillo de una vez: ordenar por (anillo, valor) y tomar el elemento central de cada grupo.
+    orden = np.lexsort((v, anillo))
+    anillo, v = anillo[orden], v[orden]
+    cuenta = np.bincount(anillo, minlength=n)
+    inicio = np.concatenate(([0], np.cumsum(cuenta)[:-1]))
     out = []
-    for r in range(0, rmax, paso):
-        m = (rr >= r) & (rr < r + paso)
-        if m.sum() < 4:
+    for i in range(n):
+        if cuenta[i] < 4:
             break
-        out.append(float(np.median(sub[m])))
+        out.append(float(v[inicio[i] + cuenta[i] // 2]))
     return np.array(out)
 
 

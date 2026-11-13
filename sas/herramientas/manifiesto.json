@@ -431,8 +431,8 @@
    "nivel": "lectura",
    "timeout_s": 3600,
    "paso": "no-lineal/06-noisex.md",
-   "descripcion": "L14/NL6 ruido: compara Cosmic Clarity denoise a varias fuerzas y GraXpert denoise; mide el ruido del cielo frente a antes y el detalle perdido (< 10 %) y recomienda. La vista NO cambia (aplicarCandidato).",
-   "resumen": "Ruido: compara Cosmic Clarity y GraXpert denoise; no cambia la vista.",
+   "descripcion": "L14/NL6 ruido: compara Cosmic Clarity denoise a varias fuerzas (y GraXpert denoise si se pide); mide el ruido del cielo frente a antes y el detalle de 2–8 px que se pierde en la parte brillante del objeto (descontando el ruido del cielo). Recomienda el que más ruido quita sin perder más del 2 % de detalle; en no lineal no deja menos de la mitad del ruido (fondo plástico). Si el detalle no se puede medir, propone la pasada moderada (~70 % del ruido) y pide mirar un recorte 1:1. La vista NO cambia (aplicarCandidato). Cosmic Clarity necesita la aceleración de SASpro (PyTorch) instalada.",
+   "resumen": "Ruido: compara Cosmic Clarity (y GraXpert) denoise; no cambia la vista.",
    "params": {
     "type": "object",
     "properties": {
@@ -445,10 +445,11 @@
       "items": {
        "type": "number"
       },
-      "description": "Fuerzas de Cosmic Clarity 0–1 (por defecto [0.3, 0.5, 0.7])."
+      "description": "Fuerzas de Cosmic Clarity 0–1 (por defecto [0.3, 0.5, 0.7] en lineal y [0.15, 0.25, 0.35] estirada)."
      },
      "usar_graxpert": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "Añadir GraXpert denoise 0,5 (por defecto false)."
      }
     }
    }
