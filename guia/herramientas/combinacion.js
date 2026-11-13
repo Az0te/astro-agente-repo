@@ -154,6 +154,19 @@ function combinarMasters(lista, o) {
   // 1. Mismo canal: combinar de dos en dos.
   for (var cl in por) {
     if (cl == "?" || cl == "DUAL" || por[cl].length < 2) continue;
+    // Exposiciones distintas en la misma clase (RGB de 60 s y de 120 s): HDR, no combinación (regla de Rafael, 13 nov 2026).
+    var exps = por[cl].map(function (id) { return cbExp(cbView(id)); });
+    var distintas = exps.some(function (e) { return cbDistintaExposicion(e, exps[0]); });
+    if (distintas && typeof componerHDR === "function") {
+      var hd = componerHDR(por[cl].slice(), { nuevaVista: cl + "_HDR" });
+      r.hecho.push("Dos o más " + cl + " de distinta exposición (" + exps.join(" s, ") + " s): composición HDR (Paso 6) → " + hd.vista +
+                   " (umbral " + hd.umbral + ", sustituido " + hd.sustituido_pct + " %). El gradiente se corrige DESPUÉS, sobre la HDR (Paso 9).");
+      r.no_cumple = r.no_cumple.concat(hd.no_cumple);
+      r.control.revisar_a_ojo = r.control.revisar_a_ojo.concat(hd.control.revisar_a_ojo);
+      r.hdr = { vista: hd.vista, mascaras: hd.mascaras, umbral: hd.umbral, sustituido_pct: hd.sustituido_pct, razon_flujo: hd.razon_flujo, escalon_pct: hd.escalon_pct };
+      por[cl] = [hd.vista];
+      continue;
+    }
     var acc = por[cl][0];
     for (var i = 1; i < por[cl].length; ++i) {
       var c = combinarMismoCanal(acc, por[cl][i], { nuevaVista: cl + "_comb" });
@@ -204,17 +217,37 @@ function combinarMasters(lista, o) {
   return r;
 }
 
+// Exposición de una vista (EXPTIME/EXPOSURE de la cabecera, o «60.00s» en el id o el fichero); NaN si no se sabe.
+function cbExp(v) {
+  try { var k = v.window.keywords; for (var i = 0; i < k.length; ++i) if (k[i].name == "EXPTIME" || k[i].name == "EXPOSURE") { var e = parseFloat(k[i].strippedValue); if (isFinite(e) && e > 0) return e; } } catch (x) { }
+  var t = String(v.window.filePath || "") + " " + v.id, m = t.match(/EXPOSURE[-_](\d+(?:[._]\d+)?)s/i) || t.match(/(\d+(?:\.\d+)?)\s*s(?![a-z])/i);
+  return m ? parseFloat(m[1].replace("_", ".")) : NaN;
+}
+// ¿Dos exposiciones distintas (más de un 20 %)? Entonces es una HDR (Paso 6), no una combinación del mismo canal.
+function cbDistintaExposicion(ea, eb) { return isFinite(ea) && isFinite(eb) && Math.abs(ea / eb - 1) > 0.2; }
+
 function combinarMismoCanal(a, b, o) {
   o = o || {};
   var va = cbView(a), vb = cbView(b);
   if (va.image.width != vb.image.width || va.image.height != vb.image.height)
     throw new Error("Tamaños distintos: alinear y recortar antes (Paso 5, alinearMasters)");
+  // 13 nov 2026 (M31, masters RGB de 60 s y 120 s): se combinaron aquí, salió en gris y el gradiente se había quitado
+  // antes en cada master. Regla de Rafael: con varias exposiciones, alinear → recortar → HDR → gradiente.
+  var ea = cbExp(va), eb = cbExp(vb);
+  if (cbDistintaExposicion(ea, eb) && !o.forzar)
+    throw new Error("Exposiciones distintas (" + ea + " s y " + eb + " s): no se combinan como el mismo canal. Con masters de " +
+                    "distinta exposición va la composición HDR (Paso 6): componerHDR([" + va.id + ", " + vb.id + "]), después de " +
+                    "alinear y recortar y ANTES de corregir el gradiente (el gradiente se quita en la HDR, Paso 9).");
+  // Color: dos masters RGB dan una RGB (antes se copiaba sólo el canal 0 y el resultado salía en gris).
+  var color = va.image.numberOfChannels >= 3 && vb.image.numberOfChannels >= 3;
   var nA = cbNoise(va.image), nB = cbNoise(vb.image);
+  if (color) { nA = (cbNoise(va.image, 0) + cbNoise(va.image, 1) + cbNoise(va.image, 2)) / 3; }
   // Mejor = menor ruido relativo a su señal (la mediana sobre el fondo la da LinearFit; aquí basta el ruido tras ajustar).
-  var wa = cbCopy(va, "cbA", true), wb = cbCopy(vb, "cbB", true);
+  var wa = cbCopy(va, "cbA", !color), wb = cbCopy(vb, "cbB", !color);
   var LF = new LinearFit; LF.referenceViewId = wa.mainView.id;
   if (!LF.executeOn(wb.mainView)) throw new Error("LinearFit falló");
-  var nBf = cbNoise(wb.mainView.image);           // ruido de b en la escala de a
+  var nBf = color ? (cbNoise(wb.mainView.image, 0) + cbNoise(wb.mainView.image, 1) + cbNoise(wb.mainView.image, 2)) / 3
+                  : cbNoise(wb.mainView.image);   // ruido de b en la escala de a
   var mejor = nA <= nBf ? "a" : "b";
   var pA = 1 / (nA * nA), pB = 1 / (nBf * nBf), kA = pA / (pA + pB), kB = pB / (pA + pB);
   var id = cbNewId((typeof o.nuevaVista === "string" && o.nuevaVista) || (va.id + "_comb"));
@@ -222,12 +255,14 @@ function combinarMismoCanal(a, b, o) {
   PM.expression = kA.toFixed(6) + "*" + wa.mainView.id + " + " + kB.toFixed(6) + "*" + wb.mainView.id;
   PM.useSingleExpression = true; PM.createNewImage = true; PM.showNewImage = true; PM.newImageId = id;
   PM.newImageWidth = 0; PM.newImageHeight = 0; PM.rescale = false; PM.truncate = false;
-  PM.newImageColorSpace = (PixelMath.Gray !== undefined) ? PixelMath.Gray : PixelMath.prototype.Gray;
+  PM.newImageColorSpace = color ? ((PixelMath.RGB !== undefined) ? PixelMath.RGB : PixelMath.prototype.RGB)
+                                : ((PixelMath.Gray !== undefined) ? PixelMath.Gray : PixelMath.prototype.Gray);
   PM.newImageSampleFormat = (PixelMath.f32 !== undefined) ? PixelMath.f32 : PixelMath.prototype.f32;
   if (!PM.executeOn(wa.mainView)) throw new Error("PixelMath de la combinación falló");
   var out = ImageWindow.windowById(id);
   if (va.window.hasAstrometricSolution) try { out.copyAstrometricSolution(va.window); } catch (e) { }
-  var nOut = cbNoise(out.mainView.image), nBest = Math.min(nA, nBf);
+  var nOut = color ? (cbNoise(out.mainView.image, 0) + cbNoise(out.mainView.image, 1) + cbNoise(out.mainView.image, 2)) / 3
+                   : cbNoise(out.mainView.image), nBest = Math.min(nA, nBf);
   var fA = cbFWHM(va), fB = cbFWHM(vb), fO = cbFWHM(out.mainView);
   wa.forceClose(); wb.forceClose();
   var r = { vista: id, pesos: { a: +kA.toFixed(3), b: +kB.toFixed(3) }, ruido: { a: nA, b_ajustado: nBf, resultado: nOut },
@@ -246,6 +281,9 @@ function combinarMismoCanal(a, b, o) {
 function cbFiltroEstrecho(v) {
   var f = "";
   try { var k = v.window.keywords; for (var i = 0; i < k.length; ++i) if (k[i].name == "FILTER") f = k[i].strippedValue; } catch (e) { }
+  // «Antlia Triband RGB Ultra II» es un filtro RGB de color (tres bandas que cubren R, G y B), no banda estrecha:
+  // con «tri band» se clasificaba como dual band y combinarMasters pedía desmezclarlo (M31, 13 nov 2026).
+  if (/\bRGB\b/i.test(f)) return null;
   return /dual|duo|tri.?band|quad|extreme|enhance|ultimate|\d+(\.\d+)?\s*nm\b|\b(ha|h-?alpha|o3|oiii|s2|sii)\b/i.test(f) ? f : null;
 }
 

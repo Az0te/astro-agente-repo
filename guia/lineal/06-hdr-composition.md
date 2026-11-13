@@ -4,6 +4,8 @@
 
 **Por qué.** "En las tomas largas los núcleos de las estrellas brillantes (y núcleos de galaxias o una nebulosa brillante) se saturan y pierden color y forma; en las cortas no, y el halo es menor. Las estrellas son brillantes y no necesitan tiempo largo.". La composición HDR combina exposiciones en lineal; **no** es la compresión multiescala del rango dinámico, que actúa sobre una imagen ya estirada.
 
+**Regla (siempre).** Con **varios masters RGB del mismo objeto y distinta exposición** (por ejemplo 60 s y 120 s de noches distintas), el orden es: **alinear → recortar (Paso 5) → HDR (`componerHDR`, este paso) → gradiente (Paso 9) sobre la HDR**. No se quita el gradiente a cada master por separado ni se combinan como el mismo canal (`combinarMismoCanal` lo rechaza si las exposiciones difieren más de un 20 %; `combinarMasters` hace la HDR solo). Comprobado con M31 (13 nov 2026): quitar el gradiente antes y combinar dio un master en gris y sin rango dinámico.
+
 **Cuándo aplica.** Cuando la estrella más brillante del campo (una estrella de magnitud 2–3, el núcleo de una nebulosa brillante) sigue saturada en la exposición corta, o cuando hay grupos de distinta exposición (120 s / 30 s). No en cúmulos ni cuando no hay saturación que recuperar.
 
 **Adquisición**
@@ -22,7 +24,7 @@
 | Suavizado / crecimiento de la máscara | Controlan suavidad y extensión de la transición (transición visible = subir suavizado/crecimiento o añadir un escalón intermedio) |
 | OSC | Los canales se saturan a distinto nivel: sustituir en cuanto se satura **cualquier** canal; bajar el umbral de binarización para evitar anillos de color |
 | Región de ajuste | Limitarla a una zona plana y representativa acelera y mejora el ajuste si hay bordes malos |
-| Gradientes | Los aditivos deben ser parecidos entre tomas o corregirse antes (modelo de fondo en cada master lineal); si son similares, se corrigen después sobre la HDR |
+| Gradientes | Se corrigen **después**, sobre la HDR (Paso 9). Sólo si un master tiene un gradiente muy distinto de los otros (otra luna, otra contaminación) y la HDR muestra el escalón de fondo, se le quita antes a ese master, y se dice por qué |
 | Máscara | Conservar la primera máscara (zonas sustituidas): sirve para proteger o tratar núcleos |
 
 **Caso medido (nebulosa de emisión y reflexión).** Composición HDR en modo global con los masters de 120 s y 30 s (tarda > 60 s). **Con normalización local los masters no saturan a 1**: el verde de 120 s se quedaba en 0,89–0,92 y R/B en 0,93–0,96; medir la meseta por canal y poner el umbral por debajo (**se usó 0,80, suavizado 7, crecimiento 1**). La salida queda reescalada (HDR ≈ 0,275 × M120, sin pedestal): normal, es lineal. La razón 120/30 en estrellas fue 3,66–3,93, pero en las alas de la estrella brillante ≈ 4,1, lo que dejó un escalón del −6 % a 28 px dentro del núcleo saturado: invisible tras estirar, pero comprobarlo con el perfil HDR/M120 y HDR/M30.

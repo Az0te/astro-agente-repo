@@ -2,7 +2,9 @@
 
 [← Índice](../SKILL.md) · Anterior: [Paso 8: Plate solve](08-plate-solve.md) · Siguiente: [Paso 10: Combinación RGB / NB](10-combinacion-rgb-nb.md) · Medidas y protocolo de comparativa: [detalle](../detalle/lineal-09-correccion-gradiente.md)
 
-El gradiente es un offset de gran escala que no es del objeto: contamina la calibración de color, aplasta el polvo y el IFN y sale como velo al estirar. Se corrige **en lineal, por canal si los canales vienen de noches, filtros o cámaras distintos**, y antes de combinar y de la deconvolución de corrección.
+El gradiente es un offset de gran escala que no es del objeto: contamina la calibración de color, aplasta el polvo y el IFN y sale como velo al estirar. Se corrige **en lineal, por canal si los canales vienen de noches, filtros o cámaras distintos**, y antes de combinar (Paso 10: canales de filtros distintos, L, RGB, banda estrecha) y de la deconvolución de corrección.
+
+**Excepción: varios masters RGB de distinta exposición** (60 s y 120 s, por ejemplo). Esos no se combinan en el Paso 10: van a la HDR (Paso 6) y el gradiente se quita **una vez, sobre la HDR**, no en cada master (`gradienteCandidatos` sobre la vista HDR, no `gradienteVarias` sobre los masters). Orden: alinear → recortar → HDR → gradiente.
 
 **Sin método fijo: se comparan siempre los candidatos y se aplica el que mejor funcione en esa imagen**: el que quita el gradiente copiando menos el objeto en su modelo. Ningún método gana siempre:
 - un modelo por muestras automáticas (escala 10) copió poco objeto en una nebulosa oscura, una nebulosa dual band y una nebulosa de emisión y reflexión;

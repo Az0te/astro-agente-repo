@@ -168,6 +168,7 @@ function astrometriaLineal(win) {
 function alScale(path) {
   // Escala en "/px: de la astrometría si la hay; si no, de XPIXSZ, FOCALLEN y XBINNING.
   var w = ImageWindow.open(path, "alSCALE", "verbosity 0", true)[0];
+  if (!w || w.isNull) throw new Error("No se pudo abrir «" + path + "» (¿es un fichero .xisf existente?)");
   var r = { ancho: w.mainView.image.width, alto: w.mainView.image.height, canales: w.mainView.image.numberOfChannels, wcs: w.hasAstrometricSolution };
   var s = NaN;
   if (w.hasAstrometricSolution) {
@@ -215,11 +216,10 @@ function alinearMasters(lista, o) {
     c.saveAs(out, false, false, false, false); c.forceClose();
     return out;
   };
-  if (o.referencia) { var rv = vistaAFichero(o.referencia); if (rv) o.referencia = rv; }
-  var files = [];
+  var files = [], porId = {};
   (lista instanceof Array ? lista : [lista]).forEach(function (x) {
     var fv = vistaAFichero(x);
-    if (fv) { files.push(fv); return; }
+    if (fv) { files.push(fv); porId[String(x)] = fv; return; }
     var p = String(x).replace(/\\/g, "/").replace(/\/$/, "");
     if (File.directoryExists(p))
       files = files.concat(alSearch(p + "/" + "*.xisf", false).filter(function (f) {
@@ -229,6 +229,18 @@ function alinearMasters(lista, o) {
   files = files.filter(function (f, i) { return files.indexOf(f) === i; });   // la misma imagen abierta dos veces, una sola vez
   if (files.length < 1) throw new Error("No hay masters en " + lista + ": pasa ficheros .xisf o la carpeta que los contiene");
   files.forEach(function (f) { if (!File.exists(f)) throw new Error("No existe " + f + ": pasa ids de vistas abiertas, ficheros .xisf o la carpeta que los contiene"); });
+  // Referencia como id de una vista de la lista (Opus, 13 nov 2026: referencia = id del master de 60 s abierto): se usa
+  // el fichero que ya salió para esa vista. Antes se resolvía aparte y acababa como el id tal cual, que alScale no podía
+  // abrir («Cannot read properties of undefined (reading 'mainView')»).
+  if (o.referencia) {
+    var rk = String(o.referencia);
+    if (porId[rk]) o.referencia = porId[rk];
+    else if (!File.exists(rk.replace(/\\/g, "/"))) {
+      var rv = vistaAFichero(o.referencia);
+      if (!rv) throw new Error("La referencia «" + rk + "» no es un fichero ni una vista abierta: pasa uno de los masters de la lista (o nada, y se elige sola)");
+      o.referencia = rv;
+    }
+  }
   var info = {}; files.forEach(function (f) { info[f] = alScale(f); });
   // Sin referencia: la de escala más fina ("/px menor; sin escala, la de más píxeles), para no perder resolución.
   var ref = o.referencia ? String(o.referencia).replace(/\\/g, "/") : files.slice().sort(function (a, b) {

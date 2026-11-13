@@ -1040,6 +1040,7 @@ function plEjecutarLlamadas(aj, texto) {
          salida.push(ll.funcion + ":\n" + s);
       } catch (e) {
          var linea = e && e.lineNumber ? " (línea " + e.lineNumber + ")" : "";
+         if (plGlobal().PL_DEPURAR && e && e.stack) linea += "\n" + e.stack;
          var vistas = "";
          try { if (String(e).indexOf("Vistas abiertas") < 0) vistas = "\nVistas abiertas (ids exactos): " + plResumenVistas(); } catch (x) {}
          return { ok: false, texto: plRecortar((salida.length ? salida.join("\n\n") + "\n\n" : "") + "ERROR en " + ll.funcion + ": " +
@@ -2566,6 +2567,7 @@ function plMain() {
    // Llamadas de la guía sin chat (mismo validador y runner que el chat):  -r=<Lite>,--llamadas,<llamadas.json>,<salida.txt>
    if (args.length >= 3 && String(args[0]) == "--llamadas") {
       var ajL = new PLAjustes(); ajL.cargar(); ajL.guardar = function () {};
+      plGlobal().PL_DEPURAR = true;   // sin chat: los errores llevan la pila
       var rL = plEjecutarLlamadas(ajL, String(File.readTextFile(String(args[1]))));
       File.writeTextFile(String(args[2]), (rL.ok ? "OK" : "ERROR") + "\n" + rL.texto);
       return;
