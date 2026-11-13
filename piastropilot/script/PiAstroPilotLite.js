@@ -2429,9 +2429,77 @@ function plPrueba(salida, cli) {
    console.noteln("[PiAstroPilotLite prueba] resultados en " + salida);
 }
 
+// Pasada automática para comparar modelos (13 nov 2026): el mismo diálogo y el mismo bucle que usa el usuario, sin
+// usuario. Manda la petición (leída de un fichero, por las comas) y, cada vez que la serie de pasos para sin haber
+// exportado, manda «sigue hasta el final» (cada una cuenta como una intervención). No guarda ajustes: los del usuario
+// quedan como estaban. Deja en <carpeta>: pasada.json (tiempo, tokens, coste, pasos, fallos), registro.txt e informe .md.
+//   PixInsight.exe -n --automation-mode --no-focus-stealing
+//      -r=<Lite>,--pasada,<ollama|claude|codex>,<modelo>,<carpeta>,<peticion.txt> --force-exit
+var PL_MAX_SIGUE = 6;
+function plPasada(proveedor, modelo, carpeta, ficheroPeticion) {
+   carpeta = plCarpeta(String(carpeta).replace(/\\/g, "/").replace(/[\/]+$/, ""));
+   var peticion = String(File.readTextFile(ficheroPeticion)).replace(/^﻿/, "").trim();
+   var aj = new PLAjustes();
+   aj.cargar();
+   aj.guardar = function () {};   // nada de lo que cambie la pasada llega a los ajustes guardados
+   aj.proveedor = proveedor; aj.ponerModelo(modelo);
+   aj.internet = false; aj.voz = false;
+   aj.carpetaInformes = carpeta;
+   var out = { proveedor: proveedor, modelo: modelo, peticion: peticion, inicio: new Date().toISOString(), sigue: 0 };
+   var fJson = carpeta + "/pasada.json";
+   function guardar(d) {
+      if (d) {
+         var reg = d.registro;
+         out.uso = d.usoSesion || null;
+         out.pasosSerie = d.pasosSerie || 0;
+         out.respuestas = d.entradas.filter(function (e) { return e.tipo == "asst" && !e.bienvenida; }).length;
+         out.ejecuciones = (reg.match(/── Resultado \(/g) || []).length;
+         out.fallosEjecucion = (reg.match(/── Error al ejecutar ──/g) || []).length;
+         out.correcciones = (reg.match(/── Corrección \d/g) || []).length;
+         out.errores = (reg.match(/── Error ──/g) || []).length;
+         out.paros = (reg.match(/(^|\n)\s*\**PARO:/g) || []).length;
+         out.exportado = /Terminada tras exportar/.test(reg);
+         try { File.writeTextFile(carpeta + "/registro.txt", reg); } catch (e) {}
+      }
+      out.segundos = Math.round((Date.now() - t0) / 100) / 10;
+      File.writeTextFile(fJson, JSON.stringify(out, null, 1));
+   }
+   var t0 = Date.now();
+   guardar(null);
+   var d = new PLDialogo(aj), tm = new Timer;
+   tm.interval = 1.5; tm.periodic = false;
+   tm.onTimeout = function () {
+      try {
+         d.cModelo.editText = modelo;
+         d.leerAjustes();
+         out.temperatura = aj.temperatura;
+         out.modeloEfectivo = aj.modelo();
+         var texto = peticion;
+         for (var v = 0; v <= PL_MAX_SIGUE; ++v) {
+            d.enviarTexto(texto);
+            guardar(d);
+            if (out.exportado) break;
+            texto = "sigue hasta el final";
+            if (v < PL_MAX_SIGUE) ++out.sigue;
+         }
+         out.informe = d.crearInforme();
+      } catch (e) { out.error = String(e && e.message ? e.message : e); }
+      out.fin = new Date().toISOString();
+      guardar(d);
+      console.noteln("[PiAstroPilotLite pasada] resultados en " + fJson);
+      d.ok();
+   };
+   tm.start();
+   d.execute();
+}
+
 function plMain() {
    var args = (typeof Runtime !== "undefined" && Runtime.jsArguments) ? Runtime.jsArguments :
               (typeof jsArguments !== "undefined") ? jsArguments : [];
+   if (args.length >= 5 && String(args[0]) == "--pasada") {
+      plPasada(String(args[1]), String(args[2]), String(args[3]), String(args[4]));
+      return;
+   }
    if (args.length && String(args[0]) == "--prueba") {
       plPrueba(args.length > 1 && String(args[1]) ? String(args[1]) : plCarpeta(PL_TMP) + "/prueba.json",
                args.length > 2 ? String(args[2]) : null);   // tercer argumento opcional: claude | codex
