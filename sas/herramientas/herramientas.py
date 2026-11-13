@@ -570,7 +570,37 @@ def _correr(ctx, doc, proceso, preset=None):
         cid = str(proceso)
     if cid not in PROCESOS:
         raise ValueError(f"Proceso no permitido: {proceso}. Permitidos: {', '.join(sorted(PROCESOS))}.")
+    _comprobar_ia(cid, preset)
     return ctx.run_command(cid, dict(preset or {}), target_doc=doc)
+
+
+# Procesos de SASpro que necesitan el entorno de IA (PyTorch en %LOCALAPPDATA%\SASpro\runtime\...\venv).
+PROCESOS_IA = {"cosmic_clarity", "aberration_ai", "syqon_prism", "syqon_starless"}
+
+
+def _comprobar_ia(proceso, preset=None):
+    """Sin PyTorch en el entorno de IA de SASpro, Cosmic Clarity y compañía no terminan nunca en modo sin ventana (SASpro
+    1.24.2 solo lo dice en el System Log). Si torch se instaló después de arrancar SASpro, tampoco lo ve hasta reiniciar."""
+    if proceso == "remove_stars" and (preset or {}).get("tool") != "darkstar":
+        return
+    if proceso not in PROCESOS_IA and proceso != "remove_stars":
+        return
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "SASpro" / "runtime"
+    if not base.is_dir():
+        return                                      # otra plataforma o instalación: no se puede comprobar
+    torch = sorted(base.glob("*/venv/Lib/site-packages/torch")) or sorted(base.glob("*/venv/lib/python*/site-packages/torch"))
+    if not torch:
+        raise RuntimeError(f"{proceso} necesita la aceleración de SASpro (PyTorch) y no está instalada: SASpro > "
+                           "Configuración > Preferencias > instalar GPU Acceleration, reiniciar SASpro y volver a "
+                           "lanzar el puente.")
+    try:
+        inicio = json.loads((DATOS / "puente.json").read_text(encoding="utf-8")).get("inicio")
+        t_inicio = time.mktime(time.strptime(inicio, "%Y-%m-%dT%H:%M:%S")) if inicio else None
+    except Exception:
+        t_inicio = None
+    if t_inicio and torch[-1].stat().st_mtime > t_inicio + 60:
+        raise RuntimeError(f"PyTorch se instaló después de arrancar SASpro y {proceso} no lo verá: reinicia SASpro y "
+                           "vuelve a lanzar el puente (Scripts > AstroPilot).")
 
 
 def procesoSAS(ctx, proceso, preset=None, vista=None):
