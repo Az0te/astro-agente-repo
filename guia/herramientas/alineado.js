@@ -425,6 +425,15 @@ function alinearMasters(lista, o) {
         if (w.isNull) { var bajo = id.toLowerCase(), ws = ImageWindow.windows; for (var i = 0; i < ws.length; ++i) if (ws[i].mainView.id.toLowerCase() == bajo) w = ws[i]; }
         if (!w.isNull && r.vistas.indexOf(w.mainView.id) < 0) { r.cerradas.push(w.mainView.id); w.forceClose(); }
       });
+    }
+    // También las abiertas de los ficheros de entrada cuando se pasaron rutas (Opus: abrirImagen y luego las rutas).
+    if (o.cerrarEntradas !== false) {
+      r.cerradas = r.cerradas || [];
+      var entradasF = r.ficheros.map(function (e) { return String(e.entrada).replace(/\\/g, "/").toLowerCase(); });
+      ImageWindow.windows.forEach(function (w) {
+        var fp = String(w.filePath || "").replace(/\\/g, "/").toLowerCase();
+        if (fp && entradasF.indexOf(fp) >= 0 && r.vistas.indexOf(w.mainView.id) < 0 && !w.mainView.isModified) { r.cerradas.push(w.mainView.id); w.forceClose(); }
+      });
       if (r.cerradas.length) r.control.medido.push("Cerradas las vistas de entrada ya alineadas (" + r.cerradas.join(", ") + "): sigue con " + r.vistas.join(", ") + ".");
     }
   }
