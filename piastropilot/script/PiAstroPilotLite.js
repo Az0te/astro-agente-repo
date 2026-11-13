@@ -980,16 +980,22 @@ function plValidarLlamada(ll, man, L) {
 // texto después del bloque); igual que pprJsonTolerante del runner. Si sigue sin ser válido, el error de siempre.
 function plJsonTolerante(texto) {
    try { return JSON.parse(texto); } catch (e0) {
-      var s = String(texto).trim().replace(/,\s*([}\]])/g, "$1"), pila = [], enCadena = false, escape = false, fin = -1;
+      var s = String(texto).trim().replace(/,\s*([}\]])/g, "$1"), pila = [], enCadena = false, escape = false, fin = -1, out = "";
       for (var i = 0; i < s.length; ++i) {
          var c = s.charAt(i);
-         if (enCadena) { if (escape) escape = false; else if (c == "\\") escape = true; else if (c == "\"") enCadena = false; continue; }
+         if (enCadena) { out += c; if (escape) escape = false; else if (c == "\\") escape = true; else if (c == "\"") enCadena = false; continue; }
          if (c == "\"") enCadena = true;
          else if (c == "{" || c == "[") pila.push(c == "{" ? "}" : "]");
-         else if (c == "}" || c == "]") { if (pila.length && pila[pila.length - 1] == c) { pila.pop(); if (!pila.length) { fin = i; break; } } else break; }
+         else if (c == "}" || c == "]") {
+            // «]» con un objeto sin cerrar: falta la «}» de la llamada (Opus, 13 nov 2026: tres veces «…true}}]}» con una
+            // llave de menos). Se cierran los objetos abiertos hasta el corchete.
+            if (c == "]") while (pila.length && pila[pila.length - 1] == "}" && pila.indexOf("]") >= 0) { out += "}"; pila.pop(); }
+            if (pila.length && pila[pila.length - 1] == c) { pila.pop(); if (!pila.length) { out += c; fin = i; break; } } else break;
+         }
+         out += c;
       }
-      if (fin >= 0) s = s.substring(0, fin + 1);
-      else if (!enCadena) s = s.replace(/,\s*$/, "") + pila.reverse().join("");
+      if (fin >= 0) s = out;
+      else if (!enCadena) s = out.replace(/,\s*$/, "") + pila.reverse().join("");
       try { return JSON.parse(s); } catch (e1) { throw e0; }
    }
 }
