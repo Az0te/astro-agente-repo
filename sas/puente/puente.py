@@ -212,8 +212,8 @@ class Puente:
         if sello <= self.sello:
             return
         carpeta = str(CARPETA_H.resolve()).lower()
-        viejos = {n: m for n, m in sys.modules.items()
-                  if str(getattr(m, "__file__", "") or "").lower().startswith(carpeta)}
+        viejos = {n: m for n, m in sys.modules.items()            # el chat no: su ventana sigue abierta
+                  if n != "chat" and str(getattr(m, "__file__", "") or "").lower().startswith(carpeta)}
         for n in viejos:
             del sys.modules[n]
         try:
@@ -342,4 +342,33 @@ def arrancar(ctx):
         ctx.log(f"[SetiAstroPilot] El puerto {PUERTO} está ocupado ({e}). ¿Hay otro SASpro con el puente abierto?")
         raise RuntimeError(f"SetiAstroPilot: el puerto {PUERTO} está ocupado ({e}).")
     setattr(app, ATRIBUTO_APP, p)
+    abrir_chat(ctx)
     return p
+
+
+def abrir_chat(ctx, forzar=False):
+    """Abre la ventana del chat (herramientas/chat.py) en el hilo de Qt de SASpro, si está activado en
+    ~/.setiastropilot/chat.json (casilla «Abrir el chat al lanzar») o se fuerza. Una sola ventana: si ya está abierta,
+    se trae al frente. El modelo trabaja en hilos aparte y las herramientas van por TCP al puente: no bloquea SASpro."""
+    app = ctx.app
+    try:
+        import importlib
+        chat = sys.modules.get("chat") or importlib.import_module("chat")
+        if not forzar and not chat.abrir_chat_al_lanzar():
+            ctx.log("[SetiAstroPilot] Sólo puente (el chat está desactivado en ~/.setiastropilot/chat.json).")
+            return None
+        v = getattr(app, "_setiastropilot_chat", None)
+        try:
+            if v is not None and v.isVisible():
+                v.raise_()
+                v.activateWindow()
+                return v
+        except RuntimeError:                       # la ventana de Qt ya no existe
+            v = None
+        v = chat.Ventana()
+        setattr(app, "_setiastropilot_chat", v)    # que no la recoja el recolector
+        v.show()
+        return v
+    except Exception as e:
+        ctx.log(f"[SetiAstroPilot] Sin chat ({type(e).__name__}: {e}); el puente sigue para el MCP.")
+        return None

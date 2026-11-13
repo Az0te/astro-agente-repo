@@ -7,7 +7,7 @@ description: "Procesado de astrofotografía de cielo profundo con un agente de I
 
 Núcleo común de la guía para cualquier agente (Claude, ChatGPT o un modelo local) que procese con las herramientas de la guía, en **PixInsight** o en **Siril**, a través del servidor MCP de cada programa o de su panel de chat. Cada herramienta es una función de la guía con su nombre y sus parámetros (los describe el propio servidor). El agente no escribe ni ejecuta código del programa: sólo llama a las herramientas. Si ninguna sirve, lo dice y propone al usuario qué hacer.
 
-Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque del anexo del programa en uso**: [Anexo J](anexos/J-pixinsight.md) (PixInsight) o [Anexo I](anexos/I-siril.md) (Siril). El resto se carga **sólo cuando hace falta**: la ficha del paso que se va a ejecutar y su apartado del anexo, y nada más.
+Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque del anexo del programa en uso**: [Anexo J](anexos/J-pixinsight.md) (PixInsight), [Anexo I](anexos/I-siril.md) (Siril) o [Anexo K](anexos/K-saspro.md) (Seti Astro Suite Pro). El resto se carga **sólo cuando hace falta**: la ficha del paso que se va a ejecutar y su apartado del anexo, y nada más.
 
 ## Principio
 
@@ -64,7 +64,7 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque d
 | NL10 Exportación | Limpieza cosmética y formatos de entrega | ficheros, saturados, bordes, recorte del gamut al pasar a sRGB |
 | NL11 Dossier | Historial y revisión crítica | historial |
 
-Qué herramienta hace cada paso, las siempre disponibles y cómo se recoge un trabajo largo: [Anexo J, arranque](anexos/J-pixinsight.md#arranque) en PixInsight; [Anexo I, arranque](anexos/I-siril.md#arranque) en Siril.
+Qué herramienta hace cada paso, las siempre disponibles y cómo se recoge un trabajo largo: [Anexo J, arranque](anexos/J-pixinsight.md#arranque) en PixInsight; [Anexo I, arranque](anexos/I-siril.md#arranque) en Siril; [Anexo K, arranque](anexos/K-saspro.md#arranque) en SASpro.
 
 ## Internet
 
@@ -136,8 +136,8 @@ Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias
 
 **No lineal:** [1 Estirado](no-lineal/01-estirado.md) ~1220 · [2 LRGB / paleta](no-lineal/02-lrgb-paleta.md) ~1460 · [3 Quitar verde](no-lineal/03-scnr.md) ~340 · [4 Máscaras](no-lineal/04-mascaras.md) ~820 · [5 Realces](no-lineal/05-boost.md) ~1050 · [6 Ruido final](no-lineal/06-noisex.md) ~520 · [7 Nitidez](no-lineal/07-nitidez.md) ~290 · [8 Estrellas](no-lineal/08-estrellas.md) ~560 · [9 Recombinación](no-lineal/09-recombinacion.md) ~410 · [10 Recorte y exportación](no-lineal/10-recorte-exportacion.md) ~280 · [11 Dossier](no-lineal/11-dossier.md) ~410
 
-**Cómo en cada programa (bajo demanda):** las fichas dicen qué y con qué criterios, con nombres neutros; las herramientas, procesos y llamadas de PixInsight están en el [Anexo J](anexos/J-pixinsight.md) y las de Siril en el [Anexo I](anexos/I-siril.md).
+**Cómo en cada programa (bajo demanda):** las fichas dicen qué y con qué criterios, con nombres neutros; las herramientas, procesos y llamadas de PixInsight están en el [Anexo J](anexos/J-pixinsight.md) las de Siril en el [Anexo I](anexos/I-siril.md) y las de SASpro en el [Anexo K](anexos/K-saspro.md).
 
-**Anexos (bajo demanda):** [A Equivalentes de scripts](anexos/A-equivalentes-scripts.md) · [B Controles de calidad y entrega](anexos/B-checklist-entrega.md) · [C Pendiente](anexos/C-pendiente-documentar.md) · [D Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) · [E Parámetros complementarios](anexos/E-parametros-detalle.md) · [F Anti-patrones y parada](anexos/F-anti-patrones.md) · [G Glosario](anexos/G-glosario.md) · [H Modelo por paso](anexos/H-modelo-por-paso.md) · [I Siril](anexos/I-siril.md) · [J PixInsight](anexos/J-pixinsight.md)
+**Anexos (bajo demanda):** [A Equivalentes de scripts](anexos/A-equivalentes-scripts.md) · [B Controles de calidad y entrega](anexos/B-checklist-entrega.md) · [C Pendiente](anexos/C-pendiente-documentar.md) · [D Flujos por tipo de objeto](anexos/D-flujos-por-tipo-objeto.md) · [E Parámetros complementarios](anexos/E-parametros-detalle.md) · [F Anti-patrones y parada](anexos/F-anti-patrones.md) · [G Glosario](anexos/G-glosario.md) · [H Modelo por paso](anexos/H-modelo-por-paso.md) · [I Siril](anexos/I-siril.md) · [J PixInsight](anexos/J-pixinsight.md) · [K SASpro](anexos/K-saspro.md)
 
 **Detalle de los pasos** (el porqué y las fuentes; sólo si una ficha no basta para decidir): `detalle/`. **Configuración** (crear o completar `perfil.md`, entorno del programa): [00 Perfil y entorno](00-perfil-y-entorno.md). Fuentes: `FUENTES.md`. Instrucciones para ChatGPT y modelos locales: `envolturas/`.
