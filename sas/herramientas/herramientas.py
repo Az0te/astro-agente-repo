@@ -1179,9 +1179,30 @@ def aplicarCandidato(ctx, id, vista=None):
 
 # --- Pasos sencillos (un proceso de SASpro con lo que pide la guía) -----------------------------------------
 
-def quitarVerde(ctx, vista=None, cantidad=1.0, modo="avg"):
-    """NL3 SCNR: Remove Green de SASpro (modo avg/max/min), conservando la luminosidad."""
-    return procesoSAS(ctx, "remove_green", {"amount": float(cantidad), "mode": modo, "preserve_lightness": True}, vista)
+def quitarVerde(ctx, vista=None, cantidad=1.0, modo="avg", metodo="propio"):
+    """NL3 SCNR. metodo 'propio' (por defecto): el SCNR clásico, solo baja G hasta la media (avg) o el máximo (max) de
+    R y B; no toca R ni B. metodo 'sas': Remove Green de SASpro con preserve_lightness, que en M31 subió R y B (cielo de
+    G +4 % a G −3,5 %, magenta). Con deshacer; devuelve cielo por canal y dominante antes y después."""
+    if metodo == "sas":
+        return _con_color(ctx, vista, "remove_green", {"amount": float(cantidad), "mode": modo, "preserve_lightness": True})
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if p.shape[0] != 3:
+        raise RuntimeError("SCNR necesita una imagen en color.")
+    k = float(np.clip(cantidad, 0, 1))
+    r_, g, b = p
+    tope = np.maximum(r_, b) if modo == "max" else np.minimum(r_, b) if modo == "min" else 0.5 * (r_ + b)
+    # El exceso de verde se mide suavizado (casi gaussiano, radio ~8 px): píxel a píxel, min(G, media) recorta la mitad
+    # positiva del ruido y deja el cielo con G por debajo de R y B (M31: dominante del 2,8 % al 5,9 %, magenta; con caja
+    # 5×5 aún 3,7 %). El verde verdadero (dominante o ruido de color grueso) es de escala grande y no se pierde.
+    exceso = np.maximum(M.suave((g - tope).astype(np.float32), 16), 0)
+    q = p.copy()
+    q[1] = np.clip(g - k * exceso, 0, 1)
+    antes = _color(d)
+    d.apply_edit(_a_sas(q, d.image), metadata={}, step_name=f"SetiAstroPilot: SCNR {modo} {k:g}")
+    return {"vista": _nombre(d), "metodo": "propio", "modo": modo, "cantidad": k,
+            "verde_bajado_pct": _r(100.0 * float((g - q[1]).mean()) / max(float(g.mean()), 1e-9), 2),
+            "antes": antes, "despues": _color(d), "nota": "Con deshacer."}
 
 
 def _color(d):

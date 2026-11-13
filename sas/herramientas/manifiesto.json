@@ -585,7 +585,7 @@
    "nivel": "vista",
    "timeout_s": 120,
    "paso": "no-lineal/03-scnr.md",
-   "descripcion": "NL3 SCNR: Remove Green de SASpro conservando la luminosidad.",
+   "descripcion": "NL3 SCNR. Por defecto propio: solo baja el verde hasta la media de R y B (avg) o su máximo (max), con el exceso medido suavizado para no sesgar el ruido del cielo; no toca R ni B. metodo 'sas': Remove Green de SASpro con preserve_lightness (sube R y B: en M31 dejó el cielo magenta). Con deshacer; devuelve cielo por canal y dominante antes y después.",
    "params": {
     "type": "object",
     "properties": {
@@ -604,6 +604,14 @@
        "max",
        "min"
       ]
+     },
+     "metodo": {
+      "type": "string",
+      "enum": [
+       "propio",
+       "sas"
+      ],
+      "description": "propio (por defecto) o el Remove Green de SASpro."
      }
     }
    }
