@@ -26,10 +26,10 @@ Agente que procesa astrofotografía en PixInsight con las funciones de la guía 
 
 | Parámetro | Valor | Motivo |
 |---|---|---|
-| `num_ctx` | 32768 | Cabe una fase entera con margen; más contexto en una GPU de 24 GB obliga a usar RAM y se ralentiza |
+| `num_ctx` | 65536 con `OLLAMA_KV_CACHE_TYPE=q8_0` (y Flash Attention) | Con la caché en q8_0, un 27B Q4_K_M con 64k cabe en 24 GB (16,6 GB frente a 16,3 GB con 32k en f16) y genera casi igual de rápido. Con 32k, un prompt más largo se recorta sin aviso. Sin q8_0, quedarse en 32768 |
 | `temperature` | 0,1–0,2 | Pasos reproducibles sin bloquear la redacción |
 | `repeat_penalty` | 1,0–1,05 | Las llamadas repiten nombres de funciones y de parámetros; penalizarlos las rompe |
-| Modelo | El mayor que quepa con 32k de contexto y buen uso de herramientas | Las llamadas a herramientas fallan más que el razonamiento en modelos pequeños |
+| Modelo | El mayor que quepa con 64k de contexto (caché q8_0) y buen uso de herramientas | Las llamadas a herramientas fallan más que el razonamiento en modelos pequeños |
 
 **Con el MCP piastropilot** (cliente MCP como Hermes Agent): arrancar el servidor con `PIASTROPILOT_COMPACTO=1` y `PIASTROPILOT_FASE=lineal` o `no-lineal` según la sesión; la lista de herramientas baja de ~10.900 a ~6.600 o ~4.700 tokens.
 

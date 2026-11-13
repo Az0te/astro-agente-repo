@@ -234,7 +234,9 @@ function plRutaCodexPorDefecto() {
 
 function PLAjustes() {
    this.proveedor = "ollama";             // ollama | claude | codex
-   this.modeloOllama = "qwen38-32k";
+   // 64k con OLLAMA_KV_CACHE_TYPE=q8_0: medido el 13 nov 2026 en la RX 7900 XTX, cabe en VRAM
+   // (16,6 GB frente a 16,3 GB) y genera casi igual de rápido; con 32k los prompts largos se recortaban.
+   this.modeloOllama = "qwen38-64k";
    this.modeloClaude = PL_AUTO;           // auto = pesos N; vacío = el que tenga configurado la CLI
    this.modeloCodex = PL_AUTO;
    // Pesos N (como «Configurar IA» del módulo): puntuación > N → modelo inferior; <= N → superior.
@@ -274,6 +276,7 @@ function PLAjustes() {
             else this[k] = v;
          }
       }
+      if (this.modeloOllama == "qwen38-32k") this.modeloOllama = "qwen38-64k";   // ajuste guardado del antiguo valor por defecto
       PL_EN = this.idioma == "en";
    };
 
