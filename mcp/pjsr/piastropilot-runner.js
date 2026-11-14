@@ -347,6 +347,7 @@ var LISTA = {
    resolverAstrometria:  function (a) { return resolverAstrometria(a.vista, a.opciones || {}); },
    gradienteCandidatos:  function (a) { return gradienteCandidatos(a.vista, a.opciones || {}); },
    gradienteVarias:      function (a) { return gradienteVarias(a.lista, a.opciones || {}); },
+   diagnosticoManchas:   function (a) { return diagnosticoManchas(a.vista, a.opciones || {}); },
    graxpertBGE:          function (a) { return graxpertBGE(a.vista, a.opciones || {}); },
    graxpertDenoise:      function (a) { return graxpertDenoise(a.vista, a.opciones || {}); },
    combinarMasters:      function (a) { return combinarMasters(a.masters, a.opciones || {}); },

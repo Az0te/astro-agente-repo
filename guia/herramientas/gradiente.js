@@ -10,6 +10,7 @@
 //     mgcOpts: { structureSeparation: 2, modelSmoothness: 2.5 },
 //     mgcBorde: true,                                      // 1.9.6+: cada escala también con edgeCorrection (false = no)
 //     dossier: "C:/ruta/dossier.json"                      // opcional: escribe el dossier de PiAstroPilot
+//     halo: true, haloOpts: { escala: 1.1 },                 // polinomio fuera del halo (+ crominancia); false = no
 //   });
 //   JSON.stringify(r);   // { vista, candidatos: [{vista, modelo, metodo, parametros, metricas, notas}],
 //                        //   intermedias, recomendado, motivo, errores }
@@ -515,6 +516,31 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
+  // Polinomio fuera del halo (+ crominancia) (14 nov 2026): para objetos grandes y difusos cuyo halo exterior se sale de
+  // la máscara. Ver grHalo en gradbordes.js. halo: false para no probarlo; haloOpts para la geometría.
+  if (o.halo !== false && nch >= 3) {
+    try {
+      var gh = grHalo(viewId, base, o);
+      var mth = grModeloCadena(viewId, gh.poly, gh.poly + "_modelo");
+      var chp = { vista: gh.poly, modelo: mth, metodo: "Polinomio fuera del halo",
+                  parametros: "grado " + (o.haloOpts && o.haloOpts.grado || 2) + " por canal, ajustado fuera del objeto agrandado ×" + gh.escala +
+                              (gh.geometria ? " (" + gh.geometria + ")" : "") + "; " + gh.celdas + " celdas de cielo",
+                  metricas: grMeasure(base, mth, gh.poly, range0),
+                  notas: "La máscara del objeto agrandada saca el halo débil del ajuste: el polinomio no se curva para seguirlo." };
+      r.candidatos.push(chp);
+      if (gh.aviso) r.errores.push("Polinomio fuera del halo: " + gh.aviso);
+      if (gh.depuracion) r.depuracion_halo = gh.depuracion;
+      if (gh.croma) {
+        r.intermedias.push(gh.modelo_croma);
+        var mtc = grModeloCadena(viewId, gh.croma, gh.croma + "_modelo");
+        r.candidatos.push({ vista: gh.croma, modelo: mtc, modelo_croma: gh.modelo_croma, metodo: "Polinomio fuera del halo + crominancia",
+                            parametros: chp.parametros + " + superficie suave de R−G y B−G en " + gh.cajas_usadas + " cajas de cielo",
+                            metricas: grMeasure(base, mtc, gh.croma, range0),
+                            notas: "Quita manchas de color de escala media (p. ej. un hueco en un solo canal) sin tocar la luminancia; bajo el objeto, interpolado." });
+      }
+    } catch (e) { r.errores.push("Polinomio fuera del halo: " + e); }
+  }
+
   // Cadenas (14 nov 2026, Rafael): polinomio (gradiente general) → buscar manchas → gradiente de bordes → buscar
   // manchas otra vez; y, para comparar, polinomio + GraXpert. Cada cadena es un candidato más, medido como los demás
   // con su modelo total (original − corregida).
@@ -692,6 +718,12 @@ function gradienteCandidatos(viewId, o) {
                (best.metricas.manchas ? "; manchas: " + best.metricas.manchas.donde : "") + ".";
   } else {
     r.motivo = "Ningún candidato se pudo medir: ver errores.";
+  }
+  // Diagnóstico de las manchas que quedan en la recomendada (14 nov 2026): canal, exceso o hueco y si siguen al objeto,
+  // con un veredicto en una frase. diagnostico: false para no hacerlo.
+  if (r.recomendado && o.diagnostico !== false && nch >= 3) {
+    try { r.diagnostico_manchas = diagnosticoManchas(r.recomendado, { bin: bin, mascara: o.mascara }); }
+    catch (e) { r.errores.push("Diagnóstico de manchas: " + e); }
   }
   // Miniaturas para el chat: la corregida (con STF) y, al lado, el modelo de gradiente quitado.
   r.candidatos.forEach(function (c) {

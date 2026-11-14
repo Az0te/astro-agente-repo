@@ -68,6 +68,13 @@ Resultados anteriores, sin GraXpert: nebulosa oscura → ganó el plano de grado
 - **Medirlo, no sólo mirarlo:** medianas en cajas de 300 px sobre el objeto y sobre el cielo cercano, antes y después. En nebulosa oscura, con escala 2048 y 4096 el modelo reproducía el borde del tiburón y el contraste polvo−cielo bajaba de 1,16 a 0,26–0,30 ×10⁻⁴ (−75 %). "**En nebulosas oscuras, IFN y polvo extenso, desconfiar del modelo con base de referencia.**"
 - No es el método predeterminado: es un candidato más en la comparativa.
 
+**Manchas de color que deja el modelo en objetos grandes y difusos** (nov 2026, galaxia grande)
+
+- Diagnosticar antes de corregir. Para cada mancha del cielo, medir en qué canal está, si es un exceso o un hueco respecto al cielo y si sigue al objeto (cerca de él y repetida al otro lado). **La señal real sólo suma luz**: un hueco, o una mancha casi en un solo canal, es un artefacto (luz parásita, planos) y se puede corregir; un exceso en los tres canales, cerca del objeto y simétrico, es halo real y no se quita. En el caso estudiado, la mancha amarilla era un hueco casi sólo en azul (−0,2…−0,4 % del cielo en B, R y G ≈ 0); dos modelos que no midieron esto la tomaron por halo y la dejaron.
+- Causa frecuente: la máscara del objeto se queda corta. El halo exterior entra como «cielo», el polinomio se curva para seguirlo y deja manchas alrededor.
+- Remedio que ganó: **polinomio de grado 2 por canal ajustado sólo fuera del objeto agrandado** (elipse del objeto ×1,1; las compañeras, fuera también) y, después, **corrección de crominancia**: medianas de R−G y B−G en cajas de cielo (~1/21 del lado menor, ≥ 60 % de cielo, con rechazo de estrellas), una superficie suave (thin-plate con suavizado y rechazo de cajas a 2,5σ) y restarla de R y de B. La luminancia sólo recibe el polinomio, así que no se lleva halo débil ni IFN. Manchas de color de 0,038 a 0,016 con el objeto intacto, mejor que spline por canal o un término de halo en el ajuste (0,023–0,025).
+- Trampas: la elipse para las cajas de color no debe llevar margen extra (con ×1,25 se perdían las cajas de las esquinas, la superficie extrapolaba allí y no mejoraba nada). Bajo el objeto la corrección es interpolada: no se puede verificar.
+
 **Extracción por muestras manuales (referencia clásica)**: "tolerancia ~2,0, shadows relaxation ~6, pocas muestras (gradiente = gran escala), nunca sobre nebulosa".
 
 **Plano robusto (control conservador).** "Plano robusto de grado 1 (rejilla 24×16 de medianas, mínimos cuadrados con rechazo iterativo a 2σ) restado por canal. No puede crear ni borrar formas; antes, confirmar en una vista binada con mediana que el gradiente es liso (en una nebulosa oscura, brillo verdoso hacia arriba a la derecha)."

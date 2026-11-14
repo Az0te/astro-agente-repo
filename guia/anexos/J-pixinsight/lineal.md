@@ -255,7 +255,10 @@ El proceso GraXpert crea `GraXpert_sample_free_background_extraction` (corregida
 - GraXpert sample_free 10 y 8, y GraXpert con su modelo de IA (`graxpertIA: false` para quitarlo);
 - GradientCorrection, el proceso nativo de PixInsight: automático, sin astrometría ni MARS, con protección de estructuras (`gradientCorrection: false` para quitarlo; `gcOpts` para sus parámetros);
 - MGC 1024 y 2048, con y sin corrección de bordes;
-- polinomio robusto de grado 1 y 2 por canal, ajustado fuera del objeto.
+- polinomio robusto de grado 1 y 2 por canal, ajustado fuera del objeto;
+- polinomio fuera del halo (`GC_POLY2H`) y + crominancia (`GC_POLY2HC`): el polinomio se ajusta fuera de la elipse del objeto agrandada (`haloOpts.escala`, 1,1) y luego se quitan de R y B las manchas de color de escala media (detalle: «Manchas de color que deja el modelo»). `halo: false` para quitarlo; `haloOpts: { escala, elipse: { x, y, a, q, angulo } (en px, a = eje mayor entero, p. ej. del tamaño de catálogo), excluirCirculos: [{ x, y, r }], suavizado: 0.005, croma: true }`.
+
+`diagnosticoManchas(vista)` dice qué es cada mancha que queda (valores R, G, B en % del cielo de cada canal, `tipo`: hueco / exceso en un canal / halo probable / exceso sin forma de halo, y un `veredicto`). `gradienteCandidatos` lo añade solo para la recomendada en `diagnostico_manchas` (`diagnostico: false` para no hacerlo). Leer el veredicto antes de decir que una mancha es halo.
 
 Sin astrometría, MGC no se puede probar, pero quedan 6 candidatos. En una nebulosa de emisión y reflexión sin calibrar (8 nov 2026) ganó GradientCorrection: dejó el 62 % del gradiente y se llevó el 2 % del objeto; los tres GraXpert se llevaban entre el 4 y el 6 %. `gradienteVarias` (varias vistas) conserva la tabla de la comparación en `comparados` (una fila por candidato, con `elegido`). Si el objeto llena el campo y no quedan celdas de cielo, `fondoResidual` se mide en la rejilla 4×3 de toda la imagen (lo dice `fondo_medido_en`); una medida imposible cuenta como la peor.
 
