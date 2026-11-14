@@ -2349,6 +2349,22 @@ def _contraste_local(L, m, r=16):
     return float(np.sqrt(np.mean(d ** 2)))
 
 
+def _textura(L, obj):
+    """Textura del objeto en una imagen estirada, por escalas (igual que medidas.textura de SASpro): grano = σ de la
+    escala fina (L − caja 3×3) relativo al nivel del objeto; contraste_medio = σ de la banda 4–32 px; contraste_grande =
+    σ de la banda 32–256 px; suavidad = contraste_grande / grano. Meta: el final de PixInsight de IC 1396 (suavidad 5,0,
+    grano 0,027; 14 nov 2026)."""
+    if obj is None or not obj.any():
+        return {}
+    nivel = max(float(np.median(L[obj])), 1e-6)
+    g = float(np.std((L - _caja(L, 1))[obj])) / nivel
+    s4, s32, s256 = _suave(L, 8), _suave(L, 64), _suave(L, 512)
+    cm = float(np.std((s4 - s32)[obj])) / nivel
+    cg = float(np.std((s32 - s256)[obj])) / nivel
+    return {"grano": _r(g, 4), "contraste_medio": _r(cm, 4), "contraste_grande": _r(cg, 4),
+            "suavidad": _r(cg / max(g, 1e-9), 2)}
+
+
 CONTRASTE = {
     "clahe_suave": (["clahe", "1.5", "8"], "CLAHE límite 1,5"),
     "clahe_medio": (["clahe", "2.5", "8"], "CLAHE límite 2,5"),
