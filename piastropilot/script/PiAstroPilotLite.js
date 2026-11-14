@@ -756,19 +756,66 @@ function plOllamaModelos(aj) {
    return (JSON.parse(r.texto).models || []).map(function (m) { return m.name; });
 }
 
-function plOllamaChat(aj, sistema, mensajes, estado) {
-   var cuerpo = { model: aj.modeloOllama, stream: false, think: !!aj.pensar,
-                  options: { temperature: aj.temperatura },
-                  messages: [{ role: "system", content: sistema }].concat(mensajes) };
-   var r = plHttp({ url: aj.ollamaUrl.replace(/[\/]+$/, "") + "/api/chat", cuerpo: plJsonAscii(cuerpo), conexion: 10 }, estado, 0);
-   if (!r.ok || r.codigo != 200) {
-      var det = r.texto ? " " + plRecortar(r.texto, 400) : "";
-      throw new Error("Ollama: " + (r.error || "HTTP " + r.codigo) + det);
+// Turno mudo (14 nov 2026, qwen38-32k): con «pensar», Ollama puede devolver content vacío y todo en message.thinking
+// (en bucle o con la respuesta redactada ahí). Hasta 2 empujones con think=false; si sigue vacío, el final legible del
+// razonamiento marcado como tal. El thinking no vuelve al historial.
+var PL_MAX_EMPUJONES = 2;
+var PL_EMPUJON = "Tu último turno quedó vacío: haz ya la llamada a la herramienta que estabas preparando o escribe la " +
+                 "respuesta final. No vuelvas a razonar desde el principio.";
+
+function plTextoDelRazonamiento(pensado, maximo) {
+   maximo = maximo || 2500;
+   var vistos = {}, parrafos = [];
+   String(pensado || "").split("\n\n").forEach(function (p) {
+      p = p.trim();
+      if (p.length && !vistos.hasOwnProperty(p)) { vistos[p] = true; parrafos.push(p); }
+   });
+   var salida = [], largo = 0;
+   for (var i = parrafos.length - 1; i >= 0; i--) {
+      if (salida.length && largo + parrafos[i].length > maximo) break;
+      salida.unshift(parrafos[i]);
+      largo += parrafos[i].length;
    }
-   var j = JSON.parse(r.texto);
-   if (j.error) throw new Error("Ollama: " + j.error);
-   return { texto: String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "").trim(),
-            uso: { entrada: j.prompt_eval_count || 0, salida: j.eval_count || 0, cache: j.prompt_eval_cached_count || 0, coste: 0 } };
+   var texto = salida.join("\n\n").trim();
+   if (texto.length > maximo) texto = "…" + texto.substring(texto.length - maximo);
+   return texto.length >= 80 ? texto : "";
+}
+
+function plOllamaChat(aj, sistema, mensajes, estado) {
+   var conv = [{ role: "system", content: sistema }].concat(mensajes);
+   var uso = { entrada: 0, salida: 0, cache: 0, coste: 0 }, empujones = 0, pensar = !!aj.pensar, ultimoPensado = "";
+   for (;;) {
+      var cuerpo = { model: aj.modeloOllama, stream: false, think: pensar,
+                     options: { temperature: aj.temperatura }, messages: conv };
+      var r = plHttp({ url: aj.ollamaUrl.replace(/[\/]+$/, "") + "/api/chat", cuerpo: plJsonAscii(cuerpo), conexion: 10 }, estado, 0);
+      if (!r.ok || r.codigo != 200) {
+         var det = r.texto ? " " + plRecortar(r.texto, 400) : "";
+         throw new Error("Ollama: " + (r.error || "HTTP " + r.codigo) + det);
+      }
+      var j = JSON.parse(r.texto);
+      if (j.error) throw new Error("Ollama: " + j.error);
+      uso.entrada += j.prompt_eval_count || 0;
+      uso.salida += j.eval_count || 0;
+      uso.cache += j.prompt_eval_cached_count || 0;
+      var texto = String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "").trim();
+      var pensado = String(j.message && j.message.thinking || "").trim() || ultimoPensado;   // tras think=false ya no llega
+      ultimoPensado = pensado;
+      if (texto.length || !pensado.length) {
+         if (!texto.length) console.warningln("PiAstroPilot: el modelo no respondió (turno vacío).");
+         return { texto: texto, uso: uso };
+      }
+      if (empujones < PL_MAX_EMPUJONES) {
+         empujones++;
+         console.warningln("PiAstroPilot: el modelo dejó el turno vacío (todo en el razonamiento): empujón " +
+                           empujones + " de " + PL_MAX_EMPUJONES + ".");
+         conv = conv.concat([{ role: "user", content: PL_EMPUJON }]);
+         pensar = false;                         // sólo en el reintento
+         continue;
+      }
+      var final = plTextoDelRazonamiento(pensado);
+      if (!final.length) console.warningln("PiAstroPilot: el modelo no respondió (turno vacío).");
+      return { texto: final.length ? "(tomado del razonamiento)\n\n" + final : "", uso: uso };
+   }
 }
 
 // Lanza una CLI con el prompt por stdin (fichero) y la salida a fichero, sin congelar el diálogo.

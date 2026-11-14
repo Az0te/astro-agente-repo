@@ -75,6 +75,7 @@ def _poner(siril, a, nota):
         except Exception:
             pass
         siril.set_image_pixeldata(a)
+    H._apilar(siril, nota[:70])                 # deshacer sabrá qué deshace (Siril no lo pone en su historial)
 
 
 def _restaurar(siril, a):
@@ -2770,6 +2771,7 @@ def exportarFinal(siril, carpeta, nombre=None, calidad=95):
     t0 = time.perf_counter()
     siril.cmd("savetif", H._arg_cmd(raiz))
     siril.cmd("savejpg", H._arg_cmd(raiz), str(q))
+    H._pila_sigue(siril)
     hechos = []
     for e in (".tif", ".tiff", ".jpg", ".jpeg"):
         f = Path(str(raiz) + e)

@@ -432,7 +432,7 @@
    "fichero": "herramientas.py",
    "nivel": "vista",
    "timeout_s": 60,
-   "descripcion": "Deshace la última operación de la imagen cargada (historial de Siril).",
+   "descripcion": "Deshace la última operación de la imagen cargada, también las de las herramientas (aplicarCandidato, etc.). Devuelve cambio (true si la imagen cambió de verdad), paso (qué se deshizo) y aviso. Ojo: tras deshacer, la imagen queda SIN ese paso; usa rehacer antes de guardar si lo quieres.",
    "params": {
     "type": "object",
     "properties": {}
@@ -443,7 +443,7 @@
    "fichero": "herramientas.py",
    "nivel": "vista",
    "timeout_s": 60,
-   "descripcion": "Rehace la última operación deshecha.",
+   "descripcion": "Rehace la última operación deshecha. Devuelve cambio (true si la imagen cambió de verdad), paso y aviso.",
    "params": {
     "type": "object",
     "properties": {}

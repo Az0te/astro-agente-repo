@@ -472,21 +472,97 @@ def guardarImagen(siril, fichero, sobrescribir=False):
     if not hechos:
         raise RuntimeError(f"Siril no ha escrito {base}{ext}.")
     GUARDADOS.update(_clave(h) for h in hechos)
+    _pila_sigue(siril)                          # guardar cambia el nombre de la imagen, pero es la misma
     return {"fichero": hechos[0], "bytes": os.path.getsize(hechos[0])}
 
 
 # --- Herramientas: cambian la imagen (con deshacer) --------------------------------------------------------
 
-def deshacer(siril):
+# Pila de lo que aplican las herramientas con set_image_pixeldata (aplicarCandidato, starless...): Siril sí lo deshace
+# (undo_save_state), pero get_image_history() no lo registra. Sin esto, deshacer respondía {"historial": []} aunque
+# hubiera quitado el gradiente, y el modelo guardaba la imagen sin corregir (14 nov 2026, M31 con qwen38-32k).
+# Se pierde si el puente recarga las herramientas; entonces deshacer dice «desconocido» pero sigue sabiendo si cambió.
+PILA = {"fichero": None, "hechos": [], "deshechos": []}
+ESPERA_DESHACER_S = 5.0
+
+
+def _pila_de(siril):
+    f = siril.get_image_filename()
+    if PILA["fichero"] != f:                 # otra imagen cargada: lo apilado era de la anterior
+        PILA.update(fichero=f, hechos=[], deshechos=[])
+    return PILA
+
+
+def _pila_sigue(siril):
+    """Tras guardar con save/savetif el nombre de la imagen cambia, pero sigue siendo la misma: conserva la pila."""
+    try:
+        PILA["fichero"] = siril.get_image_filename()
+    except Exception:
+        pass
+
+
+def _apilar(siril, nota):
+    """Lo llama pasos._poner tras cambiar los píxeles con un estado de deshacer."""
+    try:
+        p = _pila_de(siril)
+        p["hechos"] = (p["hechos"] + [nota])[-30:]
+        p["deshechos"] = []
+    except Exception:
+        pass
+
+
+def _huella_imagen(siril):
+    """Huella de los píxeles: muestra regular (sha1) más la suma total, para saber si deshacer/rehacer cambió algo."""
+    import hashlib
+    a = siril.get_image_pixeldata()
+    v = np.ascontiguousarray(a.reshape(-1)[:: max(1, a.size // 400000)])
+    return hashlib.sha1(v.tobytes()).hexdigest() + f"_{float(np.sum(a, dtype=np.float64))!r}_{a.shape}"
+
+
+def _deshacer_rehacer(siril, rehacer):
     _hay_imagen(siril)
-    siril.undo()
-    return {"historial": (siril.get_image_history() or [])[-5:]}
+    p = _pila_de(siril)
+    hist0 = list(siril.get_image_history() or [])
+    antes = _huella_imagen(siril)
+    siril.redo() if rehacer else siril.undo()
+    # undo()/redo() vuelven antes de que Siril cambie los píxeles (lo hace después, en su hilo): se espera al cambio.
+    t0, cambio = time.time(), False
+    while not cambio and time.time() - t0 < ESPERA_DESHACER_S:
+        time.sleep(0.25)
+        cambio = _huella_imagen(siril) != antes
+    hist1 = list(siril.get_image_history() or [])
+    r = {"cambio": cambio}
+    if not cambio:
+        r["paso"] = None
+        r["aviso"] = (f"No había nada que {'rehacer' if rehacer else 'deshacer'}: la imagen NO ha cambiado.")
+    else:
+        origen, destino = (p["deshechos"], p["hechos"]) if rehacer else (p["hechos"], p["deshechos"])
+        if not rehacer and len(hist1) < len(hist0):
+            paso = hist0[-1]                 # comando de Siril (sí está en su historial)
+        elif rehacer and len(hist1) > len(hist0):
+            paso = hist1[-1]
+        elif origen:
+            paso = origen.pop()
+            destino.append(paso)
+        else:
+            paso = "desconocido"
+        r["paso"] = paso
+        r["aviso"] = (f"Rehecho «{paso}»: la imagen vuelve a tenerlo aplicado." if rehacer else
+                      f"Deshecho «{paso}»: la imagen ha vuelto al estado de ANTES de ese paso. Si quieres guardar el "
+                      "resultado con el paso aplicado, usa rehacer antes de guardar.")
+    r["aplicados_por_herramientas"] = p["hechos"][-5:]
+    r["historial"] = hist1[-5:]
+    return r
+
+
+def deshacer(siril):
+    """Deshace la última operación y dice si la imagen cambió de verdad y qué se deshizo."""
+    return _deshacer_rehacer(siril, False)
 
 
 def rehacer(siril):
-    _hay_imagen(siril)
-    siril.redo()
-    return {"historial": (siril.get_image_history() or [])[-5:]}
+    """Rehace la última operación deshecha y dice si la imagen cambió de verdad."""
+    return _deshacer_rehacer(siril, True)
 
 
 # Comandos de Siril de procesado de la imagen cargada. Nada que cargue, guarde, cambie de carpeta,

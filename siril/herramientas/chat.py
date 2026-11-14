@@ -40,6 +40,9 @@ MODELO_LOCAL = "qwen38-32k"
 CLAUDE = "Claude (CLI)"
 MAX_RONDAS = 30
 MAX_RESULTADO = 6000                                    # caracteres de cada resultado que vuelven al modelo local
+MAX_EMPUJONES = 2                                       # turnos vacíos (todo en «thinking») que se reintentan
+EMPUJON = ("Tu último turno quedó vacío: haz ya la llamada a la herramienta que estabas preparando o escribe la "
+           "respuesta final. No vuelvas a razonar desde el principio.")
 
 
 # --- Puente --------------------------------------------------------------------------------------------------
@@ -259,6 +262,26 @@ def _compactar(mensajes, guardar_ultimos=2):
     return int(tokens())
 
 
+def _texto_del_razonamiento(pensado, maximo=2500):
+    """Final legible del «thinking» de un turno vacío: párrafos sin repetir (los bucles repiten los mismos), los
+    últimos que quepan en «maximo». Vacío si no queda texto con sentido."""
+    vistos, parrafos = set(), []
+    for p in (x.strip() for x in pensado.split("\n\n")):
+        if p and p not in vistos:
+            vistos.add(p)
+            parrafos.append(p)
+    salida, largo = [], 0
+    for p in reversed(parrafos):
+        if salida and largo + len(p) > maximo:
+            break
+        salida.insert(0, p)
+        largo += len(p)
+    texto = "\n\n".join(salida).strip()
+    if len(texto) > maximo:
+        texto = "…" + texto[-maximo:]
+    return texto if len(texto) >= 80 else ""
+
+
 class MotorLocal:
     """Ollama con herramientas: el bucle de llamadas lo hace este script, contra el puente."""
 
@@ -280,6 +303,7 @@ class MotorLocal:
         self.mensajes.append({"role": "user", "content": texto})
         rondas = 150 if leer_ajustes().get("hasta_final") else MAX_RONDAS
         tok_in = tok_out = 0
+        empujones, sin_pensar, ultimo_pensado = 0, False, ""
         t0 = time.time()
         for _ in range(rondas):
             if cancelado():
@@ -289,6 +313,9 @@ class MotorLocal:
             cuerpo = {"model": self.modelo, "messages": [{k: v for k, v in m.items() if not k.startswith("_")}
                                                         for m in self.mensajes], "tools": herramientas_ollama(self.funcs, internet),
                       "stream": False, "options": {"num_ctx": 32768}}
+            if sin_pensar:                       # sólo en la petición que sigue a un empujón
+                cuerpo["think"] = False
+                sin_pensar = False
             # Ollama responde 500 cuando no puede leer la llamada a herramienta que ha escrito el modelo (XML cortado:
             # 11 nov 2026, IC 1396). Es esporádico: se repite hasta 3 veces y la última con un aviso de formato.
             r = None
@@ -310,8 +337,27 @@ class MotorLocal:
             tok_in += int(r.get("prompt_eval_count") or 0)
             tok_out += int(r.get("eval_count") or 0)
             m = r.get("message", {})
-            self.mensajes.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls")})
             llamadas = m.get("tool_calls") or []
+            if not llamadas and not (m.get("content") or "").strip():
+                # Turno mudo (14 nov 2026, M31 en SASpro con qwen38-32k): Ollama devuelve stop con content vacío, sin
+                # llamadas y miles de tokens en «thinking» (en bucle, o con la respuesta redactada ahí). En vez de cerrar
+                # el turno, hasta MAX_EMPUJONES empujones con think=false en la petición siguiente. El thinking no
+                # vuelve al historial (se comería el contexto).
+                pensado = (m.get("thinking") or "").strip() or ultimo_pensado   # tras think=false ya no llega
+                ultimo_pensado = pensado
+                if pensado and empujones < MAX_EMPUJONES:
+                    empujones += 1
+                    emitir({"tipo": "aviso", "texto": f"El modelo dejó el turno vacío (todo en el razonamiento): "
+                                                      f"empujón {empujones} de {MAX_EMPUJONES}."})
+                    self.mensajes.append({"role": "user", "content": EMPUJON})
+                    sin_pensar = True
+                    continue
+                final = _texto_del_razonamiento(pensado)
+                if final:
+                    m = dict(m, content="(tomado del razonamiento)\n\n" + final)
+                else:
+                    emitir({"tipo": "aviso", "texto": "El modelo no respondió (turno vacío)."})
+            self.mensajes.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls")})
             if m.get("content") and (not llamadas or m["content"].strip()):
                 emitir({"tipo": "texto", "texto": m["content"]})
             if not llamadas:
@@ -346,7 +392,7 @@ class MotorLocal:
                 self.mensajes.append({"role": "tool", "tool_name": nombre,
                                       "content": txt[:MAX_RESULTADO] + ("…" if len(txt) > MAX_RESULTADO else "")})
         emitir({"tipo": "fin", "tokens_entrada": tok_in, "tokens_salida": tok_out, "coste": 0.0,
-                "segundos": round(time.time() - t0, 1), "contexto": _compactar(self.mensajes)})
+                "segundos": round(time.time() - t0, 1), "contexto": _compactar(self.mensajes), "empujones": empujones})
 
 
 class MotorClaude:
