@@ -13,6 +13,14 @@ Los ejemplos de llamada explican qué hace cada función: no se copian, se pide 
 
 **Vistas e ids.** Los ids salen de `vistas`. Las funciones reciben el id como texto (`analizarMaster("id")`), no una ventana ni una vista. Renombrar las ventanas en la misma llamada que las crea (`nuevaVista`).
 
+<a id="perfil"></a>
+**Perfil y entorno en PixInsight** (complementa [00 Perfil y entorno](../00-perfil-y-entorno.md)).
+
+- Procesos configurados en código, sin iconos del escritorio: `herramientas/procesos.js` (SPCC, SPFC y MGC) y los scripts necesarios reimplementados en `herramientas/realces.js`.
+- En el perfil, bloque «PixInsight»: instalación si no es la de por defecto; módulos de terceros (BXT, NXT, SXT, GraXpert…); filtros y curva QE para SPCC/SPFC con los nombres de `library/filters.xspd` (`pxFilterNames()` los lista); ruta de la base MARS (sin ella, MGC usa la configurada en sus preferencias); ejecutable de GraXpert sólo si `graxpert.js` no lo encuentra; carpeta `guia/` del repo.
+- Astrometría: `resolverAstrometria` usa el motor de BlindSolver (PixInsight 1.9.6+).
+- Previas: `previa` reduce con IntegerResample y aplica un STF automático si la vista es lineal.
+
 **Funciones por paso** (en negrita las que comparan)
 
 | Paso | Funciones |
@@ -97,3 +105,4 @@ Las funciones devuelven ya los nombres neutros; los antiguos se mantienen como a
 
 - [Fase lineal](J-pixinsight/lineal.md): [Paso 1](J-pixinsight/lineal.md#lineal-01), [Paso 2](J-pixinsight/lineal.md#lineal-02), [Paso 3](J-pixinsight/lineal.md#lineal-03), [Paso 4](J-pixinsight/lineal.md#lineal-04), [Paso 5](J-pixinsight/lineal.md#lineal-05), [Paso 6](J-pixinsight/lineal.md#lineal-06), [Paso 7](J-pixinsight/lineal.md#lineal-07), [Paso 8](J-pixinsight/lineal.md#lineal-08), [Paso 9](J-pixinsight/lineal.md#lineal-09), [Paso 10](J-pixinsight/lineal.md#lineal-10), [Paso 11](J-pixinsight/lineal.md#lineal-11), [Paso 12](J-pixinsight/lineal.md#lineal-12), [Paso 13](J-pixinsight/lineal.md#lineal-13), [Paso 14](J-pixinsight/lineal.md#lineal-14), [Paso 15](J-pixinsight/lineal.md#lineal-15), [Paso 16](J-pixinsight/lineal.md#lineal-16), [Paso 17](J-pixinsight/lineal.md#lineal-17)
 - [Fase no lineal](J-pixinsight/no-lineal.md): [Paso 1](J-pixinsight/no-lineal.md#no-lineal-01), [Paso 2](J-pixinsight/no-lineal.md#no-lineal-02), [Paso 3](J-pixinsight/no-lineal.md#no-lineal-03), [Paso 4](J-pixinsight/no-lineal.md#no-lineal-04), [Paso 5](J-pixinsight/no-lineal.md#no-lineal-05), [Paso 6](J-pixinsight/no-lineal.md#no-lineal-06), [Paso 8](J-pixinsight/no-lineal.md#no-lineal-08), [Paso 9](J-pixinsight/no-lineal.md#no-lineal-09), [Paso 10](J-pixinsight/no-lineal.md#no-lineal-10), [Paso 11](J-pixinsight/no-lineal.md#no-lineal-11)
+- [Detalle en PixInsight](J-pixinsight/detalle.md) (material de apoyo de los ficheros de `detalle/`): [gradiente](J-pixinsight/detalle.md#lineal-09), [ruido de la starless](J-pixinsight/detalle.md#lineal-15), [estirado](J-pixinsight/detalle.md#no-lineal-01), [estrellas](J-pixinsight/detalle.md#no-lineal-08)

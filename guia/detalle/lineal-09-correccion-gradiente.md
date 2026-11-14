@@ -1,60 +1,36 @@
 # Detalle del Paso 9 lineal: Corrección de gradiente
 
-[← Ficha del paso](../lineal/09-correccion-gradiente.md) · [Índice](../SKILL.md)
+[← Ficha del paso](../lineal/09-correccion-gradiente.md) · [Índice](../SKILL.md) · En PixInsight: [Anexo J, detalle](../anexos/J-pixinsight/detalle.md#lineal-09)
 
-Material de apoyo de la ficha: medidas, funcionamiento de GraXpert, opciones de `graxpert.js`, MGC en detalle y el protocolo para comparar métodos cuando el modelo no convence. La ficha manda.
+Material de apoyo de la ficha: medidas, funcionamiento de GraXpert y de los modelos con base de referencia, y el protocolo para comparar métodos cuando el modelo no convence. La ficha manda. Los nombres de procesos, funciones y ventanas de cada programa están en su anexo.
 
-**Por qué.** El gradiente es un offset de gran escala que no pertenece al objeto: contamina la calibración de color (SPCC mide el fondo), aplasta el contraste del polvo y del IFN y aparece como un velo al estirar. Y se corrige **en lineal y por canal**, antes de combinar: "Si los canales tienen gradientes distintos (otras noches/filtros/cámaras), corregir por canal antes de combinar". Un gradiente que llega al estirado ya no se puede separar de la señal débil.
+**Por qué.** El gradiente es un offset de gran escala que no pertenece al objeto: contamina la calibración de color (que mide el fondo), aplasta el contraste del polvo y del IFN y aparece como un velo al estirar. Y se corrige **en lineal y por canal**, antes de combinar: "Si los canales tienen gradientes distintos (otras noches/filtros/cámaras), corregir por canal antes de combinar". Un gradiente que llega al estirado ya no se puede separar de la señal débil.
 
-**Sin método predeterminado** (decisión del usuario, 5 nov 2026): se comparan los candidatos en cada imagen y se aplica el que mejor mida. GraXpert sample_free escala 10 por sustracción fue el mejor en la prueba de la tabla de abajo, pero en una galaxia grande ganó un polinomio de grado 2. El GraXpert se ejecuta con el **proceso GraXpert de PixInsight**, que da el mismo resultado que `herramientas/graxpert.js` sin el ejecutable aparte (comparativa abajo); `graxpert.js` queda para los métodos que el proceso no ofrece (RBF, Kriging, Splines con muestras propias) y para el denoise.
+**Sin método predeterminado** (decisión del usuario, 5 nov 2026): se comparan los candidatos en cada imagen y se aplica el que mejor mida. GraXpert sample_free escala 10 por sustracción fue el mejor en la prueba de la tabla de abajo, pero en una galaxia grande ganó un polinomio de grado 2.
 
-**Cadena de procesos alrededor del gradiente**
+**Cadena de pasos alrededor del gradiente**
 
 | Caso | Cadena documentada |
 |---|---|
-| GraXpert | Recorte → `blindSolve` → **proceso GraXpert, sample_free 10** (conserva la astrometría) → BXT Correct Only → comprobar WCS → SPCC |
-| MGC | RGB → **SPFC_RGB** → **MGC** (MARS) → SPCC |
-| Banda estrecha sin MGC | "polinomio suave propio sobre rejilla de medianas con rechazo sigma (grado 2 en OIII; en Hα sólo plano grado 1 ajustado en bordes, para no comerse emisión difusa real)" |
+| GraXpert | Recorte → astrometría → **GraXpert sample_free 10** (conservar la astrometría) → deconvolución "sólo corregir" → comprobar la astrometría → calibración de color |
+| Modelo con base de referencia | Recorte → astrometría → calibración de flujo fotométrico → **modelo con base de referencia** → calibración de color |
+| Banda estrecha sin base de referencia | "polinomio suave propio sobre rejilla de medianas con rechazo sigma (grado 2 en OIII; en Hα sólo plano grado 1 ajustado en bordes, para no comerse emisión difusa real)" |
 
 **Sustracción o división**
 
 - Corrección **por sustracción** para gradientes de contaminación lumínica (aditivos).
-- **Por división** sólo para viñeteo residual (multiplicativo, flats imperfectos) en ABE/DBE/GraXpert.
+- **Por división** sólo para viñeteo residual (multiplicativo, flats imperfectos).
 - "Ante la duda probar las dos y comparar el modelo."
 
 **GraXpert en detalle**
 
 - Programa independiente (Dark Matters); desde la v3.1 también tiene modelos de denoise y deconvolución, que "no sustituyen a NXT/BXT".
 - Fondo de cada muestra: sigma-clipping (> 3σ de la mediana y píxeles a < 4 px de ellos, iterando) y mediana del resto.
-- **Salida por sustracción:** `resultado = original − modelo + media(modelo)`, con la media **de los tres canales juntos**: además de quitar el gradiente, **neutraliza el color del fondo**. MGC no lo hace. Al comparar, medir el color del fondo después de SPCC, no antes.
+- **Salida por sustracción:** `resultado = original − modelo + media(modelo)`, con la media **de los tres canales juntos**: además de quitar el gradiente, **neutraliza el color del fondo**. El modelo con base de referencia no lo hace. Al comparar, medir el color del fondo después de calibrar el color, no antes.
 - **Salida por división:** `original / modelo × media(modelo)` con la media **por canal**.
 - Extrae el fondo con un modelo de IA o con métodos clásicos sobre puntos de muestra: splines, funciones de base radial (thin-plate, lineal, cúbica, quíntica, con suavizado), kriging y sample_free.
-- La guía no usa el script de PixInsight (Toolbox/Graxpert.js). Por dentro sólo guarda la imagen, ejecuta `GraXpert -cli` con `ExternalProcess` y reabre el resultado, siempre con IA.
-- `herramientas/graxpert.js` (alternativa: llama al ejecutable por línea de comandos):
-
-```json
-{"llamadas": [
-  {"funcion": "graxpertBGE", "parametros": {"vista": "<vista>"}}
-]}
-```
-
-sample_free, escala 10 por defecto. Crea `GC_GraXpert_<tag>` (corregida) y `GC_GraXpert_<tag>_model` (modelo), con la astrometría del original copiada; devuelve `{corrected, model, seconds, log}`.
-
-- El ejecutable se busca en las rutas habituales; si no está, definir `var GX_EXE = "ruta"` antes del `eval`.
-- Opciones: `method` (sample_free por defecto, AI, RBF, Kriging, Splines), `scale` (sample_free, 1–10, por defecto 10), `smoothing` 0–1, `correction` (Subtraction o Division), `aiVersion`, `gpu: false`, `prefs`, `extra` (`-sample_free_scale`, `-sample_free_smoothness`, `-sample_free_protect`, `-sample_free_protect_threshold`, `-sample_free_protect_amount`, `-sample_free_simplified`, `-sample_free_degree`, `-sample_free_downsample`), `tag`, `keepFiles`, `maxMinutes`.
-- **Proceso GraXpert de PixInsight** (método por defecto; comprobado en 1.9.6). Crea `GraXpert_sample_free_background_extraction` (corregida, con la astrometría conservada) y `GraXpert_background` (el modelo); ~5 s en 3008×3222. Por defecto usa sample_free con suavizado 1,0, protección de estructuras activada y submuestreo 4.
-
-  Comparativa del 31 oct 2026, sample_free escala 10 en la misma imagen (masters binados ×2):
-
-  | Objeto | `copia_objeto` graxpert.js | `copia_objeto` proceso | Diferencia entre las corregidas |
-  |---|---|---|---|
-  | nebulosa oscura | copia 0,8 % (0,13) | copia 0,5 % (0,07) | p95 0,07σ del cielo |
-  | nebulosa dual band (`master_RGB`) | copia 4,3 % (0,32) | copia 4,1 % (0,31) | p95 0,08σ |
-
-  Mismo resultado en la práctica, con el modelo igual o algo más limpio. En nebulosa dual band este master da un 4,3 % con graxpert.js, no el 14 % de la tabla de abajo: aquella medida se hizo sobre otra versión del master (Anexo C).
-
-- Denoise: `graxpertDenoise("<vista>", {strength: 0.5})`; "es una alternativa a comparar con NXT, no un sustituto".
-- Si cambia la versión de GraXpert, confirmar las opciones de `graxpert.js` con `GraXpert -cli -cmd background-extraction -h` y las del proceso en su ventana.
+- Se puede llamar desde el programa (proceso o interfaz propia) o por línea de comandos; en PixInsight los dos dan el mismo resultado (comparativa en el Anexo J). Si cambia la versión de GraXpert, confirmar las opciones con `GraXpert -cli -cmd background-extraction -h`.
+- Su denoise "es una alternativa a comparar con NXT, no un sustituto".
 
 **Ajustes de partida (medidos el 29 oct 2026 en galaxia grande, nebulosa oscura, nebulosa dual band y nebulosa de emisión y reflexión)**
 
@@ -79,58 +55,40 @@ sample_free, escala 10 por defecto. Crea `GC_GraXpert_<tag>` (corregida) y `GC_G
 | nebulosa dual band (llena el campo) | copia 48 % (0,79) | IA s0,5: 37 % (0,74) | copia 39 % (0,76) | copia 22 % (0,68) | **copia 14 % (0,61)** |
 | nebulosa de emisión y reflexión  | modelo con mancha en la estrella brillante | — | estructura alrededor del fantasma | liso | liso |
 
-Masters lineales sin tocar (nebulosa dual band, nebulosa oscura y una nebulosa de emisión y reflexión binados ×2), luminancia binada ×8, con BXT Correct Only previo. En nebulosa de emisión y reflexión la medida está dominada por el halo de la estrella brillante: se juzgó a la vista. Conclusión: **sample_free escala 10 como punto de partida**; en nebulosas que llenan el campo (nebulosa dual band) aún copia algo: revisar el modelo y, si hace falta, comparar con el plano robusto o RBF con muestras propias.
+Masters lineales sin tocar (nebulosa dual band, nebulosa oscura y una nebulosa de emisión y reflexión binados ×2), luminancia binada ×8, con deconvolución "sólo corregir" previa. En nebulosa de emisión y reflexión la medida está dominada por el halo de la estrella brillante: se juzgó a la vista. Conclusión: **sample_free escala 10 como punto de partida**; en nebulosas que llenan el campo (nebulosa dual band) aún copia algo: revisar el modelo y, si hace falta, comparar con el plano robusto o RBF con muestras propias.
 
-Resultados anteriores, sin GraXpert: nebulosa oscura → ganó el plano de grado 1, MGC 2048/4096 se comió el 75 % del contraste del polvo; nebulosa de emisión y reflexión (emisión + reflexión) → MGC, sin comparar con otros métodos.
+Resultados anteriores, sin GraXpert: nebulosa oscura → ganó el plano de grado 1, el modelo con base de referencia (escalas 2048/4096) se comió el 75 % del contraste del polvo; nebulosa de emisión y reflexión → modelo con base de referencia, sin comparar con otros métodos.
 
-En imágenes grandes GraXpert puede pasar de 45 s: el MCP devuelve un id de trabajo; esperar con `estado(trabajo)` y comprobar las ventanas `GC_GraXpert_*`.
+**Modelo con base de referencia** (en PixInsight, MGC con la base MARS)
 
-**MGC / MARS**
+- Modelo: `I ≈ k·R + G + ε` (imagen = factor × referencia de cielo sin gradiente + gradiente + ruido). Prerrequisitos en orden: master lineal recortado (sin bordes de apilado) → astrometría **correcta** → calibración de flujo fotométrico → modelo → calibración de color. Correlación ≈ 0 con la base = la base no cubre ese campo o la astrometría está mal.
+- Parámetros: escala del gradiente (pequeña = riesgo de absorber cielo real; grande = subcorrección), separación de estructuras, suavizado del modelo, factores de escala por canal y filtro de gris en mono. **Factores de escala automáticos** (ajustados a la imagen): con factores fijos a 1,0 se comió el 3–4 % de una galaxia grande; con automáticos (correlación con la base 0,98–0,99), ≈ 0 % (nov 2026).
+- Corrección de bordes: modela aparte la franja del borde; agresividad 2 de partida. No quita del todo las manchas que deja en el resto del campo: ahí, encadenar con cielo con máscara (ficha) y medir.
+- Diagnóstico: modelo liso, sin objeto fantasma, sin bordes, fondo corregido no aplastado, misma visualización antes/después, control por canal. "El modelo de gradiente es la prueba." Si la nebulosa aparece en el modelo, el brillo de los objetos está infravalorado (subir escala); si aparece en negativo, sobrevalorado.
+- **Medirlo, no sólo mirarlo:** medianas en cajas de 300 px sobre el objeto y sobre el cielo cercano, antes y después. En nebulosa oscura, con escala 2048 y 4096 el modelo reproducía el borde del tiburón y el contraste polvo−cielo bajaba de 1,16 a 0,26–0,30 ×10⁻⁴ (−75 %). "**En nebulosas oscuras, IFN y polvo extenso, desconfiar del modelo con base de referencia.**"
+- No es el método predeterminado: es un candidato más en la comparativa.
 
-- Modelo: `I ≈ k·R + G + ε`. Prerrequisitos en orden: master lineal recortado (sin bordes de apilado) → astrometría (`blindSolve`) → SPFC → MGC → SPCC.
-- Parámetros: Gradient scale (pequeña = riesgo de absorber cielo real; grande = subcorrección), Structure separation, Model smoothness, Scale factors R/G/B (corregir si el objeto imprime en el modelo), Gray filter en mono.
-- Diagnóstico: modelo liso, sin objeto fantasma, sin bordes, fondo corregido no aplastado, mismo STF antes/después, control por canal. "El modelo de gradiente es la prueba." Si la nebulosa aparece en el modelo, el brillo de los objetos está infravalorado (subir escala); si aparece en negativo, sobrevalorado.
-- **Medirlo, no sólo mirarlo:** medianas en cajas de 300 px sobre el objeto y sobre el cielo cercano, antes y después. En nebulosa oscura, con escala 2048 y 4096 el modelo reproducía el borde del tiburón y el contraste polvo−cielo bajaba de 1,16 a 0,26–0,30 ×10⁻⁴ (−75 %). "**En nebulosas oscuras, IFN y polvo extenso, desconfiar de MGC.**"
-- MGC ya no es el método predeterminado: usarlo como candidato en la comparativa.
+**Extracción por muestras manuales (referencia clásica)**: "tolerancia ~2,0, shadows relaxation ~6, pocas muestras (gradiente = gran escala), nunca sobre nebulosa".
 
-**DBE clásico como referencia**: "tolerancia ~2,0, shadows relaxation ~6, pocas muestras (gradiente = gran escala), nunca sobre nebulosa".
+**Plano robusto (control conservador).** "Plano robusto de grado 1 (rejilla 24×16 de medianas, mínimos cuadrados con rechazo iterativo a 2σ) restado por canal. No puede crear ni borrar formas; antes, confirmar en una vista binada con mediana que el gradiente es liso (en una nebulosa oscura, brillo verdoso hacia arriba a la derecha)."
 
-**Plano robusto (control conservador).** "Plano robusto de grado 1 (rejilla 24×16 de medianas, mínimos cuadrados con rechazo iterativo a 2σ) restado con PixelMath por canal. No puede crear ni borrar formas; antes, confirmar en una vista binada con mediana que el gradiente es liso (en una nebulosa oscura, brillo verdoso hacia arriba a la derecha)."
+**Protocolo de comparativa** (cuando el modelo de GraXpert no convence: correlación de `copia_objeto` alta o forma del objeto visible en el modelo). Las herramientas `gradienteCandidatos` de cada programa hacen casi todo esto en una llamada.
 
-**Protocolo de comparativa** (cuando el modelo de GraXpert no convence: correlación de `copia_objeto` alta o forma del objeto visible en el modelo)
-
-1. Entrada común: el mismo master lineal, recortado y con astrometría, en el punto del flujo en que se va a corregir (antes de BXT Correct Only). Guardar una copia intacta.
-2. Candidatos, cada uno a una ventana nueva `GC_<metodo>`: MGC (SPFC previo, escalas 1024/2048/4096 si hay duda); GraXpert sample_free escala 10 y 8, y GraXpert IA; GraXpert RBF con muestras manuales si el objeto llena el campo; plano robusto grado 1 (y 2 si el gradiente es curvo); DBE con pocas muestras (opcional). Guardar también el modelo de cada uno.
-3. Métricas con `<versión>/tools/gradcompare.js`, resultados en CSV:
-   - **Forma del objeto en el modelo:** correlación entre el modelo (sin su ajuste de grado 1) y una máscara del objeto (luminancia suavizada por encima de cielo + 3σ). Cerca de 0 = bien; positiva = se come el objeto; negativa = lo infla.
+1. Entrada común: el mismo master lineal, recortado y con astrometría, en el punto del flujo en que se va a corregir (antes de la deconvolución "sólo corregir"). Guardar una copia intacta.
+2. Candidatos, cada uno a una vista o fichero nuevo: modelo con base de referencia (escalas 1024/2048/4096 si hay duda); GraXpert sample_free escala 10 y 8, y GraXpert IA; GraXpert RBF con muestras manuales si el objeto llena el campo; plano robusto grado 1 (y 2 si el gradiente es curvo); muestras manuales (opcional). Guardar también el modelo de cada uno.
+3. Métricas:
+   - **Forma del objeto en el modelo** (`copia_objeto`): correlación entre el modelo (sin su ajuste de grado 1) y una máscara del objeto (luminancia suavizada por encima de cielo + 3σ). Cerca de 0 = bien; positiva = se come el objeto; negativa = lo infla. **< 0,15 = limpio; > 0,5 = se come el objeto.**
    - **Contraste objeto−cielo:** medianas en 4–6 cajas fijas (300 px) sobre el objeto y sobre cielo cercano, % conservado respecto al original. Penalizar < 90 % en polvo/IFN.
    - **Planitud del fondo:** rejilla 8×8 de medianas sigma-clipped sólo en cajas de cielo; rango y σ por canal.
-   - **Color del fondo:** R/G y B/G en la rejilla, medido **después de SPCC** en todos.
+   - **Color del fondo:** R/G y B/G en la rejilla, medido **después de calibrar el color** en todos.
    - **Anillo oscuro:** perfil radial alrededor del objeto (objetos extensos): mínimo por debajo del cielo lejano = sobrecorrección.
    - **Ruido:** σ en cajas de cielo antes y después.
-4. Vista: tríptico original / corregido / modelo con el mismo STF, más una plancha con los modelos de todos los candidatos; comprobar también con un estirado agresivo.
+4. Vista: tríptico original / corregido / modelo con la misma visualización, más una plancha con los modelos de todos los candidatos; comprobar también con un estirado agresivo.
 5. Decisión: gana el que conserva el contraste del objeto con el fondo más plano y sin anillo; en empate, GraXpert sample_free escala 10.
-6. Registrar el resultado en la tabla de arriba (objeto, tipo, ganador, métricas clave, notas) y guardar también el modelo de cada candidato.
+6. Registrar el resultado (objeto, tipo, ganador, métricas clave, notas) y guardar también el modelo de cada candidato.
 
-**Revisión del modelo con medida**
+**Revisión del modelo.** "Confirmarlo a la vista con el modelo menos su gradiente liso: cualquier forma reconocible del objeto es señal perdida." Revisar siempre el modelo: "liso, sin la forma del objeto y sin anillo oscuro".
 
-- `copia_objeto` (en PixInsight, la función `gcStructCopy(base, modelo)` de `guia/herramientas/gradcompare.js`) da la correlación entre la estructura de gran escala del original y la del modelo (sin estrellas y sin gradiente liso). **Correlación < 0,15 = limpio; > 0,5 = se come el objeto.**
-- "Confirmarlo a la vista con el modelo menos su gradiente liso: cualquier forma reconocible del objeto es señal perdida."
-- Revisar siempre el modelo que devuelve GraXpert: "liso, sin la forma del objeto y sin anillo oscuro".
+**Control.** Modelo liso, sin objeto fantasma, sin bordes, fondo no aplastado, misma visualización antes/después. Medir el contraste objeto−cielo en cajas de 300 px (no debe bajar del 90 % en polvo/IFN). Comprobar que la imagen conserva la astrometría al terminar. Si aparece un anillo oscuro alrededor de un objeto extenso, el extractor se ha comido el halo: volver atrás y usar plano robusto o muestras manuales.
 
-**A mano en PixInsight (valores de referencia)**
-
-- GraXpert sample_free, escala 10, sustracción, con el modelo de fondo aparte y sin sustituir la imagen.
-- La corregida (`GraXpert_sample_free_background_extraction`) debe conservar la astrometría.
-- Revisar el modelo (`GraXpert_background`) antes de aceptarlo: estructura copiada < 0,15 = limpio.
-
-- Si el modelo no convence: sample_free escala 8, o IA (`graxpertBGE` con `{"method": "AI", "tag": "ai"}`).
-- Renombrar las ventanas que crea cada variante antes de lanzar la siguiente.
-
-- Orden: SPFC → MGC → SPCC; los tres necesitan solución astrométrica (sin ella, parar).
-- SPFC con los filtros y la QE del perfil; MGC con la base MARS del perfil y `gradientScale` 1024 / 2048 / 4096 en la comparativa.
-- MGC crea `<vista>_MGC_gradient_model` para revisarlo. Probado el 31 oct 2026: SPFC 2,7 s y MGC 5,6 s en 3008×3222.
-
-**Control.** Modelo liso, sin objeto fantasma, sin bordes, fondo no aplastado, mismo STF antes/después. Medir el contraste objeto−cielo en cajas de 300 px (no debe bajar del 90 % en polvo/IFN). Comprobar `hasAstrometricSolution` al terminar. Si aparece un anillo oscuro alrededor de un objeto extenso, el extractor se ha comido el halo: volver atrás y usar plano robusto o muestras manuales.
-
-> **Orden.** El gradiente se corrige antes de BXT Correct Only, como en los flujos de astro-photographie (Gradient Correction → BXT Correct Only → Plate Solve → SPCC). La tabla de GraXpert se midió con BXT CO previo; como el modelo de fondo es de gran escala y Correct Only sólo cambia el perfil de las estrellas, no se espera que el orden cambie el resultado, pero no está medido (Anexo C).
+> **Orden.** El gradiente se corrige antes de la deconvolución "sólo corregir", como en los flujos de astro-photographie (gradiente → deconvolución sólo corregir → astrometría → color). La tabla de GraXpert se midió con la deconvolución previa; como el modelo de fondo es de gran escala y "sólo corregir" sólo cambia el perfil de las estrellas, no se espera que el orden cambie el resultado, pero no está medido (Anexo C).
