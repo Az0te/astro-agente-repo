@@ -475,6 +475,25 @@ def saturar(p, k, fondo=None):
     return np.clip(q, 0, 1).astype(np.float32)
 
 
+def textura(L, obj, cielo_px=None):
+    """Textura del objeto en una imagen estirada, por escalas (lo que hace «suave y con contraste»):
+    grano = σ de la escala fina (L − caja 3×3) en el objeto, relativo a su nivel; contraste_medio = σ de la banda 4–32 px;
+    contraste_grande = σ de la banda 32–256 px; suavidad = contraste_grande / grano (más = más suave y con más relieve).
+    Para comparar finales (IC 1396: meta de Rafael, la textura del final de PixInsight, 14 nov 2026)."""
+    if obj is None or not obj.any():
+        return {}
+    nivel = max(float(np.median(L[obj])), 1e-6)
+    fino = (L - _caja(L, 1))[obj]
+    s4, s32, s256 = suave(L, 8), suave(L, 64), suave(L, 512)
+    medio = (s4 - s32)[obj]
+    grande = (s32 - s256)[obj]
+    g = float(np.std(fino)) / nivel
+    cm = float(np.std(medio)) / nivel
+    cg = float(np.std(grande)) / nivel
+    return {"grano": _r(g, 4), "contraste_medio": _r(cm, 4), "contraste_grande": _r(cg, 4),
+            "suavidad": _r(cg / max(g, 1e-9), 2)}
+
+
 def energia_detalle(L, banda=(1, 4)):
     """Energía de las escalas finas (diferencia de cajas) fuera del cielo: lo que un denoise no debería borrar."""
     a, b = banda

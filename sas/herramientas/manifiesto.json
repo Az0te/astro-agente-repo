@@ -542,8 +542,8 @@
    "nivel": "vista",
    "timeout_s": 300,
    "paso": "lineal/07-extraccion-canales.md",
-   "descripcion": "L7 dual band: de una vista OSC con filtro dual band (Hα + OIII), en lineal, crea dos vistas mono nuevas: <vista>_Ha (rojo) y <vista>_OIII (media de verde y azul), con su cielo, ruido y señal. Con carpeta, también las guarda como XISF.",
-   "resumen": "L7: separa Hα y OIII de un dual band en vistas nuevas.",
+   "descripcion": "L7 dual band: separa en lineal las dos rayas de una vista OSC con filtro dual band (HaO3 → Ha y OIII; S2Hb → SII y Hb; S2O3 → SII y OIII) en vistas mono nuevas <vista>_<raya>, con su cielo, ruido y señal. Con el filtro reconocido (nombre, FILTER o 'filtro'), por mínimos cuadrados con la respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract); si no, Ha = rojo y OIII = (verde+azul)/2. Con carpeta, también las guarda como XISF. Usa TODOS los masters: las capas de la misma raya se juntan con unirCapas.",
+   "resumen": "L7: separa las rayas de un dual band (HaO3, S2Hb, S2O3) en vistas nuevas.",
    "params": {
     "type": "object",
     "properties": {
@@ -554,8 +554,36 @@
      "carpeta": {
       "type": "string",
       "description": "Carpeta para guardar las capas (opcional)."
+     },
+     "filtro": {
+      "type": "string",
+      "description": "Filtro si no se deduce del nombre ni de FILTER: 'HaO3', 'S2Hb' o 'S2O3'."
      }
     }
+   }
+  },
+  {
+   "nombre": "unirCapas",
+   "fichero": "multicapa.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "lineal/07-extraccion-canales.md",
+   "descripcion": "L7: junta capas mono lineales y alineadas de la MISMA raya que salen de masters distintos (OIII del HaO3 y del S2O3; SII del S2Hb y del S2O3). Cada una se lleva a la escala y nivel de la de mejor señal/ruido (ajuste lineal sin estrellas) y se promedian con pesos 1/σ² del ruido. Vista nueva; devuelve pesos y cuánto baja el ruido. Más señal = textura más suave.",
+   "resumen": "L7: une capas de la misma raya de varios masters (LinearFit + pesos por ruido).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vistas": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Dos o más vistas mono de la misma raya (nombre o uid)."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre de la vista nueva (por defecto <referencia>_unida)."
+     }
+    },
+    "required": ["vistas"]
    }
   },
   {

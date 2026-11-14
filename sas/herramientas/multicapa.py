@@ -6,8 +6,10 @@
 #   resueltos): cada uno se reproyecta al WCS de la referencia con reproject (va con SASpro), se recorta todo a la zona
 #   común con datos y se guarda como XISF nuevo en la carpeta pedida. Los ficheros del usuario no se tocan. SASpro no
 #   tiene un comando sin ventana para alinear por estrellas.
-# desmezclarDualBand: de una vista OSC con filtro dual band (Hα + OIII), Hα = rojo y OIII = media de verde y azul, en
-#   lineal, como vistas mono nuevas (y ficheros si se pide carpeta).
+# desmezclarDualBand: separa las dos rayas de una vista OSC dual band (HaO3, S2Hb, S2O3) por mínimos cuadrados con la
+#   respuesta del IMX571, en lineal, como vistas mono nuevas (y ficheros si se pide carpeta).
+# unirCapas: junta capas de la misma raya de masters distintos (ajuste lineal + media ponderada por ruido).
+# Las herramientas de combinación avisan si un master de la última alineación queda sin usar.
 # combinarCandidatos: sobre la vista RGB lineal, compara formas de añadir la banda estrecha (exceso de Hα al rojo y,
 #   opcional, de OIII a verde y azul) a varias intensidades; mide nebulosa ganada, ruido y dominante del cielo y color
 #   de las estrellas. La vista no cambia hasta aplicarCandidato(id). Mismos criterios que en Siril.
@@ -266,6 +268,7 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
         ctx.save_image(np.ascontiguousarray(img), str(dst), original_format="xisf", bit_depth="32-bit floating point",
                        original_header=h, is_mono=(rec.shape[0] == 1))
         salidas.append(str(dst))
+    _anotar_alineados(salidas)
     r = {"alineados": salidas, "referencia": str(fs[iref]), "metodo": metodo,
          "desplazamientos": info, "recorte_comun": [x0, y0, x1, y1], "tam_comun": [x1 - x0, y1 - y0],
          "segundos": _r(time.perf_counter() - t0, 1),
@@ -277,21 +280,75 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
     return r
 
 
-def desmezclarDualBand(ctx, vista=None, carpeta=None):
-    """Paso 7 lineal: capas Hα (rojo) y OIII (media de verde y azul) de una vista OSC dual band, en lineal, como vistas
-    mono nuevas (<vista>_Ha, <vista>_OIII) y, con carpeta, también como XISF."""
+# Respuesta de cada canal del IMX571 (ASI2600MC) a cada raya, la misma que usó el dosier de PixInsight de IC 1396
+# (emulando DBXtract). Con dos rayas por filtro y tres canales se separan por mínimos cuadrados (pseudoinversa).
+RESPUESTA_IMX571 = {"Ha": (0.80, 0.11, 0.04), "OIII": (0.04, 0.93, 0.50), "SII": (0.74, 0.13, 0.05),
+                    "Hb": (0.01, 0.67, 0.70)}
+# Rayas de cada filtro dual band: claves que se buscan en el nombre de la vista o en FILTER de la cabecera.
+FILTROS_DUAL = [(("s2hb", "shb", "sii-hb", "s2-hb"), ("SII", "Hb")),
+                (("s2o3", "so3", "sii-oiii", "s2-o3"), ("SII", "OIII")),
+                (("hao3", "ha-o3", "haoiii", "l-extreme", "l-enhance", "alp-t", "dual"), ("Ha", "OIII"))]
+
+
+def _rayas_del_filtro(d, filtro=None):
+    """Rayas (dos) del filtro dual band de la vista: 'filtro' explícito o deducido del nombre y de FILTER."""
+    texto = (filtro or "").lower()
+    if not texto:
+        m = H._meta(d)
+        cab = m.get("fits_header") or m.get("original_header") or {}
+        try:
+            f = cab.get("FILTER", "") if hasattr(cab, "get") else ""
+        except Exception:
+            f = ""
+        texto = f"{H._nombre(d)} {f}".lower()
+    texto = texto.replace(" ", "").replace("_", "")
+    for claves, rayas in FILTROS_DUAL:
+        if any(k.replace("-", "") in texto.replace("-", "") for k in claves):
+            return rayas
+    return None
+
+
+def _fondo_por_canal(p):
+    """Nivel de fondo de cada canal: percentil 0,2 de la imagen en binning 16×16 (como el dosier de PI), para que la
+    separación de rayas no mezcle niveles de cielo con señal."""
+    c, h, w = p.shape
+    h16, w16 = h // 16 * 16, w // 16 * 16
+    b = p[:, :h16, :w16].reshape(c, h16 // 16, 16, w16 // 16, 16).mean(axis=(2, 4))
+    return [float(np.percentile(b[i], 0.2)) for i in range(c)]
+
+
+def desmezclarDualBand(ctx, vista=None, carpeta=None, filtro=None):
+    """Paso 7 lineal: separa las dos rayas de una vista OSC dual band (HaO3 → Hα y OIII; S2Hb → SII y Hβ; S2O3 → SII y
+    OIII), en lineal, como vistas mono nuevas (<vista>_<raya>) y, con carpeta, también como XISF. Con el filtro
+    reconocido, por mínimos cuadrados con la respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract y
+    el dosier de PI); si no, Hα = rojo y OIII = (verde + azul)/2."""
     d = H._doc(ctx, vista)
     p = H._p(d.image)
     if p.shape[0] != 3:
         raise RuntimeError("desmezclarDualBand necesita el master dual band en color (3 canales).")
     if not M.lineal(p[:, ::8, ::8]):
         raise RuntimeError("El dual band parece estirado: se separa en lineal (Paso 7, antes del gradiente y del color).")
-    ha, o3 = p[0].astype(np.float32), (0.5 * (p[1] + p[2])).astype(np.float32)
+    rayas = _rayas_del_filtro(d, filtro)
+    if rayas is None:
+        capas = (("Ha", p[0].astype(np.float32)), ("OIII", (0.5 * (p[1] + p[2])).astype(np.float32)))
+        metodo = "Hα = rojo; OIII = (verde + azul) / 2 (filtro no reconocido: pasa filtro='HaO3', 'S2Hb' o 'S2O3')"
+    else:
+        A = np.array([RESPUESTA_IMX571[r] for r in rayas], dtype=np.float64).T      # 3 canales × 2 rayas
+        P = np.linalg.pinv(A)                                                        # 2 × 3
+        fondo = _fondo_por_canal(p)
+        q = p - np.array(fondo, dtype=np.float32)[:, None, None]
+        capas = []
+        for i, raya in enumerate(rayas):
+            c = P[i, 0] * q[0] + P[i, 1] * q[1] + P[i, 2] * q[2]
+            c = c - float(np.percentile(c[::8, ::8], 0.1)) + 1e-4        # sin negativos: fondo apenas sobre 0
+            capas.append((raya, np.clip(c, 0, 1).astype(np.float32)))
+        metodo = "mínimos cuadrados con la respuesta del IMX571 (" + "; ".join(
+            f"{r} = " + " ".join(f"{P[i, j]:+.4f}·{'RGB'[j]}" for j in range(3)) for i, r in enumerate(rayas)) + ")"
     base = H._seguro(Path(H._nombre(d)).stem)
     out = {}
     meta = dict(H._meta(d))
     meta.pop("file_path", None)
-    for etiqueta, capa in (("Ha", ha), ("OIII", o3)):
+    for etiqueta, capa in capas:
         m = dict(meta)
         m["display_name"] = f"{base}_{etiqueta}"
         m["mono"] = True
@@ -308,11 +365,186 @@ def desmezclarDualBand(ctx, vista=None, carpeta=None):
                            bit_depth="32-bit floating point", original_header=H._cabecera_para_guardar(H._meta(d), capa.shape),
                            is_mono=True)
             out[etiqueta]["fichero"] = str(dst)
+        _anotar_origen(out[etiqueta]["vista"], [_fuente(ctx, d)])
     H._reactivar(ctx, d)
-    return {"capas": out, "metodo": "Hα = rojo; OIII = (verde + azul) / 2 (matriz Bayer con filtro dual band)",
+    return {"capas": out, "metodo": metodo,
             "vista_activa": H._nombre(d),
             "nota": "Capas lineales en vistas nuevas. Gradiente de cada capa con gradienteCandidatos(vista); después "
                     "combinarCandidatos(ha, oiii, vista=<RGB lineal ya calibrado de color>)."}
+
+
+# --- procedencia: qué masters alineados acaban en cada capa ------------------------------------------------
+# IC 1396 (14 nov 2026): las versiones de SASpro y de Siril usaron sólo el RGB y el HaO3; el SHb y el SO3 (4,9 h de
+# señal) quedaron fuera sin que nada avisara, y PixInsight los usó todos. Se guarda qué alineó alinearMasters y de qué
+# vistas sale cada capa nueva, y las herramientas de combinación avisan del master alineado que no entra.
+
+def _estado_ruta():
+    return Path.home() / ".setiastropilot" / "trabajo" / "procedencia.json"
+
+
+def _estado():
+    import json
+    try:
+        return json.loads(_estado_ruta().read_text(encoding="utf-8"))
+    except Exception:
+        return {"alineados": [], "origen": {}}
+
+
+def _guardar_estado(e):
+    import json
+    r = _estado_ruta()
+    r.parent.mkdir(parents=True, exist_ok=True)
+    r.write_text(json.dumps(e, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _raiz(nombre):
+    s = Path(str(nombre)).name
+    for ext in (".xisf", ".fits", ".fit", ".fts", ".tif", ".tiff"):
+        if s.lower().endswith(ext):
+            s = s[: -len(ext)]
+    return s.lower()
+
+
+def _anotar_alineados(ficheros):
+    e = _estado()
+    e["alineados"] = [_raiz(f) for f in ficheros]
+    _guardar_estado(e)
+
+
+def _anotar_origen(vista, fuentes):
+    try:
+        e = _estado()
+        e.setdefault("origen", {})[_raiz(vista)] = [_raiz(f) for f in fuentes]
+        _guardar_estado(e)
+    except Exception:
+        pass
+
+
+def _fuente(ctx, v):
+    """Nombre de origen de una vista: su fichero si lo tiene (SASpro titula algunas vistas con OBJECT y FILTER de la
+    cabecera, no con el nombre del fichero), si no su nombre."""
+    if not v:
+        return None
+    try:
+        d = H._doc(ctx, v) if isinstance(v, str) else v
+        fp = (H._meta(d) or {}).get("file_path")
+        return fp or H._nombre(d)
+    except Exception:
+        return v if isinstance(v, str) else None
+
+
+def _raices(nombre, e, prof=0):
+    r = _raiz(nombre)
+    fuentes = e.get("origen", {}).get(r)
+    if not fuentes or prof > 8:
+        return {r}
+    out = {r}
+    for f in fuentes:
+        out |= _raices(f, e, prof + 1)
+    return out
+
+
+def _aviso_sin_usar(usadas):
+    """Aviso si algún master de la última alineación no entra (directa o indirectamente) en las vistas usadas."""
+    try:
+        e = _estado()
+        if not e.get("alineados"):
+            return None
+        raices = set()
+        for v in usadas:
+            if v:
+                raices |= _raices(v, e)
+        faltan = [a for a in e["alineados"] if not any(a in r for r in raices)]
+    except Exception:
+        return None
+    if not faltan:
+        return None
+    return ("Masters alineados que NO entran en esta combinación: " + ", ".join(faltan) + ". Si llevan señal de estas "
+            "rayas, sepáralos (desmezclarDualBand) y júntalos con la capa de la misma raya (unirCapas): más señal, "
+            "textura más suave.")
+
+
+def _ruido_fino(x):
+    """σ del ruido por la escala fina (x − caja 5×5), MAD sobre una muestra: casi no lo afecta la nebulosa."""
+    hp = (x - M._caja(x, 2))[::3, ::3]
+    return 1.4826 * float(np.median(np.abs(hp - np.median(hp))))
+
+
+def unirCapas(ctx, vistas, nombre=None):
+    """Paso 7 lineal: junta capas mono alineadas de la MISMA raya que salen de masters distintos (p. ej. OIII del HaO3 y
+    del S2O3; SII del S2Hb y del S2O3). Cada una se lleva a la escala y el nivel de la de menos ruido (ajuste lineal en
+    los píxeles sin estrellas ni recortes) y se promedian con pesos 1/σ² del ruido. Vista nueva; las de entrada no
+    cambian. Es lo que hizo el dosier de PixInsight (LinearFit + media ponderada por ruido)."""
+    if not vistas or len(vistas) < 2:
+        raise RuntimeError("unirCapas necesita al menos dos vistas de la misma raya.")
+    docs = [H._doc(ctx, v) for v in vistas]
+    capas = []
+    for d in docs:
+        c = H._p(d.image)
+        c = c[0] if c.shape[0] == 1 else c.mean(axis=0)
+        capas.append(c.astype(np.float32))
+    forma = capas[0].shape
+    for d, c in zip(docs, capas):
+        if c.shape != forma:
+            raise RuntimeError(f"'{H._nombre(d)}' mide {c.shape[1]}×{c.shape[0]} y la primera {forma[1]}×{forma[0]}: "
+                               "alinéalas antes (alinearMasters).")
+        if not M.lineal(c[None, ::8, ::8]):
+            raise RuntimeError(f"'{H._nombre(d)}' parece estirada: las capas se juntan en lineal.")
+    # Señal/ruido de cada una: la de referencia es la de mejor relación (p99,5 − mediana) / ruido.
+    snr = []
+    for c in capas:
+        s = c[::4, ::4]
+        snr.append((float(np.percentile(s, 99.5)) - float(np.median(s))) / max(_ruido_fino(c), 1e-12))
+    iref = int(np.argmax(snr))
+    ref = capas[iref]
+    hp = ref - M._caja(ref, 5)
+    shp = 1.4826 * float(np.median(np.abs(hp[::4, ::4])))
+    lim_hi = float(np.percentile(ref[::4, ::4], 99.8))
+    util = (np.abs(hp) < 5 * max(shp, 1e-12)) & (ref < lim_hi)          # sin estrellas ni lo más brillante
+    util = M._caja(util.astype(np.float32), 6) > 0.999                  # lejos de las estrellas
+    util[::2, :] = False
+    util[:, ::2] = False
+    # El ajuste se hace sobre las capas SUAVIZADAS: con el ruido de píxel en la x la pendiente sale corta (dilución por
+    # regresión) y la capa con menos señal parecía la de menos ruido (OIII del S2O3 ×0,38 y 75 % del peso; 14 nov 2026).
+    ref_s = M.suave(ref, 16)
+    ajustadas, info = [], []
+    for i, (d, c) in enumerate(zip(docs, capas)):
+        if i == iref:
+            a, b = 1.0, 0.0
+        else:
+            c_s = M.suave(c, 16)
+            m = util & (c < float(np.percentile(c[::4, ::4], 99.8)))
+            x, y = c_s[m].astype(np.float64), ref_s[m].astype(np.float64)
+            # Recta por mínimos cuadrados ortogonales (total least squares): sin sesgo aunque las dos tengan ruido.
+            mx, my = x.mean(), y.mean()
+            sxx, syy, sxy = ((x - mx) ** 2).mean(), ((y - my) ** 2).mean(), ((x - mx) * (y - my)).mean()
+            a = (syy - sxx + np.sqrt((syy - sxx) ** 2 + 4 * sxy ** 2)) / (2 * sxy) if sxy > 0 else 1.0
+            b = my - a * mx
+        q = (a * c + b).astype(np.float32)
+        ajustadas.append(q)
+        info.append({"vista": H._nombre(d), "escala": _r(float(a), 4), "nivel": _r(float(b), 6),
+                     "snr": _r(snr[i], 1), "ruido": _ruido_fino(q)})
+    w = np.array([1.0 / max(x["ruido"], 1e-12) ** 2 for x in info])
+    w = w / w.sum()
+    out = np.zeros(forma, np.float32)
+    for wi, q in zip(w, ajustadas):
+        out += np.float32(wi) * q
+    out = np.clip(out, 0, 1)
+    r_out = _ruido_fino(out)
+    baja = 100.0 * (1 - r_out / max(info[iref]["ruido"], 1e-12))
+    for x, wi in zip(info, w):
+        x["peso_pct"] = _r(100.0 * float(wi), 1)
+        x["ruido"] = _r(x["ruido"], 7)
+    nombre = H._seguro(nombre or f"{Path(H._nombre(docs[iref])).stem}_unida")
+    meta = dict(H._meta(docs[iref]))
+    meta.pop("file_path", None)
+    meta.update(display_name=nombre, mono=True)
+    nuevo = ctx.open_new_document(np.ascontiguousarray(out), metadata=meta, name=nombre)
+    vista = H._nombre(H._base(nuevo)) if nuevo is not None else nombre
+    _anotar_origen(vista, [_fuente(ctx, d) for d in docs])
+    return {"vista": vista, "referencia": H._nombre(docs[iref]), "capas": info,
+            "ruido_baja_pct": _r(baja, 1),
+            "nota": "Capa unida en lineal (vista nueva). Úsala en lugar de las sueltas en combinarCandidatos o paletas."}
 
 
 # --- combinar la banda estrecha con el RGB (criterios de Siril) --------------------------------------------
@@ -495,6 +727,9 @@ def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), 
     r.update(antes={k: (_r(v, 6) if isinstance(v, float) else v) for k, v in m0.items()}, escala_ha=kH, escala_oiii=kO)
     r["leyenda"] = ("Se suma sólo el EXCESO de la banda estrecha sobre el canal de banda ancha, escalada por las estrellas "
                     "y sin ellas (salen del RGB). La vista NO ha cambiado: aplicarCandidato(id).")
+    aviso = _aviso_sin_usar([_fuente(ctx, d), _fuente(ctx, ha), _fuente(ctx, oiii)])
+    if aviso:
+        r["aviso_masters"] = aviso
     return H._galeria(r, p, "diferencia")
 
 
@@ -509,9 +744,15 @@ def combinarRGB(ctx, r, g, b, nombre="RGB"):
     m.pop("file_path", None)
     m["display_name"], m["mono"] = nombre, False
     nuevo = ctx.open_new_document(np.ascontiguousarray(np.moveaxis(q, 0, -1)), metadata=m, name=nombre)
-    return {"vista": H._nombre(H._base(nuevo)) if nuevo is not None else nombre,
-            "mediana_por_canal": [_r(float(np.median(c[::4, ::4])), 6) for c in canales],
-            "nota": "RGB lineal sin calibrar. Siguiente: gradiente, neutralizarFondo y calibrarColor."}
+    vista = H._nombre(H._base(nuevo)) if nuevo is not None else nombre
+    fuentes = [_fuente(ctx, v) for v in (r, g, b)]
+    _anotar_origen(vista, fuentes)
+    res = {"vista": vista, "mediana_por_canal": [_r(float(np.median(c[::4, ::4])), 6) for c in canales],
+           "nota": "RGB lineal sin calibrar. Siguiente: gradiente, neutralizarFondo y calibrarColor."}
+    aviso = _aviso_sin_usar(fuentes)
+    if aviso:
+        res["aviso_masters"] = aviso
+    return res
 
 
 # --- NL2: paletas de banda estrecha (criterios de Siril) ---------------------------------------------------
@@ -609,6 +850,9 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     r["leyenda"] = ("separacion_tonos_grados: variedad de tonos en el objeto (más = más zonas distinguibles). "
                     "verde_residual_pct: verde por encima de rojo y azul en el objeto. dominante_cielo_pct: el cielo debe "
                     "quedar neutro. La vista NO ha cambiado: aplicarCandidato(id).")
+    aviso = _aviso_sin_usar([_fuente(ctx, ha), _fuente(ctx, oiii), _fuente(ctx, sii)])
+    if aviso:
+        r["aviso_masters"] = aviso + " (El RGB de banda ancha puede entrar después, para las estrellas.)"
     return H._galeria(r, H._p(d.image))
 
 
@@ -696,5 +940,5 @@ def componerHDR(ctx, larga, corta, umbral=None, crecer=3, suavizar=8, nombre="HD
 
 
 LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand,
-                   "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB,
+                   "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB, "unirCapas": unirCapas,
                    "paletasCandidatos": paletasCandidatos, "componerHDR": componerHDR}

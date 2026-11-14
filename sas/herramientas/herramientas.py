@@ -1287,7 +1287,8 @@ def compararFinales(ctx, vistas):
                       "contraste_local_objeto": _r(M.contraste_local(L, z["obj_px"]), 5),
                       "sat_objeto": _r(float(M.saturacion(p)[z["obj_px"]].mean()), 3) if p.shape[0] == 3 and z["obj_px"].any() else None,
                       "p99": c["p99"], "estrellas_pct": _r(float(z["est_px"].mean() * 100), 2),
-                      "fwhm_px": _r(fw, 2), "estrellas_medidas": nfw, **M.recortes(p)})
+                      "fwhm_px": _r(fw, 2), "estrellas_medidas": nfw, **M.recortes(p),
+                      **M.textura(L, z["obj_px"])})
     return {"filas": filas,
             "leyenda": "cielo: nivel del fondo. ruido_rel: ruido/cielo. dominante_cielo_pct: diferencia entre canales en el "
                        "cielo. contraste_local_objeto: estructura de escala media en el objeto. fwhm_px: tamaño de las "
