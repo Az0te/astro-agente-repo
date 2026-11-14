@@ -21,7 +21,7 @@ El gradiente es un offset de gran escala que no es del objeto: contamina la cali
 - Queda gradiente en el cielo → escala algo menor (copia algo más, fondo más plano) o, si el residuo es liso, plano robusto grado 1 encima (no puede comerse formas).
 - Modelos de IA de fondo: sólo objetos pequeños en campo amplio; se comen objetos extensos. Aun así entran en la comparativa: las medidas deciden.
 - Comparar el color del fondo después de la calibración de color: algunos métodos neutralizan además el color del fondo y otros no.
-- Los modelos con base de referencia necesitan astrometría (sin ella, no se prueban). Con banda estrecha o dual band, no usar las bandas RGB de la referencia: Hα como rojo y OIII como verde y azul cuando exista; si no hay banda de referencia para ese filtro, no probarlo. Si la nebulosa aparece en su modelo, subir la escala; si aparece en negativo, bajarla.
+- Los modelos con base de referencia necesitan astrometría **correcta** (sin ella, no se prueban). Si fallan buscando en otra zona del cielo o la base de referencia no encuentra datos, la solución está mal (p. ej. heredada al combinar): volver a resolver forzando (Paso 8). Correlación 0 con la referencia en todos los canales = la base no cubre ese campo. Con banda estrecha o dual band, no usar las bandas RGB de la referencia: Hα como rojo y OIII como verde y azul cuando exista; si no hay banda de referencia para ese filtro, no probarlo. Si la nebulosa aparece en su modelo, subir la escala; si aparece en negativo, bajarla.
 - Píxeles a 0 de los bordes del registro: recortar primero (Paso 5); un modelo que intente ajustarlos falsea todo.
 
 **Medidas** (las mismas en todos los programas):
@@ -41,7 +41,7 @@ Se recomienda, entre los que no se comen el objeto (`objeto_quitado_pct` ≤ 3 %
 2. **Modelo del cielo con máscara**: el cielo se mide en cajas, como las muestras de un extractor de fondo con muestras (se rechazan el objeto, su halo, las cajas vecinas y las estrellas), y con ellas se hace un modelo liso que bajo el objeto se interpola desde el cielo de alrededor. Se prueba de dos formas: **sólo en los bordes** (peso 1 junto al borde que baja a 0 hacia el interior; una segunda pasada más fina si siguen manchas) y **en todo el campo**.
 3. **Volver a buscar manchas** y comparar con polinomio + GraXpert (IA y sample_free 10) sobre la misma salida.
 
-En una galaxia grande que llena casi el campo, las manchas de color que quedaban junto a la galaxia las **creaba el propio polinomio** (se curva de más donde no tiene cielo en que apoyarse); el modelo sólo de bordes no llegaba a ellas y el modelo con máscara en todo el campo sí: dejó el cielo plano llevándose el 1 % de la galaxia, frente al 3,5 % de polinomio + GraXpert IA.
+Si las manchas no estaban en el original y aparecen tras el polinomio, **las crea el propio polinomio** (se curva de más donde no tiene cielo en que apoyarse, típico cuando el objeto llena casi el campo): el modelo sólo de bordes no llega a ellas; probar el modelo con máscara en todo el campo.
 
 Entre los candidatos que no se comen el objeto y no dejan manchas visibles se recomienda el que **menos objeto quita**. Si todos dejan manchas, el que deja el cielo más plano.
 

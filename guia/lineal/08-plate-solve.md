@@ -16,6 +16,7 @@ Tras alinear, todos comparten la rejilla: basta resolver la referencia y copiar 
 - Necesita el catálogo o índice astrométrico configurado en el programa; si falta, el error lo dice.
 - Resolver la imagen **con estrellas**, nunca la capa sin estrellas.
 - Si la imagen ya tenía solución, comparar la nueva con la anterior sirve para verificar una solución dudosa.
+- **Una solución previa equivocada se conserva** si no se borra antes (el resolvedor avisa de que ha preservado la existente). Pasa sobre todo tras combinar imágenes (HDR, integraciones), que heredan la solución de una entrada. Comprobar que el centro resuelto coincide con el objeto; si no, resolver **forzando** (borrando la anterior). La herramienta la borra sola si su centro cae fuera de la región indicada.
 - Si se pierde tras BXT o GraXpert, volver a resolver es más sencillo que trasladarla a mano.
 
 **Si falla**

@@ -422,10 +422,15 @@ function gradienteCandidatos(viewId, o) {
     mgcRuns.push({ g: scalesMGC[j0], borde: false });
     if (conBorde) mgcRuns.push({ g: scalesMGC[j0], borde: true });
   }
+  // Solución astrométrica equivocada (p. ej. heredada al combinar): SPFC busca en otra zona del cielo y MARS no
+  // encuentra referencias. Se compara el centro con las coordenadas de la cabecera (RA/DEC u OBJCTRA/OBJCTDEC).
+  var wcsMal = mgcRuns.length && hasWCS ? grWCSLejos(win) : null;
+  if (wcsMal) r.errores.push("MGC: " + wcsMal);
   for (var j = 0; j < mgcRuns.length; ++j) {
     var g = mgcRuns[j].g, borde = mgcRuns[j].borde;
     try {
       if (!hasWCS) throw new Error("la vista no tiene solución astrométrica (Paso 8: blindSolve)");
+      if (wcsMal) continue;
       var id = grDuplicate(viewId, "GC_MGC" + g + (borde ? "_borde" : ""));
       var v = View.viewById(id);
       if (!pxSPFC(o.spfc || {}).executeOn(v)) throw new Error("SPFC devolvió false");
@@ -442,9 +447,11 @@ function gradienteCandidatos(viewId, o) {
       for (var q = 0; q < nm.length; ++q) if (nm[q].indexOf("gradient_model") >= 0 || nm[q].indexOf("model") >= 0) mmod = nm[q];
       if (!mmod) throw new Error("MGC no creó el modelo de gradiente");
       mmod = grRename(mmod, id + "_modelo");
+      var sinMARS = ajusteMARS.length && ajusteMARS.every(function (a) { return a[2] === 0; });
       r.candidatos.push({ vista: id, modelo: mmod, metodo: "MGC", parametros: "SPFC + MGC gradientScale " + g + (borde ? ", corrección de bordes" : ""),
                           metricas: grMeasure(base, mmod, id, range0), ajuste_mars: ajusteMARS,
-                          notas: "No neutraliza el color del fondo (GraXpert sí)." });
+                          notas: "No neutraliza el color del fondo (GraXpert sí)." +
+                                 (sinMARS ? " Correlación con MARS 0 en todos los canales: la base MARS puede no cubrir este campo." : "") });
     } catch (e) {
       r.errores.push("MGC escala " + g + (borde ? " con bordes" : "") + ": " + e);
     }
@@ -661,6 +668,23 @@ function gradienteCandidatos(viewId, o) {
   grPrevios.push(r);
   if (grPrevios.length > 1 && !o.noCompactar) grPrevios.forEach(function (g) { grCompactar(g, o); });
   return r;
+}
+
+// Devuelve un aviso si el centro de la solución astrométrica está a más de 5° de las coordenadas de la cabecera.
+function grWCSLejos(w) {
+  function kw(n) { for (var i = 0; i < w.keywords.length; ++i) if (w.keywords[i].name == n) return w.keywords[i].strippedValue; return null; }
+  function sexa(t, h) { var a = String(t).trim().split(/[\s:]+/).map(parseFloat); if (a.some(isNaN)) return NaN;
+    var sg = /^-/.test(String(t).trim()) ? -1 : 1, v = Math.abs(a[0]) + (a[1] || 0) / 60 + (a[2] || 0) / 3600; return sg * v * (h ? 15 : 1); }
+  try {
+    var ra = parseFloat(kw("RA")), de = parseFloat(kw("DEC"));
+    if (isNaN(ra) || isNaN(de)) { ra = sexa(kw("OBJCTRA"), true); de = sexa(kw("OBJCTDEC"), false); }
+    if (isNaN(ra) || isNaN(de)) return null;
+    var im = w.mainView.image, q = w.imageToCelestial(new Point(im.width / 2, im.height / 2));
+    var r = Math.PI / 180, c = Math.sin(de * r) * Math.sin(q.y * r) + Math.cos(de * r) * Math.cos(q.y * r) * Math.cos((ra - q.x) * r);
+    var d = Math.acos(Math.max(-1, Math.min(1, c))) / r;
+    return d > 5 ? "la solución astrométrica está a " + d.toFixed(1) + "° de las coordenadas de la cabecera (centro " + q.x.toFixed(2) +
+                   ", " + q.y.toFixed(2) + "): repetir resolverAstrometria con forzar: true y pistas de región; MGC no se prueba" : null;
+  } catch (e) { return null; }
 }
 
 // ---------------------------------------------------------------------------------------------------

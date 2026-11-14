@@ -53,6 +53,28 @@ function lnFwhmPorCanal(view, base) {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Centro [AR, Dec] en grados de la solución astrométrica de una ventana (null si no hay o no se puede calcular).
+function lnCentro(w) {
+  if (!w.hasAstrometricSolution) return null;
+  try {
+    var im = w.mainView.image, q = w.imageToCelestial(new Point(im.width / 2, im.height / 2));
+    return q ? [+q.x.toFixed(4), +q.y.toFixed(4)] : null;
+  } catch (e) { return null; }
+}
+
+function lnDistancia(a, b) {
+  var r = Math.PI / 180, c = Math.sin(a[1] * r) * Math.sin(b[1] * r) + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.cos((a[0] - b[0]) * r);
+  return Math.acos(Math.max(-1, Math.min(1, c))) / r;
+}
+
+// Borra la solución astrométrica y las palabras clave WCS (las de la cámara y el objeto se quedan).
+function lnBorrarWCS(w) {
+  try { w.clearAstrometricSolution(); } catch (e) { }
+  var wcs = /^(CTYPE|CRVAL|CRPIX|CDELT|CROTA|CUNIT|CD\d_|PC\d_|PV\d_|A_|B_|AP_|BP_|LONPOLE|LATPOLE|EQUINOX|RADESYS|WCSAXES|PLTSOLVD|REFSPLIN|CTYPE)/i;
+  try { w.keywords = w.keywords.filter(function (k) { return !wcs.test(k.name); }); } catch (e) { }
+  try { w.mainView.properties.forEach(function (pr) { if (/^PCL:AstrometricSolution/.test(pr)) w.mainView.deleteProperty(pr); }); } catch (e) { }
+}
+
 // Paso 8: astrometría con blindSolve (único método de la guía).
 function resolverAstrometria(viewId, o) {
   viewId = lnId(viewId); o = o || {};
@@ -62,10 +84,21 @@ function resolverAstrometria(viewId, o) {
     throw new Error("blindSolve no está disponible: la función tiene que correr con el runner de piastropilot (MCP o panel PiAstroPilot)");
   var w = ImageWindow.windowById(viewId);
   if (w.isNull) throw new Error("No existe la vista " + viewId);
-  var t0 = Date.now(), r = blindSolve(viewId, o.pistas || {});
-  var ok = ImageWindow.windowById(viewId).hasAstrometricSolution;
+  // Una solución previa equivocada (p. ej. heredada al combinar) se conserva si no se borra antes: el resolvedor
+  // dice «The existing astrometric solution has been preserved». Se borra si o.forzar o si el centro está lejos de la región.
+  var p = o.pistas || {}, antes = lnCentro(w), borrada = false;
+  if (w.hasAstrometricSolution && (o.forzar || (antes && p.regionRA !== undefined && p.regionDec !== undefined &&
+      lnDistancia(antes, [+p.regionRA, +p.regionDec]) > (p.regionRadius !== undefined ? +p.regionRadius : 5)))) {
+    lnBorrarWCS(w); borrada = true;
+  }
+  var t0 = Date.now(), r = blindSolve(viewId, p);
+  var ok = ImageWindow.windowById(viewId).hasAstrometricSolution, cen = lnCentro(ImageWindow.windowById(viewId));
   var res = { vista: viewId, con_solucion: ok, segundos: +((Date.now() - t0) / 1000).toFixed(1), resultado: r,
+              centro_antes: antes, centro: cen, solucion_previa_borrada: borrada,
               no_cumple: ok ? [] : ["sin solución astrométrica: repetir con pistas de escala (minScale/maxScale del perfil) o de región (regionRA/regionDec)"] };
+  if (ok && cen && p.regionRA !== undefined && p.regionDec !== undefined &&
+      lnDistancia(cen, [+p.regionRA, +p.regionDec]) > (p.regionRadius !== undefined ? +p.regionRadius : 5))
+    res.no_cumple.push("el centro resuelto está lejos de la región indicada: repetir con forzar: true");
   res.control = { medido: { con_solucion_astrometrica: ok },
                   revisar_a_ojo: ["que la imagen resuelta sea la que tiene estrellas (nunca la starless)"],
                   nota: "Volver a resolver tras BXT o GraXpert si se pierde la solución (recortar y rotar la conservan desde 1.9.6)." };

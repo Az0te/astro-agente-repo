@@ -429,7 +429,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { pistas: { minScale, maxScale (\"/px) | minField, maxField (grados) | regionRA, regionDec, regionRadius } }"
+      "description": "Opcional. { pistas: { minScale, maxScale (\"/px) | minField, maxField (grados) | regionRA, regionDec, regionRadius }, forzar: true (borra antes una solución previa; se borra sola si su centro cae fuera de la región) }"
      }
     },
     "required": [
