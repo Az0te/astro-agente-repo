@@ -69,6 +69,9 @@ function ppList(x, patron) {
   return out;
 }
 
+// Alias de filtro activos durante lanzarWBPP ({ "nombre en la cabecera": "nombre bueno" }); null fuera de él.
+var PP_ALIAS = null;
+
 function ppHeader(path) {
   var F = new FileFormat(File.extractExtension(path).toLowerCase(), true, false);
   if (F.isNull) throw new Error("Formato no soportado: " + path);
@@ -103,6 +106,7 @@ function ppHeader(path) {
   if (o.offset === null && (m = nm.match(/(\d+)\s*Of/i))) o.offset = parseFloat(m[1]);
   o.bin = parseInt(o.XBINNING || "1");
   o.filtro = o.FILTER || "";
+  if (PP_ALIAS && PP_ALIAS[o.filtro] !== undefined) { o.filtroCabecera = o.filtro; o.filtro = String(PP_ALIAS[o.filtro]); }
   o.telescopio = (o.TELESCOP || "").toLowerCase();
   o.tipo = (o.IMAGETYP || "").toLowerCase();
   o.ncombine = o.NCOMBINE !== undefined && isFinite(parseInt(o.NCOMBINE)) ? parseInt(o.NCOMBINE) : null;
@@ -420,8 +424,17 @@ function inventario(carpeta, o) {
 // noche y el filtro en la ruta (LIGHT/NOCHE_N1-20260911/..., FLAT/NOCHE_N1-20260911/FILTER_Duo-Band/...): WBPP los lee
 // de ahí cuando la cabecera no los trae (lights sin IMAGETYP, flats sin FILTER: DWARF) y empareja cada noche con su
 // flat por la palabra clave NOCHE. Desde otro disco hay que pasar copiar: true (copia los ficheros).
+// aliasFiltros: { "viejo": "bueno" } (filtro mal nombrado en la cabecera de lights o flats): el plan empareja por el
+// nombre bueno y en _entrada esos ficheros van como COPIA .xisf con FILTER corregido (los originales no se tocan; WBPP
+// lee FILTER de la cabecera antes que de la ruta). Con aliasFiltros se usa siempre el modo de sesiones (auto si no se da).
 function lanzarWBPP(o) {
   o = o || {};
+  if (o.aliasFiltros && !o.sesiones) o.sesiones = "auto";
+  PP_ALIAS = o.aliasFiltros || null;
+  try { return ppLanzarWBPP(o); } finally { PP_ALIAS = null; }
+}
+
+function ppLanzarWBPP(o) {
   if (!o.salida) throw new Error("Falta la carpeta de salida (opción salida, ruta corta)");
   var salida = o.salida.replace(/\\/g, "/").replace(/\/$/, "");
   if (salida.length > 60) throw new Error("Ruta de salida demasiado larga (" + salida.length + " caracteres): usar una de menos de 60");
@@ -475,6 +488,7 @@ function lanzarWBPP(o) {
   if (plan) {
     res.sesiones = info.sesiones;
     res.enlaces = entrada.enlazados; res.copiados = entrada.copiados;
+    if (entrada.filtro_corregido) res.filtro_corregido = entrada.filtro_corregido + " ficheros copiados con FILTER corregido (aliasFiltros)";
     res.referencia = entrada.referencia || "auto (WBPP elige una para todas las noches)";
     res.control = plan.control;
   }
@@ -630,7 +644,10 @@ function ppMontarEntrada(plan, salida, o) {
     var h = null; try { h = ppHeader(src); } catch (e) { }
     if (h && !h.expEnCabecera && isFinite(h.exp)) dir += "/EXPOSURE_" + h.exp;
     var dst = base + "/" + dir + "/" + ppNombreSeguro(src, esMaster);
-    pares.push([src.replace(/\\/g, "/"), dst]);
+    if (h && h.filtroCabecera !== undefined) {          // alias: copia .xisf con FILTER corregido
+      dst = dst.replace(/\.[^.\/]+$/, "") + ".xisf";
+      pares.push([src.replace(/\\/g, "/"), dst, h.filtro]);
+    } else pares.push([src.replace(/\\/g, "/"), dst]);
     ficheros.push(dst);
     return dst;
   }
@@ -653,16 +670,17 @@ function ppMontarEntrada(plan, salida, o) {
   }
   // Enlaces duros: mismo disco. Si el disco es otro, copiar sólo con copiar: true.
   var unidad = function (p) { var m = p.match(/^([A-Za-z]):/); return m ? m[1].toUpperCase() : ""; };
-  var otros = pares.filter(function (p) { return unidad(p[0]) != unidad(p[1]); });
+  var otros = pares.filter(function (p) { return !p[2] && unidad(p[0]) != unidad(p[1]); });
   if (otros.length && !o.copiar)
     throw new Error(otros.length + " ficheros están en otro disco que la salida (p. ej. " + otros[0][0] + "): poner la salida en el mismo disco (enlaces sin copiar) o pasar copiar: true.");
   // Lo de un intento anterior se rehace (los enlaces no ocupan; borrar un enlace no toca el original).
   if (File.directoryExists(base)) ppBorrarArbol(base);
   var dirs = ppUnique(pares, function (p) { return ppDir(p[1]); });
   dirs.forEach(function (d) { File.createDirectory(d, true); });
-  var enlazados = 0, copiados = 0, lineas = [];
+  var enlazados = 0, copiados = 0, reescritos = 0, lineas = [];
   pares.forEach(function (p) {
-    if (unidad(p[0]) != unidad(p[1])) { File.copyFile(p[1], p[0]); ++copiados; }
+    if (p[2]) { ppReescribirFiltro(p[0], p[1], p[2]); ++reescritos; }
+    else if (unidad(p[0]) != unidad(p[1])) { File.copyFile(p[1], p[0]); ++copiados; }
     else lineas.push(p);
   });
   if (lineas.length) {
@@ -677,7 +695,25 @@ function ppMontarEntrada(plan, salida, o) {
     if (enlazados < lineas.length)
       throw new Error("Sólo se crearon " + enlazados + " de " + lineas.length + " enlaces en " + base + " (¿disco no NTFS?). Probar con copiar: true.");
   }
-  return { ficheros: ficheros, referencia: referencia, enlazados: enlazados, copiados: copiados };
+  return { ficheros: ficheros, referencia: referencia, enlazados: enlazados, copiados: copiados, filtro_corregido: reescritos };
+}
+
+// Copia src en dst (.xisf) con FILTER (y la propiedad Instrument:Filter:Name) = filtro. El original no se toca.
+function ppReescribirFiltro(src, dst, filtro) {
+  var ws = ImageWindow.open(src, "ppAlias", "verbosity 0", true);
+  if (!ws || !ws.length) throw new Error("No se pudo abrir " + src + " para corregir el filtro");
+  var w = ws[0];
+  try {
+    var k = w.keywords, hay = false;
+    for (var i = 0; i < k.length; ++i)
+      if (k[i].name == "FILTER") { k[i] = new FITSKeyword("FILTER", "'" + filtro + "'", k[i].comment); hay = true; }
+    if (!hay) k.push(new FITSKeyword("FILTER", "'" + filtro + "'", "Filtro corregido (aliasFiltros)"));
+    w.keywords = k;
+    try { w.mainView.setPropertyValue("Instrument:Filter:Name", filtro); } catch (e) { }
+    if (!w.saveAs(dst, false, false, false, false)) throw new Error("No se pudo guardar " + dst);
+  } finally {
+    for (var j = 0; j < ws.length; ++j) ws[j].forceClose();
+  }
 }
 
 // Otra instancia de PixInsight sin ventanas que se cierra sola. ExternalProcess.startDetached con lista de argumentos

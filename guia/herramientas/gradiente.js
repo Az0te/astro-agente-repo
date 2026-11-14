@@ -436,6 +436,9 @@ function gradienteCandidatos(viewId, o) {
       if (!pxSPFC(o.spfc || {}).executeOn(v)) throw new Error("SPFC devolvió false");
       var mo = { mars: o.mars, gradientScale: g, showGradientModel: true };
       if (o.mgcOpts) for (var key in o.mgcOpts) mo[key] = o.mgcOpts[key];
+      // Factores de escala automáticos (1.9.6+): con 1,0 fijo el modelo se llevaba el 3,4–3,9 % de una galaxia grande;
+      // con automáticos (ajuste a MARS, correlación 0,98–0,99) no se lleva nada (14 nov 2026).
+      if (mo.autoScaleFactors === undefined) mo.autoScaleFactors = true;
       if (borde) mo.edgeCorrection = true;
       before = grIds();
       var PM = pxMGC(mo);
@@ -453,7 +456,8 @@ function gradienteCandidatos(viewId, o) {
                           notas: "No neutraliza el color del fondo (GraXpert sí)." +
                                  (sinMARS ? " Correlación con MARS 0 en todos los canales: la base MARS puede no cubrir este campo." : "") });
     } catch (e) {
-      r.errores.push("MGC escala " + g + (borde ? " con bordes" : "") + ": " + e);
+      r.errores.push("MGC escala " + g + (borde ? " con bordes" : "") + ": " + e +
+                     (/false/.test(String(e)) ? " (si SPFC busca en otra zona del cielo o MARS no tiene referencias, la astrometría está mal: resolverAstrometria con forzar: true)" : ""));
     }
   }
 
@@ -584,6 +588,45 @@ function gradienteCandidatos(viewId, o) {
       } catch (e) { r.errores.push("Polinomio + GraXpert " + gs + ": " + e); }
     });
   });
+  // MGC con bordes → cielo con máscara (14 nov 2026): MGC quita el gradiente general y el de bordes sin comerse el objeto
+  // (con factores de escala automáticos) y el modelo del cielo con máscara limpia las manchas que deja. En una galaxia
+  // grande fue lo que dejó el cielo más uniforme; un plano intermedio lo empeoraba (cadenaMGCPlano: true para probarlo).
+  // cadenaMGC: false para no probar la cadena.
+  if (o.cadenaMGC !== false) {
+    var mgcB = r.candidatos.filter(function (x) { return x.metodo === "MGC" && /bordes/.test(x.parametros); });
+    if (!mgcB.length) mgcB = r.candidatos.filter(function (x) { return x.metodo === "MGC"; });
+    mgcB.sort(function (a, b) { return (a.metricas.gradiente_visible || 9) - (b.metricas.gradiente_visible || 9); });
+    if (mgcB.length) {
+      var srcM = mgcB[0].vista, desc = mgcB[0].parametros;
+      try {
+        if (o.cadenaMGCPlano) {
+          var p1 = grPlanoSobre(srcM, base, bin, srcM + "_P1");
+          var mt1 = grModeloCadena(viewId, p1, p1 + "_modelo_total");
+          var c1 = { vista: p1, modelo: mt1, metodo: "MGC + plano", parametros: desc + " + polinomio grado 1",
+                     metricas: grMeasure(base, mt1, p1, range0), notas: "Plano robusto sobre la salida de MGC." };
+          c1.metricas.manchas = grManchas(p1, base, o);
+          r.candidatos.push(c1);
+          r.cadena.push("MGC + plano: manchas " + c1.metricas.manchas.donde + " (brillo " + c1.metricas.manchas.manchas_brillo +
+                        ", color " + c1.metricas.manchas.manchas_color + "), objeto quitado " + c1.metricas.objeto_quitado_pct + " %");
+          srcM = p1; desc += " + polinomio grado 1";
+        }
+        if (o.cieloMascara !== false) {
+          var cmo2 = {}; for (var kc in (o.cieloOpts || {})) cmo2[kc] = o.cieloOpts[kc];
+          cmo2.anchoBordes = 99; cmo2.llenoBordes = 99; if (!cmo2.escalaBordes) cmo2.escalaBordes = 15;
+          var gm2 = grBordes(srcM, base, srcM + "M", cmo2);
+          r.intermedias.push(gm2.modelo);
+          var mt3 = grModeloCadena(viewId, gm2.vista, gm2.vista + "_modelo_total");
+          var c3 = { vista: gm2.vista, modelo: mt3, modelo_bordes: gm2.modelo, metodo: "MGC + cielo con máscara",
+                     parametros: desc + " + cielo con máscara (1/" + cmo2.escalaBordes + ")",
+                     metricas: grMeasure(base, mt3, gm2.vista, range0), notas: "Modelo del cielo con máscara sobre la salida de MGC." };
+          c3.metricas.manchas = grManchas(gm2.vista, base, o);
+          r.candidatos.push(c3);
+          r.cadena.push(c3.metodo + ": manchas " + c3.metricas.manchas.donde + " (brillo " + c3.metricas.manchas.manchas_brillo +
+                        ", color " + c3.metricas.manchas.manchas_color + "), objeto quitado " + c3.metricas.objeto_quitado_pct + " %");
+        }
+      } catch (e) { r.errores.push("Cadena MGC sobre " + srcM + ": " + e); }
+    }
+  }
   if (!r.cadena.length) delete r.cadena;
   // Manchas en todos los candidatos (las cadenas ya las tienen).
   if (o.manchas !== false) {
@@ -668,6 +711,19 @@ function gradienteCandidatos(viewId, o) {
   grPrevios.push(r);
   if (grPrevios.length > 1 && !o.noCompactar) grPrevios.forEach(function (g) { grCompactar(g, o); });
   return r;
+}
+
+// Plano robusto (grado 1) por canal ajustado fuera del objeto sobre la vista srcId; devuelve el id de la copia corregida.
+function grPlanoSobre(srcId, base, bin, nombre) {
+  var src = View.viewById(srcId), nch = src.image.numberOfChannels, exprs = [];
+  for (var ch = 0; ch < Math.min(3, nch); ++ch) exprs.push(grPolyExpr(grPolyCoef(grChanBinned(srcId, ch, bin), base.excl, 1)));
+  var pid = grDuplicate(srcId, nombre), cen = function (e) { return "(" + e.split(" + ")[0] + ")"; };
+  var P = new PixelMath;
+  P.useSingleExpression = (nch < 3); P.expression = "$T - (" + exprs[0] + ") + " + cen(exprs[0]);
+  if (nch >= 3) { P.expression1 = "$T - (" + exprs[1] + ") + " + cen(exprs[1]); P.expression2 = "$T - (" + exprs[2] + ") + " + cen(exprs[2]); }
+  P.rescale = false; P.truncate = false; P.createNewImage = false;
+  if (!P.executeOn(View.viewById(pid))) throw new Error("PixelMath del plano falló");
+  return pid;
 }
 
 // Devuelve un aviso si el centro de la solución astrométrica está a más de 5° de las coordenadas de la cabecera.

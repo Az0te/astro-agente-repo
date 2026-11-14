@@ -148,7 +148,7 @@ function pxMGC(o) {
   P.showGradientModel = pxDefault(o, "showGradientModel", true);
   // PixInsight 1.9.6+: factores de escala automáticos y corrección de bordes (sólo si el proceso los tiene).
   if (P.autoScaleFactors !== undefined) {
-    P.autoScaleFactors = pxDefault(o, "autoScaleFactors", false);
+    P.autoScaleFactors = pxDefault(o, "autoScaleFactors", true);   // con 1,0 fijo se comía el objeto (14 nov 2026)
     P.edgeCorrection = pxDefault(o, "edgeCorrection", false);
     P.edgeAggressiveness = pxDefault(o, "edgeAggressiveness", 2);
   }

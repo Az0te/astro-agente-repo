@@ -263,7 +263,7 @@
     "properties": {
      "wbpp": {
       "type": "object",
-      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), planSolo, copiar (otro disco), forzar, parametros: { nombre: valor de la automatización de WBPP } }"
+      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), planSolo, copiar (otro disco), forzar, aliasFiltros: { \"viejo\": \"bueno\" } (filtro mal nombrado en la cabecera: fuerza sesiones y esos ficheros van como copia .xisf con FILTER corregido), parametros: { nombre: valor de la automatización de WBPP } }"
      }
     },
     "required": [
@@ -478,7 +478,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { graxpert: [10, 8], graxpertIA: true, gradientCorrection: true, gcOpts: { scale, smoothness, protection... }, mgc: [1024, 2048], mgcBorde: true, mgcOpts, polinomio: [1, 2] (lista de grados; false = sin polinomio), cadenas: [2] (grados del polinomio a encadenar; false = sin cadenas), bordes: true (polinomio + gradiente de bordes), bordesOpts: { anchoBordes: 0.20, llenoBordes: 0.04, escalaBordes: 16 }, cieloMascara: true (polinomio + modelo del cielo con máscara en todo el campo), cieloOpts: { escalaBordes: 15 }, mapas: false (true = vistas MAPA_<vista> con las manchas ×10), cadenaGraXpert: [\"IA\", 10] (false = no), abe: [2, 4] (sólo pruebas; apagado por defecto), mascara: vista (blanco = objeto que no entra en el ajuste de los modelos), manchas: true, spfc: { qe, gray } del perfil, mars: ruta .xmars, dossier: ruta .json }"
+      "description": "Opcional. { graxpert: [10, 8], graxpertIA: true, gradientCorrection: true, gcOpts: { scale, smoothness, protection... }, mgc: [1024, 2048], mgcBorde: true, mgcOpts, polinomio: [1, 2] (lista de grados; false = sin polinomio), cadenas: [2] (grados del polinomio a encadenar; false = sin cadenas), bordes: true (polinomio + gradiente de bordes), bordesOpts: { anchoBordes: 0.20, llenoBordes: 0.04, escalaBordes: 16 }, cieloMascara: true (polinomio + modelo del cielo con máscara en todo el campo), cieloOpts: { escalaBordes: 15 }, mapas: false (true = vistas MAPA_<vista> con las manchas ×10), cadenaGraXpert: [\"IA\", 10] (false = no), abe: [2, 4] (sólo pruebas; apagado por defecto), mascara: vista (blanco = objeto que no entra en el ajuste de los modelos), manchas: true, spfc: { qe, gray } del perfil, mars: ruta .xmars, dossier: ruta .json, cadenaMGC: true (MGC con bordes → cielo con máscara; cadenaMGCPlano: true añade un plano en medio), mgcOpts.autoScaleFactors (true por defecto; con 1,0 fijo se come el objeto), mgcOpts.edgeAggressiveness (2) }"
      }
     },
     "required": [

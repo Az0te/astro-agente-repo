@@ -55,6 +55,59 @@ function hdrPlateau(im, c) {
   return { meseta: vals[Math.floor(0.99 * (vals.length - 1))], maximo: mx, n: vals.length };
 }
 
+// Astrometría de la HDR (14 nov 2026): la HDR puede heredar una solución equivocada (centro en otra zona del cielo)
+// y el resolvedor la conserva en vez de sustituirla. Se compara su centro con el de las entradas (misma rejilla tras
+// alinear) o, si ninguna tiene solución, con RA/DEC de la cabecera; si no cuadra, se borra y se copia la buena o se
+// vuelve a resolver.
+function hdrCentro(w) {
+  if (!w || !w.hasAstrometricSolution) return null;
+  try { var im = w.mainView.image, q = w.imageToCelestial(new Point(im.width / 2, im.height / 2)); return q ? [q.x, q.y] : null; }
+  catch (e) { return null; }
+}
+
+function hdrDist(a, b) {
+  var r = Math.PI / 180, c = Math.sin(a[1] * r) * Math.sin(b[1] * r) + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.cos((a[0] - b[0]) * r);
+  return Math.acos(Math.max(-1, Math.min(1, c))) / r;
+}
+
+function hdrCabecera(w) {
+  function kw(n) { for (var i = 0; i < w.keywords.length; ++i) if (w.keywords[i].name == n) return w.keywords[i].strippedValue; return null; }
+  function sexa(t, h) { if (t === null) return NaN; var a = String(t).trim().split(/[\s:]+/).map(parseFloat); if (a.some(isNaN)) return NaN;
+    var sg = /^-/.test(String(t).trim()) ? -1 : 1; return sg * (Math.abs(a[0]) + (a[1] || 0) / 60 + (a[2] || 0) / 3600) * (h ? 15 : 1); }
+  var ra = parseFloat(kw("RA")), de = parseFloat(kw("DEC"));
+  if (isNaN(ra) || isNaN(de)) { ra = sexa(kw("OBJCTRA"), true); de = sexa(kw("OBJCTDEC"), false); }
+  return isNaN(ra) || isNaN(de) ? null : [ra, de];
+}
+
+function hdrRevisarWCS(hdrW, ins, r) {
+  var cH = hdrCentro(hdrW), ref = null;
+  for (var i = 0; i < ins.length && !ref; ++i) if (hdrCentro(ins[i].win)) ref = ins[i].win;
+  var a = { centro: cH ? [+cH[0].toFixed(4), +cH[1].toFixed(4)] : null, accion: "ninguna" };
+  if (ref) {
+    var d = cH ? hdrDist(cH, hdrCentro(ref)) : 999;
+    if (d > 0.05) {
+      try { hdrW.clearAstrometricSolution(); } catch (e) { }
+      try { hdrW.copyAstrometricSolution(ref); a.accion = "solución de la HDR " + (cH ? "a " + d.toFixed(2) + "° de la de las entradas" : "ausente") +
+                                                          ": borrada y copiada de " + ref.mainView.id; }
+      catch (e) { a.accion = "no se pudo copiar la solución de las entradas: " + e; }
+    }
+  } else if (cH) {
+    var cab = hdrCabecera(hdrW), dc = cab ? hdrDist(cH, cab) : 0;
+    if (dc > 5) {
+      a.accion = "solución a " + dc.toFixed(1) + "° de RA/DEC de la cabecera";
+      try { hdrW.clearAstrometricSolution(); } catch (e) { }
+      if (typeof blindSolve === "function") {
+        try { blindSolve(hdrW.mainView.id, { regionRA: cab[0], regionDec: cab[1], regionRadius: 5 }); a.accion += "; borrada y resuelta de nuevo"; }
+        catch (e) { a.accion += "; borrada, no se pudo resolver: " + e; }
+      } else a.accion += "; borrada";
+    }
+  }
+  var cF = hdrCentro(hdrW);
+  a.centro_final = cF ? [+cF[0].toFixed(4), +cF[1].toFixed(4)] : null;
+  if (!cF) r.no_cumple.push("la HDR no tiene solución astrométrica válida: resolverAstrometria con forzar: true (Paso 8)");
+  r.astrometria = a;
+}
+
 function componerHDR(lista, o) {
   o = o || {};
   // También una carpeta (o lista de carpetas) con los masters alineados: se toman sus .xisf (sin máscaras ni mapas).
@@ -114,6 +167,7 @@ function componerHDR(lista, o) {
   var id = (typeof o.nuevaVista === "string" && o.nuevaVista) || "HDR";
   if (hdrW.mainView.id != id) { var free = id; for (var n = 2; !ImageWindow.windowById(free).isNull; ++n) free = id + "_" + n; hdrW.mainView.id = free; }
   if (ins[0].win.hasAstrometricSolution && !hdrW.hasAstrometricSolution) try { hdrW.copyAstrometricSolution(ins[0].win); } catch (e) { }
+  hdrRevisarWCS(hdrW, ins, r);
   r.vista = hdrW.mainView.id;
   r.mascaras = masks.map(function (w) { return w.mainView.id; });
   if (masks.length != ins.length - 1)

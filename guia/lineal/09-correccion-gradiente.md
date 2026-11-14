@@ -45,6 +45,8 @@ Si las manchas no estaban en el original y aparecen tras el polinomio, **las cre
 
 Entre los candidatos que no se comen el objeto y no dejan manchas visibles se recomienda el que **menos objeto quita**. Si todos dejan manchas, el que deja el cielo más plano.
 
+**Modelo con base de referencia y bordes.** Usar factores de escala automáticos (ajuste a la referencia, por canal): con factor 1 fijo el modelo se lleva parte del objeto extenso; con automáticos no. Su corrección de bordes hace lo mismo que el modelo de bordes de arriba y se compara igual; la agresividad por defecto (2) fue la mejor entre 1, 2 y 3. Se prueba también la cadena **modelo con referencia y bordes → cielo con máscara**, que limpia las manchas que deja (un plano intermedio empeoraba el resultado).
+
 **Máscaras.** Una máscara sirve para **ajustar** el modelo sin el objeto, nunca para **aplicar** la corrección sólo en el cielo: restar a través de una máscara deja el gradiente debajo del objeto y un escalón en su borde. Con `mascara: <vista>` (blanco = objeto) esa zona sale del ajuste del polinomio y del modelo de bordes y de las medidas de cielo; útil cuando el objeto llena el campo o tiene halos débiles que la máscara automática toma por cielo.
 
 **Encadenar dos métodos** puede ganar a cualquiera solo: uno automático de base y otro de acabado (en una toma con mucha contaminación y sin flats, astroimagetw obtuvo lo mejor con un modelo automático seguido de la corrección de gradiente nativa, que además quitó la sombra que dejó el primero). Medir la cadena como un candidato más. Si no convence, hacer la comparativa de candidatos del detalle.
