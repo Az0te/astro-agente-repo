@@ -20,3 +20,6 @@ tmp_*/
 
 # Perfil personal (rutas, equipo y preferencias): no se publica
 guia/perfil.md
+
+# Bytecode de Python/
+*.pyc
