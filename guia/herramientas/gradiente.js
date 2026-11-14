@@ -29,6 +29,9 @@ var GR_DIR = (typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS
            : File.homeDirectory + "/astro-agente-repo/guia/herramientas";
 if (typeof gcPrepare !== "function") eval(File.readTextFile(GR_DIR + "/gradcompare.js"));
 if (typeof pxMGC !== "function") eval(File.readTextFile(GR_DIR + "/procesos.js"));
+// Siempre se recarga: PixInsight conserva las funciones globales entre ejecuciones del runner y con la guarda se quedaba
+// la versión vieja de gradbordes.js (14 nov 2026).
+eval(File.readTextFile(GR_DIR + "/gradbordes.js"));
 
 function grIds() {
   var ids = [], ws = ImageWindow.windows;
@@ -54,6 +57,25 @@ function grRename(oldId, newId) {
   var id = grFreeId(newId);
   w.mainView.id = id;
   return id;
+}
+
+// GraXpert (proceso de PixInsight) sobre una vista, sin modificarla. escala: número (sample_free) o "IA".
+function grGraXpert(srcId, escala, nombre, ref) {
+  var before = grIds(), G = new GraXpert, v = View.viewById(srcId);
+  G.backgroundExtraction = true;
+  G.backgroundExtractionSampleFree = escala !== "IA";
+  if (escala !== "IA") G.sampleFreeScale = escala;
+  G.correction = "Subtraction"; G.createBackground = true; G.replaceImage = false;
+  if (!G.executeOn(v)) throw new Error("GraXpert devolvió false");
+  var nuevas = grNew(before), corr = null, mod = null;
+  for (var k = 0; k < nuevas.length; ++k) {
+    if (nuevas[k].indexOf("background_extraction") >= 0) corr = nuevas[k];
+    else if (nuevas[k].indexOf("background") >= 0) mod = nuevas[k];
+  }
+  if (!corr || !mod) throw new Error("no encuentro las salidas de GraXpert (nuevas: " + nuevas.join(", ") + ")");
+  corr = grRename(corr, nombre); mod = grRename(mod, nombre + "_modelo");
+  try { ImageWindow.windowById(corr).keywords = (ref || v.window).keywords; } catch (e) { }
+  return { corr: corr, mod: mod };
 }
 
 function grDuplicate(srcId, newId) {
@@ -303,6 +325,13 @@ function gradienteCandidatos(viewId, o) {
   var base = gcPrepare(viewId, bin);
   r.intermedias = r.intermedias.concat(grNew(before));
   var range0 = grGridRange(viewId);   // gradiente del original en la rejilla 4x3
+  // Máscara propia (14 nov 2026): vista en la que blanco = objeto. Sólo saca esas zonas del AJUSTE de los modelos
+  // (polinomio, bordes) y de las medidas de cielo; la corrección se aplica siempre a toda la imagen.
+  if (o.mascara) {
+    base.usuario = gbMascaraUsuario(o.mascara, base);
+    for (var iu = 0; iu < base.usuario.length; ++iu) if (base.usuario[iu]) base.excl[iu] = 1;
+    r.mascara = o.mascara;
+  }
 
   // GraXpert sample_free, sustracción, sobre la original sin modificarla.
   for (var i = 0; i < scalesGX.length; ++i) {
@@ -421,6 +450,31 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
+  // ABE (AutomaticBackgroundExtractor) de PixInsight por sustracción, sobre una copia (14 nov 2026). Sólo para pruebas y
+  // comparativas (Rafael: con MGC no hace falta): apagado salvo abe: [2, 4] (lista de grados) o abe: true (= [2, 4]).
+  var gradosABE = !o.abe ? [] : (o.abe instanceof Array ? o.abe : typeof o.abe === "number" ? [o.abe] : [2, 4]);
+  for (var ga = 0; ga < gradosABE.length; ++ga) {
+    try {
+      var aid = grDuplicate(viewId, "GC_ABE" + gradosABE[ga]);
+      before = grIds();
+      var AB = new AutomaticBackgroundExtractor;
+      AB.polyDegree = gradosABE[ga];
+      AB.targetCorrection = 1;   // 0 ninguna, 1 sustracción, 2 división (las constantes no tienen el mismo nombre en todas las versiones)
+      AB.normalize = true; AB.discardModel = false; AB.replaceTarget = true;
+      try { AB.modelImageSampleFormat = gcK(AutomaticBackgroundExtractor, "f32"); } catch (eF) { }
+      if (o.abeOpts) for (var ka in o.abeOpts) AB[ka] = o.abeOpts[ka];
+      if (!AB.executeOn(View.viewById(aid))) throw new Error("ABE devolvió false");
+      var na = grNew(before), amod = null;
+      for (var qa = 0; qa < na.length; ++qa) if (na[qa].indexOf("ABE") >= 0 || na[qa].indexOf("background") >= 0) amod = na[qa];
+      if (!amod) throw new Error("ABE no creó el modelo (nuevas: " + na.join(", ") + ")");
+      amod = grRename(amod, aid + "_modelo");
+      r.candidatos.push({ vista: aid, modelo: amod, metodo: "ABE", parametros: "grado " + gradosABE[ga] + ", sustracción",
+                          metricas: grMeasure(base, amod, aid, range0), notas: "Muestras automáticas de PixInsight; no necesita astrometría." });
+    } catch (e) {
+      r.errores.push("ABE grado " + gradosABE[ga] + ": " + e);
+    }
+  }
+
   // Polinomio robusto (grado 1 = plano, grado 2) por canal, ajustado fuera del objeto: no puede comerse formas.
   // En galaxia grande (oct 2026) el grado 2 ganó a GraXpert, que se comía el 8,5 % de la galaxia.
   var nch = win.mainView.image.numberOfChannels;
@@ -450,7 +504,92 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
-  r.leyenda = "copia_objeto: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
+  // Cadenas (14 nov 2026, Rafael): polinomio (gradiente general) → buscar manchas → gradiente de bordes → buscar
+  // manchas otra vez; y, para comparar, polinomio + GraXpert. Cada cadena es un candidato más, medido como los demás
+  // con su modelo total (original − corregida).
+  var gradosCadena = o.cadenas === false ? [] : (o.cadenas instanceof Array ? o.cadenas :
+                     gradosPoly.indexOf(2) >= 0 ? [2] : gradosPoly.length ? [gradosPoly[gradosPoly.length - 1]] : []);
+  r.cadena = [];
+  gradosCadena.forEach(function (gc) {
+    var cp = r.candidatos.filter(function (x) { return x.metodo === "Polinomio" && x.parametros.indexOf("grado " + gc) === 0; })[0];
+    if (!cp) { r.errores.push("Cadenas: no hay candidato de polinomio de grado " + gc); return; }
+    var mp; try { mp = cp.metricas.manchas = grManchas(cp.vista, base, o); } catch (e) { r.errores.push("Manchas de " + cp.vista + ": " + e); }
+    if (mp) r.cadena.push("Polinomio " + gc + ": manchas " + mp.donde + " (brillo bordes " + mp.manchas_brillo_bordes + ", centro " +
+                          mp.manchas_brillo_centro + "; color bordes " + mp.manchas_color_bordes + ", centro " + mp.manchas_color_centro + ")");
+    // Gradiente de bordes: siempre se prueba (es barato); si tras la primera pasada siguen manchas en los bordes, una
+    // segunda más fina y estrecha.
+    if (o.bordes !== false) {
+      var pasadas = [{ sufijo: "B", op: o.bordesOpts || {} },
+                     { sufijo: "BB", op: o.bordesOpts2 || { escalaBordes: 24, anchoBordes: 0.12, llenoBordes: 0.03 } }];
+      var srcB = cp.vista;
+      for (var pb = 0; pb < pasadas.length; ++pb) {
+        try {
+          var gb = grBordes(srcB, base, "GC_POLY" + gc + pasadas[pb].sufijo, pasadas[pb].op);
+          r.intermedias.push(gb.modelo);
+          var mt = grModeloCadena(viewId, gb.vista, gb.vista + "_modelo_total");
+          var cb = { vista: gb.vista, modelo: mt, modelo_bordes: gb.modelo, metodo: "Polinomio + bordes",
+                     parametros: "grado " + gc + " + gradiente de bordes" + (pb ? " (2 pasadas)" : "") + ", ancho " + gb.ancho,
+                     metricas: grMeasure(base, mt, gb.vista, range0),
+                     notas: "El modelo de bordes se ajusta sólo en el cielo (sin objeto ni estrellas) y vale 0 en el interior." };
+          cb.metricas.manchas = grManchas(gb.vista, base, o);
+          r.candidatos.push(cb);
+          r.cadena.push(cb.metodo + (pb ? " ×2" : "") + ": manchas " + cb.metricas.manchas.donde + " (brillo bordes " +
+                        cb.metricas.manchas.manchas_brillo_bordes + ", color bordes " + cb.metricas.manchas.manchas_color_bordes +
+                        "), objeto quitado " + cb.metricas.objeto_quitado_pct + " %");
+          var d = cb.metricas.manchas.donde;
+          if (d !== "bordes" && d !== "todo") break;
+          srcB = gb.vista;
+        } catch (e) { r.errores.push("Bordes (pasada " + (pb + 1) + ") sobre " + srcB + ": " + e); break; }
+      }
+    }
+    // Polinomio + cielo con máscara (14 nov 2026): el mismo modelo liso del cielo (sin objeto ni estrellas; bajo el objeto,
+    // interpolado desde el cielo de alrededor) pero restado en TODO el campo, no sólo en los bordes. Ataca las manchas que
+    // deja el polinomio entre los bordes y el objeto. cieloMascara: false para no probarlo; cieloOpts: { escalaBordes }.
+    if (o.cieloMascara !== false) {
+      try {
+        var cmo = o.cieloOpts || {}; cmo.anchoBordes = 99; cmo.llenoBordes = 99; if (!cmo.escalaBordes) cmo.escalaBordes = 15;   // galaxia grande, 14 nov 2026: 1/10 quita 0,8 %, 1/15 1,0 %, 1/25 1,6 %
+        var gm = grBordes(cp.vista, base, "GC_POLY" + gc + "M", cmo);
+        r.intermedias.push(gm.modelo);
+        var mtm = grModeloCadena(viewId, gm.vista, gm.vista + "_modelo_total");
+        var cm = { vista: gm.vista, modelo: mtm, modelo_bordes: gm.modelo, metodo: "Polinomio + cielo con máscara",
+                   parametros: "grado " + gc + " + modelo liso del cielo con máscara del objeto (suavizado 1/" + cmo.escalaBordes + ")",
+                   metricas: grMeasure(base, mtm, gm.vista, range0),
+                   notas: "Modelo ajustado sólo en el cielo y aplicado en todo el campo; bajo el objeto, interpolado." };
+        cm.metricas.manchas = grManchas(gm.vista, base, o);
+        r.candidatos.push(cm);
+        r.cadena.push(cm.metodo + ": manchas " + cm.metricas.manchas.donde + " (brillo " + cm.metricas.manchas.manchas_brillo +
+                      ", color " + cm.metricas.manchas.manchas_color + "), objeto quitado " + cm.metricas.objeto_quitado_pct + " %");
+      } catch (e) { r.errores.push("Cielo con máscara sobre " + cp.vista + ": " + e); }
+    }
+    // Polinomio + GraXpert (suave): IA y sample_free 10 sobre la salida del polinomio.
+    var gxCad = o.cadenaGraXpert === false ? [] : (o.cadenaGraXpert instanceof Array ? o.cadenaGraXpert : ["IA", 10]);
+    gxCad.forEach(function (gs) {
+      try {
+        var gx = grGraXpert(cp.vista, gs, "GC_POLY" + gc + "_GX" + gs, win);
+        r.intermedias.push(gx.mod);
+        var mt2 = grModeloCadena(viewId, gx.corr, gx.corr + "_modelo_total");
+        var cg = { vista: gx.corr, modelo: mt2, metodo: "Polinomio + GraXpert",
+                   parametros: "grado " + gc + " + GraXpert " + (gs === "IA" ? "IA" : "sample_free escala " + gs),
+                   metricas: grMeasure(base, mt2, gx.corr, range0), notas: "Segunda pasada de GraXpert sobre el polinomio." };
+        cg.metricas.manchas = grManchas(gx.corr, base, o);
+        r.candidatos.push(cg);
+        r.cadena.push(cg.metodo + " " + gs + ": manchas " + cg.metricas.manchas.donde + ", objeto quitado " + cg.metricas.objeto_quitado_pct + " %");
+      } catch (e) { r.errores.push("Polinomio + GraXpert " + gs + ": " + e); }
+    });
+  });
+  if (!r.cadena.length) delete r.cadena;
+  // Manchas en todos los candidatos (las cadenas ya las tienen).
+  if (o.manchas !== false) {
+    try { r.manchas_original = grManchas(viewId, base, o); } catch (e) { r.errores.push("Manchas del original: " + e); }
+    r.candidatos.forEach(function (c) {
+      if (c.metricas && !c.metricas.manchas)
+        try { c.metricas.manchas = grManchas(c.vista, base, o); } catch (e) { r.errores.push("Manchas de " + c.vista + ": " + e); }
+    });
+  }
+
+  r.leyenda = "manchas: variación de brillo y color de gran escala que queda en el cielo, ya estirada (< 0,008 no se ve; " +
+              "> 0,015 se ve), en los bordes y en el centro; donde = dónde se ven. " +
+              "copia_objeto: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
               "negativo = infla el objeto). objeto_quitado_pct: % de la señal del objeto que se lleva el modelo (menor = mejor). " +
               "gradiente_restante: fracción del gradiente del cielo que queda, medido fuera del objeto (menor = más plano). " +
               "gradiente_visible: desnivel entre esquinas del cielo tras un estirado automático (< 0,008 plano; > 0,015 se ve; " +
@@ -479,12 +618,17 @@ function gradienteCandidatos(viewId, o) {
   function vis(x) { var v = x.metricas.gradiente_visible; return isFinite(v) ? v : Infinity; }
   function eat(x) { var e = x.metricas.come_objeto_pct; return isFinite(e) ? Math.abs(e) : 100; }
   // Primero, no comerse el objeto (≤ 3 % de su señal y modelo limpio); entre esos, el que deja el cielo más plano.
+  function manchas(x) { var m = x.metricas.manchas; return m && m.se_ven !== undefined ? m.se_ven : null; }
   var safe = r.candidatos.filter(function (x) { return eat(x) <= 3 && absCorr(x) < 0.3; });
   // Entre los seguros, mejor uno cuyo cielo no se vea desnivelado al estirar (gradiente_visible ≤ 0,015), si lo hay.
   var noSeVe = safe.filter(function (x) { return vis(x) <= 0.015; });
   if (noSeVe.length) safe = noSeVe;
   var clean = r.candidatos.filter(function (x) { return absCorr(x) < 0.3; });
-  var best = safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(r.candidatos, absCorr);
+  // 14 nov 2026: entre los seguros sin manchas visibles, el que MENOS objeto se lleva (Rafael: perder la menor
+  // información posible; el cielo ya está bien por definición). Si todos tienen manchas, el más plano, como antes.
+  var sinManchas = safe.filter(function (x) { return manchas(x) === false; });
+  var best = sinManchas.length ? pick(sinManchas, function (x) { return eat(x) + 0.01 * absCorr(x); })
+           : safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(r.candidatos, absCorr);
   if (best) {
     var bc = best.metricas.gcStructCopy;
     r.recomendado = best.vista;
@@ -494,7 +638,8 @@ function gradienteCandidatos(viewId, o) {
                (Math.abs(bc) < 0.15 ? "modelo limpio" : Math.abs(bc) > 0.5 ? "copia el objeto: revisar o probar plano robusto"
                                                                    : "intermedio: revisar el modelo a la vista") + ")" +
                (isFinite(best.metricas.gradiente_visible) ? "; tras estirar: " + best.metricas.se_ve + " (" + best.metricas.gradiente_visible +
-                 (vis(best) > 0.015 ? "; se verá el desnivel: probar otro candidato o una segunda pasada suave" : "") + ")" : "") + ".";
+                 (vis(best) > 0.015 ? "; se verá el desnivel: probar otro candidato o una segunda pasada suave" : "") + ")" : "") +
+               (best.metricas.manchas ? "; manchas: " + best.metricas.manchas.donde : "") + ".";
   } else {
     r.motivo = "Ningún candidato se pudo medir: ver errores.";
   }
@@ -534,6 +679,8 @@ function grCompactar(g, o) {
         if (v && v !== g.recomendado) { var w = ImageWindow.windowById(v); if (!w.isNull) w.forceClose(); }
       });
     });
+  if (o.cerrar !== false && g.intermedias)
+    g.intermedias.forEach(function (v) { var w = ImageWindow.windowById(v); if (!w.isNull) w.forceClose(); });
   var best = g.candidatos.filter(function (c) { return c.vista === g.recomendado; })[0];
   // Tabla corta de la comparación (una fila por candidato): sin ella no se veía qué se había comparado (8 nov 2026).
   g.comparados = g.candidatos.map(function (c) {
@@ -542,6 +689,7 @@ function grCompactar(g, o) {
     return { metodo: c.metodo + " " + c.parametros, deja_gradiente_pct: isFinite(f) ? Math.round(100 * f) : null,
              gradiente_restante: isFinite(f) ? f : null, objeto_quitado_pct: come, copia_objeto: corr,
              gradiente_visible: isFinite(m.gradiente_visible) ? m.gradiente_visible : null,
+             manchas: m.manchas ? m.manchas.donde : null,
              come_objeto_pct: come, corr: corr, elegido: c === best,
              previa: c.previa, previa_modelo: c.previa_modelo };
   });

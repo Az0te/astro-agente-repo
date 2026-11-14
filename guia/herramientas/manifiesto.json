@@ -466,8 +466,8 @@
    "fichero": "gradiente.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free y con IA, GradientCorrection de PixInsight, MGC con y sin bordes, polinomio robusto de grado 1 y 2) sobre copias GC_*, mide cuánto se come cada modelo del objeto y cuánto gradiente de cielo deja, y recomienda. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias.",
-   "resumen": "Paso 9 lineal, UNA vista: compara GraXpert, GradientCorrection, MGC y polinomio sobre copias GC_* y recomienda. Devuelve un trabajo.",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free y con IA, GradientCorrection de PixInsight, MGC con y sin bordes, polinomio robusto de grado 1 y 2, y las cadenas polinomio + gradiente de bordes, polinomio + cielo con máscara y polinomio + GraXpert) sobre copias GC_*, mide cuánto se come cada modelo del objeto, cuánto gradiente de cielo deja y las manchas de brillo y color que quedan en bordes y centro, y recomienda: entre los que no se comen el objeto y no dejan manchas visibles, el que menos objeto quita. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias.",
+   "resumen": "Paso 9 lineal, UNA vista: compara GraXpert, GradientCorrection, MGC, polinomio y polinomio + bordes / + GraXpert sobre copias GC_*, mide manchas y recomienda. Devuelve un trabajo.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
     "type": "object",
@@ -478,7 +478,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { graxpert: [10, 8], graxpertIA: true, gradientCorrection: true, gcOpts: { scale, smoothness, protection... }, mgc: [1024, 2048], mgcBorde: true, mgcOpts, polinomio: [1, 2] (lista de grados; false = sin polinomio), spfc: { qe, gray } del perfil, mars: ruta .xmars, dossier: ruta .json }"
+      "description": "Opcional. { graxpert: [10, 8], graxpertIA: true, gradientCorrection: true, gcOpts: { scale, smoothness, protection... }, mgc: [1024, 2048], mgcBorde: true, mgcOpts, polinomio: [1, 2] (lista de grados; false = sin polinomio), cadenas: [2] (grados del polinomio a encadenar; false = sin cadenas), bordes: true (polinomio + gradiente de bordes), bordesOpts: { anchoBordes: 0.20, llenoBordes: 0.04, escalaBordes: 16 }, cieloMascara: true (polinomio + modelo del cielo con máscara en todo el campo), cieloOpts: { escalaBordes: 15 }, mapas: false (true = vistas MAPA_<vista> con las manchas ×10), cadenaGraXpert: [\"IA\", 10] (false = no), abe: [2, 4] (sólo pruebas; apagado por defecto), mascara: vista (blanco = objeto que no entra en el ajuste de los modelos), manchas: true, spfc: { qe, gray } del perfil, mars: ruta .xmars, dossier: ruta .json }"
      }
     },
     "required": [

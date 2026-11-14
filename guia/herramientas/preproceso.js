@@ -551,7 +551,7 @@ function ppPlanSesiones(o) {
       ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) {
         ppSearch(raiz + "/" + e, true).forEach(function (f) {
           var rel = f.replace(/\\/g, "/").substring(raiz.length);
-          if (!/\/_/.test(rel) && !/(^|[^A-Za-z0-9])(flats?|darks?|bias|calibrat\w*|master\w*|registered|debayered|logs)\//i.test(rel)) Lt.push(f);
+          if (!/\/_/.test(rel) && !/(^|[^A-Za-z0-9])(flats?|darks?|bias|calibrat\w*|master\w*|registered|debayered|logs)[\/]/i.test(rel)) Lt.push(f);
         });
       });
       Lt.sort();
