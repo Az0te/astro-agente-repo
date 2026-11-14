@@ -290,8 +290,24 @@ function pprGuardar(id, f, sobrescribir) {
    return { vista: id, fichero: f };
 }
 
-function pprCerrar(ids, descartar) {
-   var lista = ids instanceof Array ? ids : [ids], r = { cerradas: [], no_cerradas: [] };
+// Cierra vistas: ids, lista o patrones con * («GC_*», «MAPA_*»), para cerrar todas las de una comparativa en UNA llamada
+// (14 nov 2026: Qwen hacía una llamada por vista). excepto: ids o patrones que se conservan.
+function pprPatron(p) {
+   return new RegExp("^" + String(p).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+}
+
+function pprCerrar(ids, descartar, excepto) {
+   var pedidos = ids instanceof Array ? ids : [ids], r = { cerradas: [], no_cerradas: [] }, lista = [];
+   var todas = ImageWindow.windows.map(function (w) { return w.mainView.id; });
+   var fuera = (excepto instanceof Array ? excepto : excepto ? [excepto] : []).map(pprPatron);
+   pedidos.forEach(function (p) {
+      if (String(p).indexOf("*") >= 0) {
+         var re = pprPatron(p), n = 0;
+         todas.forEach(function (id) { if (re.test(id) && lista.indexOf(id) < 0) { lista.push(id); ++n; } });
+         if (!n) r.no_cerradas.push(p + " (ninguna vista coincide)");
+      } else if (lista.indexOf(String(p)) < 0) lista.push(String(p));
+   });
+   lista = lista.filter(function (id) { return !fuera.some(function (re) { return re.test(id); }); });
    lista.forEach(function (id) {
       var w = pprVista(id), mod = false;
       try { mod = !!w.modified; } catch (x) {}
@@ -315,7 +331,7 @@ var LISTA = {
    previa:               function (a) { return pprPrevia(a.vista, a.opciones); },
    abrirImagen:          function (a) { return pprAbrir(a.fichero); },
    guardarImagen:        function (a) { return pprGuardar(a.vista, a.fichero, a.sobrescribir === true); },
-   cerrarVista:          function (a) { return pprCerrar(a.vista, a.descartar === true); },
+   cerrarVista:          function (a) { return pprCerrar(a.vista, a.descartar === true, a.excepto); },
    // Fase lineal
    analizarMaster:       function (a) { return analizarMaster(a.vista); },
    bordesSinDatos:       function (a) { return bordesSinDatos(a.vista); },

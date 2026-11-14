@@ -117,7 +117,7 @@ function gbRango(v) {   // p97 − p3
 }
 
 // Manchas del cielo de una vista: variación de brillo y de color de gran escala que queda en el cielo, ya estirada
-// (mismas unidades que gradiente_visible: < 0,008 no se ve; 0,008–0,015 leve; > 0,015 se ve). Separa bordes y centro.
+// (umbrales propios, más abajo: el rango incluye el halo débil del objeto). Separa bordes y centro.
 //   manchas_brillo, manchas_color: en todo el cielo; *_bordes / *_centro: en la franja de bordes y en el interior;
 //   donde: "bordes", "centro", "todo" o "nada"; peores: hasta 3 zonas con la mancha más fuerte.
 function grManchas(viewId, base, o) {
@@ -198,11 +198,16 @@ function grManchas(viewId, base, o) {
   });
   lista.sort(function (a, b2) { return b2.f - a.f; });
   res.peores = lista.slice(0, 3).filter(function (q) { return q.f > 0.008; }).map(function (q) { delete q.f; return q; });
-  var lim = o.limiteManchas || 0.015;
-  function peor(a, b2) { return Math.max(isFinite(a) ? a : 0, isFinite(b2) ? b2 : 0); }
-  var vb = peor(res.manchas_brillo_bordes, res.manchas_color_bordes), vc = peor(res.manchas_brillo_centro, res.manchas_color_centro);
-  res.donde = (vb <= lim && vc <= lim) ? "nada" : (vb > lim && vc <= lim) ? "bordes" : (vb <= lim && vc > lim) ? "centro" : "todo";
+  // Umbrales (14 nov 2026, calibrados mirando los mapas de una galaxia grande): el rango p97−p3 del cielo liso incluye
+  // el halo débil junto al objeto, así que no son las unidades de gradiente_visible. Brillo: < 0,03 no se ve, 0,03–0,06
+  // leve, > 0,06 se ve; color: < 0,02, 0,02–0,04, > 0,04. Con 0,015 todos los candidatos «se veían», incluso los planos.
+  // limiteManchas: número (mismo para los dos) o { brillo, color } = el umbral de «se ve»; el de «leve» es la mitad.
+  var lm = o.limiteManchas, limB = typeof lm === "number" ? lm : (lm && lm.brillo) || 0.06, limC = typeof lm === "number" ? lm : (lm && lm.color) || 0.04;
+  function supera(b2, c2, f) { return (isFinite(b2) && b2 > limB * f) || (isFinite(c2) && c2 > limC * f); }
+  var vb = supera(res.manchas_brillo_bordes, res.manchas_color_bordes, 1), vc = supera(res.manchas_brillo_centro, res.manchas_color_centro, 1);
+  res.donde = !vb && !vc ? "nada" : vb && !vc ? "bordes" : !vb && vc ? "centro" : "todo";
   res.se_ven = res.donde !== "nada";
+  res.nivel = res.se_ven ? "se ven" : supera(res.manchas_brillo, res.manchas_color, 0.5) ? "leves" : "no se ven";
   return res;
 }
 

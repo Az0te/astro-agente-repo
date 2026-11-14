@@ -637,8 +637,8 @@ function gradienteCandidatos(viewId, o) {
     });
   }
 
-  r.leyenda = "manchas: variación de brillo y color de gran escala que queda en el cielo, ya estirada (< 0,008 no se ve; " +
-              "> 0,015 se ve), en los bordes y en el centro; donde = dónde se ven. " +
+  r.leyenda = "manchas: variación de brillo y color de gran escala que queda en el cielo, ya estirada (brillo < 0,03 no se ve, > 0,06 se ve; " +
+              "color < 0,02 no se ve, > 0,04 se ve; nivel: no se ven / leves / se ven), en los bordes y en el centro; donde = dónde se ven. " +
               "copia_objeto: cuánto se parece el modelo de fondo al objeto (cerca de 0 = modelo limpio; > 0,5 = se come el objeto; " +
               "negativo = infla el objeto). objeto_quitado_pct: % de la señal del objeto que se lleva el modelo (menor = mejor). " +
               "gradiente_restante: fracción del gradiente del cielo que queda, medido fuera del objeto (menor = más plano). " +

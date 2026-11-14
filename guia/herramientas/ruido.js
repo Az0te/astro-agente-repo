@@ -117,6 +117,8 @@ function rdMoteado(view, sky, noise) {
   } catch (e) { return null; }
 }
 
+function rdCambio(a, b) { return a === null || b === null || !(a > 0) ? null : +(100 * (b / a - 1)).toFixed(1); }
+
 function rdQuality(before, after) {
   var a = rdLum(before), b = rdLum(after), cells = rdCells(a);
   var sorted = cells.filter(function (c0) { return c0.m > 1e-6; }).sort(function (p, q) { return p.m - q.m; });   // fuera bordes negros
@@ -129,7 +131,10 @@ function rdQuality(before, after) {
            ruido_baja_pct: +(100 * (1 - nb / na)).toFixed(1), ruido_rel: +(nb / na).toFixed(3),   // ruido_rel: nombre neutro de la guía
            contraste_zona_debil_pct: +(100 * (cb / ca - 1)).toFixed(1),
            residual_estructura: +rdResidual(a, b).toFixed(2), celdas_zona_debil: faint.length,
-           moteado_color_antes: rdMoteado(before, sky, na), moteado_color_despues: rdMoteado(after, sky, nb) };
+           moteado_color_antes: rdMoteado(before, sky, na), moteado_color_despues: rdMoteado(after, sky, nb),
+           // Manchas de color en valor absoluto (las dos con el grano de ANTES): < 0 = el denoise las quita, > 0 = las crea.
+           // moteado_color va en unidades del grano que queda y sube siempre que se quita grano aunque las manchas no cambien.
+           manchas_color_cambio_pct: rdCambio(rdMoteado(before, sky, na), rdMoteado(after, sky, na)) };
 }
 
 function rdCopy(viewId, newId) {
@@ -338,8 +343,13 @@ function reducirRuido(viewId, o) {
                     "2026, 1,45 → 2,03 con 0,30) ni tampoco SCNR. Quedarse con la entrada sin este NXT; las manchas vienen de la fase lineal " +
                     "(dominante o doble NXT lineal) o de saturar demasiado: bajar la saturación o volver al checkpoint. No hay otro límite que 1,5");
   }
-  if (q.moteado_color_antes !== null && q.moteado_color_despues !== null && q.moteado_color_despues - q.moteado_color_antes > 0.3)
-    noCumple.push("este denoise SUBE el moteado de color de " + q.moteado_color_antes + " a " + q.moteado_color_despues + ": " +
+  // Subida del moteado (14 nov 2026): moteado_color va en unidades del grano que queda, así que sube con CUALQUIER denoise
+  // fuerte aunque las manchas no cambien (NXT 0,7 y la separación de frecuencias quedaban fuera por eso en una galaxia
+  // grande). Es fallo si las manchas crecen de verdad (manchas_color_cambio_pct > 10) o si sube y además pasa de 1 (se verán).
+  var subeMot = q.moteado_color_antes !== null && q.moteado_color_despues !== null && q.moteado_color_despues - q.moteado_color_antes > 0.3;
+  if ((q.manchas_color_cambio_pct !== null && q.manchas_color_cambio_pct > 10) || (subeMot && q.moteado_color_despues > 1.0))
+    noCumple.push("este denoise SUBE el moteado de color de " + q.moteado_color_antes + " a " + q.moteado_color_despues +
+                  (q.manchas_color_cambio_pct !== null ? " (manchas " + (q.manchas_color_cambio_pct > 0 ? "+" : "") + q.manchas_color_cambio_pct + " %)" : "") + ": " +
                   (linealSrc ? "repetir sobre la misma entrada con menos denoise (0,50); si la entrada ya pasó por el NXT suave del Paso 14, " +
                                "basta con 0,50 o menos (galaxia grande, 7 nov 2026: 0,50 + 0,70 subió el moteado de 0,35 a 0,92)"
                              : "no aplicar este NXT"));
@@ -463,7 +473,9 @@ function ruidoCandidatos(viewId, o) {
     var m = c.r.medidas;
     return { metodo: c.etiqueta, ruido_rel: m.ruido_rel, ruido_baja_pct: m.ruido_baja_pct, contraste_zona_debil_pct: m.contraste_zona_debil_pct,
              residual_estructura: m.residual_estructura, moteado_color: m.moteado_color_despues,
-             cumple: !c.r.no_cumple.length, segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
+             manchas_color_cambio_pct: m.manchas_color_cambio_pct,
+             cumple: !c.r.no_cumple.length, no_cumple: c.r.no_cumple.length ? c.r.no_cumple : undefined, aviso: c.r.aviso || undefined,
+             parametros: c.r.parametros && c.r.parametros.aplicado ? c.r.parametros.aplicado : undefined, segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
   });
   var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn"), vista = null, completa = null;
   cands.forEach(function (c) {

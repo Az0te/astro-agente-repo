@@ -1650,12 +1650,12 @@
    "fichero": null,
    "nivel": "disco",
    "timeout_s": 30,
-   "descripcion": "Cierra una vista. Si tiene cambios sin guardar no la cierra salvo descartar: true.",
+   "descripcion": "Cierra vistas en UNA llamada: id, lista de ids o patrón con * (\"GC_*\" cierra todas las copias de una comparativa, \"MAPA_*\" los mapas). No llamar una vez por vista. excepto: ids o patrones que se conservan (p. ej. la elegida). Si una tiene cambios sin guardar no la cierra salvo descartar: true.",
    "params": {
     "type": "object",
     "properties": {
      "vista": {
-      "description": "Id o lista de ids.",
+      "description": "Id, lista de ids o patrón con * (p. ej. \"GC_*\").",
       "anyOf": [
        {
         "type": "string"
@@ -1670,7 +1670,21 @@
      },
      "descartar": {
       "type": "boolean"
+     },
+   "excepto": {
+    "description": "Ids o patrones con * que no se cierran.",
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
      }
+    ]
+   }
     },
     "required": [
      "vista"
