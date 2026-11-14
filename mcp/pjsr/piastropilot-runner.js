@@ -535,7 +535,9 @@ function pprEjecutarLlamadas(texto) {
 // ---------------------------------------------------------------------------------------------------------------
 
 function pprMain() {
-   var id = (typeof jsArguments !== "undefined" && jsArguments.length) ? String(jsArguments[0]) : "";
+   // PixInsight 1.9.6 avisa de que jsArguments está obsoleto: usar Runtime.jsArguments si existe.
+   var pprArgs = (typeof Runtime !== "undefined" && Runtime.jsArguments) ? Runtime.jsArguments : ((typeof jsArguments !== "undefined") ? jsArguments : []);
+   var id = (pprArgs && pprArgs.length) ? String(pprArgs[0]) : "";
    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
       console.warningln("[piastropilot] runner lanzado sin id de petición válido; no hago nada.");
       return;
