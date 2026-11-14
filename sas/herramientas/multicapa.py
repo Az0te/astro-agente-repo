@@ -317,6 +317,15 @@ def desmezclarDualBand(ctx, vista=None, carpeta=None):
 
 # --- combinar la banda estrecha con el RGB (criterios de Siril) --------------------------------------------
 
+def _peso_senal(nb, mn, sn):
+    """Peso 0–1 de dónde la banda estrecha tiene señal, medido sobre la capa SUAVIZADA (radio ~6 px) y con una rampa
+    de 1 a 4 σ del ruido suavizado. Píxel a píxel, el umbral seguía el ruido y la máscara salía a manchas de borde duro
+    que se veían con intensidad ×2 (IC 1396, 14 nov 2026)."""
+    s = M.suave(np.asarray(nb, dtype=np.float32), 12)
+    ss = max(sn / 6.0, 1e-9)          # ruido de la media en ~36 px
+    return np.clip(((s - mn) / ss - 1.0) / 3.0, 0, 1).astype(np.float32)
+
+
 def _excesos(base, nb, cielo_px, estrellas_px, obj_px):
     mb, mn = float(np.median(base[cielo_px])), float(np.median(nb[cielo_px]))
     sn = 1.4826 * float(np.median(np.abs(nb[cielo_px] - mn)))
@@ -326,7 +335,7 @@ def _excesos(base, nb, cielo_px, estrellas_px, obj_px):
     k = float(np.median((base[zona] - mb) / np.maximum(nb[zona] - mn, 1e-9))) if zona.sum() >= 100 else 1.0
     k = float(np.clip(k, 0.05, 20))
     ex = np.clip((nb - mn) * k - (base - mb), 0, None)
-    ex = ex * np.clip(((nb - mn) / max(sn, 1e-9) - 1.5) / 1.5, 0, 1)
+    ex = ex * _peso_senal(nb, mn, sn)
     ex[estrellas_px] = 0
     return ex, _r(k, 4)
 
@@ -373,7 +382,7 @@ def _excesos_estrellas(base, nb, cielo_px, estrellas_px, obj_px):
     sn = 1.4826 * float(np.median(np.abs(nb[cielo_px] - mn)))
     ex = np.clip((nb - mn) * k - (base - mb), 0, None)
     with np.errstate(over="ignore", invalid="ignore"):
-        ex = ex * np.clip(((nb.astype(np.float64) - mn) / max(sn, 1e-9) - 1.5) / 1.5, 0, 1).astype(np.float32)
+        ex = ex * _peso_senal(nb, mn, sn)
     ex[estrellas_px] = 0
     zona = obj_px & ~estrellas_px
     s_base = float(np.median(base[zona])) - mb if zona.any() else 0.0

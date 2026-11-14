@@ -111,7 +111,9 @@ Sin SASpro (solo para desarrollo): `python sas/pruebas/puente_falso.py` lanza el
 - Halo-B-Gon: no existe en la rama main de GitHub ni hay comando; sin herramienta.
 - Apilado (Stacking Suite): SASpro no tiene comando sin ventana para apilar ni para registrar por estrellas (`star_align` sólo aparece como alias). Se apila con WBPP en PixInsight o con `apilarCandidatos` de SirilAstroPilot; aquí se empieza desde el master. `alinearMasters` alinea por astrometría.
 - Probar `componerHDR` con una toma corta de verdad corta (30 s frente a 120–300 s, p. ej. IC 63): en M31 120/60 s la larga apenas satura (sustituido < 0,01 %).
-- Comparación de IC 1396 SASpro / Siril / PixInsight: el resultado de SASpro está en `D:\Astronomia\Master\master\IC1396\SetiAstroPilot_20261114` (13–14 nov 2026).
+- FITS guardado por SASpro: filas de arriba abajo; Siril (estándar FITS) lo ve volteado en vertical.
+- SirilAstroPilot sin ventana (siril-cli): el puente va, pero resolverAstrometria y calibrarColor leen el registro de Siril y fallan («Log only available in GUI mode»).
+- Comparación de IC 1396 SASpro / Siril / PixInsight (`notas/IC1396_comparacion_PI_Siril_SASpro.md`): el resultado de SASpro está en `D:\Astronomia\Master\master\IC1396\SetiAstroPilot_20261114` (13–14 nov 2026).
 
 ## Desarrollo
 
