@@ -210,6 +210,10 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
         datos = m if datos is None else (datos & m)
         alineados.append((f, p, cab))
     x0, y0, x1, y1 = _rect_con_datos(datos)
+    # Margen de seguridad: la interpolación del reproyectado deja 1–3 px mezclados con el relleno en el borde de los
+    # datos (IC 1396: línea rojiza fina en el borde de las capas SII/OIII). 8 px fuera.
+    m = 8
+    x0, y0, x1, y1 = x0 + m, y0 + m, x1 - m, y1 - m
     if (x1 - x0) < forma[1] * 0.5 or (y1 - y0) < forma[0] * 0.5:
         raise RuntimeError(f"La zona común con datos es menor que la mitad ({x1 - x0}×{y1 - y0}): ¿son del mismo campo?")
     salidas = []

@@ -1216,6 +1216,72 @@ def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", 
     return _galeria(r, p, "diferencia")
 
 
+def _fwhm_estrellas(L, n=300):
+    """FWHM mediana (px) de estrellas aisladas no saturadas, por momentos de segundo orden en una ventana de 15 px."""
+    hp = L - M._caja(L, 5)
+    s = 1.4826 * float(np.median(np.abs(hp[::4, ::4] - np.median(hp[::4, ::4]))))
+    cand = hp > 20 * max(s, 1e-9)
+    cand[:16, :] = cand[-16:, :] = False
+    cand[:, :16] = cand[:, -16:] = False
+    ys, xs = np.nonzero(cand)
+    v = hp[ys, xs]
+    pico = np.ones(len(ys), bool)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            if dy or dx:
+                pico &= v >= hp[ys + dy, xs + dx]
+    ys, xs = ys[pico], xs[pico]
+    orden = np.argsort(-hp[ys, xs])
+    yy, xx = np.mgrid[-7:8, -7:8]
+    f = []
+    for j in orden[len(orden) // 10:]:                      # sin el 10 % más brillante (saturadas, halos)
+        y, x = ys[j], xs[j]
+        w = L[y - 7:y + 8, x - 7:x + 8]
+        if w.max() > 0.95:
+            continue
+        w = np.clip(w - np.median(L[y - 15:y + 16, x - 15:x + 16]), 0, None)
+        t = float(w.sum())
+        if t <= 0:
+            continue
+        cy, cx = float((w * yy).sum() / t), float((w * xx).sum() / t)
+        var = float((w * ((yy - cy) ** 2 + (xx - cx) ** 2)).sum() / t) / 2
+        if var > 0:
+            f.append(2.3548 * np.sqrt(var))
+        if len(f) >= n:
+            break
+    return float(np.median(f)) if f else None, len(f)
+
+
+def compararFinales(ctx, vistas):
+    """Mide varias vistas ya estiradas (finales de distintos programas o versiones) con los mismos criterios: cielo,
+    ruido relativo, dominante del cielo, contraste local y saturación del objeto, recortes, % de píxeles de estrella y
+    FWHM de las estrellas. Solo lectura. Para comparar PixInsight / Siril / SASpro."""
+    if isinstance(vistas, str):
+        vistas = [v.strip() for v in vistas.split(";") if v.strip()]
+    filas = []
+    for v in vistas:
+        d = _doc(ctx, v)
+        p = _p(d.image)
+        z = M.zonas_objeto_cielo(p)
+        c = z["medidas"]
+        L = M.lum(p)
+        dom = None
+        if p.shape[0] == 3:
+            rgb = M.cielo_por_canal(p, c["_celdas"])
+            dom = _r(100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6), 2)
+        fw, nfw = _fwhm_estrellas(L)
+        filas.append({"vista": _nombre(d), "tam": [int(p.shape[2]), int(p.shape[1])], "lineal": M.lineal(p[:, ::8, ::8]),
+                      "cielo": c["cielo"], "ruido_rel": c["ruido_rel"], "dominante_cielo_pct": dom,
+                      "contraste_local_objeto": _r(M.contraste_local(L, z["obj_px"]), 5),
+                      "sat_objeto": _r(float(M.saturacion(p)[z["obj_px"]].mean()), 3) if p.shape[0] == 3 and z["obj_px"].any() else None,
+                      "p99": c["p99"], "estrellas_pct": _r(float(z["est_px"].mean() * 100), 2),
+                      "fwhm_px": _r(fw, 2), "estrellas_medidas": nfw, **M.recortes(p)})
+    return {"filas": filas,
+            "leyenda": "cielo: nivel del fondo. ruido_rel: ruido/cielo. dominante_cielo_pct: diferencia entre canales en el "
+                       "cielo. contraste_local_objeto: estructura de escala media en el objeto. fwhm_px: tamaño de las "
+                       "estrellas no saturadas (a la escala de cada imagen: un drizzle ×2 da el doble)."}
+
+
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75), proteger_cielo=True, dominante_max=5.0):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
     cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
@@ -1711,6 +1777,7 @@ LISTA = {
     "ruidoCandidatos": ruidoCandidatos,
     "nucleoCandidatos": nucleoCandidatos,
     "contrasteCandidatos": contrasteCandidatos,
+    "compararFinales": compararFinales,
     "saturacionCandidatos": saturacionCandidatos,
     "nitidezCandidatos": nitidezCandidatos,
     "estirarEstrellas": estirarEstrellas,

@@ -93,6 +93,28 @@
    }
   },
   {
+   "nombre": "compararFinales",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "descripcion": "Mide varias vistas ya estiradas (finales de PixInsight, Siril, SASpro o versiones) con los mismos criterios: cielo, ruido relativo, dominante del cielo, contraste local y saturación del objeto, recortes, % de píxeles de estrella y FWHM de las estrellas. Solo lectura.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vistas": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Vistas a comparar (nombre o uid)."
+     }
+    },
+    "required": [
+     "vistas"
+    ]
+   }
+  },
+  {
    "nombre": "previa",
    "fichero": "herramientas.py",
    "nivel": "lectura",
