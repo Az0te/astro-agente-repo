@@ -45,22 +45,48 @@ def _leer(ctx, ruta):
     return H._p(img), cab, meta
 
 
-def _wcs(cab, meta):
-    """WCS celeste de un fichero: el de SASpro (metadata['wcs']) o el de la cabecera."""
+def _wcs_valido(w, forma):
+    """Un WCS resuelto tiene el píxel de referencia dentro (o cerca) de la imagen. Los masters de WBPP traen RA/DEC y
+    CDELT pero no CRPIX: SASpro arma un WCS con CRPIX 0 que no vale (IC 1396: CRPIX1 −80; M31 60 s: 354 px de error)."""
+    try:
+        cx, cy = float(w.wcs.crpix[0]), float(w.wcs.crpix[1])
+        h, wd = forma
+        return -0.25 * wd < cx < 1.25 * wd and -0.25 * h < cy < 1.25 * h and abs(cx) > 1 and abs(cy) > 1
+    except Exception:
+        return False
+
+
+def _wcs(cab, meta, forma=None):
+    """WCS celeste de un fichero (el de SASpro o el de la cabecera), sólo si es válido para 'forma'."""
     from astropy.wcs import WCS
+    cands = []
     w = meta.get("wcs")
     if w is not None and getattr(w, "has_celestial", False):
-        return w.celestial
+        cands.append(w.celestial)
     for h in (meta.get("wcs_header"), cab):
         if h is None:
             continue
         try:
             w = WCS(h, naxis=2)
             if w.has_celestial and "CRPIX1" in h:
-                return w.celestial
+                cands.append(w.celestial)
         except Exception:
             continue
+    for w in cands:
+        if forma is None or _wcs_valido(w, forma):
+            return w
     return None
+
+
+def _desplazar(p, dx, dy):
+    """Traslación entera de (canales, alto, ancho) rellenando con 0 (luego se recorta a la zona común)."""
+    q = np.zeros_like(p)
+    h, w = p.shape[1:]
+    dx, dy = int(round(dx)), int(round(dy))
+    ys, yd = (slice(0, h - dy), slice(dy, h)) if dy >= 0 else (slice(-dy, h), slice(0, h + dy))
+    xs, xd = (slice(0, w - dx), slice(dx, w)) if dx >= 0 else (slice(-dx, w), slice(0, w + dx))
+    q[:, yd, xd] = p[:, ys, xs]
+    return q
 
 
 def _mascara_datos(L, b=8):
@@ -144,14 +170,14 @@ def _cabecera_recortada(cab, w, x0, y0):
             h = cab.copy()
         except Exception:
             pass
+    import re as _re
+    for k in list(h.keys()):                       # el WCS propio (otro marco, o incompleto como el de WBPP) fuera
+        if _re.match(r"^(CTYPE|CRVAL|CRPIX|CUNIT|CD\d_|PC\d_|CDELT|CROTA|A_|B_|AP_|BP_|LONPOLE|LATPOLE|WCSAXES|RADESYS|EQUINOX|PLTSOLVD)", str(k)):
+            try:
+                del h[k]
+            except Exception:
+                pass
     if w is not None:
-        import re as _re
-        for k in list(h.keys()):                   # el WCS propio (otro marco) fuera: manda el de la referencia
-            if _re.match(r"^(CTYPE|CRVAL|CRPIX|CUNIT|CD\d_|PC\d_|CDELT|CROTA|A_|B_|AP_|BP_|LONPOLE|LATPOLE|WCSAXES|RADESYS|EQUINOX)", str(k)):
-                try:
-                    del h[k]
-                except Exception:
-                    pass
         wc = w.deepcopy()
         wc.wcs.crpix = [wc.wcs.crpix[0] - x0, wc.wcs.crpix[1] - y0]
         for k, v in wc.to_header(relax=True).items():
@@ -176,29 +202,42 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
     t0 = time.perf_counter()
     iref = int(referencia) - 1
     pref, cref, mref = _leer(ctx, fs[iref])
-    wref = _wcs(cref, mref)
-    if wref is None:
-        raise RuntimeError(f"La referencia {fs[iref].name} no tiene astrometría: resuélvela antes (abrirImagen + "
-                           "resolverAstrometria + guardarImagen) o elige otra referencia.")
     forma = pref.shape[1:]
+    wref = _wcs(cref, mref, forma)
+    metodo = "reproyección al WCS de la referencia (reproject)"
+    if wref is None:
+        # Sin WCS válido (p. ej. masters de WBPP: RA/DEC sin CRPIX), alineado por estrellas: traslación medida por
+        # correlación de fase. Vale para masters de la misma sesión o con el mismo encuadre; si hay giro, resolver antes.
+        metodo = "traslación por estrellas (sin astrometría válida en la referencia)"
     alineados, info, datos = [], [], None
     for i, f in enumerate(fs):
         if i == iref:
             p, cab, w = pref, cref, wref
         else:
             p, cab, meta = _leer(ctx, f)
-            w = _wcs(cab, meta)
-            if w is None:
-                raise RuntimeError(f"{f.name} no tiene astrometría: resuélvela antes o alinéalos en otro programa.")
-            canales = []
-            for c in range(p.shape[0]):
-                out, _ = reproject_interp((p[c], w), wref, shape_out=forma, order="bilinear")
-                canales.append(np.nan_to_num(out, nan=0.0).astype(np.float32))
-            p = np.stack(canales)
-            cen = w.pixel_to_world(p.shape[2] / 2, p.shape[1] / 2)
-            x, y = wref.world_to_pixel(cen)
-            info.append({"fichero": f.name, "desplazamiento_px": [_r(float(x) - forma[1] / 2, 1),
-                                                                  _r(float(y) - forma[0] / 2, 1)]})
+            if p.shape[1:] != forma and wref is None:
+                raise RuntimeError(f"{f.name} mide {p.shape[2]}×{p.shape[1]} y la referencia {forma[1]}×{forma[0]}, y no hay "
+                                   "astrometría válida para reproyectar: resuelve los masters antes (resolverAstrometria).")
+            w = _wcs(cab, meta, p.shape[1:]) if wref is not None else None
+            if wref is not None and w is None:
+                raise RuntimeError(f"{f.name} no tiene astrometría válida: resuélvela antes o alinéalos en otro programa.")
+            if wref is not None:
+                canales = []
+                for c in range(p.shape[0]):
+                    out, _ = reproject_interp((p[c], w), wref, shape_out=forma, order="bilinear")
+                    canales.append(np.nan_to_num(out, nan=0.0).astype(np.float32))
+                p = np.stack(canales)
+                cen = w.pixel_to_world(p.shape[2] / 2, p.shape[1] / 2)
+                x, y = wref.world_to_pixel(cen)
+                info.append({"fichero": f.name, "desplazamiento_px": [_r(float(x) - forma[1] / 2, 1),
+                                                                      _r(float(y) - forma[0] / 2, 1)]})
+            else:
+                dx, dy, pico = _desfase_residual(pref.mean(axis=0), p.mean(axis=0))
+                if pico < 8:
+                    raise RuntimeError(f"{f.name}: no encuentro el desplazamiento por estrellas (confianza {pico:.0f}): "
+                                       "resuelve la astrometría de los masters antes.")
+                p = _desplazar(p, -dx, -dy)
+                info.append({"fichero": f.name, "desplazamiento_px": [_r(-dx, 1), _r(-dy, 1)]})
         if i != iref:
             dx, dy, pico = _desfase_residual(pref.mean(axis=0), p.mean(axis=0))
             info[-1]["residuo_estrellas_px"] = [_r(dx, 1), _r(dy, 1)]
@@ -227,11 +266,15 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
         ctx.save_image(np.ascontiguousarray(img), str(dst), original_format="xisf", bit_depth="32-bit floating point",
                        original_header=h, is_mono=(rec.shape[0] == 1))
         salidas.append(str(dst))
-    return {"alineados": salidas, "referencia": str(fs[iref]), "metodo": "reproyección al WCS de la referencia (reproject)",
-            "desplazamientos": info, "recorte_comun": [x0, y0, x1, y1], "tam_comun": [x1 - x0, y1 - y0],
-            "segundos": _r(time.perf_counter() - t0, 1),
-            "nota": "Recortados todos al mismo rectángulo con datos en todos. Ábrelos con abrirImagen; el dual band se "
-                    "separa con desmezclarDualBand."}
+    r = {"alineados": salidas, "referencia": str(fs[iref]), "metodo": metodo,
+         "desplazamientos": info, "recorte_comun": [x0, y0, x1, y1], "tam_comun": [x1 - x0, y1 - y0],
+         "segundos": _r(time.perf_counter() - t0, 1),
+         "nota": "Recortados todos al mismo rectángulo con datos en todos. Ábrelos con abrirImagen; el dual band se "
+                 "separa con desmezclarDualBand."}
+    if wref is None:
+        r["aviso"] = ("Sin astrometría válida: los alineados se guardan sin WCS. Resuelve la referencia alineada "
+                      "(resolverAstrometria) antes del color por estrellas o de documentarObjeto.")
+    return r
 
 
 def desmezclarDualBand(ctx, vista=None, carpeta=None):
@@ -262,7 +305,7 @@ def desmezclarDualBand(ctx, vista=None, carpeta=None):
             dst = H._libre(H._ruta(carpeta) / f"{base}_{etiqueta}.xisf")
             dst.parent.mkdir(parents=True, exist_ok=True)
             ctx.save_image(np.ascontiguousarray(capa), str(dst), original_format="xisf",
-                           bit_depth="32-bit floating point", original_header=H._cabecera_para_guardar(H._meta(d)),
+                           bit_depth="32-bit floating point", original_header=H._cabecera_para_guardar(H._meta(d), capa.shape),
                            is_mono=True)
             out[etiqueta]["fichero"] = str(dst)
     H._reactivar(ctx, d)

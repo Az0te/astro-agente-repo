@@ -547,7 +547,7 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
         bits = "8-bit" if fmt in ("jpg",) else "16-bit" if fmt == "png" else "32-bit floating point"
     m = _meta(d)
     img = d.image
-    cab = _cabecera_para_guardar(m)
+    cab = _cabecera_para_guardar(m, np.shape(img)[:2])
     # En SASpro la cabecera está en metadata["fits_header"] (no en "original_header") y la astrometría en "wcs_header".
     # Antes se pasaba original_header (None) y el fichero salía con 7 palabras clave: sin OBJECT, exposición ni WCS
     # (M31, 13 nov 2026). image_meta no se pasa en XISF: con ella SASpro copia las palabras de la XISF original y
@@ -562,7 +562,7 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
             "astrometria_guardada": bool(cab is not None and "CTYPE1" in cab)}
 
 
-def _cabecera_para_guardar(m):
+def _cabecera_para_guardar(m, forma=(0, 0)):
     """Cabecera FITS de la vista (fits_header u original_header) con la astrometría de wcs_header encima, sin tocar el
     original. None si no hay cabecera."""
     h = m.get("original_header") or m.get("fits_header")
@@ -581,6 +581,18 @@ def _cabecera_para_guardar(m):
                 h[k] = w[k]
         except Exception:
             pass
+    # PLTSOLVD (lo usa Siril para saber si hay astrometría) sólo con un WCS completo: CRPIX dentro de la imagen.
+    # Los de WBPP traen RA/DEC sin CRPIX y no valen (14 nov 2026).
+    try:
+        cx = float(h.get("CRPIX1")) if h.get("CRPIX1") is not None else None
+        cy = float(h.get("CRPIX2")) if h.get("CRPIX2") is not None else None
+        ancho, alto = forma[1], forma[0]
+        if cx is not None and cy is not None and 1 < cx < ancho and 1 < cy < alto and h.get("CTYPE1"):
+            h["PLTSOLVD"] = (True, "SetiAstroPilot: WCS completo")
+        elif "PLTSOLVD" in h:
+            del h["PLTSOLVD"]
+    except Exception:
+        pass
     return h
 
 
