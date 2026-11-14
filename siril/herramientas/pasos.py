@@ -2729,6 +2729,50 @@ def exportarFinal(siril, carpeta, nombre=None, calidad=95):
     return r
 
 
+# --- Comparar finales ------------------------------------------------------------------------------------------
+
+def compararFinales(siril, ficheros=None):
+    """Mide la imagen cargada y/o varios ficheros ya estirados (finales de distintos programas o versiones) con los
+    mismos criterios: cielo, ruido relativo, dominante del cielo, contraste local, saturación del objeto, recortes,
+    % de estrellas y textura por escalas (grano, contraste medio y grande, suavidad). Solo lectura."""
+    info = H._info(siril)
+    if isinstance(ficheros, str):
+        ficheros = [f.strip() for f in ficheros.split(";") if f.strip()]
+    fuentes = [("(cargada)", None)] if not ficheros else []
+    for f in ficheros or []:
+        ruta = H._ruta(f)
+        if not ruta.is_file():
+            raise FileNotFoundError(f"No existe: {ruta}")
+        fuentes.append((ruta.name, ruta))
+    filas, errores = [], []
+    for nombre, ruta in fuentes:
+        try:
+            p = _pantalla(_crudo(siril), info) if ruta is None else _leer_fichero(siril, ruta, info)
+            z = _zonas(p)
+            c = z["medidas"]
+            L = _lum(p)
+            dom = None
+            if p.shape[0] == 3:
+                rgb = _cielo_por_canal(p, c["_celdas"])
+                dom = _r(100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6), 2)
+            obj = z["obj_px"]
+            fila = {"imagen": nombre, "tam": [int(p.shape[2]), int(p.shape[1])], "lineal": bool(_lineal(p)),
+                    "cielo": c["cielo"], "ruido_rel": c["ruido_rel"], "dominante_cielo_pct": dom,
+                    "contraste_local_objeto": _r(_contraste_local(L, obj), 5),
+                    "sat_objeto": _r(float(_saturacion(p)[obj].mean()), 3) if p.shape[0] == 3 and obj.any() else None,
+                    "p99": c["p99"], "estrellas_pct": z["estrellas_pct"], **_recortes(p), **_textura(L, obj)}
+            if fila["lineal"]:
+                fila["aviso"] = "parece lineal: la comparación es para imágenes ya estiradas"
+            filas.append(fila)
+        except Exception as e:                              # un fichero ilegible no tumba la comparación
+            errores.append(f"{nombre}: {e}")
+    return {"filas": filas, "errores": errores,
+            "leyenda": "cielo: nivel del fondo. ruido_rel: ruido/cielo. dominante_cielo_pct: diferencia entre canales en "
+                       "el cielo. contraste_local_objeto: estructura de escala media en el objeto. grano: escala fina "
+                       "relativa al objeto (menor = más limpio); suavidad = contraste_grande / grano (mayor = estructura "
+                       "grande sin grano). Comparar imágenes a la misma escala (un drizzle ×2 cambia grano y contraste)."}
+
+
 LISTA_PASOS = {
     "reducirRuidoCandidatos": reducirRuidoCandidatos,
     "estrellasCandidatos": estrellasCandidatos,
@@ -2748,4 +2792,5 @@ LISTA_PASOS = {
     "separarEstrellas": separarEstrellas,
     "estirarCandidatos": estirarCandidatos,
     "quitarVerde": quitarVerde,
+    "compararFinales": compararFinales,
 }

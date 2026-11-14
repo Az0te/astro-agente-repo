@@ -1216,6 +1216,35 @@
    }
   },
   {
+   "nombre": "compararFinales",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "paso": "no-lineal/10-recorte-exportacion.md",
+   "descripcion": "Compara finales ya estirados (de Siril, PixInsight o SASpro, o versiones distintas) con las mismas medidas: cielo, ruido relativo, dominante del cielo, contraste local y saturación del objeto, recortes, % de estrellas y textura por escalas (grano, contraste medio y grande, suavidad). Sin 'ficheros' mide la imagen cargada. Solo lectura: no cambia la imagen cargada.",
+   "resumen": "Mide y compara finales estirados (incluida textura). Solo lectura.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ficheros": {
+      "description": "Rutas absolutas separadas por ';' (o lista). Sin ellas, la imagen cargada.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      ]
+     }
+    },
+    "required": []
+   }
+  },
+  {
    "nombre": "alinearMasters",
    "fichero": "multicapa.py",
    "nivel": "disco",
