@@ -422,7 +422,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "lineal/09-correccion-gradiente.md",
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente de SASpro (ABE polinomio 1 y 2, ABE con RBF y GraXpert IA), mide cada una con los criterios de la guía (copia_objeto, objeto_quitado_pct, gradiente_restante, irregularidad_cielo) y recomienda. La vista NO cambia: el elegido se pone con aplicarCandidato(id). Cada candidato trae previa y previa_quita (el modelo restado).",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) de SASpro (ABE polinomio 1 y 2, ABE con RBF y GraXpert IA), mide cada una con los criterios de la guía (copia_objeto, objeto_quitado_pct, gradiente_restante, irregularidad_cielo) y recomienda. La vista NO cambia: el elegido se pone con aplicarCandidato(id). Cada candidato trae previa y previa_quita (el modelo restado). Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo.",
    "resumen": "Paso 9: compara ABE poli/RBF y GraXpert, mide y recomienda; no cambia la vista.",
    "params": {
     "type": "object",
@@ -458,6 +458,48 @@
        "galaxia",
        "nebulosa_oscura"
       ]
+     },
+     "halo": {
+      "type": "boolean",
+      "description": "Probar polinomio fuera del halo y + crominancia (por defecto true)."
+     },
+     "halo_opciones": {
+      "type": "object",
+      "description": "Opcional. { escala: 1.1 (agrandado de la elipse del objeto), elipse: { x, y, a, q, angulo } (px, a = eje mayor entero), circulos: [{ x, y, r }] (zonas a excluir), suavizado: 0.005 }"
+     },
+     "diagnostico": {
+      "type": "boolean",
+      "description": "Diagnóstico de manchas de la recomendada (por defecto true)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "diagnosticoManchas",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "paso": "lineal/09-correccion-gradiente.md",
+   "descripcion": "Diagnostica las manchas que quedan en el cielo de una imagen en color (normalmente ya corregida de gradiente) antes de decidir qué son: para las zonas peores da R, G y B en % del cielo de cada canal, si es exceso o hueco, si está en un solo canal, la distancia al objeto, si se repite al otro lado de él, y un veredicto. Regla: un hueco (más oscuro que el cielo) o una mancha en un solo canal no es señal y se puede corregir (polinomio fuera del halo + crominancia); un exceso en los tres canales cerca del objeto y simétrico es halo real y no se quita. No cambia nada.",
+   "resumen": "Dice qué es cada mancha del cielo (canal, exceso/hueco, sigue al objeto o no): artefacto corregible o halo real.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "umbral": {
+      "type": "number",
+      "description": "% del cielo a partir del cual se informa (por defecto 0,1)."
+     },
+     "zonas": {
+      "type": "number",
+      "description": "Zonas como mucho (por defecto 4)."
+     },
+     "escala": {
+      "type": "number",
+      "description": "Agrandado de la elipse del objeto (por defecto 1,1)."
      }
     }
    }
@@ -575,7 +617,9 @@
     "properties": {
      "vistas": {
       "type": "array",
-      "items": {"type": "string"},
+      "items": {
+       "type": "string"
+      },
       "description": "Dos o más vistas mono de la misma raya (nombre o uid)."
      },
      "nombre": {
@@ -583,7 +627,9 @@
       "description": "Nombre de la vista nueva (por defecto <referencia>_unida)."
      }
     },
-    "required": ["vistas"]
+    "required": [
+     "vistas"
+    ]
    }
   },
   {

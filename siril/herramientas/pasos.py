@@ -26,6 +26,7 @@ from pathlib import Path
 import numpy as np
 
 import herramientas as H
+import halo as _halo
 
 TRABAJO = H.DATOS / "trabajo"
 CONFIG = H.DATOS / "config.json"
@@ -708,8 +709,9 @@ def _exigir_alineado(siril, info, sin_alinear=False):
 
 
 def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True, muestras=20, tolerancia=1.0,
-                        ignorar_cunas=False, tipo=None, sin_alinear=False):
-    """Paso 9 lineal: compara subsky (polinomio y RBF) y GraXpert IA, mide y recomienda. La imagen no cambia."""
+                        ignorar_cunas=False, tipo=None, sin_alinear=False, halo=True, halo_opciones=None, diagnostico=True):
+    """Paso 9 lineal: compara subsky (polinomio y RBF), GraXpert IA y el polinomio fuera del halo (+ crominancia), mide y
+    recomienda. La imagen no cambia."""
     info = H._info(siril)
     alineado = _exigir_alineado(siril, info, sin_alinear)
     crudo = _crudo(siril)
@@ -754,6 +756,28 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
                     _restaurar(siril, crudo)
     finally:
         _restaurar(siril, crudo)
+    # Polinomio fuera del halo y + crominancia (14 nov 2026, halo.py): para objetos grandes y difusos cuya máscara se queda
+    # corta; quita manchas de color de escala media sin tocar la luminancia. Cálculo propio en numpy: no toca la imagen.
+    if halo and p.shape[0] >= 3:
+        t0 = time.perf_counter()
+        try:
+            poly, cro, hinfo = _halo.calcular(p, **(halo_opciones or {}))
+            r["halo"] = hinfo
+            for nombre, q in (("polinomio fuera del halo", poly), ("polinomio fuera del halo + crominancia", cro)):
+                if q is None:
+                    continue
+                n += 1
+                m = _medir_gradiente(base, q)
+                qq = q if info["top_down"] else q[:, ::-1, :]
+                res = _a_siril(qq, crudo.dtype).reshape(crudo.shape)
+                cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": "halo.py " + json.dumps(hinfo, default=str),
+                                                         "huella_base": huella, "metricas": m})
+                r["candidatos"].append({"id": cid, "metodo": nombre, "comando": "cálculo propio (halo.py)", "metricas": m,
+                                        "segundos": _r(time.perf_counter() - t0, 1)})
+            if hinfo.get("aviso"):
+                r["errores"].append("polinomio fuera del halo: " + hinfo["aviso"])
+        except Exception as e:
+            r["errores"].append(f"polinomio fuera del halo: {e}")
 
     def absc(x): return abs(x["metricas"]["copia_objeto"] or 0)
     def resid(x): v = x["metricas"]["gradiente_restante"]; return v if v is not None else 9
@@ -768,7 +792,11 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
     if seguros:
         r0 = min(resid(x) for x in seguros)
         margen = 0.15 if extenso else 0.05
-        mejor = min([x for x in seguros if resid(x) <= r0 + margen], key=eat)
+        cerca = [x for x in seguros if resid(x) <= r0 + margen]
+        # A «se lleva» parecido (≤ 0,5 puntos) gana el que deja menos gradiente: en M31 el polinomio 1 (0 %) ganaba por
+        # el orden de la lista dejando el 22 % del gradiente frente al 8 % del de fuera del halo (14 nov 2026).
+        e0 = min(eat(x) for x in cerca)
+        mejor = min([x for x in cerca if eat(x) <= e0 + 0.5], key=resid)
     else:
         mejor = min(limpios, key=eat) if limpios else min(c, key=absc) if c else None
     r["criterio"] = (f"campo con objeto extenso o polvo: se tolera que el modelo se lleve ≤ {tope:g} % del objeto"
@@ -791,9 +819,35 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
         r["aviso_campo"] = (f"El objeto ocupa el {round(base['objeto_campo_pct'])} % del campo: casi no hay cielo libre y las celdas "
                             "de cielo llevan nebulosa débil. gradiente_restante es orientativo (lo que queda puede ser nebulosa, "
                             "no gradiente); irregularidad_cielo no sirve aquí. Decide con previa y estadisticas(bordes).")
+    # Qué es cada mancha que queda en la recomendada: canal, exceso o hueco, si sigue al objeto, y veredicto.
+    if diagnostico and r["recomendado"] and p.shape[0] >= 3:
+        try:
+            q = _pantalla(np.load(TRABAJO / f"{r['recomendado']}.npy"), info)
+            r["diagnostico_manchas"] = _halo.diagnosticar(q)
+            # Si las manchas que deja son artefactos de color y la crominancia es segura, se recomienda esa.
+            cambio = _halo.preferir_por_diagnostico(r["diagnostico_manchas"], c, r["recomendado"], tope)
+            if cambio:
+                r["recomendado_por_medidas"] = r["recomendado"]
+                r["diagnostico_manchas_por_medidas"] = r["diagnostico_manchas"]
+                r["recomendado"], r["motivo"] = cambio[0], cambio[1] + " Por medidas era " + r["motivo"]
+                q = _pantalla(np.load(TRABAJO / f"{r['recomendado']}.npy"), info)
+                r["diagnostico_manchas"] = _halo.diagnosticar(q)
+        except Exception as e:
+            r["errores"].append(f"diagnóstico de manchas: {e}")
     _asegurar_restaurado(siril, crudo, huella, r)
     _galeria(r, info, p, "modelo")
     return r
+
+
+def diagnosticoManchas(siril, escala=1.1, umbral=0.1, zonas=4):
+    """Qué es cada mancha que queda en el cielo de la imagen cargada (en color): R, G, B en % del cielo de cada canal,
+    exceso o hueco, distancia al objeto y simetría, y veredicto. La señal real sólo suma luz: un hueco o una mancha en un
+    solo canal es un artefacto. No cambia nada."""
+    info = H._info(siril)
+    p = _pantalla(_crudo(siril), info)
+    if p.shape[0] < 3:
+        raise RuntimeError("hace falta una imagen en color")
+    return _halo.diagnosticar(p, escala=float(escala), umbral=float(umbral), zonas=int(zonas))
 
 
 # --- Aplicar un candidato -----------------------------------------------------------------------------------
@@ -2785,6 +2839,7 @@ LISTA_PASOS = {
     "recortarBordes": recortarBordes,
     "resolverAstrometria": resolverAstrometria,
     "gradienteCandidatos": gradienteCandidatos,
+    "diagnosticoManchas": diagnosticoManchas,
     "aplicarCandidato": aplicarCandidato,
     "listaSPCC": listaSPCC,
     "calibrarColor": calibrarColor,

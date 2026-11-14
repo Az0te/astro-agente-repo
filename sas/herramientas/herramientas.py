@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
+import halo as _halo
 import medidas as M
 from medidas import _r
 
@@ -857,8 +858,25 @@ def _comparar(ctx, doc, grupo, lista, medir):
     return r
 
 
-def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpert=True, muestras=120, tipo=None):
-    """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF) y GraXpert IA, mide y recomienda. La vista no cambia."""
+_HALO_CACHE = {}
+
+
+def _halo_candidato(p, croma=False, **op):
+    """Polinomio fuera del halo (croma=False) o + crominancia (croma=True), con halo.py; los dos salen del mismo cálculo."""
+    clave = (p.shape, float(p[:, ::97, ::97].sum()), json.dumps(op, sort_keys=True))
+    if clave not in _HALO_CACHE:
+        _HALO_CACHE.clear()
+        _HALO_CACHE[clave] = _halo.calcular(p, **op)
+    poly, cro, info = _HALO_CACHE[clave]
+    if croma and cro is None:
+        raise RuntimeError(info.get("aviso", "sin crominancia"))
+    return cro if croma else poly
+
+
+def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpert=True, muestras=120, tipo=None,
+                        halo=True, halo_opciones=None, diagnostico=True):
+    """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF), GraXpert IA y el polinomio fuera del halo
+    (+ crominancia), mide y recomienda. La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if not M.lineal(p[:, ::8, ::8]):
@@ -870,8 +888,31 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
         lista.append(("ABE polinomio 2 + RBF", "abe", {"degree": 2, "samples": int(muestras), "rbf": True}))
     if usar_graxpert:
         lista.append(("GraXpert IA", "graxpert", {"op": "background", "smoothing": 0.1}))
+    # 14 nov 2026 (halo.py): objetos grandes y difusos cuya máscara se queda corta; la crominancia quita manchas de color
+    # de escala media sin tocar la luminancia. Cálculo propio en numpy.
+    if halo and p.shape[0] >= 3:
+        op = dict(halo_opciones or {})
+        lista.append(("Polinomio fuera del halo", "halo", {**op, "croma": False}, _halo_candidato))
+        lista.append(("Polinomio fuera del halo + crominancia", "halo", {**op, "croma": True}, _halo_candidato))
     r = _comparar(ctx, d, "gradiente", lista, lambda q: M.medir_gradiente(base, q))
+    if _HALO_CACHE:
+        r["halo"] = next(iter(_HALO_CACHE.values()))[2]
+        _HALO_CACHE.clear()
     r["recomendado"], r["criterio"], r["motivo"] = M.elegir_gradiente(r["candidatos"], base["objeto_campo_pct"], tipo)
+    # Qué es cada mancha que queda en la recomendada: canal, exceso o hueco, si sigue al objeto, y veredicto.
+    if diagnostico and r["recomendado"] and p.shape[0] >= 3:
+        try:
+            r["diagnostico_manchas"] = _halo.diagnosticar(_p(_cargar_candidato(r["recomendado"])[0]))
+            # Si las manchas que deja son artefactos de color y la crominancia es segura, se recomienda esa.
+            tope = M.tope_gradiente(base["objeto_campo_pct"], tipo)[1]
+            cambio = _halo.preferir_por_diagnostico(r["diagnostico_manchas"], r["candidatos"], r["recomendado"], tope)
+            if cambio:
+                r["recomendado_por_medidas"] = r["recomendado"]
+                r["diagnostico_manchas_por_medidas"] = r["diagnostico_manchas"]
+                r["recomendado"], r["motivo"] = cambio[0], cambio[1] + " Por medidas era " + r["motivo"]
+                r["diagnostico_manchas"] = _halo.diagnosticar(_p(_cargar_candidato(r["recomendado"])[0]))
+        except Exception as e:
+            r["errores"].append(f"diagnóstico de manchas: {e}")
     r["objeto_campo_pct"] = _r(base["objeto_campo_pct"], 1)
     r["leyenda"] = ("copia_objeto: cuánto se parece el modelo al objeto (cerca de 0 = limpio; > 0,5 se come el objeto). "
                     "objeto_quitado_pct: % de la señal del objeto que se lleva el modelo. gradiente_restante: fracción "
@@ -880,6 +921,18 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
         r["aviso_campo"] = (f"El objeto ocupa el {round(base['objeto_campo_pct'])} % del campo: gradiente_restante es "
                             "orientativo. Decide con previa y estadisticas(bordes).")
     return _galeria(r, p, "modelo")
+
+
+def diagnosticoManchas(ctx, vista=None, escala=1.1, umbral=0.1, zonas=4):
+    """Qué es cada mancha que queda en el cielo de una vista en color: R, G, B en % del cielo de cada canal, exceso o
+    hueco, distancia al objeto y simetría, y veredicto. La señal real sólo suma luz: un hueco o una mancha en un solo
+    canal es un artefacto. No cambia nada."""
+    p = _p(_doc(ctx, vista).image)
+    if p.shape[0] < 3:
+        raise RuntimeError("hace falta una imagen en color")
+    r = _halo.diagnosticar(p, escala=float(escala), umbral=float(umbral), zonas=int(zonas))
+    r["vista"] = _nombre(_doc(ctx, vista))
+    return r
 
 
 def _estirado_mtf(p, mediana=0.2, enlazado=True):
@@ -1786,6 +1839,7 @@ LISTA = {
     "procesoSAS": procesoSAS,
     "ayudaProceso": ayudaProceso,
     "gradienteCandidatos": gradienteCandidatos,
+    "diagnosticoManchas": diagnosticoManchas,
     "estirarCandidatos": estirarCandidatos,
     "ruidoCandidatos": ruidoCandidatos,
     "nucleoCandidatos": nucleoCandidatos,

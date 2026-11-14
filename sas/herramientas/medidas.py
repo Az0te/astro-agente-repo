@@ -257,22 +257,31 @@ def escala_uniforme(M, L, valido):
     return float(np.clip((sl * sm).sum() / den, -0.05, 0.05)) if den > 0 else 0.0
 
 
+def tope_gradiente(objeto_campo_pct, tipo=None):
+    """(extenso, tope): % del objeto que se tolera que se lleve el modelo (≤ 1 % en campos extensos, si no ≤ 3 %)."""
+    import re
+    extenso = objeto_campo_pct > 25 or bool(re.search(r"(?i)nebul|polvo|dust|ifn|oscur|extens|molecular", str(tipo or "")))
+    return extenso, (1.0 if extenso else 3.0)
+
+
 def elegir_gradiente(c, objeto_campo_pct, tipo=None):
     """Mismo criterio que Siril: se tolera que el modelo se lleve ≤ 3 % del objeto (≤ 1 % en campos extensos)."""
-    import re
 
     def absc(x): return abs(x["metricas"]["copia_objeto"] or 0)
     def resid(x): v = x["metricas"]["gradiente_restante"]; return v if v is not None else 9
     def eat(x): v = x["metricas"]["objeto_quitado_pct"]; return abs(v) if v is not None else 100
 
-    extenso = objeto_campo_pct > 25 or bool(re.search(r"(?i)nebul|polvo|dust|ifn|oscur|extens|molecular", str(tipo or "")))
-    tope = 1.0 if extenso else 3.0
+    extenso, tope = tope_gradiente(objeto_campo_pct, tipo)
     seguros = [x for x in c if eat(x) <= tope and absc(x) < 0.3]
     limpios = [x for x in c if absc(x) < 0.3]
     if seguros:
         r0 = min(resid(x) for x in seguros)
         margen = 0.15 if extenso else 0.05
-        mejor = min([x for x in seguros if resid(x) <= r0 + margen], key=eat)
+        cerca = [x for x in seguros if resid(x) <= r0 + margen]
+        # A «se lleva» parecido (≤ 0,5 puntos) gana el que deja menos gradiente: en M31 el polinomio 1 (0 %) ganaba por
+        # el orden de la lista dejando el 22 % del gradiente frente al 8 % del de fuera del halo (14 nov 2026).
+        e0 = min(eat(x) for x in cerca)
+        mejor = min([x for x in cerca if eat(x) <= e0 + 0.5], key=resid)
     else:
         mejor = min(limpios, key=eat) if limpios else min(c, key=absc) if c else None
     criterio = (f"campo con objeto extenso o polvo: se tolera que el modelo se lleve ≤ {tope:g} % del objeto"

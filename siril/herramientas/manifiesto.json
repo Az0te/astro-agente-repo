@@ -550,7 +550,7 @@
    "nivel": "lectura",
    "timeout_s": 1200,
    "paso": "lineal/09-correccion-gradiente.md",
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (subsky de Siril con polinomio de grado 1 y 2 y con RBF, y GraXpert IA por su CLI si está instalado), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Si en la sesión se han abierto dos o más masters sin alinear, comprueba si ya vienen alineados (mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio); si no, se para y pide alinearMasters (Paso 5). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) (subsky de Siril con polinomio de grado 1 y 2 y con RBF, y GraXpert IA por su CLI si está instalado), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Si en la sesión se han abierto dos o más masters sin alinear, comprueba si ya vienen alineados (mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio); si no, se para y pide alinearMasters (Paso 5). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo.",
    "resumen": "Paso 9: compara subsky polinomio/RBF y GraXpert IA, mide y recomienda; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -598,6 +598,44 @@
        "nebulosa_oscura"
       ],
       "description": "Tipo de objeto (se admite en todas las comparativas)."
+     },
+     "halo": {
+      "type": "boolean",
+      "description": "Probar polinomio fuera del halo y + crominancia (por defecto true)."
+     },
+     "halo_opciones": {
+      "type": "object",
+      "description": "Opcional. { escala: 1.1 (agrandado de la elipse del objeto), elipse: { x, y, a, q, angulo } (px, a = eje mayor entero), circulos: [{ x, y, r }] (zonas a excluir), suavizado: 0.005 }"
+     },
+     "diagnostico": {
+      "type": "boolean",
+      "description": "Diagnóstico de manchas de la recomendada (por defecto true)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "diagnosticoManchas",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "paso": "lineal/09-correccion-gradiente.md",
+   "descripcion": "Diagnostica las manchas que quedan en el cielo de una imagen en color (normalmente ya corregida de gradiente) antes de decidir qué son: para las zonas peores da R, G y B en % del cielo de cada canal, si es exceso o hueco, si está en un solo canal, la distancia al objeto, si se repite al otro lado de él, y un veredicto. Regla: un hueco (más oscuro que el cielo) o una mancha en un solo canal no es señal y se puede corregir (polinomio fuera del halo + crominancia); un exceso en los tres canales cerca del objeto y simétrico es halo real y no se quita. No cambia nada.",
+   "resumen": "Dice qué es cada mancha del cielo (canal, exceso/hueco, sigue al objeto o no): artefacto corregible o halo real.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "umbral": {
+      "type": "number",
+      "description": "% del cielo a partir del cual se informa (por defecto 0,1)."
+     },
+     "zonas": {
+      "type": "number",
+      "description": "Zonas como mucho (por defecto 4)."
+     },
+     "escala": {
+      "type": "number",
+      "description": "Agrandado de la elipse del objeto (por defecto 1,1)."
      }
     }
    }
@@ -1305,11 +1343,24 @@
    "params": {
     "type": "object",
     "properties": {
-     "r": { "type": "string", "description": "Master rojo alineado (ruta absoluta)." },
-     "g": { "type": "string", "description": "Master verde alineado." },
-     "b": { "type": "string", "description": "Master azul alineado." }
+     "r": {
+      "type": "string",
+      "description": "Master rojo alineado (ruta absoluta)."
+     },
+     "g": {
+      "type": "string",
+      "description": "Master verde alineado."
+     },
+     "b": {
+      "type": "string",
+      "description": "Master azul alineado."
+     }
     },
-    "required": ["r", "g", "b"]
+    "required": [
+     "r",
+     "g",
+     "b"
+    ]
    }
   },
   {
