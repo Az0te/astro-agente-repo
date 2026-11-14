@@ -473,6 +473,48 @@
    }
   },
   {
+   "nombre": "componerHDR",
+   "fichero": "multicapa.py",
+   "nivel": "vista",
+   "timeout_s": 900,
+   "paso": "lineal/06-hdr-composition.md",
+   "descripcion": "L6 HDR con tomas cortas, en lineal: combina un master largo y uno corto (vistas alineadas con alinearMasters). Mide la razón de flujo larga/corta en estrellas no saturadas, detecta la meseta de saturación de cada canal de la larga (umbral = 85 % de la meseta; sin meseta, no hace falta HDR), sustituye esas zonas por la corta con una máscara dilatada y suavizada, lleva la larga a la escala de la corta con su fondo ((larga − cielo)/razón + cielo de la corta) y crea una vista nueva. Mide el escalón en el borde de la transición (< 5 %).",
+   "resumen": "L6: HDR larga + corta en lineal, vista nueva.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "larga": {
+      "type": "string",
+      "description": "Vista del master de exposición larga."
+     },
+     "corta": {
+      "type": "string",
+      "description": "Vista del master de exposición corta (alineado)."
+     },
+     "umbral": {
+      "type": "number",
+      "description": "Nivel de saturación de la larga (por defecto el 85 % de la meseta medida)."
+     },
+     "crecer": {
+      "type": "integer",
+      "description": "Dilatación de la máscara en px (por defecto 3)."
+     },
+     "suavizar": {
+      "type": "integer",
+      "description": "Suavizado de la máscara en px (por defecto 8)."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre de la vista nueva (por defecto HDR)."
+     }
+    },
+    "required": [
+     "larga",
+     "corta"
+    ]
+   }
+  },
+  {
    "nombre": "desmezclarDualBand",
    "fichero": "multicapa.py",
    "nivel": "vista",

@@ -43,11 +43,17 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 | NL1 Estirado | `estirarCandidatos` → `aplicarCandidato` | estirado estadístico enlazado y por canal, GHS con pivote en el cielo y un estirado MTF propio; descarta los que no llegan a su mediana |
 | NL3 SCNR | `quitarVerde` | Remove Green conservando la luminosidad |
 | Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | compresor del bulbo propio (como en Siril); WaveScale HDR solo si se pide; meseta, anillos, brillo y estructura del bulbo |
+| Contraste local | `contrasteCandidatos` → `aplicarCandidato` | CLAHE (sólo escalas medias, 25/50 %), ondículas y máscara de enfoque, propios; contraste ganado por ruido añadido |
 | NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | saturación propia que conserva la luminancia, cielo protegido; dominante < 5 %, sin recortes nuevos |
 | L11 / NL7 Nitidez | `nitidezCandidatos` → `aplicarCandidato` | Cosmic Clarity sharpen; detalle ganado y ruido del cielo ≤ ×1,15 |
 | L14 / NL6 Ruido | `ruidoCandidatos` → `aplicarCandidato` | Cosmic Clarity denoise a varias fuerzas, GraXpert denoise; detalle perdido < 10 % |
 | NL8 Estrellas | `estirarEstrellas` → `aplicarCandidato` | Star Stretch y arcsinh propio sobre la vista de estrellas |
 | NL9 Recombinar | `recombinarEstrellas` | starless + vista de estrellas por screen (o suma), con deshacer |
+| L5 Varios masters | `alinearMasters` | por astrometría (reproject), recorte común, comprobación por estrellas |
+| L6 HDR | `componerHDR` | larga + corta: razón de flujo en estrellas, meseta de saturación, fondo igualado, escalón < 5 % |
+| L7 Dual band | `desmezclarDualBand` | Hα y OIII en vistas nuevas |
+| L10 Combinación | `combinarCandidatos` → `aplicarCandidato`, `combinarRGB` | exceso de Hα / OIII sobre el RGB (criterios de Siril) |
+| NL2 Paletas | `paletasCandidatos` → `aplicarCandidato` | HOO (4 variantes), SHO y Foraxx con capas estiradas |
 | NL10 Exportación | `exportarFinal` | TIFF 16 bits + JPG 95 como `<nombre>_final`, sin sobrescribir |
 
 Los candidatos pueden ser procesos de SASpro o cálculos propios en numpy (el cuarto elemento de la lista de `_comparar`); los dos se miden igual y se aplican con `aplicarCandidato`.
@@ -104,7 +110,7 @@ Sin SASpro (solo para desarrollo): `python sas/pruebas/puente_falso.py` lanza el
 - SFCC (color por espectros Gaia): sólo tiene ventana; `sfcc.py` tiene funciones sueltas (fotometría, curvas) pero no una entrada sin ventana. Mientras, `calibrarColor` (White Balance con estrellas).
 - Halo-B-Gon: no existe en la rama main de GitHub ni hay comando; sin herramienta.
 - Apilado (Stacking Suite): SASpro no tiene comando sin ventana para apilar ni para registrar por estrellas (`star_align` sólo aparece como alias). Se apila con WBPP en PixInsight o con `apilarCandidatos` de SirilAstroPilot; aquí se empieza desde el master. `alinearMasters` alinea por astrometría.
-- Herramientas de Siril que aún no están: HDR con tomas cortas, contraste local (CLAHE u ondículas), paletas de banda estrecha.
+- Probar `componerHDR` con una toma corta de verdad corta (30 s frente a 120–300 s, p. ej. IC 63): en M31 120/60 s la larga apenas satura (sustituido < 0,01 %).
 - Comparación de IC 1396 SASpro / Siril / PixInsight: el resultado de SASpro está en `D:\Astronomia\Master\master\IC1396\SetiAstroPilot_20261114` (13–14 nov 2026).
 
 ## Desarrollo

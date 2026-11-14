@@ -16,13 +16,18 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 | Paso | Herramientas |
 |---|---|
 | L1 Análisis | `analizarMaster`, `cabecera`, `estadisticas`, `previa`; con internet `documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` |
+| L5 Alineado | `alinearMasters` (por astrometría; recorte común) |
+| L6 HDR | `componerHDR` (larga + corta, en lineal) |
+| L7 Dual band | `desmezclarDualBand` |
 | L8 Astrometría | `resolverAstrometria` (resolvedor de SASpro con su índice Gaia; ASTAP o astrometry.net si están configurados) |
 | L9 Gradiente | **`gradienteCandidatos`** (ABE polinomio 1 y 2, ABE con RBF, GraXpert IA) → `aplicarCandidato` |
+| L10 Combinación | **`combinarCandidatos`** → `aplicarCandidato`; `combinarRGB` (mono con rueda) |
 | L12 Color | `neutralizarFondo` → `calibrarColor` (White Balance con las estrellas); devuelven el cielo por canal antes y después |
 | L15 Estrellas | `separarEstrellas` (StarNet, DarkStar o SyQon) |
 | NL1 Estirado | **`estirarCandidatos`** (estadístico, GHS y MTF propio) → `aplicarCandidato` |
+| NL2 Paletas | **`paletasCandidatos`** (capas estiradas) → `aplicarCandidato` |
 | NL3 Verde | `quitarVerde` (SCNR propio que sólo baja el verde; `metodo: sas` para el de SASpro) |
-| NL5 Realces | **`nucleoCandidatos`** (galaxias, antes de saturar), **`saturacionCandidatos`** → `aplicarCandidato` |
+| NL5 Realces | **`nucleoCandidatos`** (galaxias), **`contrasteCandidatos`**, **`saturacionCandidatos`** → `aplicarCandidato`, en ese orden |
 | L14 / NL6 Ruido | **`ruidoCandidatos`** (Cosmic Clarity, GraXpert) → `aplicarCandidato` |
 | NL7 Nitidez | **`nitidezCandidatos`** (Cosmic Clarity sharpen) → `aplicarCandidato` |
 | NL8 Estrellas | **`estirarEstrellas`** (de la vista de estrellas) → `aplicarCandidato` |

@@ -556,6 +556,87 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     return H._galeria(r, H._p(d.image))
 
 
+# --- L6: composición HDR con tomas cortas (alternativa propia de la ficha) ----------------------------------
+
+def componerHDR(ctx, larga, corta, umbral=None, crecer=3, suavizar=8, nombre="HDR"):
+    """L6: combina en lineal un master largo y uno corto (vistas alineadas, mismo tamaño): mide la razón de flujo
+    larga/corta en estrellas no saturadas, sustituye en la larga lo que satura (cualquier canal ≥ umbral; por defecto el
+    90 % de la meseta medida de cada canal) por la corta escalada, con una máscara dilatada y suavizada, y crea una vista
+    nueva en la escala de la corta (HDR ≈ larga / razón: lineal y sin pasar de 1). Comprueba el escalón en la transición."""
+    dl, dc = H._doc(ctx, larga), H._doc(ctx, corta)
+    L, C = H._p(dl.image), H._p(dc.image)
+    if L.shape != C.shape:
+        raise RuntimeError(f"La larga mide {L.shape[2]}×{L.shape[1]} y la corta {C.shape[2]}×{C.shape[1]}: alinéalas antes "
+                           "(alinearMasters).")
+    if not M.lineal(L[:, ::8, ::8]) or not M.lineal(C[:, ::8, ::8]):
+        raise RuntimeError("La HDR se compone en lineal: las dos vistas deben estar sin estirar.")
+    fb, fs = _flujos_estrellas(L.mean(axis=0), C.mean(axis=0), max_n=800)
+    if len(fb) < 20:
+        raise RuntimeError(f"Sólo {len(fb)} estrellas no saturadas comunes: no puedo medir la razón larga/corta.")
+    razones = fb / fs
+    k = float(np.median(razones))
+    dispersion = float(1.4826 * np.median(np.abs(razones - k)) / k)
+    # Meseta de saturación de cada canal de la larga: píxeles pegados a su máximo (con normalización local no llega a 1:
+    # guía, Paso 6). Umbral = 85 % de la meseta (la guía usó 0,80 con mesetas de 0,89–0,96). Sin meseta: no hace falta.
+    mesetas = []
+    for c in range(L.shape[0]):
+        mx = float(L[c].max())
+        mesetas.append(mx if int((L[c] >= 0.995 * mx).sum()) >= 20 else None)
+    if umbral is None:
+        if not any(mesetas):
+            return {"aplicado": False, "razon_larga_corta": _r(k, 3), "estrellas_medidas": int(len(fb)),
+                    "maximos": [_r(float(L[c].max()), 3) for c in range(L.shape[0])],
+                    "aviso": "La larga no tiene mesetas de saturación (ningún canal con ≥ 20 px pegados a su máximo): "
+                             "no hace falta HDR. Con umbral se puede forzar."}
+        umbrales = [0.85 * m if m else 1.01 for m in mesetas]
+    else:
+        umbrales = [float(umbral)] * L.shape[0]
+    sat = np.zeros(L.shape[1:], bool)
+    for c in range(L.shape[0]):
+        sat |= L[c] >= umbrales[c]
+    if not sat.any():
+        return {"aplicado": False, "razon_larga_corta": _r(k, 3), "umbrales": [_r(u, 3) for u in umbrales],
+                "aviso": "La larga no tiene píxeles saturados por encima del umbral: no hace falta HDR."}
+    w = (M._caja(sat.astype(np.float32), int(crecer)) > 0).astype(np.float32)
+    w = np.clip(M.suave(w, 2 * int(suavizar)), 0, 1)
+    # La larga se lleva a la escala de la corta con su fondo: (L − cielo_L)/k + cielo_C por canal. Sólo dividir por k
+    # dejaba el pedestal de la larga (otra noche, otro cielo) y un escalón que crecía hacia fuera (M31: 9–17 %).
+    cel = M.cielo(C)["_celdas"]
+    bL, bC = M.cielo_por_canal(L, cel), M.cielo_por_canal(C, cel)
+    Lk = np.stack([(L[c] - bL[c]) / k + bC[c] for c in range(L.shape[0])]).astype(np.float32)
+    out = (1 - w)[None] * Lk + w[None] * C
+    out = np.clip(out, 0, 1).astype(np.float32)
+    # Escalón: en el borde exterior de la máscara (0,02 < w < 0,2) la larga aún es lineal y larga/k debe coincidir con
+    # la corta; una diferencia ahí se ve como un anillo tras estirar. (Dentro de la transición la larga ya satura.)
+    anillo = (w > 0.02) & (w < 0.2) & ~sat
+    escalon = None
+    if anillo.sum() > 50:
+        # suavizado (radio ~6 px): las dos tomas pueden ser de noches con distinto seeing y, píxel a píxel junto al
+        # núcleo, el perfil no coincide aunque el flujo sí (M31 120 s / 60 s: 18 % sin suavizar)
+        a = M.suave(Lk.mean(axis=0), 12)[anillo]
+        b = M.suave(C.mean(axis=0).astype(np.float32), 12)[anillo]
+        escalon = float(np.median(a / np.maximum(b, 1e-6)) - 1)
+    m = dict(H._meta(dl))
+    m.pop("file_path", None)
+    m.update(display_name=nombre, mono=out.shape[0] == 1)
+    img = out[0] if out.shape[0] == 1 else np.moveaxis(out, 0, -1)
+    nuevo = ctx.open_new_document(np.ascontiguousarray(img), metadata=m, name=nombre)
+    exp_l = (H._cabecera(dl).get("EXPTIME") or H._cabecera(dl).get("EXPOSURE"))
+    exp_c = (H._cabecera(dc).get("EXPTIME") or H._cabecera(dc).get("EXPOSURE"))
+    r = {"vista": H._nombre(H._base(nuevo)) if nuevo is not None else nombre,
+         "razon_larga_corta": _r(k, 3), "razon_exposiciones": _r(float(exp_l) / float(exp_c), 3) if exp_l and exp_c else None,
+         "dispersion_razon_pct": _r(100 * dispersion, 1), "estrellas_medidas": int(len(fb)),
+         "umbrales": [_r(u, 3) for u in umbrales], "mesetas": [_r(m, 3) if m else None for m in mesetas],
+         "sustituido_pct": _r(100.0 * float((w > 0.5).mean()), 3),
+         "escalon_transicion_pct": _r(100 * escalon, 1) if escalon is not None else None,
+         "corta_satura_pct": _r(100.0 * float((C.max(axis=0) >= 0.98).mean()), 4),
+         "nota": "HDR lineal en la escala de la corta (se ve más oscura: es normal). Revisa con previa un recorte de la "
+                 "estrella o núcleo más brillante (sin escalón ni anillo de color). Las estrellas, mejor de esta HDR."}
+    if escalon is not None and abs(escalon) > 0.05:
+        r["aviso"] = (f"Escalón del {_r(100 * escalon, 1)} % en la transición: sube suavizar/crecer o revisa el umbral.")
+    return r
+
+
 LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand,
                    "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB,
-                   "paletasCandidatos": paletasCandidatos}
+                   "paletasCandidatos": paletasCandidatos, "componerHDR": componerHDR}
