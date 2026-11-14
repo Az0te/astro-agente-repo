@@ -581,7 +581,9 @@ def componerHDR(ctx, larga, corta, umbral=None, crecer=3, suavizar=8, nombre="HD
     mesetas = []
     for c in range(L.shape[0]):
         mx = float(L[c].max())
-        mesetas.append(mx if int((L[c] >= 0.995 * mx).sum()) >= 20 else None)
+        # ≥ 20 px a menos del 2 % del máximo: en un drizzle ×2 los núcleos saturados no quedan planos del todo
+        # (IC 63: con el 0,5 % no detectaba ninguna meseta)
+        mesetas.append(mx if int((L[c] >= 0.98 * mx).sum()) >= 20 else None)
     if umbral is None:
         if not any(mesetas):
             return {"aplicado": False, "razon_larga_corta": _r(k, 3), "estrellas_medidas": int(len(fb)),
