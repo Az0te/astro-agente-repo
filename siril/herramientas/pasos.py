@@ -2324,7 +2324,7 @@ def _saturacion(p):
     return np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0).astype(np.float32)
 
 
-def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None):
+def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5):
     """Paso 5 no lineal: compara satu de Siril a varias cantidades; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
     if info["canales"] != 3:
@@ -2378,7 +2378,7 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
                     fal.append(f"dominante del cielo {m['dominante_cielo_pct']} % ≥ {dominante_max} %")
                 if m["recorte_nuevo_pct"] > 0.01:
                     fal.append(f"recorte alto nuevo fuera de lo ya brillante {m['recorte_nuevo_pct']} %")
-                if m["ceros_pct"] - m0["ceros_pct"] > 0.05:
+                if m["ceros_pct"] - m0["ceros_pct"] > ceros_max:   # 15 nov 2026: con 0,05 fallaba todo tras bajar el fondo (polvo negro a 0)
                     fal.append(f"canales a 0 nuevos {_r(m['ceros_pct'] - m0['ceros_pct'], 3)} % (colores fuera de rango)")
                 if gan_obj is not None and gan_cielo > max(gan_obj, 5.0):
                     fal.append("el cielo gana más color que el objeto")
@@ -2433,8 +2433,12 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None)
     _limpiar_grupo(grupo)
     r = {"antes": {"cielo_rgb": [_r(x, 4) for x in s0]}, "candidatos": [], "errores": []}
     n = 0
+    obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
+    m_obj = float(np.median(_lum(p)[obj_px]))
+    variantes = []
     for t in sorted(cielos or [], reverse=True):
-        t = float(t)
+        variantes += [(float(t), False), (float(t), True)]
+    for t, medios in variantes:
         if float(np.mean(s0)) <= t:   # un canal ya por debajo no se toca (bp 0)
             continue
         n += 1
@@ -2442,24 +2446,34 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None)
         try:
             bp = np.array([max(0.0, (s - t) / (1 - t)) for s in s0], dtype=np.float32).reshape(-1, 1, 1)
             q = np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
+            if medios:
+                # Curva que deja el cielo en t y devuelve la mediana del objeto a la de antes (MTF sobre t–1): el fondo
+                # baja sin apagar la nebulosa (15 nov 2026: el punto negro solo la oscurecía; la referencia usa curva).
+                m1 = float(np.median(_lum(q)[obj_px]))
+                x, y = (m1 - t) / (1 - t), (m_obj - t) / (1 - t)
+                if 0 < x < y < 1:
+                    mt = x * (y - 1) / (2 * x * y - x - y)
+                    u = np.clip((q - t) / (1 - t), 0, 1)
+                    q = np.where(q > t, t + (1 - t) * ((mt - 1) * u / ((2 * mt - 1) * u - mt)), q).astype(np.float32)
             rgb = _cielo_por_canal(q, cel) if q.shape[0] == 3 else [float(np.median(q))]
             m = {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
+                 "objeto_mediana": _r(float(np.median(_lum(q)[obj_px])), 4),
                  "ruido_rel": _r(_ruido_en(_lum(q), cel) / max(r0, 1e-9), 3), **_recortes(q)}
             m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)   # lo que decide (ceros_pct incluye los de antes)
             fal = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                    if m["ceros_nuevos_pct"] > ceros_max else [])
             res = q if info["top_down"] else q[:, ::-1, :]
             res = _a_siril(res, crudo.dtype).reshape(crudo.shape)
-            nombre = f"cielo a {t:g}"
-            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"punto negro por canal {bp.ravel().round(4).tolist()}",
+            nombre = f"cielo a {t:g}" + (" + medios" if medios else "")
+            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"punto negro por canal {bp.ravel().round(4).tolist()}" + (" + curva de medios" if medios else ""),
                                                      "huella_base": huella, "metricas": m})
             r["candidatos"].append({"id": cid, "metodo": nombre, "metricas": m, "no_cumple": fal,
                                     "segundos": _r(time.perf_counter() - t0, 1)})
         except Exception as e:
-            r["errores"].append(f"cielo {t:g}: {e}")
+            r["errores"].append(f"cielo {t:g}{' + medios' if medios else ''}: {e}")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
     if ok:
-        mejor = min(ok, key=lambda x: x["metricas"]["cielo"])
+        mejor = min(ok, key=lambda x: (x["metricas"]["cielo"], 0 if x["metodo"].endswith("+ medios") else 1))
         r["recomendado"] = mejor["id"]
         # Qwen leyó «ceros_pct 0,9778» como un 97,78 % y aplicó el más claro (IC 1396, 15 nov 2026): se dice en palabras.
         r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) y "

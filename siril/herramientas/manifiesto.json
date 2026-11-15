@@ -1085,7 +1085,7 @@
    "nivel": "lectura",
    "timeout_s": 600,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Paso 5 no lineal (fondo; después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,065 y 0,05, neutro. Mide píxeles nuevos a 0, cielo por canal y ruido, y recomienda el más oscuro que no lleva a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro). Un cielo en 0,10–0,13 deja la imagen gris y plana. La imagen NO cambia (aplicarCandidato).",
+   "descripcion": "Paso 5 no lineal (fondo; después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,065 y 0,05, neutro; cada nivel también «+ medios» (curva que devuelve la mediana del objeto a la de antes: el fondo baja sin apagar la nebulosa), preferido a igual cielo. Mide píxeles nuevos a 0, cielo por canal y ruido, y recomienda el más oscuro que no lleva a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro). Un cielo en 0,10–0,13 deja la imagen gris y plana. La imagen NO cambia (aplicarCandidato).",
    "resumen": "Paso 5 NL: fondo más oscuro y neutro (punto negro a 0,08–0,03); no cambia la imagen.",
    "params": {
     "type": "object",

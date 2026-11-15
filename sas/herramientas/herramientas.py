@@ -1358,6 +1358,22 @@ def _punto_negro(p, bp):
     return np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
 
 
+def _punto_negro_medios(p, bp, t, obj_px, m_obj):
+    """Punto negro y después una curva que deja el cielo en t (lo que está por debajo no cambia) y devuelve la mediana
+    del objeto a la de antes (MTF sobre el tramo t–1): el fondo se oscurece sin apagar la nebulosa, como el punto negro
+    + curva en S de la versión de referencia de IC 1396 (15 nov 2026: el punto negro solo dejaba la nebulosa oscura)."""
+    q = _punto_negro(p, bp)
+    L = M.lum(q)
+    m1 = float(np.median(L[obj_px])) if obj_px.any() else float(np.median(L))
+    x, y = (m1 - t) / (1 - t), (m_obj - t) / (1 - t)
+    if not (0 < x < y < 1):
+        return q
+    mt = x * (y - 1) / (2 * x * y - x - y)              # MTF(mt, x) = y
+    u = np.clip((q - t) / (1 - t), 0, 1)
+    v = (mt - 1) * u / ((2 * mt - 1) * u - mt)
+    return np.where(q > t, t + (1 - t) * v, q).astype(np.float32)
+
+
 def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     """NL5 fondo: punto negro por canal para dejar el cielo en varios niveles (más oscuro = más profundidad y
     contraste) y neutro; mide píxeles nuevos a 0, cielo y ruido, y recomienda el más oscuro que no recorta más del
@@ -1372,11 +1388,14 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     s0 = M.cielo_por_canal(p, cel) if p.shape[0] == 3 else [float(z["medidas"]["cielo"])]
     rec0 = M.recortes(p)
     r0 = float(z["medidas"]["ruido"])
+    obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
+    m_obj = float(np.median(M.lum(p)[obj_px]))
 
     def medir(q):
         c = M.cielo(q)
         rgb = M.cielo_por_canal(q, cel) if q.shape[0] == 3 else [c["cielo"]]
         return {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
+                "objeto_mediana": _r(float(np.median(M.lum(q)[obj_px])), 4),
                 "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), **M.recortes(q)}
 
     lista = []
@@ -1387,6 +1406,8 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
             continue
         bp = [max(0.0, (s - t) / (1 - t)) for s in s0]
         lista.append((f"cielo a {t:g}", "punto_negro", {"bp": bp}, (lambda q, bp: _punto_negro(q, bp))))
+        lista.append((f"cielo a {t:g} + medios", "punto_negro_medios", {"bp": bp, "t": float(t)},
+                      (lambda q, bp, t: _punto_negro_medios(q, bp, t, obj_px, m_obj))))
     if not lista:
         return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
                 "motivo": f"El cielo ya está en {_r(float(np.mean(s0)), 3)}, igual o por debajo de los niveles pedidos."}
@@ -1400,9 +1421,11 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
                           if m["ceros_nuevos_pct"] > ceros_max else [])
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
     if ok:
-        mejor = min(ok, key=lambda x: x["metricas"]["cielo"])
+        # El más oscuro; a igual cielo, el que conserva los medios del objeto (+ medios).
+        mejor = min(ok, key=lambda x: (x["metricas"]["cielo"], 0 if x["metodo"].endswith("+ medios") else 1))
         r["recomendado"] = mejor["id"]
-        r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) "
+        r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}), "
+                       f"la mediana del objeto en {mejor['metricas']['objeto_mediana']} (antes {_r(m_obj, 4)}) "
                        f"y neutro (mismo nivel en R, G y B); lleva a 0 sólo un {mejor['metricas']['ceros_nuevos_pct']} % más de "
                        f"los píxeles (ya en porcentaje: menos de {max(1, int(np.ceil(mejor['metricas']['ceros_nuevos_pct'])))} de "
                        f"cada 100; límite {ceros_max} %, la referencia de IC 1396 tiene un 3 % en negro): APLÍCALO salvo que "
@@ -1413,7 +1436,7 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     return _galeria(r, p, None)
 
 
-def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), proteger_cielo=True, dominante_max=5.0):
+def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), proteger_cielo=True, dominante_max=5.0, ceros_max=0.5):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
     cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
     d = _doc(ctx, vista)
@@ -1451,7 +1474,7 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5)
             fal.append(f"dominante del cielo {m['dominante_cielo_pct']} % ≥ {dominante_max} %")
         if m["recorte_nuevo_pct"] > 0.01:
             fal.append(f"recorte alto nuevo fuera de lo ya brillante {m['recorte_nuevo_pct']} %")
-        if m["ceros_pct"] - m0["ceros_pct"] > 0.05:
+        if m["ceros_pct"] - m0["ceros_pct"] > ceros_max:   # 15 nov 2026: con 0,05 fallaba todo tras bajar el fondo (polvo negro a 0)
             fal.append("canales a 0 nuevos (colores fuera de rango)")
         if go is not None and gc > max(go, 5.0):
             fal.append("el cielo gana más color que el objeto")

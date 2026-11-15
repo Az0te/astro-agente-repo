@@ -1070,7 +1070,7 @@
     "properties": {
      "capas": {
       "type": "object",
-      "description": "{ S: id SII (opcional), H: id Hα, O: id OIII, B: id Hβ (opcional, para NATURAL) }, starless y estiradas."
+      "description": "OBJETO (no lista) { S: id SII (opcional), H: id Hα, O: id OIII, B: id Hβ (opcional, para NATURAL) }, starless y estiradas; también valen las claves sii/ha/oiii/hb."
      },
      "opciones": {
       "type": "object",
@@ -1246,7 +1246,7 @@
    "fichero": "boost.js",
    "nivel": "copias",
    "timeout_s": 600,
-   "descripcion": "Paso 5 no lineal (fondo; después de recombinar las estrellas, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,065 y 0,05, neutro, en copias. Mide el cielo por canal y los píxeles nuevos a 0, y se queda con el más oscuro que no lleva a 0 más de un 2 % de los píxeles (r.vista). Un cielo en 0,10–0,13 deja la imagen gris y plana.",
+   "descripcion": "Paso 5 no lineal (fondo; después de recombinar las estrellas, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,065 y 0,05, neutro, en copias; cada nivel también «+ medios» (curva que devuelve la mediana de la nebulosa a la de antes: el fondo baja sin apagarla), preferido a igual cielo. Mide el cielo por canal y los píxeles nuevos a 0, y se queda con el más oscuro que no lleva a 0 más de un 2 % de los píxeles (r.vista). Un cielo en 0,10–0,13 deja la imagen gris y plana.",
    "resumen": "Paso 5 no lineal: fondo más oscuro y neutro (punto negro a 0,08/0,05/0,03) en una copia; r.vista es la elegida.",
    "paso": "no-lineal/05-boost.md",
    "params": {

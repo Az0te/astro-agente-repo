@@ -120,27 +120,47 @@ function fondoCandidatos(viewId, o) {
   var s0 = sd.canales && sd.canales.length ? sd.canales : [c0.cielo];
   var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 2, cielos = (o.cielos || [0.08, 0.065, 0.05]).slice().sort(function (a, b) { return b - a; });
   var cands = [];
-  cielos.forEach(function (t) {
-    if (Math.min.apply(null, s0) <= t) return;
-    var bp = s0.map(function (s) { return (s - t) / (1 - t); });
-    var w = esCopy(viewId, viewId + "_fondo" + String(t).replace(".", ""));
+  // Mediana de la imagen como medida de la nebulosa (en IC 1396 llena el campo).
+  var m0 = esMedian(v0), variantes = [];
+  cielos.forEach(function (t) { variantes.push([t, false]); variantes.push([t, true]); });
+  variantes.forEach(function (vt) {
+    var t = vt[0], medios = vt[1];
+    var media0 = s0.reduce(function (a, b) { return a + b; }, 0) / s0.length;
+    if (media0 <= t) return;   // un canal ya por debajo no se toca (bp 0)
+    var bp = s0.map(function (s) { return Math.max(0, (s - t) / (1 - t)); });
+    var w = esCopy(viewId, viewId + "_fondo" + String(t).replace(".", "") + (medios ? "m" : ""));
     var P = new PixelMath;
     var e = bp.map(function (b) { return "($T - " + b.toFixed(6) + ") / " + (1 - b).toFixed(6); });
     P.useSingleExpression = (e.length === 1); P.expression = e[0];
     if (e.length === 3) { P.expression1 = e[1]; P.expression2 = e[2]; }
     P.createNewImage = false; P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
     if (!P.executeOn(w.mainView)) { w.forceClose(); throw new Error("PixelMath del punto negro falló"); }
+    if (medios) {
+      // Curva que deja el cielo en t y devuelve la mediana de la nebulosa a la de antes (MTF sobre el tramo t–1): el
+      // fondo baja sin apagar la nebulosa (15 nov 2026: con el punto negro solo la imagen quedaba oscura).
+      var m1 = esMedian(w.mainView), x = (m1 - t) / (1 - t), y = (m0 - t) / (1 - t);
+      if (x > 0 && x < y && y < 1) {
+        var mt = x * (y - 1) / (2 * x * y - x - y), tt = t.toFixed(6), k = (1 - t).toFixed(6);
+        var C = new PixelMath;
+        C.expression = "iif($T > " + tt + ", " + tt + " + " + k + " * mtf(" + mt.toFixed(6) + ", ($T - " + tt + ") / " + k + "), $T)";
+        C.useSingleExpression = true; C.createNewImage = false; C.truncate = true; C.truncateLower = 0; C.truncateUpper = 1;
+        if (!C.executeOn(w.mainView)) { w.forceClose(); throw new Error("PixelMath de la curva de medios falló"); }
+      }
+    }
     var c = esCheck(w.mainView), s1 = esSkyDominance(w.mainView);
     var cielo = s1.canales && s1.canales.length ? (s1.canales[0] + s1.canales[1] + s1.canales[2]) / 3 : c.cielo;
     var nuevos = c.cero_pct - c0.cero_pct;
-    cands.push({ metodo: "cielo a " + t, vista: w.mainView.id, cielo: +cielo.toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
+    cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : ""), vista: w.mainView.id, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
                  ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
                  cumple: nuevos <= cerosMax, previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
   });
   if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,
                               motivo: "El cielo ya está en " + (s0.reduce(function (a, b) { return a + b; }, 0) / s0.length).toFixed(3) + ", igual o por debajo de los niveles pedidos." };
   var ok = cands.filter(function (c) { return c.cumple; });
-  var mejor = ok.length ? ok.reduce(function (a, c) { return c.cielo < a.cielo ? c : a; }) : null;
+  // El más oscuro; a casi igual cielo (±0,005: la curva sube un poco las celdas de cielo), el que conserva los medios.
+  var mejor = ok.length ? ok.reduce(function (a, c) {
+    if (Math.abs(c.cielo - a.cielo) <= 0.005) return /medios$/.test(c.metodo) ? c : a;
+    return c.cielo < a.cielo ? c : a; }) : null;
   cands.forEach(function (c) { if (c !== mejor && o.cerrar !== false) { var ww = ImageWindow.windowById(c.vista); if (!ww.isNull) ww.forceClose(); } });
   return {
     vista: mejor ? mejor.vista : viewId, original: viewId, antes: { cielo_rgb: s0.map(function (x) { return +x.toFixed(4); }), ceros_pct: +c0.cero_pct.toFixed(3) },

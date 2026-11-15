@@ -445,8 +445,13 @@ function componerPaleta(capas, o) {
   if (!capas || typeof capas !== "object" || capas instanceof Array)
     throw new Error("componerPaleta({ S: id, H: id, O: id }, opciones): las capas van en un objeto con S (opcional), H y O");
   var ids = {};
+  // Claves sin distinguir mayúsculas y con el nombre de la raya (s/h/o/b, sii/ha/oiii/hb): Qwen probó las tres formas
+  // y sólo valía S/H/O/B (15 nov 2026).
+  var porClave = {};
+  for (var kc in capas) porClave[String(kc).toLowerCase()] = capas[kc];
   ["S", "H", "O", "B"].forEach(function (k) {
-    var v = capas[k] !== undefined ? capas[k] : capas[{ S: "SII", H: "Ha", O: "OIII", B: "Hb" }[k]];
+    var lk = k.toLowerCase(), nom = { S: "sii", H: "ha", O: "oiii", B: "hb" }[k];
+    var v = porClave[lk] !== undefined ? porClave[lk] : porClave[nom];
     if (v) ids[k] = beId(v);
   });
   if (!ids.H || !ids.O) throw new Error("Hacen falta al menos H (Hα) y O (OIII)");
@@ -557,8 +562,8 @@ function componerPaleta(capas, o) {
   im.resetSelections();
   w.show();
   var siguiente = sumadas ? "La paleta ya lleva las estrellas: saturarAlFallo(\"" + id + "\") con cuidado y exportar; NO prepararEstrellas ni recombinarEstrellas."
-    : "Paleta SIN estrellas: 1) saturarAlFallo(\"" + id + "\", { tipo: \"nebulosa\" }); 2) prepararEstrellas(" + (estrellasId ? "\"" + estrellasId + "\"" : "capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas)") +
-      ") — sobre la CAPA DE ESTRELLAS, nunca sobre la paleta; 3) recombinarEstrellas(paleta saturada, estrellas preparadas); 4) exportarFinal.";
+    : "Paleta SIN estrellas: 1) fondoCandidatos(\"" + id + "\") (cielo oscuro y neutro; sigue con su r.vista); 2) saturarAlFallo(esa vista, { tipo: \"nebulosa\" }); 3) prepararEstrellas(" + (estrellasId ? "\"" + estrellasId + "\"" : "capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas)") +
+      ") — sobre la CAPA DE ESTRELLAS, nunca sobre la paleta; 4) recombinarEstrellas(paleta saturada, estrellas preparadas); 5) exportarFinal.";
   return {
     vista: id, paleta: etiqueta, previa: (typeof pxPrevia === "function" ? pxPrevia(id, "pal_" + id, { estirar: false }) : null) || undefined,
     capas: ids, medianas_capas: med, mediana_por_canal: porCanal, hecho: hecho, no_cumple: noCumple,
