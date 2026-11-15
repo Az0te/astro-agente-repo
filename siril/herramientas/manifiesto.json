@@ -1106,7 +1106,7 @@
    "nivel": "lectura",
    "timeout_s": 900,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5 y 0,75 (factor de fondo 1) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5, 0,75, 1 y 1,5 (factor de fondo 1; las paletas de banda estrecha suelen aguantar 1–1,5) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
    "resumen": "Paso 5 NL: compara satu 0,25/0,5/0,75; saturación objeto/cielo, dominante, recortes; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -1116,7 +1116,7 @@
       "items": {
        "type": "number"
       },
-      "description": "Cantidades de satu (por defecto [0.25, 0.5, 0.75])."
+      "description": "Cantidades de satu (por defecto [0.25, 0.5, 0.75, 1.0, 1.5])."
      },
      "fondo": {
       "type": "number",

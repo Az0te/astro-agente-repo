@@ -2324,7 +2324,7 @@ def _saturacion(p):
     return np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0).astype(np.float32)
 
 
-def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75), fondo=1.0, dominante_max=5.0, tipo=None):
+def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None):
     """Paso 5 no lineal: compara satu de Siril a varias cantidades; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
     if info["canales"] != 3:

@@ -1410,7 +1410,7 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.05, 0.03), ceros_max=2.0):
     return _galeria(r, p, None)
 
 
-def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75), proteger_cielo=True, dominante_max=5.0):
+def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), proteger_cielo=True, dominante_max=5.0):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
     cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
     d = _doc(ctx, vista)
@@ -1469,7 +1469,7 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75), proteger
     return _galeria(r, p)
 
 
-def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.10):
+def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.07, p90_variantes=(0.05, 0.10)):
     """NL estrellas: estira la vista de solo estrellas. Compara Star Stretch de SASpro a varios factores y un arcsinh
     propio que lleva el p90 de los píxeles de estrella a ~p90_objetivo. La vista no cambia (aplicarCandidato)."""
     d = _doc(ctx, vista)
@@ -1491,7 +1491,10 @@ def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.
 
     lista = [(f"Star Stretch {f:g}", "star_stretch", {"stretch_factor": float(f), "color_boost": float(color),
                                                       "scnr_green": False}) for f in (factores or [])]
-    lista.append((f"arcsinh propio (p90 estrellas {p90_objetivo:g})", "asinh_propio", {"p90": float(p90_objetivo)}, asinh))
+    # IC 1396 (15 nov 2026): Star Stretch 3 y 5 dejaban las estrellas casi invisibles (p90 0,0006–0,006) y el único
+    # arcsinh (p90 0,10) hinchaba HD 206267 y daba un 8 % de aporte. Varios arcsinh y el objetivo en 0,07.
+    for p90 in sorted({float(p90_objetivo), *[float(x) for x in (p90_variantes or [])]}):
+        lista.append((f"arcsinh propio (p90 estrellas {p90:g})", "asinh_propio", {"p90": p90}, asinh))
 
     def medir(q):
         L = M.lum(q)
