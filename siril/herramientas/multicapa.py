@@ -322,7 +322,10 @@ def aviso_sin_usar(usadas):
         for v in usadas:
             if v:
                 raices |= _raices(v, e)
-        faltan = [a for a in e["alineados"] if not any(a in r for r in raices)]
+        usados = [a for a in e["alineados"] if any(a in r for r in raices)]
+        if not usados:                  # no se sabe de dónde salen (otra sesión, ficheros sueltos): sin aviso
+            return None
+        faltan = [a for a in e["alineados"] if a not in usados]
     except Exception:
         return None
     if not faltan:

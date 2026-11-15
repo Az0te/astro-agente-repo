@@ -1279,8 +1279,13 @@ def separarEstrellas(siril, estirar=None, upscale=False, motor="auto"):
     info = H._info(siril)
     p = H._pixeles(siril, info)
     lineal = _lineal(p)
+    forzado = False
     if estirar is None:
         estirar = lineal
+    elif lineal and not estirar:
+        # StarNet necesita la imagen estirada; -stretch la estira, quita las estrellas y deshace el estirado (sigue
+        # lineal). Sin él, en lineal la starless salía casi negra (mediana 0, máx 0,03): IC 1396 v4 en Siril, 15 nov 2026.
+        estirar, forzado = True, True
     if motor not in ("auto", "siril", "starnet2"):
         raise ValueError("motor: auto, siril o starnet2.")
     wd = siril.get_siril_wd()
@@ -1308,8 +1313,15 @@ def separarEstrellas(siril, estirar=None, upscale=False, motor="auto"):
          "starless": "cargada en Siril (sin guardar)", "estrellas": max(nuevos, key=os.path.getmtime) if nuevos else None,
          "senal_quitada_media": _r(quitado, 6), "imagen": info2,
          "nota": "Guarda la starless con guardarImagen. La capa de estrellas se abre luego con abrirImagen."}
+    if forzado:
+        r["nota_estirar"] = ("La imagen es lineal: se ha usado -stretch aunque pediste estirar: false (sin él StarNet deja la "
+                             "starless casi negra). La starless sigue lineal.")
     if quitado <= 0:
         r["aviso"] = "La starless no tiene menos señal que la original: ¿ha funcionado StarNet? Mira registro."
+    m_antes, m_despues = float(np.median(_lum(p))), float(np.median(_lum(p2)))
+    if m_antes > 0 and m_despues < 0.5 * m_antes:
+        r["aviso_starless"] = (f"La starless ha perdido la nebulosa: mediana {m_despues:.6f} frente a {m_antes:.6f} antes. "
+                               "No la uses: deshacer y repetir con estirar: true.")
     if not nuevos:
         r["aviso_estrellas"] = "No encuentro el fichero starmask en la carpeta de trabajo de Siril."
     return r
@@ -2516,15 +2528,38 @@ def _textura(L, obj):
             "suavidad": _r(cg / max(g, 1e-9), 2)}
 
 
+def _escala_grande(p, cantidad=0.5, fino=16, grueso=256):
+    """Contraste de escala grande (propio, igual que en SetiAstroPilot): realza sólo la banda fino–grueso px de la
+    luminancia (pilares, bordes, nubes), pesada por la señal suavizada (0 en el cielo), sin tocar el grano fino. Es lo
+    que daba el relieve del final de PixInsight de IC 1396 (contraste de 32–256 px 0,139; 15 nov 2026)."""
+    L = _lum(p)
+    banda = _suave(L, fino) - _suave(L, grueso)
+    s = _suave(L, 32)
+    cielo = float(np.percentile(s[::8, ::8], 10))
+    rango = max(float(np.percentile(s[::8, ::8], 60)) - cielo, 1e-4)
+    w = np.clip((s - cielo) / rango, 0, 1)
+    w = w * w * (3 - 2 * w)
+    L1 = np.maximum(L + float(cantidad) * banda * w, 0.6 * L)
+    if p.shape[0] == 1:
+        return np.clip(L1[None], 0, 1).astype(np.float32)
+    q = p * (L1 / np.maximum(L, 1e-6))[None]
+    mx = q.max(axis=0)
+    q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
 CONTRASTE = {
     "clahe_suave": (["clahe", "1.5", "8"], "CLAHE límite 1,5"),
     "clahe_medio": (["clahe", "2.5", "8"], "CLAHE límite 2,5"),
     "ondiculas": ("ondiculas", "ondículas: escalas 2–4 × 1,15–1,3"),
     "enfoque": (["unsharp", "2.0", "0.3"], "máscara de enfoque σ 2, 0,3"),
+    "grande_suave": (("escala_grande", 0.5), "escala grande 16–256 px × 1,5"),
+    "grande_fuerte": (("escala_grande", 1.0), "escala grande 16–256 px × 2"),
 }
 
 
-def contrasteCandidatos(siril, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque"), ruido_max=None, tipo=None):
+def contrasteCandidatos(siril, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque", "grande_suave", "grande_fuerte"),
+                        ruido_max=None, tipo=None):
     """Paso de contraste local (no lineal): compara CLAHE, realce de escalas medias con ondículas y máscara de enfoque.
     Mide el contraste local en el objeto, el ruido del cielo y los recortes; recomienda. La imagen no cambia."""
     info = H._info(siril)
@@ -2559,24 +2594,33 @@ def contrasteCandidatos(siril, metodos=("clahe_suave", "clahe_medio", "ondiculas
             cmd, nombre = CONTRASTE[mt]
             t0 = time.perf_counter()
             try:
-                if cmd == "ondiculas":
-                    siril.cmd("wavelet", "6", "2")
-                    pesos = ["1", "1.15", "1.3", "1.3", "1.1", "1"]
-                    siril.cmd("wrecons", *pesos)
-                    texto = "wavelet 6 2; wrecons " + " ".join(pesos)
+                if isinstance(cmd, tuple) and cmd[0] == "escala_grande":
+                    q = _escala_grande(p, cmd[1])
+                    x = q if info["top_down"] else q[:, ::-1, :]
+                    res = _a_siril(x, crudo.dtype).reshape(crudo.shape)
+                    texto = f"escala grande propia (banda 16–256 px × {1 + cmd[1]:g}, pesada por la señal)"
                 else:
-                    siril.cmd(*cmd)
-                    texto = " ".join(cmd)
-                res = _crudo(siril)
-                q = _pantalla(res, info)
+                    if cmd == "ondiculas":
+                        siril.cmd("wavelet", "6", "2")
+                        pesos = ["1", "1.15", "1.3", "1.3", "1.1", "1"]
+                        siril.cmd("wrecons", *pesos)
+                        texto = "wavelet 6 2; wrecons " + " ".join(pesos)
+                    else:
+                        siril.cmd(*cmd)
+                        texto = " ".join(cmd)
+                    res = _crudo(siril)
+                    q = _pantalla(res, info)
                 L = _lum(q)
                 k1 = _contraste_local(L, z["obj_px"])
                 rr = _ruido_en(L, z["medidas"]["_celdas"]) / max(r0, 1e-9)
                 rec = _recortes(q)
                 d1 = dom(q)
+                t = _textura(L, z["obj_px"])
                 m = {"contraste_ganado_pct": _r(100 * (k1 / k0 - 1), 1) if k0 and k1 else None, "ruido_rel": _r(rr, 3),
                      "dominante_cielo_pct": _r(d1, 2),
-                     "cielo": _r(float(np.median(L[z["cielo_px"]])), 4) if z["cielo_px"].any() else None, **rec}
+                     "cielo": _r(float(np.median(L[z["cielo_px"]])), 4) if z["cielo_px"].any() else None,
+                     "grano": t.get("grano"), "contraste_grande": t.get("contraste_grande"), "suavidad": t.get("suavidad"),
+                     **rec}
                 fal = []
                 if rr > ruido_max:
                     fal.append(f"ruido del cielo × {round(rr, 2)} > {ruido_max}")

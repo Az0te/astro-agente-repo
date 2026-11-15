@@ -558,6 +558,11 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
                    file_meta=m.get("file_meta"))
     if not p.exists():
         raise RuntimeError(f"SASpro no ha escrito {p}.")
+    try:                                # procedencia: el fichero nuevo sale de la vista (y de su fichero de origen)
+        import multicapa
+        multicapa._anotar_origen(str(p), [x for x in (m.get("file_path"), _nombre(d)) if x])
+    except Exception:
+        pass
     return {"fichero": str(p), "formato": fmt, "bits": bits, "bytes": p.stat().st_size, "vista": _nombre(d),
             "palabras_cabecera": len(cab) if cab is not None else 0,
             "astrometria_guardada": bool(cab is not None and "CTYPE1" in cab)}
@@ -1214,16 +1219,35 @@ def _enfoque(p, sigma=2.0, cantidad=0.3):
     return _con_luminancia(p, L + float(cantidad) * (L - M.suave(L, 2 * float(sigma))))
 
 
+def _escala_grande(p, cantidad=0.5, fino=16, grueso=256):
+    """Contraste de escala grande (propio): realza sólo la banda fino–grueso px de la luminancia (estructura de la
+    nebulosa: pilares, bordes, nubes), sin tocar el grano fino ni el nivel medio. Es lo que daba el relieve del final de
+    PixInsight de IC 1396: contraste de 32–256 px 0,139 frente a 0,107 con la misma suavidad de grano (15 nov 2026)."""
+    L = M.lum(p)
+    banda = M.suave(L, fino) - M.suave(L, grueso)
+    # Sin máscara oscurecía las nubes oscuras junto a la nebulosa hasta 0 (+0,7 % de píxeles a negro) y teñía el cielo
+    # (dominante 5 → 8,6 %): el realce va pesado por la señal suavizada, de 0 en el cielo a 1 un poco por encima.
+    s = M.suave(L, 32)
+    cielo = float(np.percentile(s[::8, ::8], 10))
+    rango = max(float(np.percentile(s[::8, ::8], 60)) - cielo, 1e-4)
+    w = np.clip((s - cielo) / rango, 0, 1)
+    w = w * w * (3 - 2 * w)
+    L1 = L + float(cantidad) * banda * w
+    return _con_luminancia(p, np.maximum(L1, 0.6 * L))
+
+
 CONTRASTE = {
     "clahe_suave": ("CLAHE (25 % del detalle local)", lambda q: _clahe(q, 0.25)),
     "clahe_medio": ("CLAHE (50 % del detalle local)", lambda q: _clahe(q, 0.5)),
     "ondiculas": ("ondículas: escalas 2–4 × 1,15–1,3", _ondiculas),
     "enfoque": ("máscara de enfoque σ 2, 0,3", _enfoque),
+    "grande_suave": ("escala grande 16–256 px × 1,5", lambda q: _escala_grande(q, 0.5)),
+    "grande_fuerte": ("escala grande 16–256 px × 2", lambda q: _escala_grande(q, 1.0)),
 }
 
 
-def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque"), ruido_max=None,
-                        tipo=None):
+def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque", "grande_suave",
+                                                  "grande_fuerte"), ruido_max=None, tipo=None):
     """Contraste local (no lineal, antes de saturar): compara CLAHE, realce de escalas medias por ondículas y máscara
     de enfoque (propios, como en Siril). Mide el contraste local en el objeto, el ruido del cielo, la dominante y los
     recortes, y recomienda el de más contraste por ruido añadido. La vista no cambia."""
@@ -1252,9 +1276,11 @@ def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", 
         L = M.lum(q)
         k1 = M.contraste_local(L, obj)
         c = M.cielo(q)
+        t = M.textura(L, obj)
         return {"contraste_ganado_pct": _r(100 * (k1 / k0 - 1), 1) if k0 and k1 else None,
                 "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), "dominante_cielo_pct": _r(dom(q), 2),
-                "cielo": c["cielo"], **M.recortes(q)}
+                "cielo": c["cielo"], "grano": t.get("grano"), "contraste_grande": t.get("contraste_grande"),
+                "suavidad": t.get("suavidad"), **M.recortes(q)}
 
     lista = []
     for mt in metodos or []:
