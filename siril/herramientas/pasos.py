@@ -293,6 +293,22 @@ def recortarBordes(siril, margen=8, tolerancia_pct=0.01, aplicar=True):
     datos = H._con_datos(L, med)
     b = 4
     malo = 1.0 - _binar(datos.astype(np.float32), b)          # fracción sin datos por celda b×b
+    # Sólo cuenta lo vacío conectado con el borde (las cuñas de alinear entran desde fuera). Con el cielo bajo (0,05),
+    # el polvo oscuro del interior recortado a 0 parecía «sin datos» y, como la tolerancia es sobre toda la imagen,
+    # IC 1396 c6 pasaba de 3568 a 2236 px de alto (15 nov 2026).
+    vacio = malo > 0.5
+    con = np.zeros_like(vacio)
+    con[0, :], con[-1, :] = vacio[0, :], vacio[-1, :]
+    con[:, 0] |= vacio[:, 0]
+    con[:, -1] |= vacio[:, -1]
+    for _ in range(sum(vacio.shape)):
+        n = con.copy()
+        n[1:] |= con[:-1]; n[:-1] |= con[1:]; n[:, 1:] |= con[:, :-1]; n[:, :-1] |= con[:, 1:]
+        n &= vacio
+        if (n == con).all():
+            break
+        con = n
+    malo = malo * con
     h, w = malo.shape
     y0, y1, x0, x1 = 0, h, 0, w
     tol = tolerancia_pct / 100.0
@@ -2355,7 +2371,23 @@ def _saturacion(p):
     return np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0).astype(np.float32)
 
 
-def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5):
+def _saturar_propio(p, k, fondo=None):
+    """Satura conservando la luminancia: c' = L + (1 + k)·(c − L); con fondo (nivel del cielo) el aumento se reduce en el
+    cielo (peso de 0 en el cielo a 1 en cielo + 0,1). Igual que medidas.saturar de SetiAstroPilot."""
+    L = _lum(p)[None]
+    g = 1.0 + float(k)
+    if fondo is not None:
+        g = 1.0 + float(k) * np.clip((L - fondo) / 0.1, 0, 1)
+    # Tope por píxel: ningún canal sale de 0–1 (a +2,5 el canal débil iba a 0 en el 1,9 % de IC 1396; 15 nov 2026).
+    d = p - L
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tope = np.where(d < 0, L / np.maximum(-d, 1e-9), np.where(d > 0, (1 - L) / np.maximum(d, 1e-9), np.inf)).min(axis=0)
+    g = np.minimum(g, np.maximum(0.98 * tope, 1.0)[None])
+    return np.clip(L + g * d, 0, 1).astype(np.float32)
+
+
+def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5,
+                         propia=(1.0, 1.5, 2.0, 2.5)):
     """Paso 5 no lineal: compara satu de Siril a varias cantidades; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
     if info["canales"] != 3:
@@ -2388,16 +2420,25 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
         r["aviso"] = (f"El cielo ya tiene una dominante del {m0['dominante_cielo_pct']} % antes de saturar: saturar la amplifica. "
                       "Corrígela antes (fase lineal o neutralizar el fondo).")
     n = 0
+    # Además de satu, la saturación propia de SetiAstroPilot (conserva la luminancia y no satura el cielo: peso de 0 en
+    # el cielo a 1 en cielo + 0,1). En IC 1396 satu llegaba a 0,34 de saturación del objeto antes de teñir el cielo;
+    # PixInsight tiene 0,49 (15 nov 2026).
+    cielo_L = float(np.median(_lum(p)[z["cielo_px"]])) if z["cielo_px"].any() else 0.0
+    trabajos = [("satu", float(q)) for q in cantidades] + [("propia", float(k)) for k in (propia or ())]
     try:
-        for q in cantidades:
+        for tipo_s, q in trabajos:
             n += 1
-            q = float(q)
             t0 = time.perf_counter()
-            args = ["satu", f"{q:g}", f"{float(fondo):g}"]
+            args = ["satu", f"{q:g}", f"{float(fondo):g}"] if tipo_s == "satu" else ["saturación propia", f"+{q:g}"]
             try:
-                siril.cmd(*args)
-                res = _crudo(siril)
-                pq = _pantalla(res, info)
+                if tipo_s == "satu":
+                    siril.cmd(*args)
+                    res = _crudo(siril)
+                    pq = _pantalla(res, info)
+                else:
+                    pq = _saturar_propio(p, q, cielo_L)
+                    x = pq if info["top_down"] else pq[:, ::-1, :]
+                    res = _a_siril(x, crudo.dtype).reshape(crudo.shape)
                 m = medir(pq)
                 nuevos = (pq.max(axis=0) >= 0.999) & (pmax0 < 0.9) & ~cerca_brillante
                 m["recorte_nuevo_pct"] = _r(100.0 * float(nuevos.mean()), 4)
@@ -2416,11 +2457,12 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
                 elif gan_cielo > 10.0:
                     fal.append(f"el cielo gana un {_r(gan_cielo, 1)} % de saturación (> 10 %)")
                 texto = " ".join(args)
-                cid = _guardar_candidato(grupo, n, res, {"nombre": f"satu {q:g}", "comando": texto, "huella_base": huella, "metricas": m})
-                r["candidatos"].append({"id": cid, "metodo": f"satu {q:g}", "comando": texto, "metricas": m, "no_cumple": fal,
+                nombre = f"satu {q:g}" if tipo_s == "satu" else f"saturación propia +{q:g} (cielo protegido)"
+                cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": texto, "huella_base": huella, "metricas": m})
+                r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "metricas": m, "no_cumple": fal,
                                         "segundos": _r(time.perf_counter() - t0, 1)})
             except Exception as e:
-                r["errores"].append(f"satu {q:g}: {e}")
+                r["errores"].append(f"{tipo_s} {q:g}: {e}")
             finally:
                 _restaurar(siril, crudo)
     finally:

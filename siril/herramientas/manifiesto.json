@@ -1128,6 +1128,13 @@
       },
       "description": "Cantidades de satu (por defecto [0.25, 0.5, 0.75, 1.0, 1.5])."
      },
+     "propia": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Cantidades de la saturación propia (conserva la luminancia, cielo protegido, sin salir de 0–1; por defecto [1, 1.5, 2, 2.5]). En IC 1396 llegó a la saturación de PixInsight (+2,5) donde satu se quedaba corta."
+     },
      "fondo": {
       "type": "number",
       "description": "background_factor de satu (por defecto 1): por debajo de ese umbral de fondo no satura."

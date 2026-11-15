@@ -1546,7 +1546,8 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     return _galeria(r, p, None)
 
 
-def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), proteger_cielo=True, dominante_max=5.0, ceros_max=0.5):
+def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5), proteger_cielo=True,
+                         dominante_max=5.0, ceros_max=0.5):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
     cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
     d = _doc(ctx, vista)
@@ -1667,7 +1668,8 @@ def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0,
     if not 0 < k <= 2:
         raise ValueError("factor entre 0 y 2 (1 = estrellas tal cual; 0,5–0,6 para estrellas discretas).")
     pct = _pct_estrellas(d)
-    if pct > 0.5 and not forzar:
+    # 1 %: una starless con contraste de escala grande daba 0,6 % y se negaba (IC 1396 c7); con estrellas sale > 3 %.
+    if pct > 1.0 and not forzar:
         # IC 1396 (14 nov 2026): la paleta salía de capas con estrellas y se recombinaron otra vez: estrellas dobles.
         return {"aplicado": False, "estrellas_en_vista_pct": _r(pct, 2),
                 "aviso": f"'{_nombre(d)}' ya tiene estrellas ({pct:.1f} % de píxeles de estrella; una starless da < 0,5 %): "

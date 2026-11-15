@@ -480,8 +480,13 @@ def saturar(p, k, fondo=None):
     if fondo is not None:
         w = np.clip((L - fondo) / 0.1, 0, 1)
         g = 1.0 + float(k) * w
-    q = L + g * (p - L)
-    return np.clip(q, 0, 1).astype(np.float32)
+    # Tope por píxel: ningún canal sale de 0–1 (a +2,5 el canal débil iba a 0 en el 1,9 % de IC 1396; 15 nov 2026).
+    # Igual que _saturar_propio de Siril.
+    d = p - L
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tope = np.where(d < 0, L / np.maximum(-d, 1e-9), np.where(d > 0, (1 - L) / np.maximum(d, 1e-9), np.inf)).min(axis=0)
+    g = np.minimum(g, np.maximum(0.98 * tope, 1.0)[None])
+    return np.clip(L + g * d, 0, 1).astype(np.float32)
 
 
 def patron_2px(x, r=12):
