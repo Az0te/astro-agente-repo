@@ -484,6 +484,25 @@ def saturar(p, k, fondo=None):
     return np.clip(q, 0, 1).astype(np.float32)
 
 
+def patron_2px(x, r=12):
+    """Patrón fijo de periodo 2 px (filas, columnas y diagonal alternas: resto de la matriz Bayer de un master OSC
+    debayerizado), estimado con la segunda diferencia (no ve la estructura suave) y promediado en una ventana. En IC 1396
+    era el 1 % de la escala fina del master y el 15 % tras un denoise fuerte: salía como una malla fina (15 nov 2026).
+    Se resta: x − patron_2px(x). Igual que _patron_2px de Siril."""
+    x = np.asarray(x, dtype=np.float32)
+    h, w = x.shape
+    sx = np.where(np.arange(w) % 2, -1.0, 1.0)[None, :].astype(np.float32)
+    sy = np.where(np.arange(h) % 2, -1.0, 1.0)[:, None].astype(np.float32)
+    total = np.zeros_like(x)
+    for m, eje in ((sx, 1), (sy, 0), (sx * sy, None)):
+        if eje is None:
+            d = x - 0.25 * (np.roll(x, 1, 0) + np.roll(x, -1, 0) + np.roll(x, 1, 1) + np.roll(x, -1, 1))
+        else:
+            d = x - 0.5 * (np.roll(x, 1, eje) + np.roll(x, -1, eje))
+        total += suave(d * m, 2 * r) * 0.5 * m
+    return total
+
+
 def textura(L, obj, cielo_px=None):
     """Textura del objeto en una imagen estirada, por escalas (lo que hace «suave y con contraste»):
     grano = σ de la escala fina (L − caja 3×3) en el objeto, relativo a su nivel; contraste_medio = σ de la banda 4–32 px;

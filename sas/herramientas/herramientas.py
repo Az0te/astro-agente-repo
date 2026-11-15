@@ -1348,6 +1348,90 @@ def _fwhm_estrellas(L, n=300):
     return float(np.median(f)) if f else None, len(f)
 
 
+def _min3(x):
+    """Mínimo en 3×3 (erosión en grises) sin scipy."""
+    p = np.pad(x, 1, mode="edge")
+    h, w = x.shape
+    m = p[1:h + 1, 1:w + 1].copy()
+    for dy in (0, 1, 2):
+        for dx in (0, 1, 2):
+            np.minimum(m, p[dy:dy + h, dx:dx + w], out=m)
+    return m
+
+
+def _reducir_estrellas(p, cantidad=0.5, pasadas=1, gamma=1.0, color=1.0):
+    """Reducción de estrellas (propia) sobre una capa de SOLO estrellas ya estirada: erosión 3×3 (una o dos pasadas)
+    mezclada con la original según 'cantidad', gamma > 1 que apaga los halos y las estrellas débiles, y color > 1 que
+    separa los canales de la luminancia (las del RGB salían casi blancas frente a las de PixInsight; 15 nov 2026)."""
+    q = np.empty_like(p)
+    for i in range(p.shape[0]):
+        e = p[i]
+        for _ in range(int(pasadas)):
+            e = _min3(e)
+        c = (1 - float(cantidad)) * p[i] + float(cantidad) * e
+        q[i] = np.power(np.clip(c, 0, 1), float(gamma)) if gamma != 1.0 else c
+    if color != 1.0 and q.shape[0] == 3:
+        L = q.mean(axis=0, keepdims=True)
+        q = L + (q - L) * float(color)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
+LOCALES["reducir_estrellas"] = _reducir_estrellas
+
+
+def reducirEstrellasCandidatos(ctx, vista=None, fwhm_objetivo=None, area_objetivo=None):
+    """NL9: estrellas más pequeñas y discretas (lo que hace BXT en PixInsight) sobre la capa de SOLO estrellas ya
+    estirada, antes de recombinar: erosión 3×3 a varias cantidades y gamma que apaga halos y débiles. Mide FWHM, % de
+    píxeles de estrella (> 0,05) y brillo p90. Con fwhm_objetivo / area_objetivo (p. ej. los de compararFinales del
+    final de PixInsight) recomienda el más cercano; si no, la erosión media. La vista no cambia."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if M.lineal(p[:, ::8, ::8]) and float(np.percentile(p[:, ::8, ::8], 99.9)) < 0.05:
+        raise RuntimeError("La capa de estrellas parece lineal: estírala antes (estirarEstrellas).")
+    L0 = M.lum(p)
+    if float((L0 > 0.05).mean()) > 0.4:
+        raise RuntimeError("La vista no parece una capa de SOLO estrellas (> 40 % de píxeles encendidos).")
+    lista = [
+        ("erosión 3×3 al 50 %", "reducir_estrellas", {"cantidad": 0.5}),
+        ("erosión 3×3 al 100 %", "reducir_estrellas", {"cantidad": 1.0}),
+        ("erosión 3×3 ×2 al 70 %", "reducir_estrellas", {"cantidad": 0.7, "pasadas": 2}),
+        ("erosión 3×3 al 50 % + gamma 1,3", "reducir_estrellas", {"cantidad": 0.5, "gamma": 1.3}),
+        ("gamma 1,5 (apaga halos y débiles)", "reducir_estrellas", {"cantidad": 0.0, "gamma": 1.5}),
+        ("gamma 1,3 + color ×2,5 (como las de PixInsight)", "reducir_estrellas",
+         {"cantidad": 0.0, "gamma": 1.3, "color": 2.5}),
+    ]
+
+    def medir(q):
+        L = M.lum(q)
+        fw, n = _fwhm_estrellas(L)
+        on = L > 0.05
+        return {"fwhm_px": _r(fw, 2), "estrellas_medidas": n, "area_pct": _r(100.0 * float(on.mean()), 3),
+                "p90_estrellas": _r(float(np.percentile(L[on], 90)), 3) if on.any() else None}
+
+    r = _comparar(ctx, d, "estrellas_red", lista, medir)
+    r["antes"] = medir(p)
+
+    def dist(x):
+        m, s = x["metricas"], 0.0
+        if fwhm_objetivo and m["fwhm_px"]:
+            s += abs(m["fwhm_px"] / float(fwhm_objetivo) - 1)
+        if area_objetivo and m["area_pct"] is not None:
+            s += abs(m["area_pct"] / max(float(area_objetivo), 1e-6) - 1)
+        return s
+
+    if r["candidatos"]:
+        if fwhm_objetivo or area_objetivo:
+            mejor = min(r["candidatos"], key=dist)
+            r["motivo"] = f"{mejor['metodo']}: el más cercano al objetivo (FWHM {fwhm_objetivo}, área {area_objetivo} %)."
+        else:
+            mejor = r["candidatos"][0]
+            r["motivo"] = f"{mejor['metodo']}: reducción moderada (sin objetivo). Mira la previa: sin anillos negros."
+        r["recomendado"] = mejor["id"]
+    r["leyenda"] = ("fwhm_px: tamaño de las estrellas no saturadas. area_pct: píxeles de estrella encendidos (> 0,05): "
+                    "baja con halos más pequeños y menos débiles. La vista NO ha cambiado: aplicarCandidato(id).")
+    return _galeria(r, p)
+
+
 def compararFinales(ctx, vistas):
     """Mide varias vistas ya estiradas (finales de distintos programas o versiones) con los mismos criterios: cielo,
     ruido relativo, dominante del cielo, contraste local y saturación del objeto, recortes, % de píxeles de estrella y
@@ -1673,6 +1757,24 @@ def aplicarCandidato(ctx, id, vista=None):
 
 # --- Pasos sencillos (un proceso de SASpro con lo que pide la guía) -----------------------------------------
 
+def quitarPatron2px(ctx, vista=None):
+    """L7/L14: quita el patrón fijo de periodo 2 px (filas, columnas y diagonal alternas: resto de la matriz Bayer de un
+    master OSC) de cada canal de la vista, con deshacer. Sirve para capas ya separadas o ya sin ruido: tras un denoise
+    fuerte la malla pasa del 1 % al 15 % de la escala fina (IC 1396, 15 nov 2026). desmezclarDualBand ya lo hace."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    q = np.empty_like(p)
+    pct = []
+    for i in range(p.shape[0]):
+        pt = M.patron_2px(p[i])
+        hp = p[i] - M._caja(p[i], 1)
+        pct.append(_r(100.0 * float(np.std(pt[::3, ::3])) / max(float(np.std(hp[::3, ::3])), 1e-12), 2))
+        q[i] = np.clip(p[i] - pt, 0, 1)
+    d.apply_edit(_a_sas(q, d.image), metadata={}, step_name="SetiAstroPilot: quitar patrón de 2 px")
+    return {"vista": _nombre(d), "patron_pct_escala_fina": pct,
+            "nota": "Con deshacer. Por encima del ~5 % la malla se ve a 1:1; por debajo del 1 % no se nota."}
+
+
 def quitarVerde(ctx, vista=None, cantidad=1.0, modo="avg", metodo="propio", forzar=False):
     """NL3 SCNR. metodo 'propio' (por defecto): el SCNR clásico, solo baja G hasta la media (avg) o el máximo (max) de
     R y B; no toca R ni B. metodo 'sas': Remove Green de SASpro con preserve_lightness, que en M31 subió R y B (cielo de
@@ -1978,6 +2080,8 @@ LISTA = {
     "recombinarEstrellas": recombinarEstrellas,
     "aplicarCandidato": aplicarCandidato,
     "quitarVerde": quitarVerde,
+    "quitarPatron2px": quitarPatron2px,
+    "reducirEstrellasCandidatos": reducirEstrellasCandidatos,
     "neutralizarFondo": neutralizarFondo,
     "calibrarColor": calibrarColor,
     "resolverAstrometria": resolverAstrometria,

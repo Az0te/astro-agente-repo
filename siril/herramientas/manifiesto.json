@@ -928,6 +928,16 @@
    }
   },
   {
+   "nombre": "quitarPatron2px",
+   "fichero": "pasos.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "lineal/07-extraccion-canales.md",
+   "descripcion": "L7/L14: quita de cada canal de la imagen cargada el patrón fijo de periodo 2 px (filas, columnas y diagonal alternas: resto de la matriz Bayer de un master OSC), con deshacer. Para capas ya separadas o ya sin ruido: tras un denoise fuerte esa malla fina pasa del 1 % al 15 % de la escala fina. desmezclarDualBand ya lo hace por defecto.",
+   "resumen": "L7: quita la malla de 2 px de la matriz Bayer.",
+   "params": {"type": "object", "properties": {}}
+  },
+  {
    "nombre": "quitarVerde",
    "fichero": "pasos.py",
    "nivel": "vista",
@@ -1243,6 +1253,14 @@
      "estirar_estrellas": {
       "type": "boolean",
       "description": "Estirar la capa de estrellas si es lineal (arcsinh hasta p90 de estrella ≈ 0,10)."
+     },
+     "gamma": {
+      "type": "number",
+      "description": "Gamma de la capa de estrellas (> 1 apaga halos y núcleos; 1,3 se acercó a PixInsight)."
+     },
+     "color": {
+      "type": "number",
+      "description": "Color de las estrellas (> 1 las satura; 2,5 se acercó a PixInsight, que las deja con color)."
      }
     },
     "required": [
@@ -1358,6 +1376,10 @@
      "filtro": {
       "type": "string",
       "description": "Filtro si no se deduce del nombre ni de FILTER: 'HaO3', 'S2Hb' o 'S2O3'."
+     },
+     "quitar_patron": {
+      "type": "boolean",
+      "description": "Quitar la malla fija de 2 px de la matriz Bayer (por defecto sí)."
      }
     }
    }

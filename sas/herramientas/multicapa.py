@@ -317,7 +317,7 @@ def _fondo_por_canal(p):
     return [float(np.percentile(b[i], 0.2)) for i in range(c)]
 
 
-def desmezclarDualBand(ctx, vista=None, carpeta=None, filtro=None):
+def desmezclarDualBand(ctx, vista=None, carpeta=None, filtro=None, quitar_patron=True):
     """Paso 7 lineal: separa las dos rayas de una vista OSC dual band (HaO3 → Hα y OIII; S2Hb → SII y Hβ; S2O3 → SII y
     OIII), en lineal, como vistas mono nuevas (<vista>_<raya>) y, con carpeta, también como XISF. Con el filtro
     reconocido, por mínimos cuadrados con la respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract y
@@ -344,6 +344,15 @@ def desmezclarDualBand(ctx, vista=None, carpeta=None, filtro=None):
             capas.append((raya, np.clip(c, 0, 1).astype(np.float32)))
         metodo = "mínimos cuadrados con la respuesta del IMX571 (" + "; ".join(
             f"{r} = " + " ".join(f"{P[i, j]:+.4f}·{'RGB'[j]}" for j in range(3)) for i, r in enumerate(rayas)) + ")"
+    patron = {}
+    if quitar_patron:                      # malla de 2 px de la matriz Bayer (se ve tras un denoise fuerte)
+        limpias = []
+        for etiqueta, capa in capas:
+            pt = M.patron_2px(capa)
+            hp = capa - M._caja(capa, 1)
+            patron[etiqueta] = _r(100.0 * float(np.std(pt[::3, ::3])) / max(float(np.std(hp[::3, ::3])), 1e-12), 2)
+            limpias.append((etiqueta, np.clip(capa - pt, 0, 1).astype(np.float32)))
+        capas = limpias
     base = H._seguro(Path(H._nombre(d)).stem)
     out = {}
     meta = dict(H._meta(d))
@@ -367,6 +376,9 @@ def desmezclarDualBand(ctx, vista=None, carpeta=None, filtro=None):
             out[etiqueta]["fichero"] = str(dst)
         _anotar_origen(out[etiqueta]["vista"], [_fuente(ctx, d)])
     H._reactivar(ctx, d)
+    if patron:
+        metodo += ("; quitado el patrón fijo de 2 px de la matriz Bayer (" +
+                   ", ".join(f"{k} {v} % de la escala fina" for k, v in patron.items()) + ")")
     return {"capas": out, "metodo": metodo,
             "vista_activa": H._nombre(d),
             "nota": "Capas lineales en vistas nuevas. Gradiente de cada capa con gradienteCandidatos(vista); después "

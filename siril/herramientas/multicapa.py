@@ -180,7 +180,7 @@ def _fondo_por_canal(p):
     return [float(np.percentile(b[i], 0.2)) for i in range(c)]
 
 
-def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=None):
+def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=None, quitar_patron=True):
     """Paso 7 lineal: separa las dos rayas de un master OSC dual band (HaO3 → Hα y OIII; S2Hb → SII y Hβ; S2O3 → SII y
     OIII), en lineal, como FITS mono. Con el filtro reconocido (nombre, FILTER o 'filtro'), por mínimos cuadrados con la
     respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract); si no, Hα = rojo y OIII = (verde + azul)/2.
@@ -219,6 +219,15 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=No
             capas.append((raya, np.clip(c, 0, 1).astype(np.float32)))
         metodo = "mínimos cuadrados con la respuesta del IMX571 (" + "; ".join(
             f"{x} = " + " ".join(f"{Pi[i, j]:+.4f}·{'RGB'[j]}" for j in range(3)) for i, x in enumerate(rayas)) + ")"
+    if quitar_patron:                      # malla de 2 px de la matriz Bayer (se ve tras un denoise fuerte; 15 nov 2026)
+        limpias, pct = [], []
+        for etiqueta, capa in capas:
+            pt = P._patron_2px(capa)
+            hp = capa - P._caja(capa, 1)
+            pct.append(f"{etiqueta} {_r(100.0 * float(np.std(pt[::3, ::3])) / max(float(np.std(hp[::3, ::3])), 1e-12), 2)} %")
+            limpias.append((etiqueta, np.clip(capa - pt, 0, 1).astype(np.float32)))
+        capas = limpias
+        metodo += "; quitado el patrón fijo de 2 px de la matriz Bayer (" + ", ".join(pct) + " de la escala fina)"
     base = Path(fichero).stem if fichero else (nombre or "dualband")
     destino = H._ruta(carpeta, "carpeta") if carpeta else (Path(fichero).parent if fichero else H.DATOS / "capas")
     destino.mkdir(parents=True, exist_ok=True)

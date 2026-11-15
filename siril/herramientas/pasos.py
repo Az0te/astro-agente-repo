@@ -2005,6 +2005,25 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
 
 # --- NL3: quitar verde ---------------------------------------------------------------------------------------
 
+def quitarPatron2px(siril):
+    """L7/L14: quita de cada canal de la imagen cargada el patrón fijo de periodo 2 px (resto de la matriz Bayer de un
+    master OSC), con deshacer. Para capas ya separadas o ya sin ruido (tras un denoise fuerte la malla pasa del 1 % al
+    15 % de la escala fina; IC 1396, 15 nov 2026). desmezclarDualBand ya lo hace. Igual que en SetiAstroPilot."""
+    info = H._info(siril)
+    crudo = _crudo(siril)
+    p = _de_siril(crudo)
+    q = np.empty_like(p)
+    pct = []
+    for i in range(p.shape[0]):
+        pt = _patron_2px(p[i])
+        hp = p[i] - _caja(p[i], 1)
+        pct.append(_r(100.0 * float(np.std(pt[::3, ::3])) / max(float(np.std(hp[::3, ::3])), 1e-12), 2))
+        q[i] = np.clip(p[i] - pt, 0, 1)
+    _poner(siril, _a_siril(q, crudo.dtype).reshape(crudo.shape), "SirilAstroPilot: quitar patrón de 2 px")
+    return {"patron_pct_escala_fina": pct, "imagen": info.get("fichero"),
+            "nota": "Con deshacer. Por encima del ~5 % la malla se ve a 1:1; por debajo del 1 % no se nota."}
+
+
 def quitarVerde(siril, umbral=3.0, forzar=False, tipo=0):
     """Paso 3 no lineal: SCNR (rmgreen) solo si el verde del cielo supera en > umbral % a rojo y azul."""
     info = H._info(siril)
@@ -2512,6 +2531,23 @@ def _contraste_local(L, m, r=16):
     return float(np.sqrt(np.mean(d ** 2)))
 
 
+def _patron_2px(x, r=12):
+    """Patrón fijo de periodo 2 px (resto de la matriz Bayer de un master OSC debayerizado), igual que medidas.patron_2px
+    de SetiAstroPilot: segunda diferencia por filas, columnas y diagonal, promediada en una ventana. Se resta."""
+    x = np.asarray(x, dtype=np.float32)
+    h, w = x.shape
+    sx = np.where(np.arange(w) % 2, -1.0, 1.0)[None, :].astype(np.float32)
+    sy = np.where(np.arange(h) % 2, -1.0, 1.0)[:, None].astype(np.float32)
+    total = np.zeros_like(x)
+    for m, eje in ((sx, 1), (sy, 0), (sx * sy, None)):
+        if eje is None:
+            d = x - 0.25 * (np.roll(x, 1, 0) + np.roll(x, -1, 0) + np.roll(x, 1, 1) + np.roll(x, -1, 1))
+        else:
+            d = x - 0.5 * (np.roll(x, 1, eje) + np.roll(x, -1, eje))
+        total += _suave(d * m, 2 * r) * 0.5 * m
+    return total
+
+
 def _textura(L, obj):
     """Textura del objeto en una imagen estirada, por escalas (igual que medidas.textura de SASpro): grano = σ de la
     escala fina (L − caja 3×3) relativo al nivel del objeto; contraste_medio = σ de la banda 4–32 px; contraste_grande =
@@ -2833,7 +2869,7 @@ def _px_estrella(Lb):
     return m
 
 
-def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_estrellas=None):
+def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_estrellas=None, gamma=1.0, color=1.0):
     """Paso 9 no lineal: une la starless cargada con la capa de estrellas de 'fichero' (screen o suma), con deshacer."""
     info = H._info(siril)
     ruta = H._ruta(fichero)
@@ -2891,6 +2927,15 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
         r["estirado_estrellas"] = {"arcsinh": _r(s, 1), "p90_estrellas": _r(float(np.percentile(_lum(b)[mascara], 90)), 3)}
     elif metodo == "suma" and starless_estirada:
         r["aviso_suma"] = "La guía reserva la suma para capas lineales; con la starless estirada, mejor screen."
+    # Estrellas como las de PixInsight (15 nov 2026): gamma > 1 apaga halos y núcleos; color > 1 separa los canales de la
+    # luminancia (las del RGB salían casi blancas). gamma 1,3 + color 2,5 se acercó al final de PI de IC 1396.
+    if gamma != 1.0:
+        b = np.power(np.clip(b, 0, 1), float(gamma)).astype(np.float32)
+    if color != 1.0 and b.shape[0] == 3:
+        Lm = b.mean(axis=0, keepdims=True)
+        b = np.clip(Lm + (b - Lm) * float(color), 0, 1).astype(np.float32)
+    if gamma != 1.0 or color != 1.0:
+        r["estrellas_ajuste"] = {"gamma": gamma, "color": color}
     if metodo == "screen":
         res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(k * b, 0, 1))
     else:
@@ -3036,5 +3081,6 @@ LISTA_PASOS = {
     "separarEstrellas": separarEstrellas,
     "estirarCandidatos": estirarCandidatos,
     "quitarVerde": quitarVerde,
+    "quitarPatron2px": quitarPatron2px,
     "compararFinales": compararFinales,
 }

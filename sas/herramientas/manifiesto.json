@@ -600,6 +600,10 @@
      "filtro": {
       "type": "string",
       "description": "Filtro si no se deduce del nombre ni de FILTER: 'HaO3', 'S2Hb' o 'S2O3'."
+     },
+     "quitar_patron": {
+      "type": "boolean",
+      "description": "Quitar la malla fija de 2 px de la matriz Bayer (por defecto sí)."
      }
     }
    }
@@ -1002,6 +1006,41 @@
     "required": [
      "id"
     ]
+   }
+  },
+  {
+   "nombre": "reducirEstrellasCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "no-lineal/09-recombinar-estrellas.md",
+   "descripcion": "NL9: estrellas más pequeñas y discretas (lo que hace BXT en PixInsight) sobre la capa de SOLO estrellas ya estirada, antes de recombinar: erosión 3×3 a varias cantidades y gamma que apaga halos y estrellas débiles. Mide FWHM, % de píxeles de estrella y brillo p90; con fwhm_objetivo / area_objetivo recomienda el más cercano. La vista no cambia: aplicarCandidato(id).",
+   "resumen": "NL9: compara formas de reducir las estrellas (capa de estrellas).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string", "description": "La capa de estrellas estirada (nombre o uid). Sin ella, la activa."},
+     "fwhm_objetivo": {"type": "number", "description": "FWHM objetivo en px (opcional)."},
+     "area_objetivo": {"type": "number", "description": "% de píxeles de estrella objetivo (opcional)."}
+    }
+   }
+  },
+  {
+   "nombre": "quitarPatron2px",
+   "fichero": "herramientas.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "lineal/07-extraccion-canales.md",
+   "descripcion": "L7/L14: quita de cada canal de la vista el patrón fijo de periodo 2 px (filas, columnas y diagonal alternas: resto de la matriz Bayer de un master OSC), con deshacer. Para capas ya separadas o ya sin ruido: tras un denoise fuerte esa malla fina pasa del 1 % al 15 % de la escala fina. desmezclarDualBand ya lo hace por defecto.",
+   "resumen": "L7: quita la malla de 2 px de la matriz Bayer.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "La vista (nombre o uid). Sin ella, la activa."
+     }
+    }
    }
   },
   {
