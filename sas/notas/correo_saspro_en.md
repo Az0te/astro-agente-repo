@@ -2,9 +2,8 @@ Subject: SASpro 1.24.2.post2 — scripting it from an AI agent: a few issues and
 
 Hi Franklin,
 
-My name is Rafael, an amateur astrophotographer [from <city/country>]. I image deep-sky objects with an Askar SQA106
-and a ZWO ASI2600MC Pro (plus a Canon 6D), often with dual-band narrowband filters, and I process in PixInsight,
-Siril and, more and more, Seti Astro Suite Pro.
+My name is Rafael, an amateur astrophotographer [from <city/country>]. I image deep-sky objects and process them in
+PixInsight, Siril and, more and more, Seti Astro Suite Pro.
 
 **The project.** I have been building an open project (MIT licence) in which an AI agent processes
 astrophotos step by step inside the programs I already use: https://github.com/Az0te/astro-agente-repo
@@ -27,8 +26,8 @@ Driving SASpro headless through `ScriptContext` works remarkably well — thank 
 way I found the issues below. Each has steps, expected vs. actual and, where I could find it, the likely cause (code
 references are to `main` on GitHub). I'm happy to test fixes or share the scripts.
 
-**Environment:** SASpro 1.24.2.post2 (Windows installer), Windows 11 Pro, AMD Radeon RX 7900 XTX (AI tools on
-DirectML). Data: 32-bit XISF masters from the ASI2600MC (6248 × 4176), stacked in PixInsight WBPP.
+**Environment:** SASpro 1.24.2.post2 (Windows installer), Windows 11 Pro, AI tools on DirectML. Data: 32-bit XISF
+masters (6248 × 4176, one-shot colour), stacked in PixInsight WBPP.
 
 ---
 
