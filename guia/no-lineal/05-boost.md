@@ -39,6 +39,8 @@ Medidas de cada una: canales > 0,98, dominante y ruido de color del cielo (los f
 
 **Comparar dos compresiones del núcleo** (multiescala y por gradiente) con la misma máscara de bulbo y la misma mezcla, y quedarse con la que deja menos meseta sin anillos nuevos ni bulbo plano. En una prueba de 8 nov 2026 la de gradiente bajó la meseta de 6,4 a 0,6 px sin anillo y la multiescala dejó 7,7 px con un anillo oscuro (una sola imagen: las medidas deciden en cada caso).
 
+**Nivel del fondo al final.** El estirado deja el cielo en ~0,10 para comparar métodos, pero entregado así la imagen queda gris y plana. Antes de exportar, punto negro por canal para bajar el cielo a **0,03–0,08**, neutro y sin llevar a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro en negro; en una nebulosa que llena el campo, el «cielo» son las zonas más oscuras: un fondo demasiado negro se come la nebulosa débil). IC 1396 (15 nov 2026): los tres programas con Qwen dejaban el cielo en 0,07–0,13 y la versión de referencia de Rafael lo tiene en ~0,02 con punto negro a 0,06 y una curva en S suave. Herramienta: `fondoCandidatos` (PixInsight, Siril y SASpro).
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-05); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Realce del fondo débil y de las estructuras oscuras**

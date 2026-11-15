@@ -708,8 +708,8 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/02-lrgb-paleta.md",
-   "descripcion": "NL2 paletas de banda estrecha con capas YA ESTIRADAS y alineadas (vistas mono: ha, oiii y opcional sii; de desmezclarDualBand y estirarCandidatos de cada una): HOO, HOO suave, HOO con OIII realzado, HOO dinámica, SHO y Foraxx. Mide dominante del cielo, verde residual, saturación y separación de tonos, y recomienda la que más separa los tonos con el cielo neutro (una que sólo falla por verde vale, con quitarVerde forzar: true después). La paleta va en 'vista' (RGB del mismo tamaño) o en una vista nueva «paleta». La vista NO cambia (aplicarCandidato). Si las capas tienen estrellas, la paleta también: no recombines estrellas después.",
-   "resumen": "NL2: compara paletas HOO, SHO y Foraxx; no cambia la vista.",
+   "descripcion": "NL2 paletas de banda estrecha con capas YA ESTIRADAS y alineadas (vistas mono: ha, oiii y opcionales sii y hb; de desmezclarDualBand/unirCapas y estirarCandidatos de cada una): HOO, HOO suave, HOO con OIII realzado, HOO dinámica, SHO, Foraxx y Natural (las cuatro rayas: Hα y SII en rojo, OIII y Hβ en turquesa; con varios dual band, pasa TODAS las rayas). Mide dominante del cielo, verde residual, saturación y separación de tonos, y recomienda la que más separa los tonos con el cielo neutro (una que sólo falla por verde vale, con quitarVerde forzar: true después). La paleta va en 'vista' (RGB del mismo tamaño) o en una vista nueva «paleta». La vista NO cambia (aplicarCandidato). Si las capas tienen estrellas, la paleta también: no recombines estrellas después.",
+   "resumen": "NL2: compara paletas HOO, SHO, Foraxx y Natural (con Hβ); no cambia la vista. Pasa todas las rayas que haya.",
    "params": {
     "type": "object",
     "properties": {
@@ -723,7 +723,11 @@
      },
      "sii": {
       "type": "string",
-      "description": "Vista de la capa SII estirada (opcional: SHO y Foraxx)."
+      "description": "Vista de la capa SII estirada (opcional: SHO, Foraxx y Natural)."
+     },
+     "hb": {
+      "type": "string",
+      "description": "Vista de la capa Hβ estirada (opcional: Natural; sale del dual band SII/Hβ)."
      },
      "vista": {
       "type": "string",
@@ -885,6 +889,31 @@
      },
      "ruido_max": {
       "type": "number"
+     }
+    }
+   }
+  },
+  {
+   "nombre": "fondoCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "NL5 fondo (después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,05 y 0,03, neutro. Mide píxeles nuevos a 0, cielo por canal y ruido, y recomienda el más oscuro que no lleva a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro). Un cielo en 0,10–0,13 deja la imagen gris y plana. La vista NO cambia (aplicarCandidato).",
+   "resumen": "NL5: fondo más oscuro y neutro (punto negro a 0,08/0,05/0,03); no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "cielos": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Niveles de cielo a probar (por defecto [0.08, 0.05, 0.03])."
      }
     }
    }

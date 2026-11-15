@@ -292,7 +292,8 @@ function esSkyDominance(view) {
   var cells = [], blk = new Float32Array(S * S), lum = new Float32Array(S * S);
   for (var y0 = 0; y0 + S <= H; y0 += S)
     for (var x0 = 0; x0 + S <= W; x0 += S) {
-      var R = new Rect(x0, y0, x0 + S, y0 + S); lum.fill(0);
+      var R = new Rect(x0, y0, x0 + S, y0 + S);
+      for (var z0 = 0; z0 < lum.length; ++z0) lum[z0] = 0;   // Float32Array.fill no existe en el motor de PixInsight (15 nov 2026)
       for (var c = 0; c < 3; ++c) { im.getSamples(blk, R, c); for (var i = 0; i < blk.length; i += 4) lum[i] += blk[i]; }
       var v = []; for (var j = 0; j < lum.length; j += 4) v.push(lum[j]);
       v.sort(function (a, b) { return a - b; });
@@ -319,7 +320,8 @@ function esCeldasDebiles(view) {
   var blk = new Float32Array(S * S), lum = new Float32Array(S * S), cells = [];
   for (var y0 = 0; y0 + S <= H; y0 += S)
     for (var x0 = 0; x0 + S <= W; x0 += S) {
-      var R = new Rect(x0, y0, x0 + S, y0 + S); lum.fill(0);
+      var R = new Rect(x0, y0, x0 + S, y0 + S);
+      for (var z0 = 0; z0 < lum.length; ++z0) lum[z0] = 0;   // Float32Array.fill no existe en el motor de PixInsight (15 nov 2026)
       for (var c = 0; c < nc; ++c) { im.getSamples(blk, R, c); for (var i = 0; i < blk.length; i += 2) lum[i] += blk[i] / nc; }
       var v = []; for (var j = 0; j < lum.length; j += 2) v.push(lum[j]);
       v.sort(function (a, b) { return a - b; });
@@ -534,6 +536,11 @@ function estirarCandidatos(viewId, o) {
   function medir(v, etiqueta, extra, t1, clave) {
     var c = esCheck(v), sd = esSkyDominance(v), f = esFallo(c, lim);
     if (sd.dominante_pct >= 5) f.push("dominante del cielo " + sd.dominante_pct + " %");
+    // La separación sólo compara si el cielo es el mismo en todos: un candidato con el cielo muy por debajo del objetivo
+    // divide por un ruido mucho menor y gana con miles de «ruidos» aunque queme la nebulosa (IC 1396 con Qwen, 14 nov 2026:
+    // GHS simetría débil con el cielo en 0,024 dio 3208 frente a 172 y la paleta salió con el centro blanco).
+    if (Math.abs(c.cielo - cielo) > 0.3 * cielo)
+      f.push("cielo " + (+c.cielo.toFixed(4)) + " lejos del objetivo " + cielo + ": la separación no es comparable");
     var ruidoAbs = Math.max(c.ruido_rel * c.cielo, 1e-6);
     cands.push({ etiqueta: etiqueta, clave: clave, vista: v.id, medidas: c, dominante_cielo_pct: sd.dominante_pct, fallos: f,
                  senal_debil_en_ruidos: +((c.p90 - c.cielo) / ruidoAbs).toFixed(2), extra: extra,

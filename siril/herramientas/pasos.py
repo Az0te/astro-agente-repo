@@ -247,7 +247,9 @@ def _comprobar_bordes(p, ignorar):
     L = _lum(p)
     med = float(np.median(L))
     p95, _, cunas = H._zonas_vacias(L, med)
-    if not ignorar and (max(p95.values()) > 2 or cunas > 0.2):
+    # Un par de columnas sueltas (0,006 % tras alinearMasters, IC 1396 14 nov 2026) no son cuñas: recortar sólo el RGB
+    # lo dejaba de otro tamaño que las capas y la paleta ya no se podía montar.
+    if not ignorar and ((max(p95.values()) > 2 and cunas > 0.05) or cunas > 0.2):
         raise RuntimeError(
             f"La imagen tiene zonas sin datos (cuñas del registrado: {cunas} % del campo; p95 por lado {p95}). "
             "Recórtalas antes con recortarBordes (Paso 5): el modelo de fondo intentaría ajustar el relleno y falsearía todo.")
@@ -288,7 +290,7 @@ def recortarBordes(siril, margen=8, tolerancia_pct=0.01, aplicar=True):
     p = H._pixeles(siril, info)
     L = _lum(p)
     med = float(np.median(L))
-    datos = L > max(1e-6, 0.25 * med)
+    datos = H._con_datos(L, med)
     b = 4
     malo = 1.0 - _binar(datos.astype(np.float32), b)          # fracción sin datos por celda b×b
     h, w = malo.shape
@@ -2147,7 +2149,22 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     # de pérdida a todo NoiseX, también a 0,9 con el ruido al 10 % (M31, 10 nov 2026).
     zb = _zona_brillante(L0, z)
     banda = (2, 8)
-    e0 = _energia_brillante(L0, zb) if zb is not None else None
+    # Capas débiles (SII, Hβ de un dual band, IC 1396 14 nov 2026): en la zona brillante la energía de 2–8 px es casi toda
+    # ruido, y cualquier denoise «perdía» un 10–30 % de «detalle»: no se aplicaba ninguno y la paleta salía granulosa.
+    # Se descuenta la energía de la misma escala en el cielo (ruido puro); si lo que queda es poco, no hay detalle medible.
+    zc = z.get("cielo_px")
+    zc = zc & ~z["est_px"] if zc is not None and zc.sum() > 2000 else None
+
+    def energia_senal(L):
+        eb = _energia_brillante(L, zb)
+        return eb - (_energia_brillante(L, zc) if zc is not None else 0.0)
+    e0 = energia_senal(L0) if zb is not None else None
+    if e0 is not None and zc is not None and e0 < 0.5 * _energia_brillante(L0, zc):
+        e0 = None
+        r_aviso_debil = ("Capa débil: en la zona brillante el detalle de 2–8 px no sobresale del ruido del cielo; la pérdida "
+                         "de detalle no se puede medir y se recomienda por el ruido (la más cercana a la mitad).")
+    else:
+        r_aviso_debil = None
     if mods is None:                                      # denoise de Siril: en no lineal, más suave
         mods = (0.5, 0.7, 1.0) if lineal else (0.3, 0.5)
     if ia is None:                                        # NoiseX por defecto si está el CLI de RC Astro
@@ -2160,7 +2177,9 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
          "zona_objeto_pct": _r(100.0 * float(z["obj_px"].mean()), 1), "estrellas_excluidas_pct": z["estrellas_pct"],
          "candidatos": [], "errores": [],
          "referencia": {"metodo": "nada", "ruido_rel": 1.0, "detalle_perdido_pct": 0.0}}
-    if e0 is None:
+    if r_aviso_debil:
+        r["aviso"] = r_aviso_debil
+    elif e0 is None:
         r["aviso"] = "No encuentro zonas con señal clara: la pérdida de detalle no se puede medir."
     elif e0 <= 0:
         e0 = None
@@ -2172,7 +2191,7 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
         q = _pantalla(res_crudo, info)
         L = _lum(q)
         r1 = _ruido_en(L, z["medidas"]["_celdas"])
-        e1 = _energia_brillante(L, zb) if zb is not None else None
+        e1 = energia_senal(L) if zb is not None else None
         perd = max(0.0, 100.0 * (1.0 - e1 / e0)) if e0 and e1 is not None else None
         m = {"ruido_rel": _r(r1 / max(r0, 1e-9), 3), "ruido_grueso_rel": _r(_ruido_grueso(L, z["medidas"]["_celdas"]) / max(g0, 1e-9), 3),
              "detalle_perdido_pct": _r(perd, 1), **_recortes(q)}
@@ -2394,6 +2413,67 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75), fondo=1.0, dominan
     return r
 
 
+def fondoCandidatos(siril, cielos=(0.08, 0.05, 0.03), ceros_max=2.0, tipo=None):
+    """Paso 5 no lineal (fondo): punto negro por canal para dejar el cielo en varios niveles, neutro; mide píxeles
+    nuevos a 0, cielo y ruido y recomienda el más oscuro que no recorta más del ceros_max %. La imagen no cambia.
+    IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13 salían grises y planos frente a la versión de
+    Rafael (cielo ~0,02, punto negro y curva). Igual que fondoCandidatos de SetiAstroPilot."""
+    info = H._info(siril)
+    crudo = _crudo(siril)
+    p = _pantalla(crudo, info)
+    if _lineal(p):
+        raise RuntimeError("La imagen parece lineal: el nivel del fondo se ajusta después de estirar (y de recombinar).")
+    z = _zonas(p)
+    cel = z["medidas"]["_celdas"]
+    s0 = _cielo_por_canal(p, cel) if p.shape[0] == 3 else [float(z["medidas"]["cielo"])]
+    rec0 = _recortes(p)
+    r0 = float(z["ruido"])
+    huella = _huella(crudo)
+    grupo = "fondo"
+    _limpiar_grupo(grupo)
+    r = {"antes": {"cielo_rgb": [_r(x, 4) for x in s0]}, "candidatos": [], "errores": []}
+    n = 0
+    for t in sorted(cielos or [], reverse=True):
+        t = float(t)
+        if min(s0) <= t:
+            continue
+        n += 1
+        t0 = time.perf_counter()
+        try:
+            bp = np.array([(s - t) / (1 - t) for s in s0], dtype=np.float32).reshape(-1, 1, 1)
+            q = np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
+            rgb = _cielo_por_canal(q, cel) if q.shape[0] == 3 else [float(np.median(q))]
+            m = {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
+                 "ruido_rel": _r(_ruido_en(_lum(q), cel) / max(r0, 1e-9), 3), **_recortes(q)}
+            m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)   # lo que decide (ceros_pct incluye los de antes)
+            fal = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
+                   if m["ceros_nuevos_pct"] > ceros_max else [])
+            res = q if info["top_down"] else q[:, ::-1, :]
+            res = _a_siril(res, crudo.dtype).reshape(crudo.shape)
+            nombre = f"cielo a {t:g}"
+            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"punto negro por canal {bp.ravel().round(4).tolist()}",
+                                                     "huella_base": huella, "metricas": m})
+            r["candidatos"].append({"id": cid, "metodo": nombre, "metricas": m, "no_cumple": fal,
+                                    "segundos": _r(time.perf_counter() - t0, 1)})
+        except Exception as e:
+            r["errores"].append(f"cielo {t:g}: {e}")
+    ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if ok:
+        mejor = min(ok, key=lambda x: x["metricas"]["cielo"])
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) sin "
+                       f"recortar a 0 más del {ceros_max} % y neutro. Míralo en la galería: un fondo demasiado negro se come la "
+                       "nebulosa débil.")
+    else:
+        r["recomendado"] = None
+        r["motivo"] = ("El cielo ya está igual o por debajo de los niveles pedidos." if not r["candidatos"]
+                       else "Todos recortan demasiado: deja el fondo como está o pide un nivel más alto.")
+    r["leyenda"] = "cielo: nivel medio del cielo por canal tras el punto negro. La imagen NO ha cambiado: aplicarCandidato(id)."
+    _asegurar_restaurado(siril, crudo, huella, r)
+    _galeria(r, info, p, None)
+    return r
+
+
 # --- NL5/NL7: contraste local --------------------------------------------------------------------------------
 
 def _contraste_local(L, m, r=16):
@@ -2547,7 +2627,7 @@ def _tonos(p, m):
     return float(np.degrees(np.sqrt(-2 * np.log(max(rb, 1e-9)))))
 
 
-def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominante_max=5.0, verde_max=5.0, tipo=None):
+def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominante_max=5.0, verde_max=5.0, tipo=None, hb=None):
     """Paso 2 no lineal: compone paletas de banda estrecha desde capas ya estiradas (de la imagen dual band cargada:
     Hα = R, OIII = media de G y B; o de ficheros) y las compara. La imagen no cambia: aplicarCandidato(id)."""
     info = H._info(siril)
@@ -2582,12 +2662,22 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
         # frente a 0,33): la SHO salía verde y apagada. Igual que el OIII, se lleva al mismo cielo y recorrido que el Hα.
         Sa = _igualar(S, Ha, z["cielo_px"])
         todas["SHO"] = ("SHO", lambda: (Sa, Ha, Oa))
+    # Natural (IC 1396, 26 oct 2026, la mejor versión de Rafael): las cuatro rayas con su color aproximado. Hα y SII rojos,
+    # OIII y Hβ turquesa (el Hβ da señal limpia donde el OIII es flojo). Sin Hβ, el OIII hace su papel; sin SII, el Hα.
+    Rn = (0.85 * Ha + 0.15 * Sa) if S is not None else Ha
+    Hbn = _igualar(_canal_fichero(siril, hb, info, "hb"), Ha, z["cielo_px"]) if hb else None
+    if Hbn is not None:
+        todas["Natural"] = ("Natural (R = 0,85·Hα + 0,15·SII; G = 0,6·OIII + 0,25·Hβ + 0,15·Hα; B = 0,7·OIII + 0,3·Hβ)",
+                            lambda: (Rn, 0.6 * Oa + 0.25 * Hbn + 0.15 * Ha, 0.7 * Oa + 0.3 * Hbn))
+    else:
+        todas["Natural"] = ("Natural sin Hβ (R = 0,85·Hα + 0,15·SII; G = 0,85·OIII + 0,15·Hα; B = OIII)",
+                            lambda: (Rn, 0.85 * Oa + 0.15 * Ha, Oa))
     elegir = list(paletas) if paletas else list(todas)
     cel = z["medidas"]["_celdas"]
     huella = _huella(crudo)
     grupo = "paleta"
     _limpiar_grupo(grupo)
-    r = {"fuente": {"ha": ha or "R de la imagen", "oiii": oiii or "media de G y B de la imagen", "sii": sii},
+    r = {"fuente": {"ha": ha or "R de la imagen", "oiii": oiii or "media de G y B de la imagen", "sii": sii, "hb": hb},
          "candidatos": [], "errores": []}
     n = 0
     for k in elegir:
@@ -2623,7 +2713,17 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
         except Exception as e:
             r["errores"].append(f"{nombre}: {e}")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
-    if r["candidatos"]:
+    # Con Hβ (las cuatro rayas), la Natural es la que usa toda la señal y la de la mejor versión de IC 1396 (Rafael, 14 nov
+    # 2026): se recomienda si cumple (o sólo falla por verde). Por separación de tonos ganaba siempre la SHO.
+    nat = [x for x in r["candidatos"] if x["metodo"].startswith("Natural (")
+           and all(f.startswith("verde residual") for f in x["no_cumple"])]
+    if nat:
+        mejor = nat[0]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: usa las cuatro rayas (el Hβ refuerza el turquesa donde el OIII es flojo) con el "
+                       "cielo neutro; es la recomendada cuando hay Hβ. Las demás quedan en la galería: una paleta es una "
+                       "convención y la elección es estética.")
+    elif r["candidatos"]:
         mejor = max(ok or r["candidatos"], key=lambda x: x["metricas"]["separacion_tonos_grados"] or 0)
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: la que más separa los tonos ({mejor['metricas']['separacion_tonos_grados']}°) con el "
@@ -2834,6 +2934,7 @@ LISTA_PASOS = {
     "estrellasCandidatos": estrellasCandidatos,
     "nitidezLineal": nitidezLineal,
     "saturacionCandidatos": saturacionCandidatos,
+    "fondoCandidatos": fondoCandidatos,
     "contrasteCandidatos": contrasteCandidatos,
     "paletasCandidatos": paletasCandidatos,
     "recombinarEstrellas": recombinarEstrellas,

@@ -347,6 +347,13 @@ var BE_PALETAS = (function () {
     HOO_NEUTRAL: { usaS: false, f: hoo(0.5), d: "HOO Neutral 50/50" },
     HOO_SOFT: { usaS: false, f: hoo(0.6), d: "HOO Soft 60/40" },
     HOO_HARD: { usaS: false, f: hoo(0.7), d: "HOO Hard 70/30" },
+    // Natural (IC 1396, 26 oct 2026, la mejor versión de Rafael): las cuatro rayas con su color aproximado; Hα y SII en rojo,
+    // OIII y Hβ en turquesa (el Hβ da señal limpia donde el OIII es flojo). Sin Hβ el OIII hace su papel; sin SII, el Hα.
+    NATURAL: { usaS: false, f: function (c) {
+        var r = c.real ? "0.85*" + c.H + "+0.15*" + c.S : c.H;
+        if (c.B) return [r, "0.60*" + c.O + "+0.25*" + c.B + "+0.15*" + c.H, "0.70*" + c.O + "+0.30*" + c.B];
+        return [r, "0.85*" + c.O + "+0.15*" + c.H, c.O]; },
+      d: "Natural: R = 0,85·Hα + 0,15·SII; G = 0,6·OIII + 0,25·Hβ + 0,15·Hα; B = 0,7·OIII + 0,3·Hβ (sin Hβ: G = 0,85·OIII + 0,15·Hα, B = OIII)" },
     HOO_NOVA: { usaS: false, f: function (c) { var o = "min(" + c.O + ",0.85*" + c.H + ")"; return [c.H, "0.15*" + c.H + "+0.90*" + o, o]; }, d: "HOO con límite al OIII (NOVA): O' = min(O, 0,85·H)" },
     FORAXX: { usaS: true, sint: "foraxx", f: function (c) { var ho = p(c.H + "*" + c.O), oo = p(c.O); return [oo + "*" + c.S + "+" + inv(oo) + "*" + c.H, ho + "*" + c.H + "+" + inv(ho) + "*" + c.O, c.O]; }, d: "Foraxx Classic: R = o·S + ~o·H, G = ho·H + ~ho·O, B = O" },
     FORAXX_BICOLOR: { usaS: false, f: function (c) { var ho = p(c.H + "*" + c.O); return [c.H, ho + "*" + c.H + "+" + inv(ho) + "*" + c.O, c.O]; }, d: "Foraxx Classic bicolor (sin SII): R = H, G = ho·H + ~ho·O, B = O" },
@@ -425,11 +432,21 @@ function paletasDisponibles() {
 
 function componerPaleta(capas, o) {
   o = o || {};
+  // Qwen la llamó dos veces con una lista de ids (14–15 nov 2026): se reparten por el nombre de cada capa.
+  if (capas instanceof Array) {
+    var porNombre = {};
+    capas.forEach(function (c) {
+      // Las capas de desmezclarDualBand empiezan por la raya (Ha_raw, OIII_raw_comb, SII_raw_S2Hb, Hb_raw_S2Hb).
+      var s = String(c), k = /^SII/i.test(s) ? "S" : /^Hb/i.test(s) ? "B" : /^OIII/i.test(s) ? "O" : /^Ha/i.test(s) ? "H" : null;
+      if (k && !porNombre[k]) porNombre[k] = s;
+    });
+    if (porNombre.H && porNombre.O) capas = porNombre;
+  }
   if (!capas || typeof capas !== "object" || capas instanceof Array)
     throw new Error("componerPaleta({ S: id, H: id, O: id }, opciones): las capas van en un objeto con S (opcional), H y O");
   var ids = {};
-  ["S", "H", "O"].forEach(function (k) {
-    var v = capas[k] !== undefined ? capas[k] : capas[k === "S" ? "SII" : k === "H" ? "Ha" : "OIII"];
+  ["S", "H", "O", "B"].forEach(function (k) {
+    var v = capas[k] !== undefined ? capas[k] : capas[{ S: "SII", H: "Ha", O: "OIII", B: "Hb" }[k]];
     if (v) ids[k] = beId(v);
   });
   if (!ids.H || !ids.O) throw new Error("Hacen falta al menos H (Hα) y O (OIII)");
@@ -446,7 +463,35 @@ function componerPaleta(capas, o) {
     if (med[k] < 0.02) throw new Error(k + " (" + ids[k] + ") parece lineal (mediana " + med[k] + "): sepárale las estrellas (separarEstrellas) y estira cada " +
                                       "raya starless con el mismo cielo, estirarStarless(id, { cielo: 0.10 }), antes de componer la paleta");
   }
-  var c = { S: ids.S, H: ids.H, O: ids.O, real: tieneS }, pseudo = !!def.pseudo || (def.sinS === "pseudo" && !tieneS);
+  // Igualar las rayas al Hα (como _igualar de Siril y SASpro): mismo cielo y mismo recorrido cielo→p99. Sin esto la mezcla
+  // depende de cómo quedó cada estirado: en IC 1396 (15 nov 2026) la misma Natural salió turquesa en una pasada y roja,
+  // con el OIII apagado, en la siguiente. Por defecto en la NATURAL; { igualar: true/false } en cualquiera.
+  var temporales = [], igualadas = {};
+  if (o.igualar === true || (o.igualar !== false && nombre === "NATURAL")) {
+    var nivel = function (vw) {
+      var imx = vw.image, n = imx.width * imx.height, buf = new Float32Array(n);
+      imx.getSamples(buf, new Rect(0, 0, imx.width, imx.height), 0);
+      var s = []; for (var i = 0; i < n; i += 37) s.push(buf[i]);
+      s.sort(function (a, b) { return a - b; });
+      return { cielo: esCheck(vw).cielo, p99: s[Math.floor(0.99 * (s.length - 1))] };
+    };
+    var nh = nivel(ref);
+    ["S", "O", "B"].forEach(function (k) {
+      if (!ids[k]) return;
+      var nv = nivel(beView(ids[k])), sh = nh.p99 - nh.cielo, so = Math.max(nv.p99 - nv.cielo, 1e-6), f = sh / so;
+      var tid = beUnique("beIgual_" + k), Q = new PixelMath;
+      Q.expression = nh.cielo.toFixed(6) + " + ($T - " + nv.cielo.toFixed(6) + ") * " + f.toFixed(6);
+      Q.useSingleExpression = true; Q.createNewImage = true; Q.newImageId = tid; Q.showNewImage = false;
+      Q.newImageColorSpace = (PixelMath.Gray !== undefined) ? PixelMath.Gray : PixelMath.prototype.Gray;
+      Q.newImageSampleFormat = (PixelMath.f32 !== undefined) ? PixelMath.f32 : PixelMath.prototype.f32;
+      Q.truncate = true; Q.truncateLower = 0; Q.truncateUpper = 1;
+      if (!Q.executeOn(beView(ids[k]))) throw new Error("No se pudo igualar " + k + " al Hα");
+      temporales.push(tid);
+      igualadas[k] = { factor: +f.toFixed(3), cielo_antes: +nv.cielo.toFixed(4), p99_antes: +nv.p99.toFixed(4) };
+      ids[k] = tid;
+    });
+  }
+  var c = { S: ids.S, H: ids.H, O: ids.O, B: ids.B, real: tieneS }, pseudo = !!def.pseudo || (def.sinS === "pseudo" && !tieneS);
   if (def.usaS && !tieneS) {
     c.S = def.sint === "foraxx" ? "(0.85*" + ids.H + "+0.15*" + ids.O + ")" : "(0.6*" + ids.H + "+0.4*" + ids.O + ")";
     pseudo = true;
@@ -460,8 +505,11 @@ function componerPaleta(capas, o) {
   P.newImageColorSpace = (PixelMath.RGB !== undefined) ? PixelMath.RGB : PixelMath.prototype.RGB;
   P.newImageSampleFormat = (PixelMath.f32 !== undefined) ? PixelMath.f32 : PixelMath.prototype.f32;
   P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
-  if (!P.executeOn(ref)) throw new Error("PixelMath de la paleta falló");
+  var okP = P.executeOn(ref);
+  temporales.forEach(function (t) { var wt = ImageWindow.windowById(t); if (!wt.isNull) wt.forceClose(); });
+  if (!okP) throw new Error("PixelMath de la paleta falló");
   var w = ImageWindow.windowById(id), hecho = [def.d + (pseudo ? " (pseudo: sin SII real)" : "")];
+  if (temporales.length) hecho.push("rayas igualadas al Hα (mismo cielo y recorrido hasta el p99) antes de mezclar: " + JSON.stringify(igualadas));
   w.keywords = ref.window.keywords;
   if (ref.window.hasAstrometricSolution) try { w.copyAstrometricSolution(ref.window); } catch (x) { }
   var noCumple = [];

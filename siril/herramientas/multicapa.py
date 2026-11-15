@@ -137,6 +137,11 @@ def alinearMasters(siril, ficheros, carpeta=None, referencia=1):
         rec = np.ascontiguousarray(a[:, y0:y1, x0:x1], dtype=np.float32)
         siril.save_image_file(rec if rec.shape[0] > 1 else rec[0], cab, str(s))
     siril.cmd("load", H._arg_cmd(Path(salidas[0])))
+    # Los originales ya tienen su versión alineada: dejan de contar como «masters abiertos sin alinear» (IC 1396, 14 nov
+    # 2026: el RGB abierto para analizarlo frenaba el gradiente de las capas unidas después de alinear).
+    for f in fs:
+        for k in [k for k, v in H.MASTERS_ABIERTOS.items() if H._clave(v) == H._clave(f) or k == H._clave(f)]:
+            H.MASTERS_ABIERTOS.pop(k, None)
     info = H._info(siril)
     if (info["ancho"], info["alto"]) != (x1 - x0, y1 - y0):
         raise RuntimeError(f"El recorte común no se aplicó ({info['ancho']}×{info['alto']} en vez de {x1 - x0}×{y1 - y0}).")
@@ -149,8 +154,35 @@ def alinearMasters(siril, ficheros, carpeta=None, referencia=1):
                     "band, separado con desmezclarDualBand."}
 
 
-def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None):
-    """Paso 7 lineal: capas Hα (rojo) y OIII (media de verde y azul) de un master OSC dual band, en lineal, como FITS mono.
+# Respuesta de cada canal del IMX571 (ASI2600MC) a cada raya, la misma que SetiAstroPilot y el dosier de PixInsight de
+# IC 1396 (emulando DBXtract). Con dos rayas por filtro y tres canales se separan por mínimos cuadrados (pseudoinversa).
+RESPUESTA_IMX571 = {"Ha": (0.80, 0.11, 0.04), "OIII": (0.04, 0.93, 0.50), "SII": (0.74, 0.13, 0.05),
+                    "Hb": (0.01, 0.67, 0.70)}
+FILTROS_DUAL = [(("s2hb", "shb", "siihb", "s2-hb"), ("SII", "Hb")),
+                (("s2o3", "so3", "siioiii", "s2-o3"), ("SII", "OIII")),
+                (("hao3", "ha-o3", "haoiii", "l-extreme", "l-enhance", "alp-t", "dual"), ("Ha", "OIII"))]
+
+
+def _rayas_del_filtro(texto):
+    t = (texto or "").lower().replace(" ", "").replace("_", "").replace("/", "").replace("-", "")
+    for claves, rayas in FILTROS_DUAL:
+        if any(k.replace("-", "") in t for k in claves):
+            return rayas
+    return None
+
+
+def _fondo_por_canal(p):
+    """Percentil 0,2 de cada canal en binning 16×16: fondo que se resta antes de separar las rayas."""
+    c, h, w = p.shape
+    h16, w16 = h // 16 * 16, w // 16 * 16
+    b = p[:, :h16, :w16].reshape(c, h16 // 16, 16, w16 // 16, 16).mean(axis=(2, 4))
+    return [float(np.percentile(b[i], 0.2)) for i in range(c)]
+
+
+def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=None):
+    """Paso 7 lineal: separa las dos rayas de un master OSC dual band (HaO3 → Hα y OIII; S2Hb → SII y Hβ; S2O3 → SII y
+    OIII), en lineal, como FITS mono. Con el filtro reconocido (nombre, FILTER o 'filtro'), por mínimos cuadrados con la
+    respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract); si no, Hα = rojo y OIII = (verde + azul)/2.
     Con 'fichero', al terminar vuelve a dejar cargada la imagen que había (11 nov 2026: dejaba cargado el dual band, el
     modelo creyó que seguía el RGB y le hizo gradiente, astrometría, color y estirado al dual band)."""
     previa, crudo_previo, huella_previa = None, None, None
@@ -169,13 +201,28 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None):
     p = P._de_siril(crudo)                             # orden de filas de Siril: se guarda igual
     if not P._lineal(P._pantalla(crudo, info)):
         raise RuntimeError("El dual band parece estirado: se separa en lineal (Paso 7, antes del gradiente y del color).")
-    ha, o3 = p[0].astype(np.float32), (0.5 * (p[1] + p[2])).astype(np.float32)
+    cab = siril.get_image_fits_header() or ""
+    mf = re.search(r"FILTER\s*=\s*'([^']*)'", cab)
+    rayas = _rayas_del_filtro(filtro or f"{Path(fichero or info.get('fichero') or '').stem} {mf.group(1) if mf else ''}")
+    if rayas is None:
+        capas = (("Ha", p[0].astype(np.float32)), ("OIII", (0.5 * (p[1] + p[2])).astype(np.float32)))
+        metodo = "Hα = rojo; OIII = (verde + azul) / 2 (filtro no reconocido: pasa filtro='HaO3', 'S2Hb' o 'S2O3')"
+    else:
+        A = np.array([RESPUESTA_IMX571[x] for x in rayas], dtype=np.float64).T
+        Pi = np.linalg.pinv(A)
+        q = p - np.array(_fondo_por_canal(p), dtype=np.float32)[:, None, None]
+        capas = []
+        for i, raya in enumerate(rayas):
+            c = Pi[i, 0] * q[0] + Pi[i, 1] * q[1] + Pi[i, 2] * q[2]
+            c = c - float(np.percentile(c[::8, ::8], 0.1)) + 1e-4
+            capas.append((raya, np.clip(c, 0, 1).astype(np.float32)))
+        metodo = "mínimos cuadrados con la respuesta del IMX571 (" + "; ".join(
+            f"{x} = " + " ".join(f"{Pi[i, j]:+.4f}·{'RGB'[j]}" for j in range(3)) for i, x in enumerate(rayas)) + ")"
     base = Path(fichero).stem if fichero else (nombre or "dualband")
     destino = H._ruta(carpeta, "carpeta") if carpeta else (Path(fichero).parent if fichero else H.DATOS / "capas")
     destino.mkdir(parents=True, exist_ok=True)
-    cab = siril.get_image_fits_header() or ""
     out = {}
-    for etiqueta, capa in (("Ha", ha), ("OIII", o3)):
+    for etiqueta, capa in capas:
         ruta = destino / f"{base}_{etiqueta}.fit"
         k = 2
         while ruta.exists():
@@ -194,11 +241,96 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None):
         if crudo_previo is not None and P._huella(P._crudo(siril)) != huella_previa:
             P._restaurar(siril, crudo_previo)              # tenía cambios sin guardar: se reponen
         cargada = previa
-    return {"capas": out, "metodo": "Hα = rojo; OIII = (verde + azul) / 2 (matriz Bayer RGGB con filtro dual band)",
+    return {"capas": out, "metodo": metodo,
             "imagen_cargada": cargada,
             "nota": f"Queda cargada: {Path(cargada).name if cargada else '¿?'}. Capas lineales: cada una sigue la fase "
-                    "lineal (gradiente, ruido suave) abriéndola con abrirImagen. Para combinar con el RGB: "
-                    "combinarCandidatos(ha, oiii) con el RGB lineal cargado y ya calibrado de color."}
+                    "lineal (gradiente, ruido suave) abriéndola con abrirImagen. Con varios dual band, las capas de la misma "
+                    "raya se juntan con unirCapas. Para combinar con el RGB: combinarCandidatos(ha, oiii) con el RGB lineal "
+                    "cargado y ya calibrado de color; para una paleta, paletasCandidatos con todas las rayas."}
+
+
+def _ruido_fino(x):
+    hp = (x - P._caja(x, 2))[::3, ::3]
+    return 1.4826 * float(np.median(np.abs(hp - np.median(hp))))
+
+
+def unirCapas(siril, ficheros, nombre=None, carpeta=None):
+    """Paso 7 lineal: junta capas mono lineales y alineadas de la MISMA raya que salen de masters distintos (OIII del HaO3 y
+    del S2O3; SII del S2Hb y del S2O3). Cada una se lleva a la escala y nivel de la de mejor señal/ruido (ajuste ortogonal
+    sobre las capas suavizadas, sin estrellas) y se promedian con pesos 1/σ². Guarda un FITS nuevo; la imagen cargada no
+    cambia. Igual que unirCapas de SetiAstroPilot (14 nov 2026)."""
+    if isinstance(ficheros, str):
+        ficheros = [x.strip() for x in ficheros.split(";") if x.strip()]
+    fs = [H._ruta(f, "ficheros") for f in ficheros]
+    if len(fs) < 2:
+        raise ValueError("unirCapas necesita al menos dos ficheros de la misma raya.")
+    info = H._info(siril)
+    capas = []
+    for f in fs:
+        d = P._leer_fichero(siril, f, info)
+        capas.append((d.mean(axis=0) if d.shape[0] > 1 else d[0]).astype(np.float32))
+    forma = capas[0].shape
+    for f, c in zip(fs, capas):
+        if c.shape != forma:
+            raise RuntimeError(f"{f.name} mide {c.shape[1]}×{c.shape[0]} y {fs[0].name} {forma[1]}×{forma[0]}: alinéalas antes.")
+        if not P._lineal(c[None, ::8, ::8]):
+            raise RuntimeError(f"{f.name} parece estirada: las capas se juntan en lineal.")
+    snr = [(float(np.percentile(c[::4, ::4], 99.5)) - float(np.median(c[::4, ::4]))) / max(_ruido_fino(c), 1e-12)
+           for c in capas]
+    iref = int(np.argmax(snr))
+    ref = capas[iref]
+    hp = ref - P._caja(ref, 5)
+    shp = 1.4826 * float(np.median(np.abs(hp[::4, ::4])))
+    util = (np.abs(hp) < 5 * max(shp, 1e-12)) & (ref < float(np.percentile(ref[::4, ::4], 99.8)))
+    util = P._caja(util.astype(np.float32), 6) > 0.999
+    util[::2, :] = False
+    util[:, ::2] = False
+    ref_s = P._suave(ref, 16)
+    ajustadas, info_c = [], []
+    for i, (f, c) in enumerate(zip(fs, capas)):
+        if i == iref:
+            a, b = 1.0, 0.0
+        else:
+            c_s = P._suave(c, 16)
+            m = util & (c < float(np.percentile(c[::4, ::4], 99.8)))
+            x, y = c_s[m].astype(np.float64), ref_s[m].astype(np.float64)
+            mx, my = x.mean(), y.mean()
+            sxx, syy, sxy = ((x - mx) ** 2).mean(), ((y - my) ** 2).mean(), ((x - mx) * (y - my)).mean()
+            a = (syy - sxx + np.sqrt((syy - sxx) ** 2 + 4 * sxy ** 2)) / (2 * sxy) if sxy > 0 else 1.0
+            b = my - a * mx
+        q = (a * c + b).astype(np.float32)
+        ajustadas.append(q)
+        info_c.append({"fichero": str(f), "escala": _r(float(a), 4), "nivel": _r(float(b), 6), "snr": _r(snr[i], 1),
+                       "ruido": _ruido_fino(q)})
+    w = np.array([1.0 / max(x["ruido"], 1e-12) ** 2 for x in info_c])
+    w = w / w.sum()
+    out = np.zeros(forma, np.float32)
+    for wi, q in zip(w, ajustadas):
+        out += np.float32(wi) * q
+    out = np.clip(out, 0, 1)
+    baja = 100.0 * (1 - _ruido_fino(out) / max(info_c[iref]["ruido"], 1e-12))
+    for x, wi in zip(info_c, w):
+        x["peso_pct"] = _r(100.0 * float(wi), 1)
+        x["ruido"] = _r(x["ruido"], 7)
+    destino = H._ruta(carpeta, "carpeta") if carpeta else fs[iref].parent
+    destino.mkdir(parents=True, exist_ok=True)
+    ruta = destino / f"{nombre or (fs[iref].stem + '_unida')}.fit"
+    k = 2
+    while ruta.exists():
+        ruta = destino / f"{nombre or (fs[iref].stem + '_unida')}_{k}.fit"
+        k += 1
+    # Con cabecera vacía Siril no contesta y sirilpy corta por tiempo (14 nov 2026): la de la capa de referencia.
+    try:
+        cab = siril.load_image_from_file(str(fs[iref])).header or ""
+    except Exception:
+        cab = ""
+    if not cab.strip():
+        cab = "SIMPLE  =                    T\nBITPIX  =                  -32\nNAXIS   =                    2\nEND"
+    siril.save_image_file(out.astype(np.float32), cab, str(ruta))
+    H.GUARDADOS.add(H._clave(ruta))
+    return {"fichero": str(ruta), "referencia": str(fs[iref]), "capas": info_c, "ruido_baja_pct": _r(baja, 1),
+            "nota": "Capa unida (lineal). Sigue con su gradiente (abrirImagen + gradienteCandidatos) como cualquier capa; "
+                    "la imagen cargada no ha cambiado."}
 
 
 def _excesos(base, nb, cielo_px, estrellas_px, obj_px):
@@ -409,5 +541,5 @@ def combinarRGB(siril, r, g, b):
                     "filtros de la rueda, mono: true). Guárdala con guardarImagen."}
 
 
-LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand,
+LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand, "unirCapas": unirCapas,
                    "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB}

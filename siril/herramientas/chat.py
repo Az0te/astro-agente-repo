@@ -40,7 +40,10 @@ MODELO_LOCAL = "qwen38-32k"
 CLAUDE = "Claude (CLI)"
 MAX_RONDAS = 30
 MAX_RESULTADO = 6000                                    # caracteres de cada resultado que vuelven al modelo local
-MAX_EMPUJONES = 2                                       # turnos vacíos (todo en «thinking») que se reintentan
+MAX_EMPUJONES = 2                                       # turnos vacíos seguidos (todo en «thinking») que se reintentan
+MAX_SEGUIR = 3                                          # en HASTA EL FINAL, cierres sin llamada seguidos que se reanudan
+SEGUIR = ("Modo HASTA EL FINAL: no has terminado (falta exportarFinal). No describas el siguiente paso: hazlo ya, con la "
+          "llamada a la herramienta.")
 EMPUJON = ("Tu último turno quedó vacío: haz ya la llamada a la herramienta que estabas preparando o escribe la "
            "respuesta final. No vuelvas a razonar desde el principio.")
 
@@ -162,12 +165,17 @@ def prompt_sistema(funcs, internet, idioma="es"):
         "calibrarColor (y no uses su perfil para nada de esa foto). Si calibrarColor dice que la cámara (p. ej. una DSLR) no está "
         "en SPCC, usa fotometrica: true (PCC) y dilo; si cae al equilibrado sin catálogo (aviso), es color aproximado: dilo en el "
         "informe y sigue. No repitas una llamada que ha fallado con los mismos argumentos: cambia algo o explica el bloqueo. "
-        "Con varios masters (RGB + dual band o banda estrecha): alinearMasters → desmezclarDualBand → gradiente de cada capa → "
+        "Con varios masters (RGB + dual band o banda estrecha) USA TODOS: alinearMasters → desmezclarDualBand de CADA dual "
+        "band → unirCapas de las capas de la misma raya (OIII de dos filtros, SII de dos filtros) → gradiente de cada capa → "
         "nitidezLineal de corrección y calibrarColor de la RGB SOLA → combinarCandidatos (después del color: antes tiñe el "
         "cielo) → nitidez completa → separar estrellas de la RGB combinada → ruido → estirar; el cielo de la starless se "
-        "neutraliza solo al estirar. Antes de cada paso de la RGB, comprueba qué imagen está cargada (imagen_cargada / "
+        "neutraliza solo al estirar. PERO en una nebulosa de emisión con mucha más banda estrecha que RGB (horas de dual band "
+        "frente a minutos de RGB) NO inyectes: ruta de PALETA. Cada capa sigue sola (gradiente → separarEstrellas → ruido → "
+        "estirado) y después paletasCandidatos con TODAS las rayas (ha, oiii, sii, hb: Natural usa las cuatro); el RGB sólo "
+        "da las estrellas (color, separarEstrellas, estrellas estiradas y recombinarEstrellas sobre la paleta). Antes de cada paso de la RGB, comprueba qué imagen está cargada (imagen_cargada / "
         "fichero del último resultado); si no es la RGB, ábrela con abrirImagen. En galaxias, tras estirar: nucleoCandidatos "
-        "(comprimir el bulbo) ANTES de contraste y saturación. " + "Para apilar desde los subs: inventarioSubs → revisarCalibracion → "
+        "(comprimir el bulbo) ANTES de contraste y saturación. Antes de exportar, fondoCandidatos (cielo final oscuro y neutro, "
+        "0,03–0,08: con 0,10–0,13 la imagen queda gris y plana). " + "Para apilar desde los subs: inventarioSubs → revisarCalibracion → "
         "apilarCandidatos (largo: el estado del puente enseña el progreso); si el usuario pide ignorar una subcarpeta, pásala en "
         "excluir a las tres. " + "Pasa tipo (galaxia, nebulosa…) a estirarCandidatos y contrasteCandidatos. Las que cambian la imagen dejan deshacer. Mira con previa antes de dar un paso por bueno.",
         "Lee la ficha del paso con la herramienta ficha cuando la necesites (no la recites entera). Pasos con herramienta: "
@@ -304,6 +312,11 @@ class MotorLocal:
         rondas = 150 if leer_ajustes().get("hasta_final") else MAX_RONDAS
         tok_in = tok_out = 0
         empujones, sin_pensar, ultimo_pensado = 0, False, ""
+        # 14 nov 2026 (IC 1396 en Siril con qwen38-32k): con el contexto lleno Qwen dejaba muchos turnos mudos y cerraba
+        # otros con «Ahora estiro…» sin llamar a nada: 15 «sigue» y sin exportar. Los empujones cuentan por racha (se
+        # reinician tras cada llamada) y, en HASTA EL FINAL, un cierre sin llamada y sin exportar se reanuda.
+        hasta_final = bool(leer_ajustes().get("hasta_final"))
+        racha, seguir, exportado = 0, 0, False
         t0 = time.time()
         for _ in range(rondas):
             if cancelado():
@@ -345,10 +358,11 @@ class MotorLocal:
                 # vuelve al historial (se comería el contexto).
                 pensado = (m.get("thinking") or "").strip() or ultimo_pensado   # tras think=false ya no llega
                 ultimo_pensado = pensado
-                if pensado and empujones < MAX_EMPUJONES:
+                if pensado and racha < MAX_EMPUJONES:
                     empujones += 1
+                    racha += 1
                     emitir({"tipo": "aviso", "texto": f"El modelo dejó el turno vacío (todo en el razonamiento): "
-                                                      f"empujón {empujones} de {MAX_EMPUJONES}."})
+                                                      f"empujón {racha} de {MAX_EMPUJONES}."})
                     self.mensajes.append({"role": "user", "content": EMPUJON})
                     sin_pensar = True
                     continue
@@ -361,7 +375,16 @@ class MotorLocal:
             if m.get("content") and (not llamadas or m["content"].strip()):
                 emitir({"tipo": "texto", "texto": m["content"]})
             if not llamadas:
+                txt = (m.get("content") or "").strip()
+                if (hasta_final and not exportado and seguir < MAX_SEGUIR and "PARO" not in txt.upper()
+                        and not txt.rstrip("*_ ").endswith("?")):
+                    seguir += 1
+                    emitir({"tipo": "aviso", "texto": f"Cerró el turno sin llamar a nada y sin exportar: sigue {seguir} de {MAX_SEGUIR}."})
+                    self.mensajes.append({"role": "user", "content": SEGUIR})
+                    sin_pensar = True
+                    continue
                 break
+            racha, seguir = 0, 0
             for ll in llamadas:
                 if cancelado():                  # Detener corta entre una herramienta y la siguiente
                     break
@@ -389,6 +412,7 @@ class MotorLocal:
                     emitir({"tipo": "galeria", **gal})
                 if nombre == "exportarFinal":
                     emitir({"tipo": "exportado", "carpeta": _carpeta_export(txt)})
+                    exportado = exportado or res.get("estado") == "ok"
                 self.mensajes.append({"role": "tool", "tool_name": nombre,
                                       "content": txt[:MAX_RESULTADO] + ("…" if len(txt) > MAX_RESULTADO else "")})
         emitir({"tipo": "fin", "tokens_entrada": tok_in, "tokens_salida": tok_out, "coste": 0.0,

@@ -224,12 +224,22 @@ def previa(siril, lado=1600, rect=None, enlazado=None, fichero=None):
             "escala": _r(img.size[0] / (x1 - x0), 3), "rect": [x0, y0, x1, y1] if rect else None}
 
 
+def _con_datos(lum, mediana):
+    """Píxeles con datos: sobre el 25 % de la mediana, o con ruido (distintos de sus vecinos). El relleno de una cuña es
+    plano; el polvo oscuro de una capa con el fondo restado (desmezclarDualBand: cielo ≈ 0) no lo es (IC 1396, 14 nov
+    2026: salían 0,66 % de «cuñas» y recortarBordes quería dejar 5184×384)."""
+    datos = lum > max(1e-6, 0.25 * mediana)
+    ruido = np.zeros_like(datos)
+    ruido[:, :-1] |= np.abs(np.diff(lum, axis=1)) > 1e-7
+    ruido[:-1, :] |= np.abs(np.diff(lum, axis=0)) > 1e-7
+    return datos | (ruido & (lum > 1e-6))
+
+
 def _zonas_vacias(lum, mediana):
     """Ancho de las zonas sin datos (cuñas tras alinear) en cada lado: por cada fila (izquierda/derecha) o
     columna (arriba/abajo), píxeles desde el borde hasta el primer dato; por lado, percentil 95 y máximo.
     Las cuñas no siempre son cero exacto pero quedan muy por debajo del fondo: umbral relativo a la mediana."""
-    umbral = max(1e-6, 0.25 * mediana)
-    datos = lum > umbral
+    datos = _con_datos(lum, mediana)
     h, w = datos.shape
 
     def hasta_dato(m, eje):

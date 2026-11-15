@@ -74,7 +74,7 @@ function mkCoverage(mask, view) {
   var src = view.image, S = 64, cells = [], L = new Float32Array(S * S), t = new Float32Array(S * S), nc = src.numberOfChannels;
   for (var y0 = 0; y0 + S <= H; y0 += S)
     for (var x0 = 0; x0 + S <= W; x0 += S) {
-      var R = new Rect(x0, y0, x0 + S, y0 + S), s = 0, mm = 0; L.fill(0);
+      var R = new Rect(x0, y0, x0 + S, y0 + S), s = 0, mm = 0; for (var z0 = 0; z0 < L.length; ++z0) L[z0] = 0;
       for (var c = 0; c < nc; ++c) { src.getSamples(t, R, c); for (var j = 0; j < t.length; j += 4) s += t[j]; }
       im.getSamples(t, R, 0); for (var k = 0; k < t.length; k += 4) mm += t[k];
       cells.push({ l: s, m: mm / (t.length / 4) });

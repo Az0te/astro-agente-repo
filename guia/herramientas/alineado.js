@@ -196,6 +196,8 @@ function alinearMasters(lista, o) {
   // alinearMasters("<carpeta que no existe>", [vistas]) (7 nov 2026): manda la lista de vistas.
   else if (o instanceof Array) { lista = o; o = arguments[2]; }
   o = o || {};
+  // Qwen pasó { carpeta: "<salida>" } y se ignoraba: los alineados acabaron junto a los masters (15 nov 2026).
+  if (!o.salida && (o.carpeta || o.directorio)) o.salida = o.carpeta || o.directorio;
   // Ficheros o carpetas (de una carpeta se toman sus .xisf, sin mapas de rechazo, pesos de drizzle ni ya alineados).
   // También ids de vistas abiertas (o View/ImageWindow): se usa su fichero si está guardado y sin cambios; si no, se
   // guarda una copia temporal. Qwen pasó los ids de los 4 masters abiertos y fallaba con "No existe <id>" (6 nov 2026).
@@ -290,7 +292,11 @@ function alinearMasters(lista, o) {
   var W = info[ref].ancho, H = info[ref].alto, valid = new Uint8Array(W * H), buf = new Float32Array(W * H);
   for (var i = 0; i < W * H; ++i) valid[i] = 1;
   reg.forEach(function (f) {
-    var w = ImageWindow.open(f, "alVAL", "verbosity 0", true)[0], im = w.mainView.image;
+    var ws = ImageWindow.open(f, "alVAL", "verbosity 0", true);
+    // Con { referencia: <id de vista> } salía «Cannot read properties of undefined (reading 'mainView')» (15 nov 2026):
+    // que diga qué fichero no se pudo abrir.
+    if (!ws || !ws.length || !ws[0] || ws[0].isNull) throw new Error("No se pudo abrir " + f + " para la zona común (referencia: " + ref + "). Pasa la referencia como fichero .xisf o deja que se elija sola.");
+    var w = ws[0], im = w.mainView.image;
     if (im.width != W || im.height != H) { w.forceClose(); throw new Error("Tamaño distinto tras registrar: " + f); }
     var vac = mascaraSinDatos(im);   // 0 y también el relleno constante de WBPP (no es 0)
     for (var i = 0; i < W * H; ++i) if (vac[i]) valid[i] = 0;
@@ -342,7 +348,10 @@ function alinearMasters(lista, o) {
     if (!C.executeOn(w.mainView)) { w.forceClose(); throw new Error("Crop falló en " + f); }
     var im = w.mainView.image, cero = 0, n = 0, row = new Float32Array(im.width);
     [0, im.height - 1].forEach(function (yy) { im.getSamples(row, new Rect(0, yy, im.width, yy + 1), 0); for (var i = 0; i < im.width; ++i) { ++n; if (row[i] <= 0) ++cero; } });
+    // Nunca sobre un fichero que ya existe (15 nov 2026: sin 'salida', dos pasadas de prueba reescribieron los
+    // master\alineados\*_alin.xisf del 8 nov de Rafael): _alin_2, _alin_3…
     e.salida = salida + "/" + File.extractName(e.entrada) + "_alin.xisf";
+    for (var kk = 2; File.exists(e.salida); ++kk) e.salida = salida + "/" + File.extractName(e.entrada) + "_alin_" + kk + ".xisf";
     e.wcs = w.hasAstrometricSolution;
     // 12 nov 2026: el id interno era "alCROP" y al reabrir los _alin salían alCROP, alCROP1… Id = nombre del fichero.
     var idAlin = (File.extractName(e.entrada) + "_alin").replace(/[^A-Za-z0-9_]/g, "_");

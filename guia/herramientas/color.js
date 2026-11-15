@@ -64,7 +64,7 @@ function ccDarkestBlock(view, S) {
   var step = S >> 1;
   for (var y0 = 0; y0 + S <= H; y0 += step)
     for (var x0 = 0; x0 + S <= W; x0 += step) {
-      var R = new Rect(x0, y0, x0 + S, y0 + S); sum.fill(0);
+      var R = new Rect(x0, y0, x0 + S, y0 + S); for (var z0 = 0; z0 < sum.length; ++z0) sum[z0] = 0;
       for (var c = 0; c < 3; ++c) { im.getSamples(buf, R, c); for (var i = 0; i < buf.length; i += 16) sum[i] += buf[i]; }
       var v = []; for (var j = 0; j < sum.length; j += 16) v.push(sum[j]);
       v.sort(function (a, b) { return a - b; });
@@ -198,7 +198,7 @@ function ncCieloCanales(im, rect) {
   var W = im.width, H = im.height, S = 64, cells = [], blk = new Float32Array(S * S), lum = new Float32Array(S * S);
   for (var y0 = 0; y0 + S <= H; y0 += S)
     for (var x0 = 0; x0 + S <= W; x0 += S) {
-      var Rc = new Rect(x0, y0, x0 + S, y0 + S); lum.fill(0);
+      var Rc = new Rect(x0, y0, x0 + S, y0 + S); for (var z0 = 0; z0 < lum.length; ++z0) lum[z0] = 0;
       for (var c1 = 0; c1 < 3; ++c1) { im.getSamples(blk, Rc, c1); for (var i = 0; i < blk.length; i += 4) lum[i] += blk[i]; }
       var v = []; for (var j = 0; j < lum.length; j += 4) v.push(lum[j]);
       v.sort(function (a, b) { return a - b; });

@@ -123,6 +123,8 @@ Lista completa y criterio de parada: [Anexo F](anexos/F-anti-patrones.md), cuand
 |---|---|---|
 | OSC sin filtro | RGB; LRGB si hay L de mono | 7 y 10 sin desmezcla; calibración de color con QE "Ideal" |
 | OSC dual band (Hα/OIII) | HOO o Hα+RGB; SHO sólo con SII real | 7 obligatorio, 10 y paso 2 no lineal |
+| OSC con varios dual band (HaO3, SII/Hβ, SII/OIII) + RGB | Natural (cuatro rayas), SHO, Foraxx o HOO; estrellas del RGB | 5, 7 de cada uno y unir capas de la misma raya; **todos los masters entran** |
+| Nebulosa de emisión con mucha más banda estrecha que RGB (p. ej. 20 h frente a 26 min) | **Ruta de paleta**: la nebulosa sale de las capas de banda estrecha (paso 2 no lineal) y el RGB sólo da las estrellas | 10 no inyecta en el RGB; cada capa: gradiente → estrellas fuera → ruido → estirado. Inyectar en un RGB corto deja la nebulosa con el ruido y el color apagado del RGB (IC 1396, 14 nov 2026) |
 | Mono con rueda | LRGB, HOO, SHO | 7 no aplica; calibración con QE y filtros reales |
 | Mono + OSC | LRGB / LHa-RHaGB / HOO+RGB | 10 con ajuste lineal entre canales y `w ∝ 1/σ²` |
 

@@ -1042,6 +1042,11 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False):
     e0 = M.energia_brillante(L0, zb, cpx) if zb is not None else None
     if e0 is not None and e0 <= 0:
         e0 = None
+    # Capas débiles (OIII, SII, Hβ de dual band; IC 1396, 14 nov 2026): si el detalle de la zona brillante apenas sobresale
+    # del ruido del cielo en la misma escala, la «pérdida» es sobre todo ruido quitado y no se aplicaba ningún denoise
+    # (35–73 %): la paleta salía granulosa. Entonces no se mide y se recomienda la pasada moderada (como en Siril).
+    if e0 is not None and cpx.any() and e0 < 0.5 * M.energia_brillante(L0, cpx):
+        e0 = None
     lista = [(f"Cosmic Clarity denoise {f}", "cosmic_clarity",
               {"mode": "denoise", "denoise_luma": float(f), "denoise_color": float(f), "create_new_view": False,
                "gpu": True}) for f in fuerzas or []]
@@ -1348,6 +1353,63 @@ def compararFinales(ctx, vistas):
                        "estrellas no saturadas (a la escala de cada imagen: un drizzle ×2 da el doble)."}
 
 
+def _punto_negro(p, bp):
+    bp = np.asarray(bp, dtype=np.float32).reshape(-1, 1, 1)
+    return np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
+
+
+def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.05, 0.03), ceros_max=2.0):
+    """NL5 fondo: punto negro por canal para dejar el cielo en varios niveles (más oscuro = más profundidad y
+    contraste) y neutro; mide píxeles nuevos a 0, cielo y ruido, y recomienda el más oscuro que no recorta más del
+    ceros_max % de los píxeles. La vista no cambia. IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13
+    salían grises y planos frente a la versión de Rafael (cielo ~0,02 con punto negro y curva)."""
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if M.lineal(p[:, ::8, ::8]):
+        raise RuntimeError("La imagen parece lineal: el nivel del fondo se ajusta después de estirar (y de recombinar).")
+    z = M.zonas_objeto_cielo(p)
+    cel = z["medidas"]["_celdas"]
+    s0 = M.cielo_por_canal(p, cel) if p.shape[0] == 3 else [float(z["medidas"]["cielo"])]
+    rec0 = M.recortes(p)
+    r0 = float(z["medidas"]["ruido"])
+
+    def medir(q):
+        c = M.cielo(q)
+        rgb = M.cielo_por_canal(q, cel) if q.shape[0] == 3 else [c["cielo"]]
+        return {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
+                "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), **M.recortes(q)}
+
+    lista = []
+    for t in sorted(cielos or [], reverse=True):
+        if min(s0) <= t:
+            continue
+        bp = [(s - t) / (1 - t) for s in s0]
+        lista.append((f"cielo a {t:g}", "punto_negro", {"bp": bp}, (lambda q, bp: _punto_negro(q, bp))))
+    if not lista:
+        return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
+                "motivo": f"El cielo ya está en {_r(float(np.mean(s0)), 3)}, igual o por debajo de los niveles pedidos."}
+    r = _comparar(ctx, d, "fondo", lista, medir)
+    for x in r["candidatos"]:
+        m = x["metricas"]
+        # ceros_pct cuenta también los que ya estaban a 0: Qwen lo leyó como recorte del candidato y no aplicó el
+        # recomendado (IC 1396, 15 nov 2026). Lo que decide es ceros_nuevos_pct.
+        m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)
+        x["no_cumple"] = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
+                          if m["ceros_nuevos_pct"] > ceros_max else [])
+    ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if ok:
+        mejor = min(ok, key=lambda x: x["metricas"]["cielo"])
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) "
+                       f"y neutro (mismo nivel en R, G y B); lleva a 0 sólo un {mejor['metricas']['ceros_nuevos_pct']} % más de "
+                       f"los píxeles (límite {ceros_max} %, la referencia de IC 1396 tiene un 3 % en negro): APLÍCALO salvo que "
+                       "la previa muestre la nebulosa débil comida.")
+    else:
+        r["motivo"] = "Todos recortan demasiado: deja el fondo como está o pide un nivel más alto."
+    r["antes"] = {"cielo_rgb": [_r(x, 4) for x in s0]}
+    return _galeria(r, p, None)
+
+
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75), proteger_cielo=True, dominante_max=5.0):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
     cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
@@ -1537,6 +1599,15 @@ def aplicarCandidato(ctx, id, vista=None):
     if d is None:
         d = _doc(ctx)
     if M.huella(d.image) != datos.get("huella_base"):
+        # IC 1396 (14 nov 2026): Qwen comparó el gradiente de cinco capas seguidas y luego aplicó los cinco; cada comparación
+        # del mismo tipo sustituye los candidatos de la anterior y fallaron cuatro.
+        otra = datos.get("uid") and getattr(d, "uid", None) and datos.get("uid") != d.uid
+        if otra:
+            v = ctx.get_document(datos["uid"])
+            raise RuntimeError(f"El candidato '{id}' es de la última comparación, hecha sobre "
+                               f"'{_nombre(_base(v)) if v is not None else datos['uid']}', no sobre esta vista: cada "
+                               "comparación del mismo tipo sustituye a la anterior. Compara y aplica vista por vista "
+                               "(comparación → aplicarCandidato → siguiente vista).")
         raise RuntimeError("La vista ha cambiado desde la comparación (otra imagen o ya se aplicó algo): repite la comparación.")
     d.apply_edit(a.astype(np.float32, copy=False), metadata={}, step_name=f"SetiAstroPilot: {datos.get('nombre', id)}")
     m = M.cielo(_p(d.image))
@@ -1846,6 +1917,7 @@ LISTA = {
     "contrasteCandidatos": contrasteCandidatos,
     "compararFinales": compararFinales,
     "saturacionCandidatos": saturacionCandidatos,
+    "fondoCandidatos": fondoCandidatos,
     "nitidezCandidatos": nitidezCandidatos,
     "estirarEstrellas": estirarEstrellas,
     "recombinarEstrellas": recombinarEstrellas,

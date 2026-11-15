@@ -72,6 +72,9 @@ function bsCopy(view, id) {
 function bsMascara(view) {
   var id = "bsMascaraLum";
   var old = ImageWindow.windowById(id); if (!old.isNull) old.forceClose();
+  // Si la anterior sigue abierta (puesta como máscara de otra vista no se cierra), PixelMath crearía «bsMascaraLum1» y
+  // windowById(id) devolvería la vieja: se busca un id libre.
+  for (var n = 1; !ImageWindow.windowById(id).isNull; ++n) id = "bsMascaraLum" + n;
   var P = new PixelMath;
   P.expression = "CIEL($T)"; P.useSingleExpression = true; P.createNewImage = true; P.newImageId = id;
   P.newImageColorSpace = (PixelMath.Gray !== undefined) ? PixelMath.Gray : PixelMath.prototype.Gray;
@@ -80,9 +83,15 @@ function bsMascara(view) {
   if (!P.executeOn(view)) throw new Error("Máscara de luminancia falló");
   var mw = ImageWindow.windowById(id), mi = mw.mainView.image;
   var med = mi.median(), sig = 1.4826 * mi.MAD(), a = Math.max(0, med - 1.5 * sig), b = Math.max(a + 1e-3, mi.maximum());
+  // En dos pasos: con «pow(max(0, min(1, …)), 0.5)» PixelMath de 1.9.6 devuelve false (probado el 15 nov 2026: la nitidez
+  // fallaba siempre en Lite). Primero el reescalado lineal (truncate lo deja en 0–1) y después la raíz.
   var Q = new PixelMath;
-  Q.expression = "pow(max(0, min(1, ($T - " + a + ") / " + (b - a) + ")), 0.5)"; Q.useSingleExpression = true; Q.createNewImage = false; Q.truncate = true;
+  Q.expression = "($T - " + a.toFixed(6) + ") / " + (b - a).toFixed(6); Q.useSingleExpression = true; Q.createNewImage = false;
+  Q.truncate = true; Q.truncateLower = 0; Q.truncateUpper = 1;
   if (!Q.executeOn(mw.mainView)) throw new Error("Máscara de luminancia (reescalado) falló");
+  var Q2 = new PixelMath;
+  Q2.expression = "sqrt($T)"; Q2.useSingleExpression = true; Q2.createNewImage = false; Q2.truncate = true;
+  if (!Q2.executeOn(mw.mainView)) throw new Error("Máscara de luminancia (raíz) falló");
   return mw;
 }
 
@@ -94,6 +103,54 @@ function bsSaturate(view, mid, mascara) {
   var ok = C.executeOn(view);
   if (mascara) view.window.removeMask();
   if (!ok) throw new Error("Curva de saturación falló (" + mid + ")");
+}
+
+// Paso 5 no lineal, nivel del fondo (15 nov 2026, IC 1396 con Qwen): el estirado deja el cielo en ~0,10 y los finales
+// salían grises y planos (0,12) frente a la versión de Rafael (~0,02, con el 3 % del polvo más oscuro en negro). Punto
+// negro por canal hasta cielo = t (y neutro), en copias; recomienda el más oscuro que no lleva a 0 más de o.cerosMax %.
+//   fondoCandidatos("Final", { cielos: [0.08, 0.05, 0.03], cerosMax: 2 })
+function fondoCandidatos(viewId, o) {
+  o = o || {};
+  if (viewId && typeof viewId === "object") viewId = viewId.id || viewId.vista;
+  var w0 = ImageWindow.windowById(viewId);
+  if (w0.isNull) throw new Error("No existe la vista " + viewId);
+  var v0 = w0.mainView;
+  if (esMedian(v0) < 0.05) throw new Error("La imagen parece lineal: el nivel del fondo se ajusta después de estirar (y de recombinar).");
+  var sd = esSkyDominance(v0), c0 = esCheck(v0);
+  var s0 = sd.canales && sd.canales.length ? sd.canales : [c0.cielo];
+  var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 2, cielos = (o.cielos || [0.08, 0.05, 0.03]).slice().sort(function (a, b) { return b - a; });
+  var cands = [];
+  cielos.forEach(function (t) {
+    if (Math.min.apply(null, s0) <= t) return;
+    var bp = s0.map(function (s) { return (s - t) / (1 - t); });
+    var w = esCopy(viewId, viewId + "_fondo" + String(t).replace(".", ""));
+    var P = new PixelMath;
+    var e = bp.map(function (b) { return "($T - " + b.toFixed(6) + ") / " + (1 - b).toFixed(6); });
+    P.useSingleExpression = (e.length === 1); P.expression = e[0];
+    if (e.length === 3) { P.expression1 = e[1]; P.expression2 = e[2]; }
+    P.createNewImage = false; P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
+    if (!P.executeOn(w.mainView)) { w.forceClose(); throw new Error("PixelMath del punto negro falló"); }
+    var c = esCheck(w.mainView), s1 = esSkyDominance(w.mainView);
+    var cielo = s1.canales && s1.canales.length ? (s1.canales[0] + s1.canales[1] + s1.canales[2]) / 3 : c.cielo;
+    var nuevos = c.cero_pct - c0.cero_pct;
+    cands.push({ metodo: "cielo a " + t, vista: w.mainView.id, cielo: +cielo.toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
+                 ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
+                 cumple: nuevos <= cerosMax, previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
+  });
+  if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,
+                              motivo: "El cielo ya está en " + (s0.reduce(function (a, b) { return a + b; }, 0) / s0.length).toFixed(3) + ", igual o por debajo de los niveles pedidos." };
+  var ok = cands.filter(function (c) { return c.cumple; });
+  var mejor = ok.length ? ok.reduce(function (a, c) { return c.cielo < a.cielo ? c : a; }) : null;
+  cands.forEach(function (c) { if (c !== mejor && o.cerrar !== false) { var ww = ImageWindow.windowById(c.vista); if (!ww.isNull) ww.forceClose(); } });
+  return {
+    vista: mejor ? mejor.vista : viewId, original: viewId, antes: { cielo_rgb: s0.map(function (x) { return +x.toFixed(4); }), ceros_pct: +c0.cero_pct.toFixed(3) },
+    comparados: cands.map(function (c) { var x = {}; for (var k in c) x[k] = c[k]; x.elegido = c === mejor; return x; }),
+    recomendado: mejor ? mejor.metodo : null,
+    motivo: mejor ? mejor.metodo + ": el cielo más oscuro (" + mejor.cielo + ") y neutro sin llevar a 0 más de un " + cerosMax +
+                    " % de los píxeles. Un fondo demasiado negro se come la nebulosa débil: mira la previa." :
+                    "Todos llevan a 0 demasiados píxeles: deja el fondo como está o pide un nivel más alto (cielos).",
+    siguiente: "Sigue con " + (mejor ? mejor.vista : viewId) + " (exportarFinal)."
+  };
 }
 
 function saturarAlFallo(viewId, o) {

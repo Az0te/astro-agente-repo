@@ -385,6 +385,7 @@ var LISTA = {
    comprimirNucleo:      function (a) { return comprimirNucleo(a.vista, a.opciones || {}); },
    medirMeseta:          function (a) { return medirMeseta(a.vista, a.opciones || {}); },
    saturarAlFallo:       function (a) { return saturarAlFallo(a.vista, a.opciones || {}); },
+ fondoCandidatos:      function (a) { return fondoCandidatos(a.vista, a.opciones || {}); },
    colorCandidatos:      function (a) { return colorCandidatos(a.vista, a.opciones || {}); },
    saturarTono:          function (a) { return saturarTono(a.vista, a.opciones || {}); },
    derivaColor:          function (a) { return derivaColor(a.vista, a.opciones || {}); },

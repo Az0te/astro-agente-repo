@@ -878,8 +878,8 @@
    "nivel": "lectura",
    "timeout_s": 600,
    "paso": "no-lineal/02-lrgb-paleta.md",
-   "descripcion": "Paso 2 no lineal (banda estrecha): compone paletas desde capas ya estiradas y las compara. Sin ficheros, de la imagen dual band cargada (Hα = R, OIII = media de G y B); con ha/oiii/sii, de esos ficheros. Candidatas: HOO, HOO suave (G = 0,6·Hα + 0,4·OIII), HOO con OIII realzado, HOO dinámica y SHO si hay SII. Mide la separación de tonos en el objeto, el verde residual, la saturación y que el cielo quede neutro, y recomienda (la elección es estética: mirar la galería). La imagen NO cambia: aplicarCandidato(id).",
-   "resumen": "Paso 2 NL: paletas HOO/SHO desde capas estiradas (o la dual band cargada); tonos, verde, cielo; no cambia la imagen (aplicarCandidato).",
+   "descripcion": "Paso 2 no lineal (banda estrecha): compone paletas desde capas ya estiradas y las compara. Sin ficheros, de la imagen dual band cargada (Hα = R, OIII = media de G y B); con ha/oiii/sii, de esos ficheros. Candidatas: HOO, HOO suave (G = 0,6·Hα + 0,4·OIII), HOO con OIII realzado, HOO dinámica, SHO si hay SII y Natural (las cuatro rayas: Hα y SII en rojo, OIII y Hβ en turquesa; con varios dual band pasa TODAS las rayas). Mide la separación de tonos en el objeto, el verde residual, la saturación y que el cielo quede neutro, y recomienda (la elección es estética: mirar la galería). La imagen NO cambia: aplicarCandidato(id).",
+   "resumen": "Paso 2 NL: paletas HOO/SHO/Natural (con Hβ) desde capas estiradas (o la dual band cargada); tonos, verde, cielo; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
     "properties": {
@@ -893,7 +893,11 @@
      },
      "sii": {
       "type": "string",
-      "description": "Fichero de la capa SII estirada (para SHO)."
+      "description": "Fichero de la capa SII estirada (para SHO y Natural)."
+     },
+     "hb": {
+      "type": "string",
+      "description": "Fichero de la capa Hβ estirada (para Natural; sale del dual band SII/Hβ)."
      },
      "paletas": {
       "type": "array",
@@ -904,7 +908,8 @@
         "HOO_suave",
         "HOO_realzado",
         "HOO_dinamica",
-        "SHO"
+        "SHO",
+        "Natural"
        ]
       },
       "description": "Paletas a comparar (por defecto todas las posibles)."
@@ -1070,6 +1075,27 @@
      "halos": {
       "type": "number",
       "description": "Ajuste de halos −0,5–0,5 (por defecto 0)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "fondoCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "Paso 5 no lineal (fondo; después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,05 y 0,03, neutro. Mide píxeles nuevos a 0, cielo por canal y ruido, y recomienda el más oscuro que no lleva a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro). Un cielo en 0,10–0,13 deja la imagen gris y plana. La imagen NO cambia (aplicarCandidato).",
+   "resumen": "Paso 5 NL: fondo más oscuro y neutro (punto negro a 0,08/0,05/0,03); no cambia la imagen.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "cielos": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Niveles de cielo a probar (por defecto [0.08, 0.05, 0.03])."
      }
     }
    }
@@ -1316,8 +1342,8 @@
    "nivel": "disco",
    "timeout_s": 300,
    "paso": "lineal/07-extraccion-canales.md",
-   "descripcion": "Paso 7 lineal: separa un master OSC con filtro dual band (Hα + OIII) en dos capas mono lineales: Hα = rojo, OIII = media de verde y azul. Guarda <nombre>_Ha.fit y <nombre>_OIII.fit y da su señal en ruidos. Va antes del gradiente y del color. Con fichero, al terminar vuelve a dejar cargada la imagen que había (imagen_cargada dice cuál): para trabajar una capa, ábrela con abrirImagen.",
-   "resumen": "Paso 7: separa el dual band en capas Hα y OIII (FITS mono, lineales).",
+   "descripcion": "Paso 7 lineal: separa un master OSC con filtro dual band en dos capas mono lineales (HaO3 → Ha y OIII; S2Hb → SII y Hb; S2O3 → SII y OIII). Con el filtro reconocido (nombre, FILTER o 'filtro'), por mínimos cuadrados con la respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract); si no, Hα = rojo y OIII = media de verde y azul. Guarda <nombre>_<raya>.fit y da su señal en ruidos. Va antes del gradiente y del color. Usa TODOS los masters: las capas de la misma raya se juntan con unirCapas. Con fichero, al terminar vuelve a dejar cargada la imagen que había (imagen_cargada dice cuál): para trabajar una capa, ábrela con abrirImagen.",
+   "resumen": "Paso 7: separa cada dual band en sus dos rayas (FITS mono, lineales).",
    "params": {
     "type": "object",
     "properties": {
@@ -1328,8 +1354,44 @@
      "carpeta": {
       "type": "string",
       "description": "Carpeta de salida."
+     },
+     "filtro": {
+      "type": "string",
+      "description": "Filtro si no se deduce del nombre ni de FILTER: 'HaO3', 'S2Hb' o 'S2O3'."
      }
     }
+   }
+  },
+  {
+   "nombre": "unirCapas",
+   "fichero": "multicapa.py",
+   "nivel": "disco",
+   "timeout_s": 300,
+   "paso": "lineal/07-extraccion-canales.md",
+   "descripcion": "Paso 7 lineal: junta capas mono lineales y alineadas de la MISMA raya que salen de masters distintos (OIII del HaO3 y del S2O3; SII del S2Hb y del S2O3). Cada una se lleva a la escala y nivel de la de mejor señal/ruido y se promedian con pesos 1/σ² del ruido. Guarda un FITS nuevo y devuelve pesos y cuánto baja el ruido. Más señal = textura más suave. La imagen cargada no cambia.",
+   "resumen": "Paso 7: une capas de la misma raya de varios dual band (pesos 1/σ²).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ficheros": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Dos o más FITS mono de la misma raya (de desmezclarDualBand)."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre del fichero nuevo, sin extensión (por defecto <referencia>_unida)."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de salida (por defecto la de la capa de referencia)."
+     }
+    },
+    "required": [
+     "ficheros"
+    ]
    }
   },
   {

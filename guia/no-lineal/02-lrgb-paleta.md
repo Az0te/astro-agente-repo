@@ -39,6 +39,9 @@
 | Foraxx Classic (con SII real) | R = o·S + ~o·H; G = ho·H + ~ho·O; B = O |
 | Foraxx HOS sin SII (subtle) | R = H; G = 0,88·(ho·H + ~ho·O) + 0,12·O; B = o·S′ + ~o·O, con S′ = 0,78·O + 0,22·(ho·H + ~ho·max(0, H − 0,22·O)) en Soft |
 | HOO con límite al OIII (NOVA) | `O = min(OIII, 0,85·Hα)`, R = Hα, G = 0,15·Hα + 0,90·O, B = O |
+| Natural (cuatro rayas) | R = 0,85·Hα + 0,15·SII; G = 0,6·OIII + 0,25·Hβ + 0,15·Hα; B = 0,7·OIII + 0,3·Hβ. Sin Hβ: G = 0,85·OIII + 0,15·Hα, B = OIII; sin SII, R = Hα |
+
+**Usar todas las rayas.** Con varios masters de banda estrecha o dual band (p. ej. HaO3 + SII/Hβ + SII/OIII), **todas** entran en la paleta: cada dual band se desmezcla (Paso 7 lineal), las capas de la misma raya se unen pesando por ruido (OIII de HaO3 + SO3, SII de SHb + SO3) y el Hβ del SII/Hβ entra en la Natural, que es la que más señal aprovecha cuando el Hα domina: el Hβ es el mismo gas que el Hα, ~3 veces más débil, y da señal limpia al turquesa donde el OIII es flojo (IC 1396, 26 oct 2026: la mejor versión hasta hoy, 20,7 h). Dejar un master sin usar es tirar señal: decirlo si se hace.
 
 con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 
@@ -72,7 +75,7 @@ con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 
 | Objeto | Recomendación |
 |---|---|
-| Región HII / nebulosa difusa | HOO (simple, rojo/cian) o Foraxx (transiciones oro → azul más suaves) |
+| Región HII / nebulosa difusa | HOO (simple, rojo/cian) o Foraxx (transiciones oro → azul más suaves); con Hβ (dual band SII/Hβ) o varias rayas, la Natural entre las candidatas |
 | Con SII real | SHO/Hubble para separar zonas de ionización |
 | Resto de supernova | SHO o Foraxx (HOO con dual band); filamentos finos; validar el OIII débil antes de realzarlo |
 | Planetaria | Colores próximos a los reales (OIII azul-verde, Hα/NII rojo), HOO o RGB + banda estrecha; núcleo con HDR o tomas cortas |

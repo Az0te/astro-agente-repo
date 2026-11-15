@@ -707,11 +707,15 @@ function plPromptSistema(aj) {
    "líneas que empiecen por «Paso N: ...». El chat las muestra como enlaces que el usuario pulsa para que lo hagas.\n\n" +
    "Orden de los pasos de la guía (no saltes ni cambies el orden al recomendar el siguiente; si uno no aplica, dilo y pasa al siguiente):\n" +
    plOrdenPasos() + "\n" +
-   "Con varios masters (RGB + banda estrecha o dual band), el número de paso no es el orden: alinear (5) → desmezclar (7) → " +
+   "Con varios masters (RGB + banda estrecha o dual band) USA TODOS; el número de paso no es el orden: alinear (5) → desmezclar " +
+   "CADA dual band (7) → combinarMismoCanal de las capas de la misma raya (OIII de dos filtros, SII de dos filtros) → " +
    "gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB SOLA (12) → combinar (10) → " +
    "deconvolución completa (13) → separar estrellas (15) → ruido de la starless (15) → estirar. Combinar antes del color " +
    "sesga los factores y deja el cielo teñido. El cielo se neutraliza sobre la starless lineal (las funciones de estirado " +
-   "lo hacen solas).\n\n" +
+   "lo hacen solas). PERO en una nebulosa de emisión con mucha más banda estrecha que RGB (horas de dual band frente a minutos " +
+   "de RGB) NO inyectes en el RGB: ruta de PALETA (combinarMasters con tipo de paleta no inyecta). Con paleta (componerPaleta), las capas siguen separadas hasta estirarlas; pasa todas las rayas (S, H, O y " +
+   "B = Hβ: la NATURAL usa las cuatro) y las estrellas salen de la RGB. Antes de exportar, fondoCandidatos (cielo final oscuro " +
+   "y neutro, 0,03–0,08: con 0,10–0,13 la imagen queda gris y plana).\n\n" +
    "Funciones disponibles (nombre {parámetros, * = obligatorio} [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
    "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
 }

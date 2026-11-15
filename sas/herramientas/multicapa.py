@@ -775,10 +775,10 @@ def _tonos(p, m):
     return float(np.degrees(np.sqrt(-2 * np.log(max(rb, 1e-9)))))
 
 
-def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominante_max=5.0, verde_max=5.0):
-    """NL2: compone paletas de banda estrecha con capas YA ESTIRADAS (vistas mono alineadas: ha, oiii y opcional sii)
-    y las compara. La paleta se pone en 'vista' (RGB del mismo tamaño) o, si no se da o es mono, en una vista RGB nueva
-    «paleta». La vista no cambia hasta aplicarCandidato(id)."""
+def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominante_max=5.0, verde_max=5.0, hb=None):
+    """NL2: compone paletas de banda estrecha con capas YA ESTIRADAS (vistas mono alineadas: ha, oiii y opcionales sii
+    y hb) y las compara. La paleta se pone en 'vista' (RGB del mismo tamaño) o, si no se da o es mono, en una vista RGB
+    nueva «paleta». La vista no cambia hasta aplicarCandidato(id)."""
     dh = H._doc(ctx, ha)
     Ha = H._p(dh.image)
     Ha = Ha[0] if Ha.shape[0] == 1 else Ha.mean(axis=0)
@@ -811,6 +811,16 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
         todas["SHO"] = ("SHO", lambda: (Sa, Ha, Oa))
         todas["Foraxx"] = ("Foraxx (R = SII+Hα, G = Hα·OIII, B = OIII)",
                            lambda: (np.clip(0.5 * (Sa + Ha), 0, 1), np.clip(np.sqrt(np.maximum(Ha * Oa, 0)), 0, 1), Oa))
+    # Natural (IC 1396, 26 oct 2026, la mejor versión de Rafael): las cuatro rayas con su color aproximado. Hα y SII rojos,
+    # OIII y Hβ turquesa (el Hβ da señal limpia donde el OIII es flojo). Sin Hβ, el OIII hace su papel; sin SII, el Hα.
+    Rn = (0.85 * Ha + 0.15 * Sa) if S is not None else Ha
+    Hbn = _igualar(_capa(ctx, hb, forma), Ha, cpx) if hb else None
+    if Hbn is not None:
+        todas["Natural"] = ("Natural (R = 0,85·Hα + 0,15·SII; G = 0,6·OIII + 0,25·Hβ + 0,15·Hα; B = 0,7·OIII + 0,3·Hβ)",
+                            lambda: (Rn, 0.6 * Oa + 0.25 * Hbn + 0.15 * Ha, 0.7 * Oa + 0.3 * Hbn))
+    else:
+        todas["Natural"] = ("Natural sin Hβ (R = 0,85·Hα + 0,15·SII; G = 0,85·OIII + 0,15·Hα; B = OIII)",
+                            lambda: (Rn, 0.85 * Oa + 0.15 * Ha, Oa))
     elegir = [k for k in (paletas or list(todas)) if k in todas]
     cel = z["medidas"]["_celdas"]
     mo = z["obj_px"] if z["obj_px"].any() else np.ones(forma, bool)
@@ -839,7 +849,16 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     def solo_verde(x):
         return x["no_cumple"] and all(f.startswith("verde residual") for f in x["no_cumple"])
     ok = [x for x in r["candidatos"] if not x["no_cumple"] or solo_verde(x)]
-    if r["candidatos"]:
+    # Con Hβ (las cuatro rayas), la Natural es la que usa toda la señal y la de la mejor versión de IC 1396 (Rafael, 14 nov
+    # 2026): se recomienda si cumple (o sólo falla por verde). Por separación de tonos ganaba siempre la SHO.
+    nat = [x for x in ok if x["metodo"].startswith("Natural (")]
+    if nat:
+        mejor = nat[0]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: usa las cuatro rayas (el Hβ refuerza el turquesa donde el OIII es flojo) con el "
+                       "cielo neutro; es la recomendada cuando hay Hβ" + (" — después quitarVerde (forzar: true)"
+                       if solo_verde(mejor) else "") + ". Las demás quedan en la galería: la elección es estética.")
+    elif r["candidatos"]:
         mejor = max(ok or r["candidatos"], key=lambda x: x["metricas"]["separacion_tonos_grados"] or 0)
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: la que más separa los tonos ({mejor['metricas']['separacion_tonos_grados']}°) "
@@ -850,7 +869,7 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     r["leyenda"] = ("separacion_tonos_grados: variedad de tonos en el objeto (más = más zonas distinguibles). "
                     "verde_residual_pct: verde por encima de rojo y azul en el objeto. dominante_cielo_pct: el cielo debe "
                     "quedar neutro. La vista NO ha cambiado: aplicarCandidato(id).")
-    aviso = _aviso_sin_usar([_fuente(ctx, ha), _fuente(ctx, oiii), _fuente(ctx, sii)])
+    aviso = _aviso_sin_usar([_fuente(ctx, ha), _fuente(ctx, oiii), _fuente(ctx, sii), _fuente(ctx, hb)])
     if aviso:
         r["aviso_masters"] = aviso + " (El RGB de banda ancha puede entrar después, para las estrellas.)"
     return H._galeria(r, H._p(d.image))
