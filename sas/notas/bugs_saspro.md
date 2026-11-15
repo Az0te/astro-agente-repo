@@ -91,7 +91,20 @@ omits `image_meta`. A `ctx.save_document(doc, path)` that behaves like "Save As"
 
 ---
 
-## 6. Otros detalles
+## 6. Los FITS que guarda SASpro salen volteados en Siril
+
+**ES.** Un FITS guardado con `ctx.save_image(..., original_format="fits")` escribe las filas de arriba abajo (orden de
+pantalla), mientras el estándar FITS (y Siril, PixInsight, astropy) empieza por la fila de abajo: IC 1396 guardado en
+SASpro se veía volteado en vertical en Siril (14 nov 2026). Con la astrometría dentro, el WCS deja de coincidir con la
+imagen. Comprobar si la versión de la GUI («Guardar como» FITS) hace lo mismo.
+
+**EN.** FITS files written by `ctx.save_image(..., original_format="fits")` store rows top-down (screen order); the FITS
+convention (Siril, PixInsight, astropy) is bottom-up, so the image opens vertically flipped elsewhere and an embedded WCS
+no longer matches. Not checked yet for GUI "Save As".
+
+---
+
+## 7. Otros detalles
 
 - `remove_green` con `preserve_lightness=True` sube R y B en vez de bajar G: en M31 el cielo pasó de G +4 % a G −3,5 %
   (magenta). Quizá es lo esperado al conservar la luminosidad, pero no es el SCNR clásico.
