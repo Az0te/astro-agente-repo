@@ -714,8 +714,9 @@ function plPromptSistema(aj) {
    "sesga los factores y deja el cielo teñido. El cielo se neutraliza sobre la starless lineal (las funciones de estirado " +
    "lo hacen solas). PERO en una nebulosa de emisión con mucha más banda estrecha que RGB (horas de dual band frente a minutos " +
    "de RGB) NO inyectes en el RGB: ruta de PALETA (combinarMasters con tipo de paleta no inyecta). Con paleta (componerPaleta), las capas siguen separadas hasta estirarlas; pasa todas las rayas (S, H, O y " +
-   "B = Hβ: la NATURAL usa las cuatro) y las estrellas salen de la RGB. Antes de exportar, fondoCandidatos (cielo final oscuro " +
-   "y neutro, 0,03–0,08: con 0,10–0,13 la imagen queda gris y plana).\n\n" +
+   "B = Hβ: la NATURAL usa las cuatro) y las estrellas salen de la RGB. fondoCandidatos (cielo oscuro y neutro, 0,05–0,08: con " +
+   "0,10–0,13 la imagen queda gris y plana) va justo después de componer la paleta, ANTES de saturar: con el cielo teñido la " +
+   "saturación se bloquea por la dominante.\n\n" +
    "Funciones disponibles (nombre {parámetros, * = obligatorio} [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
    "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
 }

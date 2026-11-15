@@ -822,6 +822,10 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
         todas["Natural"] = ("Natural sin Hβ (R = 0,85·Hα + 0,15·SII; G = 0,85·OIII + 0,15·Hα; B = OIII)",
                             lambda: (Rn, 0.85 * Oa + 0.15 * Ha, Oa))
     elegir = [k for k in (paletas or list(todas)) if k in todas]
+    # Qwen pasa a menudo la lista entera de paletas que conoce: la Natural, con Hβ, entra siempre (IC 1396, 15 nov 2026:
+    # el enum del manifiesto no la tenía y la lista de Qwen la dejaba fuera).
+    if hb and "Natural" in todas and "Natural" not in elegir:
+        elegir.append("Natural")
     cel = z["medidas"]["_celdas"]
     mo = z["obj_px"] if z["obj_px"].any() else np.ones(forma, bool)
 

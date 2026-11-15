@@ -166,7 +166,8 @@ def prompt_sistema(funcs, internet, idioma="es"):
         "→ gradienteCandidatos → calibrarColor → separarEstrellas → ruidoCandidatos (de la starless, en lineal) →",
         "estirarCandidatos (de la starless; neutraliza el cielo) → (galaxias) nucleoCandidatos → contrasteCandidatos →",
         "saturacionCandidatos → estirarEstrellas (de la vista de estrellas) → recombinarEstrellas → quitarVerde si queda verde",
-        "→ fondoCandidatos (cielo final oscuro y neutro, 0,03–0,08) → exportarFinal. Con VARIOS masters (RGB + dual band o banda estrecha), USA TODOS: alinearMasters →",
+        "→ exportarFinal. fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) va justo después de montar la paleta o de",
+        "estirar la starless, ANTES de contraste y saturación: con el cielo teñido la saturación se bloquea por la dominante. Con VARIOS masters (RGB + dual band o banda estrecha), USA TODOS: alinearMasters →",
         "desmezclarDualBand de cada dual band → unirCapas de las capas de la misma raya → gradienteCandidatos de CADA capa",
         "(Hα, OIII, SII, Hβ) y de la RGB → resolverAstrometria y calibrarColor de la RGB SOLA → combinarCandidatos (después del",
         "color: antes tiñe el cielo) → separarEstrellas de la combinada → ruidoCandidatos de la starless → estirar. PERO en una",
@@ -249,11 +250,23 @@ def _carpeta_export(txt):
 
 
 LIMITE_TOKENS_LOCAL = 24000
+NUM_CTX = 32768
+RESERVA_RESPUESTA = 6000                                # tokens para lo que escribe el modelo (razonamiento incluido)
 
 
-def _compactar(mensajes, guardar_ultimos=2):
-    """Historial del modelo local por debajo de ~24k tokens: los resultados de herramientas viejos se cambian por su
-    resumen; si aún no cabe, se acortan también los textos viejos del asistente."""
+def limite_historial(herramientas):
+    """Tokens que caben de mensajes (sistema + historial): num_ctx menos la lista de herramientas, que también va en cada
+    petición, y menos la respuesta. 15 nov 2026 (IC 1396, Siril con qwen38-32k): con el límite fijo de 24k más ~8,4k de
+    herramientas se mandaban ~32k de 32.768; Ollama recortaba en silencio el principio (el prompt de sistema) y Qwen
+    encadenaba turnos mudos (25–31 empujones por pasada) y se saltaba reglas de la guía."""
+    t = len(json.dumps(herramientas, ensure_ascii=False)) / 3.5
+    return int(max(8000, min(LIMITE_TOKENS_LOCAL, NUM_CTX - t - RESERVA_RESPUESTA)))
+
+
+def _compactar(mensajes, guardar_ultimos=2, limite=LIMITE_TOKENS_LOCAL):
+    """Historial del modelo local por debajo de 'limite' tokens: los resultados de herramientas viejos se cambian por su
+    resumen; si aún no cabe, se acortan también los textos viejos del asistente y, en último caso, se quitan los turnos
+    más viejos (el prompt de sistema y la petición del usuario se quedan siempre)."""
     herramientas = [i for i, m in enumerate(mensajes) if m.get("role") == "tool"]
     for i in herramientas[:-guardar_ultimos]:
         if not mensajes[i].get("_corto"):
@@ -261,12 +274,18 @@ def _compactar(mensajes, guardar_ultimos=2):
             mensajes[i]["_corto"] = True
     def tokens():
         return sum(len(str(m.get("content", ""))) + len(json.dumps(m.get("tool_calls", ""))) for m in mensajes) / 3.5
-    if tokens() > LIMITE_TOKENS_LOCAL:
+    if tokens() > limite:
         for i in herramientas[:-1]:
             mensajes[i]["content"] = _resumir(mensajes[i]["content"], 150)
         for m in mensajes[1:-6]:
             if m.get("role") == "assistant" and len(m.get("content") or "") > 300:
                 m["content"] = m["content"][:300] + "…"
+    # Si aún no cabe, fuera los turnos más viejos (de dos en dos para no dejar un resultado sin su llamada).
+    primera = next((i for i, m in enumerate(mensajes) if m.get("role") == "user"), 1)
+    while tokens() > limite and len(mensajes) > primera + 8:
+        del mensajes[primera + 1:primera + 3]
+        while len(mensajes) > primera + 1 and mensajes[primera + 1].get("role") == "tool":
+            del mensajes[primera + 1]
     return int(tokens())
 
 
@@ -322,9 +341,10 @@ class MotorLocal:
             if cancelado():
                 emitir({"tipo": "aviso", "clave": "detenido"})
                 break
-            estimado = _compactar(self.mensajes)
+            herr = herramientas_ollama(self.funcs, internet)
+            estimado = _compactar(self.mensajes, limite=limite_historial(herr))
             cuerpo = {"model": self.modelo, "messages": [{k: v for k, v in m.items() if not k.startswith("_")}
-                                                        for m in self.mensajes], "tools": herramientas_ollama(self.funcs, internet),
+                                                        for m in self.mensajes], "tools": herr,
                       "stream": False, "options": {"num_ctx": 32768}}
             if sin_pensar:                       # sólo en la petición que sigue a un empujón
                 cuerpo["think"] = False

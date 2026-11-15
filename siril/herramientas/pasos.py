@@ -2413,7 +2413,7 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     return r
 
 
-def fondoCandidatos(siril, cielos=(0.08, 0.05, 0.03), ceros_max=2.0, tipo=None):
+def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None):
     """Paso 5 no lineal (fondo): punto negro por canal para dejar el cielo en varios niveles, neutro; mide píxeles
     nuevos a 0, cielo y ruido y recomienda el más oscuro que no recorta más del ceros_max %. La imagen no cambia.
     IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13 salían grises y planos frente a la versión de
@@ -2435,12 +2435,12 @@ def fondoCandidatos(siril, cielos=(0.08, 0.05, 0.03), ceros_max=2.0, tipo=None):
     n = 0
     for t in sorted(cielos or [], reverse=True):
         t = float(t)
-        if min(s0) <= t:
+        if float(np.mean(s0)) <= t:   # un canal ya por debajo no se toca (bp 0)
             continue
         n += 1
         t0 = time.perf_counter()
         try:
-            bp = np.array([(s - t) / (1 - t) for s in s0], dtype=np.float32).reshape(-1, 1, 1)
+            bp = np.array([max(0.0, (s - t) / (1 - t)) for s in s0], dtype=np.float32).reshape(-1, 1, 1)
             q = np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
             rgb = _cielo_por_canal(q, cel) if q.shape[0] == 3 else [float(np.median(q))]
             m = {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
@@ -2461,9 +2461,11 @@ def fondoCandidatos(siril, cielos=(0.08, 0.05, 0.03), ceros_max=2.0, tipo=None):
     if ok:
         mejor = min(ok, key=lambda x: x["metricas"]["cielo"])
         r["recomendado"] = mejor["id"]
-        r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) sin "
-                       f"recortar a 0 más del {ceros_max} % y neutro. Míralo en la galería: un fondo demasiado negro se come la "
-                       "nebulosa débil.")
+        # Qwen leyó «ceros_pct 0,9778» como un 97,78 % y aplicó el más claro (IC 1396, 15 nov 2026): se dice en palabras.
+        r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) y "
+                       f"neutro; lleva a 0 sólo un {mejor['metricas']['ceros_nuevos_pct']} % más de los píxeles (ya en "
+                       f"porcentaje: menos de {max(1, int(np.ceil(mejor['metricas']['ceros_nuevos_pct'])))} de cada 100; límite "
+                       f"{ceros_max} %). APLÍCALO salvo que la previa muestre la nebulosa débil comida.")
     else:
         r["recomendado"] = None
         r["motivo"] = ("El cielo ya está igual o por debajo de los niveles pedidos." if not r["candidatos"]
@@ -2788,6 +2790,16 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
         else:
             raise RuntimeError("La capa de estrellas es en color y la imagen cargada en blanco y negro.")
     La, Lb = _lum(a), _lum(b)
+    # Una capa de estrellas tiene el fondo casi a 0. 15 nov 2026 (IC 1396): Qwen guardó la imagen cargada tras
+    # separarEstrellas (la STARLESS del RGB) como «estrellas_RGB.fit» y la sumó a la paleta: aporte 36 %, fondo de 0,057 a
+    # 0,141 y la imagen gris verdosa. Se para y dice dónde está la capa de estrellas.
+    muestra_b = Lb.ravel()[::7]
+    fondo_b = float(np.percentile(muestra_b, 20))
+    if fondo_b > max(1e-4, 0.05 * float(np.percentile(muestra_b, 99.9))):
+        raise RuntimeError(
+            f"'{ruta.name}' no parece una capa de estrellas: su fondo (p20 {_r(fondo_b, 4)}) no está cerca de 0, como el de una "
+            "imagen con nebulosa o una starless. La capa de estrellas es el fichero starmask_*.fit que devuelve separarEstrellas "
+            "(campo «estrellas» de su resultado); tras separarEstrellas la imagen CARGADA es la starless.")
     star_lineal = float(np.median(Lb)) < 0.05 and float(np.percentile(Lb.ravel()[::7], 99)) < 0.05
     starless_estirada = not _lineal(a)
     r = {"metodo": metodo, "factor": k, "estrellas": str(ruta),
@@ -2869,6 +2881,15 @@ def exportarFinal(siril, carpeta, nombre=None, calidad=95):
         r["aviso"] = "La imagen parece lineal: en TIFF/JPG se verá casi negra. ¿Falta estirar?"
     q = max(1, min(100, int(calidad)))
     t0 = time.perf_counter()
+    # 15 nov 2026 (IC 1396): tras recombinarEstrellas con estirar_estrellas, savetif/savejpg escribieron una imagen negra
+    # aunque los píxeles estaban bien (exportando de nuevo tras cargar el FITS guardado salía bien). Se guarda y se recarga
+    # antes de exportar para que Siril parta de un estado limpio.
+    tmp = H.DATOS / "trabajo" / "exportar_tmp"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    siril.cmd("save", H._arg_cmd(tmp))
+    hecho_tmp = next((Path(str(tmp) + e) for e in (".fit", ".fits", ".fts") if Path(str(tmp) + e).exists()), None)
+    if hecho_tmp is not None:
+        siril.cmd("load", H._arg_cmd(hecho_tmp))
     siril.cmd("savetif", H._arg_cmd(raiz))
     siril.cmd("savejpg", H._arg_cmd(raiz), str(q))
     H._pila_sigue(siril)

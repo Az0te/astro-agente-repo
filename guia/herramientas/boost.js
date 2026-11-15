@@ -118,7 +118,7 @@ function fondoCandidatos(viewId, o) {
   if (esMedian(v0) < 0.05) throw new Error("La imagen parece lineal: el nivel del fondo se ajusta después de estirar (y de recombinar).");
   var sd = esSkyDominance(v0), c0 = esCheck(v0);
   var s0 = sd.canales && sd.canales.length ? sd.canales : [c0.cielo];
-  var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 2, cielos = (o.cielos || [0.08, 0.05, 0.03]).slice().sort(function (a, b) { return b - a; });
+  var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 2, cielos = (o.cielos || [0.08, 0.065, 0.05]).slice().sort(function (a, b) { return b - a; });
   var cands = [];
   cielos.forEach(function (t) {
     if (Math.min.apply(null, s0) <= t) return;

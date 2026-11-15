@@ -1358,7 +1358,7 @@ def _punto_negro(p, bp):
     return np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
 
 
-def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.05, 0.03), ceros_max=2.0):
+def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     """NL5 fondo: punto negro por canal para dejar el cielo en varios niveles (más oscuro = más profundidad y
     contraste) y neutro; mide píxeles nuevos a 0, cielo y ruido, y recomienda el más oscuro que no recorta más del
     ceros_max % de los píxeles. La vista no cambia. IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13
@@ -1381,9 +1381,11 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.05, 0.03), ceros_max=2.0):
 
     lista = []
     for t in sorted(cielos or [], reverse=True):
-        if min(s0) <= t:
+        # Basta con que el cielo medio esté por encima: un canal ya por debajo no se toca (bp 0). Antes se saltaba el
+        # nivel si cualquier canal estaba por debajo y con [0,094, 0,075, 0,06] sólo quedaban 0,05 y 0,03 (IC 1396).
+        if float(np.mean(s0)) <= t:
             continue
-        bp = [(s - t) / (1 - t) for s in s0]
+        bp = [max(0.0, (s - t) / (1 - t)) for s in s0]
         lista.append((f"cielo a {t:g}", "punto_negro", {"bp": bp}, (lambda q, bp: _punto_negro(q, bp))))
     if not lista:
         return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
@@ -1402,7 +1404,8 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.05, 0.03), ceros_max=2.0):
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) "
                        f"y neutro (mismo nivel en R, G y B); lleva a 0 sólo un {mejor['metricas']['ceros_nuevos_pct']} % más de "
-                       f"los píxeles (límite {ceros_max} %, la referencia de IC 1396 tiene un 3 % en negro): APLÍCALO salvo que "
+                       f"los píxeles (ya en porcentaje: menos de {max(1, int(np.ceil(mejor['metricas']['ceros_nuevos_pct'])))} de "
+                       f"cada 100; límite {ceros_max} %, la referencia de IC 1396 tiene un 3 % en negro): APLÍCALO salvo que "
                        "la previa muestre la nebulosa débil comida.")
     else:
         r["motivo"] = "Todos recortan demasiado: deja el fondo como está o pide un nivel más alto."
