@@ -2749,6 +2749,13 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
                     "saturación; más = más zonas distinguibles). verde_residual_pct: verde por encima de rojo y azul en el objeto. "
                     "dominante_cielo_pct: el cielo debe quedar neutro. La imagen NO ha cambiado: aplicarCandidato(id).")
     _asegurar_restaurado(siril, crudo, huella, r)
+    try:
+        import multicapa
+        aviso = multicapa.aviso_sin_usar([ha or info.get("fichero"), oiii, sii, hb])
+        if aviso:
+            r["aviso_masters"] = aviso + " (El RGB de banda ancha puede entrar después, para las estrellas.)"
+    except Exception:
+        pass
     _galeria(r, info, p, None)
     return r
 

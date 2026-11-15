@@ -145,6 +145,7 @@ def alinearMasters(siril, ficheros, carpeta=None, referencia=1):
     info = H._info(siril)
     if (info["ancho"], info["alto"]) != (x1 - x0, y1 - y0):
         raise RuntimeError(f"El recorte común no se aplicó ({info['ancho']}×{info['alto']} en vez de {x1 - x0}×{y1 - y0}).")
+    _anotar_alineados(salidas)
     return {"alineados": salidas, "referencia": str(fs[int(referencia) - 1]), "transformaciones": tr,
             "recorte_comun": {"rect_en_el_alineado": [x0, y0, x1, y1], "quita_px": {"izquierda": x0, "arriba": y0,
                               "derecha": info0["ancho"] - x1, "abajo": info0["alto"] - y1}},
@@ -235,6 +236,7 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=No
         senal = float(np.percentile(capa[::3, ::3], 99.5)) - c["cielo"]
         out[etiqueta] = {"fichero": str(ruta), "cielo": c["cielo"], "ruido": _r(ruido, 6),
                          "senal_p995_en_ruidos": _r(senal / max(ruido, 1e-9), 1)}
+        _anotar_origen(ruta, [fichero or info.get("fichero")])
     cargada = H._info(siril).get("fichero")
     if previa and Path(previa).is_file():
         siril.cmd("load", H._arg_cmd(Path(previa)))
@@ -247,6 +249,87 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=No
                     "lineal (gradiente, ruido suave) abriéndola con abrirImagen. Con varios dual band, las capas de la misma "
                     "raya se juntan con unirCapas. Para combinar con el RGB: combinarCandidatos(ha, oiii) con el RGB lineal "
                     "cargado y ya calibrado de color; para una paleta, paletasCandidatos con todas las rayas."}
+
+
+# --- procedencia: qué masters alineados acaban en cada capa (igual que SetiAstroPilot) ---------------------
+# IC 1396 (14 nov 2026): las versiones de Siril y SASpro usaron sólo el RGB y el HaO3; el SHb y el SO3 quedaron fuera
+# sin que nada avisara. alinearMasters guarda qué alineó; desmezclar y unirCapas, de qué ficheros sale cada capa; y
+# combinar, combinarRGB y paletas avisan del master alineado que no entra.
+
+def _estado_ruta():
+    return H.DATOS / "trabajo" / "procedencia.json"
+
+
+def _estado():
+    import json
+    try:
+        return json.loads(_estado_ruta().read_text(encoding="utf-8"))
+    except Exception:
+        return {"alineados": [], "origen": {}}
+
+
+def _guardar_estado(e):
+    import json
+    r = _estado_ruta()
+    r.parent.mkdir(parents=True, exist_ok=True)
+    r.write_text(json.dumps(e, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _raiz(nombre):
+    s = Path(str(nombre)).name
+    for ext in (".xisf", ".fits", ".fit", ".fts", ".tif", ".tiff"):
+        if s.lower().endswith(ext):
+            s = s[: -len(ext)]
+    return s.lower()
+
+
+def _anotar_alineados(ficheros):
+    try:
+        e = _estado()
+        e["alineados"] = [_raiz(f) for f in ficheros]
+        _guardar_estado(e)
+    except Exception:
+        pass
+
+
+def _anotar_origen(fichero, fuentes):
+    try:
+        e = _estado()
+        e.setdefault("origen", {})[_raiz(fichero)] = [_raiz(f) for f in fuentes if f]
+        _guardar_estado(e)
+    except Exception:
+        pass
+
+
+def _raices(nombre, e, prof=0):
+    r = _raiz(nombre)
+    fuentes = e.get("origen", {}).get(r)
+    if not fuentes or prof > 8:
+        return {r}
+    out = {r}
+    for f in fuentes:
+        out |= _raices(f, e, prof + 1)
+    return out
+
+
+def aviso_sin_usar(usadas):
+    """Aviso si algún master de la última alineación no entra (directa o indirectamente) en los ficheros usados."""
+    try:
+        e = _estado()
+        if not e.get("alineados"):
+            return None
+        raices = set()
+        for v in usadas:
+            if v:
+                raices |= _raices(v, e)
+        faltan = [a for a in e["alineados"] if not any(a in r for r in raices)]
+    except Exception:
+        return None
+    if not faltan:
+        return None
+    return ("Masters alineados que NO entran en esta combinación: " + ", ".join(faltan) + ". Si llevan señal de estas "
+            "rayas, sepáralos (desmezclarDualBand) y júntalos con la capa de la misma raya (unirCapas): más señal, "
+            "textura más suave.")
 
 
 def _ruido_fino(x):
@@ -328,6 +411,7 @@ def unirCapas(siril, ficheros, nombre=None, carpeta=None):
         cab = "SIMPLE  =                    T\nBITPIX  =                  -32\nNAXIS   =                    2\nEND"
     siril.save_image_file(out.astype(np.float32), cab, str(ruta))
     H.GUARDADOS.add(H._clave(ruta))
+    _anotar_origen(ruta, fs)
     return {"fichero": str(ruta), "referencia": str(fs[iref]), "capas": info_c, "ruido_baja_pct": _r(baja, 1),
             "nota": "Capa unida (lineal). Sigue con su gradiente (abrirImagen + gradienteCandidatos) como cualquier capa; "
                     "la imagen cargada no ha cambiado."}
@@ -520,6 +604,9 @@ def combinarCandidatos(siril, ha, oiii=None, intensidades=(0.5, 1.0), con_oiii=T
                     "y sin las estrellas (que salen del RGB). nebulosa_*_ganada_pct: subida de la nebulosa sobre el cielo en "
                     "rojo (Hα) y azul (OIII). La imagen NO ha cambiado: aplicarCandidato(id).")
     P._asegurar_restaurado(siril, crudo, huella, r)
+    aviso = aviso_sin_usar([info.get("fichero"), ha, oiii])
+    if aviso:
+        r["aviso_masters"] = aviso
     P._galeria(r, info, p, "diferencia")
     return r
 
@@ -536,9 +623,13 @@ def combinarRGB(siril, r, g, b):
     x = q if info["top_down"] else q[:, ::-1, :]
     P._poner(siril, P._a_siril(np.clip(x, 0, 1), crudo.dtype).reshape((3,) + tuple(crudo.shape[-2:])), "SirilAstroPilot: combinarRGB")
     med = [float(np.median(c[::4, ::4])) for c in canales]
-    return {"rojo": r, "verde": g, "azul": b, "mediana_por_canal": [_r(m, 6) for m in med],
-            "nota": "RGB lineal sin calibrar (cada canal tal cual). Siguiente: gradiente, astrometría y calibrarColor (SPCC con los "
-                    "filtros de la rueda, mono: true). Guárdala con guardarImagen."}
+    res = {"rojo": r, "verde": g, "azul": b, "mediana_por_canal": [_r(m, 6) for m in med],
+           "nota": "RGB lineal sin calibrar (cada canal tal cual). Siguiente: gradiente, astrometría y calibrarColor (SPCC con los "
+                   "filtros de la rueda, mono: true). Guárdala con guardarImagen."}
+    aviso = aviso_sin_usar([r, g, b])
+    if aviso:
+        res["aviso_masters"] = aviso
+    return res
 
 
 LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand, "unirCapas": unirCapas,

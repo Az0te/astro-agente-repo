@@ -476,12 +476,22 @@ def guardarImagen(siril, fichero, sobrescribir=False):
         raise FileExistsError(f"Ya existe {existentes[0]}. No lo sobrescribo (usa sobrescribir: true).")
     p.parent.mkdir(parents=True, exist_ok=True)
     antes = {e: os.path.getmtime(e) for e in existentes}
+    try:
+        previo = siril.get_image_filename()
+    except Exception:
+        previo = None
     siril.cmd(cmd, _arg_cmd(base))
     hechos = [str(base) + e for e in posibles if Path(str(base) + e).exists()
               and os.path.getmtime(str(base) + e) != antes.get(str(base) + e)]
     if not hechos:
         raise RuntimeError(f"Siril no ha escrito {base}{ext}.")
     GUARDADOS.update(_clave(h) for h in hechos)
+    if previo and Path(previo).stem.lower() != Path(hechos[0]).stem.lower():
+        try:                                    # procedencia: la versión guardada sale de la que estaba cargada
+            import multicapa
+            multicapa._anotar_origen(hechos[0], [previo])
+        except Exception:
+            pass
     _pila_sigue(siril)                          # guardar cambia el nombre de la imagen, pero es la misma
     return {"fichero": hechos[0], "bytes": os.path.getsize(hechos[0])}
 
