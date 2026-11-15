@@ -7,8 +7,8 @@ First, thanks for SASpro. I have been driving it from Python scripts (`ScriptCon
 actual behaviour and, where I could find it, the likely cause. Code references are to the `main` branch on GitHub.
 Happy to test fixes.
 
-**Environment:** SASpro 1.24.2.post2 (Windows installer), Windows 11 Pro, AMD Radeon RX 7900 XTX (AI tools on
-DirectML). Data: 32-bit XISF masters from a ZWO ASI2600MC (6248 × 4176), stacked in PixInsight WBPP.
+**Environment:** SASpro 1.24.2.post2 (Windows installer), Windows 11 Pro, AI tools on DirectML. Data: 32-bit XISF
+one-shot-colour masters (6248 × 4176), stacked in PixInsight WBPP.
 
 ---
 
@@ -69,7 +69,7 @@ normalize=False, apply_curves=False, blackpoint_sigma=5)` directly reaches the t
 (`%LOCALAPPDATA%\SASpro\runtime\py312\venv`), or after installing it while SASpro is open.
 **Expected:** an error the script can catch.
 **Actual:** the command never returns; the only hint is "GPU acceleration runtime is not installed or is incomplete"
-in the System Log. After restarting SASpro with PyTorch installed it works fine (DirectML on the RX 7900 XTX).
+in the System Log. After restarting SASpro with PyTorch installed it works fine (DirectML).
 
 ---
 

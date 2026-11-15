@@ -27,7 +27,7 @@ way I found the issues below. Each has steps, expected vs. actual and, where I c
 references are to `main` on GitHub). I'm happy to test fixes or share the scripts.
 
 **Environment:** SASpro 1.24.2.post2 (Windows installer), Windows 11 Pro, AI tools on DirectML. Data: 32-bit XISF
-masters (6248 × 4176, one-shot colour), stacked in PixInsight WBPP.
+one-shot-colour masters (6248 × 4176), stacked in PixInsight WBPP.
 
 ---
 
