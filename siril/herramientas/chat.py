@@ -562,6 +562,9 @@ TEXTOS = {
         "turno": "↳ esta respuesta: {e} entrada · {s} salida{c} · {t} s",
         "total": "Total: {e} entrada · {s} salida{c}", "local": " · local, sin coste", "sin_mini": "No puedo enseñar la previa: {e}",
         "voz_no": "El dictado por voz usa el de Windows (Win+H); en este sistema no está disponible.",
+        "leer_voz": "Leer en voz alta", "leer_voz_tip": "Lee cada respuesta del modelo con la voz de Windows (sin los bloques de código).",
+        "leer": "🔊 Leer", "leer_tip": "Lee en voz alta la última respuesta del modelo.", "callar": "Parar voz",
+        "voz_mal": "No se pudo lanzar la voz: {e}",
         "elegir_yo": "Elegir yo", "elegir_yo_tip": "Tras cada comparativa el modelo enseña la galería y espera a que elijas (no aplica el ganador solo).",
         "hasta_final": "Hasta el final", "hasta_final_tip": "El modelo encadena los pasos de la guía sin preguntar «¿sigo?» y sólo se para si algo no cumple, falla o necesita tu decisión.",
         "elegir": "Elegir este", "recomendado": "recomendado", "pedir_elegir": "aplica el candidato {id}",
@@ -582,6 +585,9 @@ TEXTOS = {
         "turno": "↳ this answer: {e} in · {s} out{c} · {t} s",
         "total": "Total: {e} in · {s} out{c}", "local": " · local, free", "sin_mini": "Can't show the preview: {e}",
         "voz_no": "Voice dictation uses Windows dictation (Win+H), which isn't available on this system.",
+        "leer_voz": "Read aloud", "leer_voz_tip": "Reads each answer of the model with the Windows voice (without code blocks).",
+        "leer": "🔊 Read", "leer_tip": "Reads the model's last answer aloud.", "callar": "Stop voice",
+        "voz_mal": "Couldn't start the voice: {e}",
         "elegir_yo": "I choose", "elegir_yo_tip": "After each comparison the model shows the gallery and waits for your choice (it doesn't apply the winner itself).",
         "hasta_final": "To the end", "hasta_final_tip": "The model chains the guide's steps without asking “shall I go on?” and only stops if something fails, doesn't pass or needs your decision.",
         "elegir": "Choose this", "recomendado": "recommended", "pedir_elegir": "apply candidate {id}",
@@ -649,6 +655,76 @@ def guardar_ajustes(d):
         AJUSTES.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
+
+
+# --- Voz: leer las respuestas en voz alta (como PiAstroPilot Lite, 8 nov 2026) -------------------------------
+# Voces de Windows (System.Speech, sin internet) en un PowerShell aparte: el chat no se bloquea y se puede parar.
+# macOS: «say»; Linux: «spd-say» si está instalado.
+
+PS_HABLAR = (
+    "param($f, $rate, $cultura)\r\n"
+    "Add-Type -AssemblyName System.Speech\r\n"
+    "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer\r\n"
+    "try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::NotSet, [System.Speech.Synthesis.VoiceAge]::NotSet, 0, "
+    "[Globalization.CultureInfo]$cultura) } catch {}\r\n"
+    "$s.Rate = [int]$rate\r\n"
+    "$s.Speak([IO.File]::ReadAllText($f, [Text.Encoding]::UTF8))\r\n")
+
+
+def texto_para_voz(md):
+    """Markdown → texto para leer: sin bloques de código, tablas como frases, sin enlaces ni marcas (plTextoParaVoz)."""
+    t = str(md).replace("\r\n", "\n")
+    t = re.sub(r"```[\s\S]*?```", " ", t)
+    lineas = []
+    for l in t.split("\n"):
+        s = l.strip()
+        if re.fullmatch(r"\|?[\s|:\-]+\|?", s) and "-" in s:
+            continue                                            # separador de tabla
+        if s.startswith("|"):
+            s = ", ".join(c.strip() for c in s.strip("|").split("|")) + "."
+        else:
+            s = re.sub(r"^#+\s*", "", s)
+            s = re.sub(r"^[-*•]\s+", "", s)
+            s = re.sub(r"^>\s*", "", s)
+        lineas.append(s)
+    t = "\n".join(lineas)
+    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
+    t = re.sub(r"https?:[^\s)]+", "", t)
+    t = re.sub(r"[*_`#★⚙✓✗➜]", "", t)
+    t = re.sub(r"\s*\n\s*", ". ", t)
+    t = re.sub(r"\.\s*\.", ".", t)
+    return re.sub(r"\s+", " ", t).strip(" .") + ("." if t.strip() else "")
+
+
+def hablar(texto, lang="es", velocidad=0):
+    """Lanza la lectura en un proceso aparte y lo devuelve (para pararlo); None si no hay texto o no hay voz."""
+    t = texto_para_voz(texto)
+    if not t or t == ".":
+        return None
+    DATOS.mkdir(parents=True, exist_ok=True)
+    f = DATOS / "voz.txt"
+    f.write_text(t, encoding="utf-8")
+    if sys.platform == "win32":
+        ps = DATOS / "hablar.ps1"
+        ps.write_text(PS_HABLAR, encoding="utf-8")
+        cultura = "en-US" if lang == "en" else "es-ES"
+        return subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+                                 "-File", str(ps), str(f), str(int(velocidad)), cultura],
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if sys.platform == "darwin":
+        return subprocess.Popen(["/usr/bin/say", "-r", str(round(175 + 15 * velocidad)), "-f", str(f)])
+    try:
+        return subprocess.Popen(["spd-say", "-w", "-l", lang, "-r", str(10 * velocidad), t])
+    except OSError:
+        return None
+
+
+def parar_voz(p):
+    if p is not None and p.poll() is None:
+        try:
+            p.kill()
+        except OSError:
+            pass
 
 
 def dictado_windows():
@@ -754,6 +830,8 @@ class Ventana(QMainWindow):
         self.ocupado = False
         self.cancelar = False
         self.n_mini = 0
+        self.p_voz = None
+        self.ultima_resp = []
         self.t_turno = 0
         self.total = {"e": 0, "s": 0, "c": 0.0, "hay_coste": False}
 
@@ -818,9 +896,21 @@ class Ventana(QMainWindow):
         self.b_parar = QPushButton()
         self.b_parar.setEnabled(False)
         self.b_parar.clicked.connect(self.detener)
+        self.c_leer = QCheckBox()
+        self.c_leer.setChecked(bool(self.ajustes.get("leer_voz")))
+        self.c_leer.toggled.connect(self.cambio_leer)
+        self.b_leer = QPushButton()
+        self.b_leer.clicked.connect(self.leer_ultima)
+        self.b_callar = QPushButton()
+        self.b_callar.clicked.connect(self.callar)
         col = QVBoxLayout()
         for b in (self.b_enviar, self.b_voz, self.b_parar):
             col.addWidget(b)
+        fila_voz = QHBoxLayout()
+        for b in (self.b_leer, self.b_callar):
+            fila_voz.addWidget(b)
+        col.addLayout(fila_voz)
+        col.addWidget(self.c_leer)
         abajo.addWidget(self.entrada, 1)
         abajo.addLayout(col)
         QShortcut(QKeySequence("Ctrl+Return"), self, activated=self.enviar)
@@ -876,6 +966,11 @@ class Ventana(QMainWindow):
         self.b_voz.setText(self.T("voz"))
         self.b_voz.setToolTip(self.T("voz_tip"))
         self.b_parar.setText(self.T("detener"))
+        self.c_leer.setText(self.T("leer_voz"))
+        self.c_leer.setToolTip(self.T("leer_voz_tip"))
+        self.b_leer.setText(self.T("leer"))
+        self.b_leer.setToolTip(self.T("leer_tip"))
+        self.b_callar.setText(self.T("callar"))
         self.entrada.setPlaceholderText(self.T("placeholder"))
         self.pintar_total()
 
@@ -968,6 +1063,8 @@ class Ventana(QMainWindow):
         self.entrada.clear()
         self.poner(f'<div class="yo"><b>{self.T("tu")}:</b> {html.escape(texto)}</div>')
         self.ocupado, self.cancelar = True, False
+        self.ultima_resp = []
+        self.callar()
         self.b_enviar.setEnabled(False)
         self.b_parar.setEnabled(True)
         motor, internet, lang = self.motor_actual(), self.internet.isChecked(), self.lang
@@ -987,6 +1084,27 @@ class Ventana(QMainWindow):
         self.activateWindow()
         if not dictado_windows():
             self.poner(f'<span class="tool">{html.escape(self.T("voz_no"))}</span>')
+
+    # --- voz
+    def cambio_leer(self, v):
+        self.guardar(leer_voz=bool(v))
+        if not v:
+            self.callar()
+
+    def decir(self, texto):
+        self.callar()
+        try:
+            self.p_voz = hablar(texto, self.lang, int(self.ajustes.get("voz_velocidad", 0) or 0))
+        except Exception as e:
+            self.poner(f'<span class="err">{html.escape(self.T("voz_mal", e=e))}</span>')
+
+    def leer_ultima(self):
+        if self.ultima_resp:
+            self.decir("\n\n".join(self.ultima_resp))
+
+    def callar(self):
+        parar_voz(self.p_voz)
+        self.p_voz = None
 
     def detener(self):
         self.cancelar = True
@@ -1101,6 +1219,8 @@ class Ventana(QMainWindow):
             self.estado.setText(ev["texto"])
         elif t == "texto":
             self.poner(f"<div>{_md(ev['texto'])}</div>")
+            if ev.get("texto", "").strip():
+                self.ultima_resp.append(ev["texto"])
         elif t == "herramienta":
             a = json.dumps(ev.get("args") or {}, ensure_ascii=False)
             self.poner(f'<span class="tool">⚙ {html.escape(ev["nombre"])} {html.escape(a[:160])}</span>')
@@ -1134,6 +1254,8 @@ class Ventana(QMainWindow):
             self.ocupado = False
             self.b_enviar.setEnabled(True)
             self.b_parar.setEnabled(False)
+            if self.c_leer.isChecked() and not self.cancelar:
+                self.leer_ultima()
             if self.c_final.isChecked() and not self.cancelar:
                 self.guardar_informe()
 
