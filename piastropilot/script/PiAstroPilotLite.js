@@ -1687,7 +1687,7 @@ function plConstruirDialogo(aj) {
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
-      self.mensajes = []; self.registro = ""; self.entradas = []; plBorrarTemporales();
+      self.mensajes = []; self.registro = ""; self.entradas = []; self.pideAprobados = false; plBorrarTemporales();
       self.bienvenida(); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0;
       self.usoSesion = null; self.actualizarUso();
@@ -2232,6 +2232,9 @@ function plConstruirDialogo(aj) {
       // resultado, el paso siguiente que pide el modelo para cumplir la petición se ejecuta solo. Paradas: «PARO:», el
       // modelo no pide llamadas (petición de un paso o una pregunta), Cancelar, 3 fallos seguidos, exportar o el tope.
       // «sigue» continúa la misma serie (mismo objetivo y cuenta de pasos).
+      // «Con los subs aprobados»: lo recuerda la conversación entera (la respuesta «lánzalo» no lo repite).
+      if (/sub\w*\s+(aprobad|seleccionad|buen)|aprobados/i.test(t)) this.pideAprobados = true;
+      if (/todos los (subs|lights)|sin selecci/i.test(t)) this.pideAprobados = false;
       if (/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) && this.objetivoSerie) this.serie = true;
       else { this.serie = true; this.pasosSerie = 0; this.objetivoSerie = t; }
       this.mensajes.push({ role: "user", content: t });
@@ -2245,7 +2248,13 @@ function plConstruirDialogo(aj) {
       this.ponerPendiente(null);
       this.estadoLbl.text = plT("Ejecutando llamadas…");
       plEventos();
-      var r = plEjecutarLlamadas(aj, s);
+      // Subs aprobados pedidos y lanzarWBPP con las carpetas (todos los lights): no se ejecuta; vuelve al modelo como
+      // error para que haga antes seleccionarSubs (16-11-2026: Qwen apiló dos veces los 230 y se comió el aviso del plan).
+      var r = (this.pideAprobados && /"lanzarWBPP"/.test(s) && !/\.txt"/i.test(s))
+        ? { ok: false, segundos: 0, texto: "No ejecuto lanzarWBPP: el usuario pidió los subs aprobados y lights no es la lista_aprobados " +
+            "de seleccionarSubs. Ejecuta antes seleccionarSubs sobre las carpetas LIGHT y repite lanzarWBPP con lights = su " +
+            "lista_aprobados (el fichero .txt que devuelve)." }
+        : plEjecutarLlamadas(aj, s);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
       if (this.serie && r.ok && /"exportarFinal"/.test(s)) {   // exportado: fin del procesado
          this.serie = false;
