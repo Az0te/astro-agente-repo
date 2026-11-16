@@ -26,8 +26,8 @@ SetiAstroPilot still needs a few more days of work before it is ready, but I pla
 22 November, as part of AstroPilot. Since it builds on SASpro and names it, I wanted to let you know first: if you have
 any objection, or would prefer it to be presented differently, please tell me and I will take it into account.
 
-You are of course very welcome to try it. So far I can only confirm that it works with Claude; I haven't had any
-testers with Codex yet.
+I would also like to invite you to try it. So far I can only confirm that it works with Claude; it is meant to work
+with Codex as well, but I haven't had any testers for Codex yet.
 
 Driving SASpro headless through `ScriptContext` works remarkably well — thank you for making it scriptable. Along the
 way I found the issues below. Each has steps, expected vs. actual and, where I could find it, the likely cause (code
