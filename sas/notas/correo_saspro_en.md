@@ -12,8 +12,8 @@ astrophotos step by step inside the programs I already use: https://github.com/A
   separation, noise, stretching, narrowband palettes, HDR, quality checks), shared by the three programs.
 - One **bridge per program**: PiAstroPilot for PixInsight, SirilAstroPilot for Siril and **SetiAstroPilot for SASpro**.
   SetiAstroPilot is a SASpro script that opens a small local server and exposes ~45 "tools" (gradient, stretch, noise,
-  stars, palettes, plate solving, multi-master alignment…) to an AI model through MCP. The model can be Claude or a
-  local model (Qwen on Ollama). There is also a chat window inside SASpro.
+  stars, palettes, plate solving, multi-master alignment…) to an AI model through MCP (tested with Claude). There is
+  also a chat window inside SASpro.
 - The agent never applies a step blindly: each tool **compares several methods** (e.g. ABE vs. GraXpert, several
   stretches or Cosmic Clarity strengths), measures them with objective metrics (sky level, noise, detail kept, clipping,
   colour cast, texture by scale) and recommends one; the image only changes when a candidate is applied. Everything
@@ -25,6 +25,9 @@ astrophotos step by step inside the programs I already use: https://github.com/A
 SetiAstroPilot still needs a few more days of work before it is ready, but I plan to present it publicly next Sunday,
 22 November, as part of AstroPilot. Since it builds on SASpro and names it, I wanted to let you know first: if you have
 any objection, or would prefer it to be presented differently, please tell me and I will take it into account.
+
+You are of course very welcome to try it. So far I can only confirm that it works with Claude; I haven't had any
+testers with Codex yet.
 
 Driving SASpro headless through `ScriptContext` works remarkably well — thank you for making it scriptable. Along the
 way I found the issues below. Each has steps, expected vs. actual and, where I could find it, the likely cause (code
