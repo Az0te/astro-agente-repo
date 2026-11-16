@@ -2223,7 +2223,7 @@ function plConstruirDialogo(aj) {
       this.enviarTexto(t);
    };
 
-   this.enviarTexto = function (t) {
+   this.enviarTexto = function (t, unPaso) {
       this.correcciones = 0;
       this.ultimoError = null;
       this.scriptFallido = null; this.repetido = false;
@@ -2240,7 +2240,8 @@ function plConstruirDialogo(aj) {
       var completo = /complet|hasta el final|de principio a fin|y (luego )?proc[eé]sa|todo el proceso/i;
       if (/apil|wbpp|preprocesad|integra(r|ci)/i.test(t) && !completo.test(t)) this.soloApilado = true;
       else if (completo.test(t) || /\bproc[eé]sa(lo|la)?\b|gradiente|estir/i.test(t)) this.soloApilado = false;
-      if (/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) && this.objetivoSerie) this.serie = true;
+      if (unPaso) { this.serie = false; this.pasosSerie = 0; }   // enlace «Siguiente paso»: sólo ese paso
+      else if (/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) && this.objetivoSerie) this.serie = true;
       else { this.serie = true; this.pasosSerie = 0; this.objetivoSerie = t; }
       this.mensajes.push({ role: "user", content: t });
       this.anotar(plT("Tú"), t, "user");
@@ -2350,8 +2351,11 @@ function plConstruirDialogo(aj) {
       var ultimo = -1;
       for (var i = 0; i < this.entradas.length; ++i) if (this.entradas[i].tipo == "asst") ultimo = i;
       // El enlace del último mensaje con llamadas sin ejecutar son esas llamadas: se ejecutan tal cual.
+      // Un enlace es UN paso: sin serie (17-11-2026: un clic en «Paso 9: gradiente» siguió solo con BXT, StarX, ruido y
+      // el checkpoint sin dejar elegir). Para encadenar, escribir «sigue» o pedir el procesado completo.
+      this.serie = false;
       if (indice === ultimo && this.pendiente) { this.anotar("Paso", ">>> Ejecuto el paso: " + texto); this.ejecutarPendiente(); return; }
-      this.enviarTexto(plT("Haz ahora este paso: ") + texto);
+      this.enviarTexto(plT("Haz ahora este paso: ") + texto, true);
    };
    this.historialBox.onScriptResultAvailable = function (r) {
       var v = r === undefined || r === null ? "" : String(r);
