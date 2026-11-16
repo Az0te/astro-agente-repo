@@ -704,6 +704,8 @@ function plPromptSistema(aj) {
    "- WBPP (Rafael, 16 nov 2026): lanzarWBPP sin confirmar devuelve el PLAN y no lanza nada. Enséñalo (noches, lights, flat de cada " +
    "noche y filtro, darks, salida) y para con «PARO:» hasta que el usuario dé el visto bueno; entonces repite la llamada con " +
    "confirmar: true. Sin parar sólo si el usuario pidió el procesado completo hasta el final.\n" +
+   "- Si el usuario pide apilar «los subs aprobados» (buenos, seleccionados) y no da una lista o carpeta concreta, ejecuta " +
+   "seleccionarSubs sobre las carpetas LIGHT y usa su lista_aprobados como lights de lanzarWBPP; no le preguntes dónde están.\n" +
    "- Mientras esta ventana está abierta el usuario NO puede tocar PixInsight ni abrir ficheros. Ve las imágenes sólo como " +
    "miniaturas en el chat: cada previa {vista} y cada comparación sale como imagen en la ficha del resultado. Si quieres que " +
    "mire algo, pide previa (con opciones.rect para un recorte al 100 %) y dile que mire la miniatura; nunca le mandes a abrir " +

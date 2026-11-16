@@ -22,6 +22,8 @@ Escala del sub = 206,265·píxel(µm)/focal(mm).
 
 **Criterio NOVA:** "descartar primero por pocas estrellas (< 20), excentricidad > 0,66, gradiente fuerte o cielo > 3× el de la sesión, y luego ordenar por `FWHM·(1 + excentricidad)` y quitar el ~10 % peor; son valores de ingeniería, no óptimos". No mezclar en un mismo ranking paneles, filtros o exposiciones distintas.
 
+**«Los subs aprobados».** Si el usuario pide apilar los subs aprobados (buenos, seleccionados) y no da una lista o carpeta concreta, son los que aprueba este paso: hacer la selección sobre las carpetas de lights y apilar con su lista de aprobados, sin preguntar dónde están.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-03); en Siril, [Anexo I](../anexos/I-siril.md).
 
 Comprobado con subs crudos CFA (nov 2026):
