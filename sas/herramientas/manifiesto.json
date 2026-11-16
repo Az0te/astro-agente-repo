@@ -378,7 +378,7 @@
    "fichero": "herramientas.py",
    "nivel": "vista",
    "timeout_s": 1800,
-   "descripcion": "Lanza un proceso de SASpro de la lista blanca sobre una vista con su preset (claves y valores: ayudaProceso). Ejemplos: abe, graxpert, background_neutral, white_balance, remove_green, stat_stretch, star_stretch, ghs, curves, wavescale_hdr, wavescale_dark_enhance, cosmic_clarity, convo, syqon_starless, remove_stars, plate_solve, geometría. Con deshacer. Avisa si la imagen no cambia.",
+   "descripcion": "Lanza un proceso de SASpro de la lista blanca sobre una vista con su preset (claves y valores: ayudaProceso). Ejemplos: abe, graxpert, background_neutral, white_balance, remove_green, stat_stretch, star_stretch, ghs, curves, wavescale_hdr, wavescale_dark_enhance, cosmic_clarity, convo, syqon_starless, remove_stars, plate_solve, geometría, halo_b_gon; y RC Astro con su programa rc-astro: rc_bxt (stars, nonstellar, halos, correct_only), rc_nxt (denoise, color, iteraciones), rc_sxt (deja la starless; para las estrellas, separarEstrellas motor starx). Con deshacer. Avisa si la imagen no cambia.",
    "resumen": "Lanza un proceso de SASpro (lista blanca) con su preset.",
    "params": {
     "type": "object",
@@ -553,6 +553,45 @@
     "required": [
      "ficheros"
     ]
+   }
+  },
+  {
+   "nombre": "medirContinuo",
+   "fichero": "multicapa.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "lineal/16-linearfit-continuo.md",
+   "descripcion": "Paso 16 lineal: mide k, la parte del continuo de la banda ancha que hay en una capa de banda estrecha, por fotometría de estrellas aisladas no saturadas (apertura r ≤ 7 px, anillo 10–14 px). Las dos vistas CON estrellas, alineadas y del mismo tamaño (nunca una starless). Solo lectura. Si el Hα ya se inyectó en la RGB, el Paso 16 no aplica.",
+   "resumen": "Paso 16: mide k del continuo por fotometría de estrellas.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "nb": {"type": "string", "description": "Vista de banda estrecha con estrellas (Hα, OIII o SII; mono)."},
+     "continuo": {"type": "string", "description": "Vista de banda ancha con estrellas (la RGB lineal, o un canal mono)."},
+     "canal": {"type": "integer", "enum": [0, 1, 2], "description": "Canal del continuo: 0 (R) para Hα y SII, 1 (G) para OIII. Por defecto 0."}
+    },
+    "required": ["nb", "continuo"]
+   }
+  },
+  {
+   "nombre": "restarContinuo",
+   "fichero": "multicapa.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "lineal/16-linearfit-continuo.md",
+   "descripcion": "Paso 16 lineal: nb − k·continuo[canal] − c en una vista nueva (nombre_CS), sobre las capas SIN estrellas, con k de medirContinuo. Mide los negativos antes de recortar (sobre-resta, máx. 0,5 %) y el brillo que conserva la emisión (mín. 80 %); lo que no cumple sale en no_cumple.",
+   "resumen": "Paso 16: resta el continuo a una capa de banda estrecha (vista nueva).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "nb": {"type": "string", "description": "Vista de banda estrecha SIN estrellas (mono)."},
+     "continuo": {"type": "string", "description": "Vista de banda ancha SIN estrellas, alineada (la RGB o un canal mono)."},
+     "k": {"type": "number", "description": "Coeficiente de medirContinuo (con las capas con estrellas)."},
+     "canal": {"type": "integer", "enum": [0, 1, 2], "description": "Canal del continuo (el mismo que en medirContinuo). Por defecto 0."},
+     "c": {"type": "number", "description": "Desplazamiento que se resta además (por defecto 0)."},
+     "nombre": {"type": "string", "description": "Nombre de la vista nueva (por defecto <nb>_CS)."}
+    },
+    "required": ["nb", "continuo", "k"]
    }
   },
   {
@@ -817,8 +856,8 @@
    "nivel": "lectura",
    "timeout_s": 3600,
    "paso": "no-lineal/06-noisex.md",
-   "descripcion": "L14/NL6 ruido: compara Cosmic Clarity denoise a varias fuerzas (y GraXpert denoise si se pide); mide el ruido del cielo frente a antes y el detalle de 2–8 px que se pierde en la parte brillante del objeto (descontando el ruido del cielo). Recomienda el que más ruido quita sin perder más del 2 % de detalle; en no lineal no deja menos de la mitad del ruido (fondo plástico). Si el detalle no se puede medir, propone la pasada moderada (~70 % del ruido) y pide mirar un recorte 1:1. La vista NO cambia (aplicarCandidato). Cosmic Clarity necesita la aceleración de SASpro (PyTorch) instalada.",
-   "resumen": "Ruido: compara Cosmic Clarity (y GraXpert) denoise; no cambia la vista.",
+   "descripcion": "L14/NL6 ruido: compara Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator de RC Astro (si está instalado) y GraXpert denoise si se pide; mide el ruido del cielo frente a antes y el detalle de 2–8 px que se pierde en la parte brillante del objeto (descontando el ruido del cielo). Recomienda el que más ruido quita sin perder más del 2 % de detalle; en no lineal no deja menos de la mitad del ruido (fondo plástico). Si el detalle no se puede medir, propone la pasada moderada (~70 % del ruido) y pide mirar un recorte 1:1. La vista NO cambia (aplicarCandidato). Cosmic Clarity necesita la aceleración de SASpro (PyTorch) instalada.",
+   "resumen": "Ruido: compara Cosmic Clarity, NoiseX (y GraXpert) denoise; no cambia la vista.",
    "params": {
     "type": "object",
     "properties": {
@@ -836,6 +875,17 @@
      "usar_graxpert": {
       "type": "boolean",
       "description": "Añadir GraXpert denoise 0,5 (por defecto false)."
+     },
+     "usar_nxt": {
+      "type": "boolean",
+      "description": "Añadir NoiseXTerminator de RC Astro (por defecto sí, si está instalado y con licencia)."
+     },
+     "nxt_fuerzas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas de NoiseXTerminator 0–1 (por defecto [0.5, 0.7] en lineal y [0.3, 0.5] estirada)."
      }
     }
    }
@@ -1005,6 +1055,53 @@
    }
   },
   {
+   "nombre": "deconvolucionCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 3600,
+   "paso": "lineal/13-bxt-completo.md",
+   "descripcion": "L11/L13 deconvolución en lineal con BlurXTerminator de RC Astro (su programa rc-astro; ver ping): solo corrección y una rejilla de nonstellar según el tipo de campo (como bxtCandidatos de PixInsight) frente a no hacer nada. Mide FWHM de las estrellas, ringing (anillos oscuros alrededor de las brillantes), gusanos (alta frecuencia del cielo frente a BXT con nonstellar 0, máx. 1,3) y contraste fino del objeto; recomienda el nonstellar más alto que cumple. Imagen completa: cada variante tarda lo que BXT en toda la imagen. La vista NO cambia (aplicarCandidato).",
+   "resumen": "Deconvolución: compara BlurXTerminator (solo corrección y nonstellar); no cambia la vista.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "nebulosa",
+       "galaxia",
+       "cumulo",
+       "snr_bajo"
+      ],
+      "description": "Rango de partida: nebulosa (estrellas 0,30; nonstellar 0,25/0,45/0,65), galaxia (0,18; 0,20/0,30/0,40), cumulo (0,25; 0,10/0,20), snr_bajo (0,15; 0,10/0,20/0,25)."
+     },
+     "nonstellar": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Valores de nonstellar a probar, 0–1 (por defecto los del tipo)."
+     },
+     "stars": {
+      "type": "number",
+      "description": "Sharpen stars, 0–0,7 (por defecto el del tipo)."
+     },
+     "halos": {
+      "type": "number",
+      "description": "Adjust star halos, −0,5–0,5 (por defecto 0)."
+     },
+     "correct_only": {
+      "type": "boolean",
+      "description": "Incluir BXT solo corrección (por defecto true)."
+     }
+    }
+   }
+  },
+  {
    "nombre": "aplicarCandidato",
    "fichero": "herramientas.py",
    "nivel": "vista",
@@ -1033,8 +1130,8 @@
    "nivel": "lectura",
    "timeout_s": 900,
    "paso": "no-lineal/09-recombinar-estrellas.md",
-   "descripcion": "NL halos de estrellas (necesita SASpro 1.24.5 o posterior): Halo-B-Gon a varias reducciones (0–3) frente a no hacer nada. Mide el brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes, la FWHM, los anillos oscuros (corrección pasada) y el cambio del cielo; recomienda la mayor reducción sin anillos oscuros nuevos ni cambio del cielo. La vista no cambia: aplicarCandidato(id).",
-   "resumen": "NL: compara Halo-B-Gon a varias reducciones (SASpro ≥ 1.24.5).",
+   "descripcion": "NL halos de estrellas: Halo-B-Gon de SASpro (comando en 1.24.5; en versiones anteriores, su función interna) a varias reducciones (0–3) frente a no hacer nada. Mide el brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes, la FWHM, los anillos oscuros (corrección pasada) y el cambio del cielo; recomienda la mayor reducción sin anillos oscuros nuevos ni cambio del cielo. La vista no cambia: aplicarCandidato(id).",
+   "resumen": "NL: compara Halo-B-Gon a varias reducciones.",
    "params": {
     "type": "object",
     "properties": {
@@ -1222,7 +1319,7 @@
    "nivel": "vista",
    "timeout_s": 1800,
    "paso": "lineal/15-starx.md",
-   "descripcion": "L15 estrellas: separa con StarNet o DarkStar (remove_stars) o SyQon. La starless queda en la vista y las estrellas en una vista nueva (vistas_nuevas).",
+   "descripcion": "L15 estrellas: separa con StarNet o DarkStar (remove_stars), SyQon o StarXTerminator de RC Astro (motor starx, si está instalado: ver ping). La starless queda en la vista y las estrellas en una vista nueva (vistas_nuevas).",
    "params": {
     "type": "object",
     "properties": {
@@ -1235,8 +1332,13 @@
       "enum": [
        "starnet",
        "darkstar",
-       "syqon"
+       "syqon",
+       "starx"
       ]
+     },
+     "unscreen": {
+      "type": "boolean",
+      "description": "Solo con starx: estrellas «des-pantalladas» (para recombinar con pantalla). Por defecto false: estrellas = original − starless."
      },
      "lineal": {
       "type": "boolean",

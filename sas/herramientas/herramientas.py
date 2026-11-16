@@ -23,6 +23,7 @@ import numpy as np
 
 import halo as _halo
 import cielo as _cielo
+import rc as _rc
 import medidas as M
 from medidas import _r
 
@@ -318,7 +319,11 @@ def ping(ctx):
     v_sas = _version_sas()
     d = _activo(ctx)
     act = _nombre(_base(d)) if d is not None else None
-    return {"herramientas": VERSION, "saspro": v_sas, "vistas_abiertas": len(_docs(ctx)), "vista_activa": act}
+    e = _rc.estado()
+    rc = {"version": e.get("version"), "productos": sorted(k for k, v in e["productos"].items() if v["valida"])} \
+        if e.get("disponible") else None
+    return {"herramientas": VERSION, "saspro": v_sas, "vistas_abiertas": len(_docs(ctx)), "vista_activa": act,
+            "rc_astro": rc}
 
 
 def vistas(ctx):
@@ -687,7 +692,8 @@ PROCESOS = {
     "extract_luminance", "recombine_luminance", "nbextract", "plate_solve", "debayer",
     "geom_flip_horizontal", "geom_flip_vertical", "geom_rotate_clockwise", "geom_rotate_counterclockwise",
     "geom_rotate_180", "geom_rescale", "geom_invert",
-    "halo_b_gon",                      # SASpro 1.24.5
+    "halo_b_gon",                      # comando en SASpro 1.24.5; antes, función interna (INTERNOS)
+    "rc_bxt", "rc_nxt", "rc_sxt",      # RC Astro con su programa rc-astro (rc.py), no son comandos de SASpro
 }
 
 
@@ -700,7 +706,52 @@ def _correr(ctx, doc, proceso, preset=None):
     if cid not in PROCESOS:
         raise ValueError(f"Proceso no permitido: {proceso}. Permitidos: {', '.join(sorted(PROCESOS))}.")
     _comprobar_ia(cid, preset)
+    if cid in INTERNOS and not _hay_comando(cid):
+        return INTERNOS[cid](doc, dict(preset or {}))
     return ctx.run_command(cid, dict(preset or {}), target_doc=doc)
+
+
+def _hay_comando(cid):
+    """True si el registro de comandos de esta SASpro tiene el id (halo_b_gon llegó en 1.24.5)."""
+    try:
+        from setiastro.saspro.ops.commands import get_spec
+        return get_spec(cid) is not None
+    except Exception:
+        return False
+
+
+def _halo_b_gon_interno(doc, preset):
+    """Halo-B-Gon sin el comando (SASpro < 1.24.5): la misma función de cálculo que usa el comando
+    (halobgon.compute_halo_b_gon, presente desde antes), con un paso de deshacer. Preset: reduction 0–3, linear."""
+    from setiastro.saspro.halobgon import compute_halo_b_gon
+    a = np.asarray(doc.image, dtype=np.float32)
+    forma = a.shape
+    mono = a.ndim == 2 or (a.ndim == 3 and a.shape[2] == 1)
+    rgb = np.repeat(a.reshape(forma[0], forma[1], 1), 3, axis=2) if mono else a
+    k = int(max(0, min(3, int(preset.get("reduction", 0)))))
+    out = np.asarray(compute_halo_b_gon(np.clip(rgb, 0.0, 1.0), k, bool(preset.get("linear", False))), dtype=np.float32)
+    if mono:
+        out = out.mean(axis=2).reshape(forma)
+    doc.apply_edit(np.clip(out, 0.0, 1.0).astype(np.float32, copy=False), metadata={},
+                   step_name=f"Halo-B-Gon (reducción {k})")
+
+
+def _rc_interno(producto):
+    """RC Astro (rc-astro) sobre la vista, con un paso de deshacer. Preset: el de rc.correr (stars, nonstellar,
+    correct_only, halos, denoise, color, iteraciones, modelo...). Con sxt deja la starless."""
+    def f(doc, preset):
+        q = _rc.correr(_p(doc.image), producto, **preset)
+        if producto == "sxt":
+            q = q[0]
+        doc.apply_edit(_a_sas(q, doc.image), metadata={},
+                       step_name=f"RC Astro {_rc.PRODUCTOS[producto]} {json.dumps(preset, ensure_ascii=False)}"[:120])
+    return f
+
+
+# Procesos de la lista blanca que no son comandos de SASpro (RC Astro) o que, si la SASpro instalada no los tiene como
+# comando, se hacen con su función interna (Halo-B-Gon antes de 1.24.5).
+INTERNOS = {"halo_b_gon": _halo_b_gon_interno, "rc_bxt": _rc_interno("bxt"), "rc_nxt": _rc_interno("nxt"),
+            "rc_sxt": _rc_interno("sxt")}
 
 
 # Procesos de SASpro que necesitan el entorno de IA (PyTorch en %LOCALAPPDATA%\SASpro\runtime\...\venv).
@@ -1058,7 +1109,10 @@ def _estirado_sas_directo(p, mediana=0.2, enlazado=True):
     return np.clip(np.moveaxis(out, -1, 0) if out.ndim == 3 else out[None], 0, 1)
 
 
-LOCALES = {"estirado_mtf": _estirado_mtf, "estirado_sas_directo": _estirado_sas_directo}
+LOCALES = {"estirado_mtf": _estirado_mtf, "estirado_sas_directo": _estirado_sas_directo,
+           # RC Astro: el cálculo va en rc-astro sobre una copia, así que en las comparaciones no toca la vista
+           "rc_bxt": lambda p, **op: _rc.correr(p, "bxt", **op),
+           "rc_nxt": lambda p, **op: _rc.correr(p, "nxt", **op)}
 
 
 def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True):
@@ -1131,9 +1185,9 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
     return _galeria(r, p)
 
 
-def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False):
-    """Pasos L14/NL6: Cosmic Clarity denoise a varias fuerzas y GraXpert denoise frente a no hacer nada: ruido del
-    cielo y detalle que se pierde (< 10 %). La vista no cambia."""
+def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt=None, nxt_fuerzas=None):
+    """Pasos L14/NL6: Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator (RC Astro, si está) y GraXpert denoise
+    frente a no hacer nada: ruido del cielo y detalle que se pierde (< 10 %). La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     lineal = M.lineal(p[:, ::8, ::8])
@@ -1157,6 +1211,12 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False):
     lista = [(f"Cosmic Clarity denoise {f}", "cosmic_clarity",
               {"mode": "denoise", "denoise_luma": float(f), "denoise_color": float(f), "create_new_view": False,
                "gpu": True}) for f in fuerzas or []]
+    if usar_nxt is None:
+        usar_nxt = _rc.hay("nxt")
+    if usar_nxt:
+        if nxt_fuerzas is None:
+            nxt_fuerzas = (0.5, 0.7) if lineal else (0.3, 0.5)
+        lista += [(f"NoiseXTerminator {f:g}", "rc_nxt", {"denoise": float(f)}) for f in nxt_fuerzas]
     if usar_graxpert:
         lista.append(("GraXpert denoise 0,5", "graxpert", {"op": "denoise", "strength": 0.5}))
 
@@ -1549,12 +1609,11 @@ def _anillos_estrellas(L, n_max=400):
 
 
 def halosCandidatos(ctx, vista=None, reducciones=(1, 2, 3), lineal=False, cielo_max_pct=2.0):
-    """NL halos de estrellas (SASpro ≥ 1.24.5): Halo-B-Gon a varias reducciones (0–3) frente a no hacer nada. Mide el
+    """NL halos de estrellas: Halo-B-Gon a varias reducciones (0–3) frente a no hacer nada (en SASpro < 1.24.5, con su
+    función interna en vez del comando). Mide el
     brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes (sobre el cielo), la FWHM, los anillos
     oscuros (píxeles del anillo por debajo del cielo − 3σ: corrección pasada) y el cambio del cielo. Recomienda la mayor
     reducción sin anillos oscuros nuevos ni cambio del cielo > cielo_max_pct %. La vista no cambia."""
-    if not _sas_al_menos(1, 24, 5):
-        raise RuntimeError(f"Halo-B-Gon como comando necesita SASpro 1.24.5 o posterior (instalada: {_version_sas()}).")
     d = _doc(ctx, vista)
     p = _p(d.image)
     if not lineal and M.lineal(p[:, ::8, ::8]):
@@ -1901,6 +1960,98 @@ def nitidezCandidatos(ctx, vista=None, cantidades=(0.3, 0.5), modo="Both", super
     return _galeria(r, p, "diferencia")
 
 
+# Rangos de partida de BlurXTerminator por tipo de campo (los mismos que bxtCandidatos de PixInsight,
+# guia/herramientas/deconvolucion.js).
+BXT_RANGOS = {"nebulosa": {"stars": 0.30, "ns": (0.25, 0.45, 0.65)},
+              "galaxia": {"stars": 0.18, "ns": (0.20, 0.30, 0.40)},
+              "cumulo": {"stars": 0.25, "ns": (0.00, 0.10, 0.20)},
+              "snr_bajo": {"stars": 0.15, "ns": (0.10, 0.20, 0.25)}}
+
+
+def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, stars=None, halos=0.0,
+                            correct_only=True):
+    """L11/L13 deconvolución con BlurXTerminator (RC Astro, con su programa rc-astro), en lineal: solo corrección y
+    una rejilla de nonstellar (rango por tipo de campo, como bxtCandidatos de PixInsight) frente a no hacer nada. Mide
+    FWHM de las estrellas, anillos oscuros alrededor de las brillantes (ringing), «gusanos» (alta frecuencia del cielo
+    frente a BXT con nonstellar 0) y contraste fino del objeto. Recomienda el nonstellar más alto sin ringing nuevo y
+    con gusanos ≤ 1,3. La vista no cambia (aplicarCandidato)."""
+    if not _rc.hay("bxt"):
+        e = _rc.estado()
+        raise RuntimeError("BlurXTerminator no está disponible: " + (
+            "no encuentro rc-astro (RC Astro CLI)." if not e.get("exe") else "sin licencia válida en rc-astro."))
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if not M.lineal(p[:, ::8, ::8]):
+        raise RuntimeError("La imagen parece estirada: BlurXTerminator va en lineal (después del color).")
+    rg = BXT_RANGOS.get(str(tipo), BXT_RANGOS["nebulosa"])
+    ns_lista = [float(x) for x in (nonstellar or rg["ns"])]
+    st = float(rg["stars"] if stars is None else stars)
+    L0 = M.lum(p)
+    z = M.zonas_objeto_cielo(p)
+    cpx, obj = z["cielo_px"], (z["obj_px"] if z["obj_px"].any() else None)
+    anillo = _anillos_estrellas(L0)
+    c0 = M.cielo(p)
+
+    def hf(L, m):
+        if m is None or not m.any():
+            return None
+        return float(np.sqrt(np.mean((L - M._caja(L, 1))[m] ** 2)))
+
+    def medir(q):
+        L = M.lum(q)
+        c = M.cielo(q)
+        cie, rui = float(c["cielo"]), float(c["ruido"])
+        fw, nfw = _fwhm_estrellas(L)
+        osc = 100.0 * float((L[anillo] < cie - 3 * max(rui, 1e-9)).mean()) if anillo.any() else None
+        return {"fwhm_px": _r(fw, 2), "estrellas_medidas": nfw, "anillo_oscuro_pct": _r(osc, 2),
+                "hf_cielo": _r(hf(L, cpx), 7), "hf_objeto": _r(hf(L, obj), 7),
+                "ruido_vs_antes": _r(c["ruido"] / max(c0["ruido"], 1e-12), 3)}
+
+    lista = []
+    if correct_only:
+        lista.append(("BXT solo corrección", "rc_bxt", {"correct_only": True}))
+    ref_preset = {"stars": st, "nonstellar": 0.0, "halos": float(halos)}
+    lista.append((f"BXT estrellas {st:g}, no estelar 0 (referencia)", "rc_bxt", ref_preset))
+    lista += [(f"BXT estrellas {st:g}, no estelar {ns:g}", "rc_bxt", {"stars": st, "nonstellar": ns, "halos": float(halos)})
+              for ns in ns_lista if ns > 0]
+    r = _comparar(ctx, d, "deconv", lista, medir)
+    m0 = medir(p)
+    r["antes"] = m0
+    ref = next((x for x in r["candidatos"] if x["preset"] == ref_preset), None)
+    for x in r["candidatos"]:
+        m, fal = x["metricas"], []
+        if ref is not None and not x["preset"].get("correct_only"):
+            rm = ref["metricas"]
+            m["gusanos"] = _r(m["hf_cielo"] / rm["hf_cielo"], 3) if rm.get("hf_cielo") else None
+            m["contraste"] = _r(m["hf_objeto"] / rm["hf_objeto"], 3) if rm.get("hf_objeto") else None
+            if (m["gusanos"] or 0) > 1.3:
+                fal.append(f"gusanos: alta frecuencia del cielo ×{m['gusanos']} frente a no estelar 0 (máx. 1,3)")
+        if m0["anillo_oscuro_pct"] is not None and (m["anillo_oscuro_pct"] or 0) - m0["anillo_oscuro_pct"] > 1.0:
+            fal.append(f"ringing: anillos oscuros alrededor de las estrellas ({m['anillo_oscuro_pct']} % del anillo)")
+        if m0["fwhm_px"] and m["fwhm_px"] and m["fwhm_px"] > m0["fwhm_px"] * 1.02:
+            fal.append("la FWHM no baja")
+        x["no_cumple"] = fal
+    ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    con_ns = [x for x in ok if not x["preset"].get("correct_only")]
+    mejor = (max(con_ns, key=lambda x: x["preset"].get("nonstellar", 0)) if con_ns else
+             next((x for x in ok if x["preset"].get("correct_only")), None))
+    if mejor:
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: FWHM {m0['fwhm_px']} → {mejor['metricas']['fwhm_px']} px, sin ringing nuevo"
+                       + ("" if mejor["preset"].get("correct_only") else
+                          f" y gusanos ×{mejor['metricas'].get('gusanos')}")
+                       + ". Míralo a 1:1 en el objeto débil (textura «crujiente») y en estrellas brillantes.")
+    else:
+        r["motivo"] = "Ninguno cumple (ver no_cumple): prueba nonstellar más bajo, o solo corrección, y revisa a ojo."
+    r["leyenda"] = ("fwhm_px: FWHM mediana de estrellas aisladas. anillo_oscuro_pct: parte del anillo de 3–12 px alrededor "
+                    "de las brillantes por debajo del cielo − 3σ (ringing). gusanos / contraste: alta frecuencia del "
+                    "cielo / del objeto frente a BXT con no estelar 0 (> 1,3 en el cielo = textura nueva). Si BXT crea "
+                    "gusanos, NoiseX los acentúa: bajar BXT, no subir el denoise. La vista NO ha cambiado: "
+                    "aplicarCandidato(id).")
+    r["rc_astro"] = {k: v for k, v in _rc.estado().items() if k in ("version", "exe")}
+    return _galeria(r, p, "diferencia")
+
+
 def aplicarCandidato(ctx, id, vista=None):
     """Pone en la vista el candidato 'id' de la última comparación (exactamente el que se midió, con deshacer)."""
     a, datos = _cargar_candidato(id)
@@ -2146,19 +2297,33 @@ def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucio
     return r
 
 
-def separarEstrellas(ctx, vista=None, motor="starnet", lineal=None):
-    """L15: separa estrellas con StarNet o DarkStar (remove_stars) o SyQon (syqon_starless). Crea la vista de
-    estrellas aparte y deja la starless en la vista."""
+def separarEstrellas(ctx, vista=None, motor="starnet", lineal=None, unscreen=False):
+    """L15: separa estrellas con StarNet o DarkStar (remove_stars), SyQon (syqon_starless) o StarXTerminator de RC Astro
+    (motor starx). Crea la vista de estrellas aparte y deja la starless en la vista."""
     d = _doc(ctx, vista)
     if lineal is None:
         lineal = M.lineal(_p(d.image)[:, ::8, ::8])
     antes = {id(x) for x in _docs(ctx)}
+    if motor in ("starx", "sxt", "starxterminator"):
+        t0 = time.perf_counter()
+        sl, est = _rc.correr(_p(d.image), "sxt", unscreen=bool(unscreen))
+        d.apply_edit(_a_sas(sl, d.image), metadata={}, step_name="RC Astro StarXTerminator (sin estrellas)")
+        m = dict(_meta(d))
+        m.pop("file_path", None)
+        nombre = f"{_nombre(d)}_estrellas"
+        m["display_name"] = nombre
+        ctx.open_new_document(_a_sas(est, d.image), metadata=m, name=nombre)
+        r = {"proceso": "rc_sxt", "vista": _nombre(d), "segundos": _r(time.perf_counter() - t0, 1), "cambio": True,
+             "estrellas": "pantalla (unscreen)" if unscreen else "original − sin estrellas"}
+        r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
+        r["vista_activa"] = _reactivar(ctx, d)
+        return r
     if motor in ("starnet", "darkstar"):
         r = procesoSAS(ctx, "remove_stars", {"tool": motor, "linear": bool(lineal)}, vista)
     elif motor == "syqon":
         r = procesoSAS(ctx, "syqon_starless", {"starless_make_stars": True}, vista)
     else:
-        raise ValueError("motor: starnet, darkstar o syqon.")
+        raise ValueError("motor: starnet, darkstar, syqon o starx.")
     r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
     # SASpro deja activa la vista nueva de estrellas: sin esto, las llamadas siguientes sin 'vista' irían a ella.
     r["vista_activa"] = _reactivar(ctx, d)
@@ -2259,6 +2424,7 @@ LISTA = {
     "saturacionCandidatos": saturacionCandidatos,
     "fondoCandidatos": fondoCandidatos,
     "nitidezCandidatos": nitidezCandidatos,
+    "deconvolucionCandidatos": deconvolucionCandidatos,
     "estirarEstrellas": estirarEstrellas,
     "recombinarEstrellas": recombinarEstrellas,
     "aplicarCandidato": aplicarCandidato,

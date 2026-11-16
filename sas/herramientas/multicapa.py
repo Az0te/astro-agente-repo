@@ -1086,7 +1086,138 @@ def componerHDR(ctx, larga, corta, umbral=None, crecer=3, suavizar=8, nombre="HD
     return r
 
 
+# --- Paso 16 lineal: resta del continuo (port de medirContinuo / restarContinuo de guia/herramientas/bandaestrecha.js) --
+
+def _canal(ctx, vista, canal=None, forma=None):
+    """Una capa (alto, ancho) de una vista: el canal pedido (0 R, 1 G, 2 B) o, en mono, la única."""
+    d = H._doc(ctx, vista)
+    p = H._p(d.image)
+    if p.shape[0] == 1:
+        c = p[0]
+    else:
+        if canal is None:
+            raise ValueError(f"'{H._nombre(d)}' es en color: indica canal (0 R, 1 G, 2 B).")
+        if int(canal) not in (0, 1, 2):
+            raise ValueError("canal debe ser 0, 1 o 2.")
+        c = p[int(canal)]
+    if forma is not None and c.shape != forma:
+        raise RuntimeError(f"La vista '{H._nombre(d)}' mide {c.shape[1]}×{c.shape[0]} y la otra {forma[1]}×{forma[0]}: "
+                           "alinéalas antes (alinearMasters).")
+    return d, c.astype(np.float32)
+
+
+def _fotometria_continuo(N, C, pico_max=0.80, max_estrellas=3000):
+    """Razón de flujos N/C en estrellas aisladas no saturadas de C: apertura r ≤ 7 px, fondo en el anillo 10–14 px,
+    centroide del flujo. Como medirContinuo de PixInsight."""
+    R0, R1, R2 = 7, 10, 14
+    v = C[::13, ::13].ravel()
+    med = float(np.median(v))
+    sig = 1.4826 * float(np.median(np.abs(v - med)))
+    thr = med + 30 * max(sig, 1e-9)
+    cand = (C >= thr) & (C <= pico_max)
+    cand[:R2 + 3, :] = cand[-R2 - 3:, :] = False
+    cand[:, :R2 + 3] = cand[:, -R2 - 3:] = False
+    ys, xs = np.nonzero(cand)
+    v = C[ys, xs]
+    pico = np.ones(len(ys), bool)
+    for dy in (-2, -1, 0, 1, 2):                      # máximo local en 5×5
+        for dx in (-2, -1, 0, 1, 2):
+            if dy or dx:
+                pico &= v >= C[ys + dy, xs + dx]
+    ys, xs = ys[pico], xs[pico]
+    orden = np.argsort(-C[ys, xs])
+    yy, xx = np.mgrid[-R2:R2 + 1, -R2:R2 + 1]
+    rr = np.hypot(yy, xx)
+    ap, an = rr <= R0, (rr >= R1) & (rr <= R2)
+    y3, x3 = np.mgrid[-3:4, -3:4]
+    usados = np.zeros(C.shape, bool)
+    razones = []
+    for j in orden:
+        y, x = int(ys[j]), int(xs[j])
+        if usados[y, x]:
+            continue
+        w = np.clip(C[y - 3:y + 4, x - 3:x + 4] - med, 0, None)
+        if w.sum() <= 0:
+            continue
+        cy = y + int(round(float((w * y3).sum() / w.sum())))
+        cx = x + int(round(float((w * x3).sum() / w.sum())))
+        if cy < R2 or cx < R2 or cy >= C.shape[0] - R2 or cx >= C.shape[1] - R2:
+            continue
+        usados[max(0, cy - R2):cy + R2 + 1, max(0, cx - R2):cx + R2 + 1] = True
+        bc, bn = C[cy - R2:cy + R2 + 1, cx - R2:cx + R2 + 1], N[cy - R2:cy + R2 + 1, cx - R2:cx + R2 + 1]
+        fC = float((bc[ap] - np.median(bc[an])).sum())
+        fN = float((bn[ap] - np.median(bn[an])).sum())
+        if fC > 0:
+            razones.append(fN / fC)
+        if len(razones) >= max_estrellas:
+            break
+    return np.array(razones, dtype=np.float64)
+
+
+def medirContinuo(ctx, nb, continuo, canal=0):
+    """Paso 16 lineal: mide k, la parte de continuo de la banda ancha que hay en la capa de banda estrecha, por
+    fotometría de estrellas (las dos vistas CON estrellas, alineadas y del mismo tamaño). nb: Hα, OIII o SII (mono);
+    continuo: la RGB o el canal de banda ancha (canal 0 R para Hα y SII, 1 G para OIII). Solo lectura."""
+    dn, N = _canal(ctx, nb, 0)
+    dc, C = _canal(ctx, continuo, canal, N.shape)
+    k = _fotometria_continuo(N, C)
+    if len(k) < 20:
+        nombres = f"{H._nombre(dn)} {H._nombre(dc)}"
+        raise RuntimeError(f"Pocas estrellas medidas ({len(k)}): el continuo se mide con las estrellas, así que las dos "
+                           "vistas tienen que tenerlas (la raya y la RGB de ANTES de separarEstrellas, ya alineadas; nunca "
+                           "una starless)" + (". Una de ellas parece una starless" if "starless" in nombres.lower() else "")
+                           + ". Si el Hα ya se inyectó en la RGB (combinarCandidatos), el Paso 16 no aplica: sáltalo.")
+    q1, q2, q3 = (float(np.percentile(k, x)) for x in (25, 50, 75))
+    return {"k": _r(q2, 4), "estrellas": int(len(k)), "rango_intercuartil": [_r(q1, 4), _r(q3, 4)],
+            "nb": H._nombre(dn), "continuo": H._nombre(dc), "canal_continuo": canal,
+            "control": {"medido": {"estrellas_suficientes": len(k) >= 100},
+                        "nota": "Mediana de (N − fondo)/(C − fondo) en apertura r ≤ 7 px con anillo 10–14 px. Siguiente: "
+                                "restarContinuo con las capas SIN estrellas y este k."}}
+
+
+def restarContinuo(ctx, nb, continuo, k, canal=0, c=0.0, nombre=None):
+    """Paso 16 lineal: nb − k·continuo[canal] − c en una vista nueva, sobre las capas SIN estrellas (k de medirContinuo,
+    medido con estrellas). Mide los negativos antes de recortar (sobre-resta) y cuánto brillo conserva la emisión."""
+    if k is None:
+        raise ValueError("Falta k: mídelo antes con medirContinuo sobre las capas con estrellas.")
+    dn, N = _canal(ctx, nb, 0)
+    dc, C = _canal(ctx, continuo, canal, N.shape)
+    out = N - float(k) * C - float(c)
+    neg = 100.0 * float((out[::3, ::3] < -0.001).mean())
+    zN = M.zonas_objeto_cielo(N[np.newaxis])
+    cie0 = float(zN["medidas"]["cielo"])
+    obj = zN["obj_px"]
+    conserva = None
+    if obj.any():
+        s0 = float(np.median(N[obj])) - cie0
+        cie1 = float(np.median(out[zN["cielo_px"]])) if zN["cielo_px"].any() else 0.0
+        s1 = float(np.median(out[obj])) - cie1
+        conserva = s1 / s0 if s0 > 0 else None
+    out = np.clip(out, 0.0, 1.0).astype(np.float32)
+    nombre = nombre or f"{H._nombre(dn)}_CS"
+    m = dict(H._meta(dn))
+    m.pop("file_path", None)
+    m.update(display_name=nombre, mono=True)
+    nuevo = ctx.open_new_document(np.ascontiguousarray(out), metadata=m, name=nombre)
+    vista = H._nombre(H._base(nuevo)) if nuevo is not None else nombre
+    _anotar_origen(vista, [_fuente(ctx, dn), _fuente(ctx, dc)])
+    no = []
+    if neg > 0.5:
+        no.append(f"{_r(neg, 3)} % de píxeles negativos antes de recortar: k o c demasiado altos, o zonas de continuo "
+                  "fuerte (enmascarar)")
+    if conserva is not None and conserva < 0.80:
+        no.append(f"la emisión conserva solo el {round(100 * conserva)} % del brillo: ¿k demasiado alta o es reflexión?")
+    return {"vista": vista, "nb": H._nombre(dn), "continuo": f"{H._nombre(dc)}[{canal}]", "k": k, "c": c,
+            "cielo_antes": _r(cie0, 5), "cielo_despues": _r(float(M.cielo(out[np.newaxis])["cielo"]), 5),
+            "negativos_pct": _r(neg, 3), "emision_conservada_pct": round(100 * conserva) if conserva is not None else None,
+            "no_cumple": no,
+            "control": {"revisar_a_ojo": ["residuos simétricos alrededor de estrellas",
+                                          "discos oscuros en zonas de continuo fuerte"],
+                        "nota": "En nebulosas de emisión con reflexión el continuo suele quitar solo un 2–5 %."}}
+
+
 LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "revisarRecorte": revisarRecorte,
+                   "medirContinuo": medirContinuo, "restarContinuo": restarContinuo,
                    "desmezclarDualBand": desmezclarDualBand,
                    "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB, "unirCapas": unirCapas,
                    "paletasCandidatos": paletasCandidatos, "componerHDR": componerHDR}
