@@ -717,6 +717,36 @@ function gradienteCandidatos(viewId, o) {
               "Mejor: el que deja poco gradiente sin comerse el objeto. (gcStructCopy, come_objeto_pct y fondoResidual: " +
               "nombres antiguos de lo mismo, se quitarán.)";
 
+  // Frenos de la comparación de gradientes del 16 nov 2026 (dosier M31 / IC 1396):
+  //  1. MGC con MARS sólo vale si la imagen se parece a MARS: en las capas de banda estrecha de IC 1396 la correlación
+  //     del ajuste fue 0,55–0,72 (en M31, banda ancha, 0,98) y MGC aplanó el Hα y el OIII un 30 % y se llevó hasta un 5 %.
+  //     Con correlación < 0,9 en algún canal, MGC y sus cadenas no se recomiendan.
+  //  2. Aplanado de la estructura grande frente al polinomio 1 (como Siril y SASpro): en nebulosas o polvo que llenan el
+  //     campo, un modelo que aplane > 5 % más que el polinomio 1 se lleva nebulosa (IC 1396: grado 2, GradientCorrection,
+  //     MGC y las cadenas con cielo con máscara, 10–63 %) y el estirado lo convierte en grano. No se aplica a galaxias:
+  //     ahí cualquier buena corrección «aplana» frente al plano porque quita gradiente que el plano deja (M31).
+  var noRecomendar = {};
+  var marsMal = r.candidatos.some(function (x) { return x.metodo === "MGC" && x.ajuste_mars && x.ajuste_mars.some(function (a) { return a[2] < 0.9; }); });
+  if (marsMal) r.candidatos.forEach(function (x) {
+    if (/^MGC/.test(x.metodo)) { noRecomendar[x.vista] = 1; (x.no_cumple = x.no_cumple || []).push("ajuste a MARS con correlación < 0,9: la imagen no se parece a MARS (banda estrecha o campo sin referencia); MGC se lleva objeto"); }
+  });
+  var tipoTxt = String(o.tipo || "");
+  var nebulosa = /nebul|polvo|dust|ifn|oscur|molecular|extens/i.test(tipoTxt) || (base.objFrac > 0.25 && !/galax/i.test(tipoTxt));
+  try {
+    var p1 = r.candidatos.filter(function (x) { return x.metodo === "Polinomio" && /^grado 1/.test(x.parametros); })[0];
+    if (p1) {
+      var e0 = grEstructura(p1.vista, bin);
+      r.candidatos.forEach(function (x) {
+        var e = grEstructura(x.vista, bin), ap = 100 * (1 - e / e0);
+        x.metricas.aplanado_vs_p1_pct = Math.round(ap * 10) / 10;
+        if (nebulosa && ap > 5) { noRecomendar[x.vista] = 1; (x.no_cumple = x.no_cumple || []).push("aplana la estructura grande un " + x.metricas.aplanado_vs_p1_pct + " % más que el polinomio 1 (> 5 %): se lleva nebulosa extensa"); }
+      });
+      r.freno_aplanado = nebulosa ? "activo (nebulosa o polvo que llena el campo)" : "inactivo (galaxia o campo con cielo libre: tipo «" + tipoTxt + "»)";
+    }
+  } catch (e) { r.errores.push("Aplanado frente al polinomio 1: " + e); }
+  var elegibles = r.candidatos.filter(function (x) { return !noRecomendar[x.vista]; });
+  if (!elegibles.length) elegibles = r.candidatos;
+
   // Recomendación. Un buen modelo cumple dos cosas: quita el gradiente (fondoResidual = rango del fondo
   // corregido / rango del original) y no copia el objeto (|corr| pequeño; negativo = el modelo infla el objeto).
   // Prioridad, como en la guía: entre los que dejan <= 30 % del gradiente, el que menos copia (menor |corr|);
@@ -739,18 +769,18 @@ function gradienteCandidatos(viewId, o) {
   function eat(x) { var e = x.metricas.come_objeto_pct; return isFinite(e) ? Math.abs(e) : 100; }
   // Primero, no comerse el objeto (≤ 3 % de su señal y modelo limpio); entre esos, el que deja el cielo más plano.
   function manchas(x) { var m = x.metricas.manchas; return m && m.se_ven !== undefined ? m.se_ven : null; }
-  var safe = r.candidatos.filter(function (x) { return eat(x) <= 3 && absCorr(x) < 0.3; });
+  var safe = elegibles.filter(function (x) { return eat(x) <= 3 && absCorr(x) < 0.3; });
   // Entre los seguros, mejor uno cuyo cielo no se vea desnivelado al estirar (gradiente_visible ≤ 0,015), si lo hay.
   var noSeVe = safe.filter(function (x) { return vis(x) <= 0.015; });
   if (noSeVe.length) safe = noSeVe;
   // (Fusión con la rama b6wzqh, 16 nov 2026: su criterio de manchas_color se ha quitado aquí: definía otra función
   // manchas() que, al estar después, sustituía a la de arriba y anulaba el filtro «sin manchas» de grManchas.)
-  var clean = r.candidatos.filter(function (x) { return absCorr(x) < 0.3; });
+  var clean = elegibles.filter(function (x) { return absCorr(x) < 0.3; });
   // 14 nov 2026: entre los seguros sin manchas visibles, el que MENOS objeto se lleva (Rafael: perder la menor
   // información posible; el cielo ya está bien por definición). Si todos tienen manchas, el más plano, como antes.
   var sinManchas = safe.filter(function (x) { return manchas(x) === false; });
   var best = sinManchas.length ? pick(sinManchas, function (x) { return eat(x) + 0.01 * absCorr(x); })
-           : safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(r.candidatos, absCorr);
+           : safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(elegibles, absCorr);
   if (best) {
     var bc = best.metricas.gcStructCopy;
     r.recomendado = best.vista;
@@ -802,6 +832,25 @@ function gradienteCandidatos(viewId, o) {
   grPrevios.push(r);
   if (grPrevios.length > 1 && !o.noCompactar) grPrevios.forEach(function (g) { grCompactar(g, o); });
   return r;
+}
+
+// Estructura de escala grande que queda en una vista (como medidas.medir_gradiente de SASpro): dispersión robusta de la
+// luminancia binada menos su plano. Un modelo que se come nebulosa extensa la baja.
+function grEstructura(viewId, bin) {
+  var O = gcLumBinned(viewId, bin), w = O.w, h = O.h, a = O.a;
+  var S = [0, 0, 0, 0, 0, 0, 0, 0, 0], bz = [0, 0, 0], k, x, y, z, t;
+  for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
+    z = a[y * w + x]; if (!(z > 0)) continue;
+    t = [1, x / w - 0.5, y / h - 0.5];
+    for (k = 0; k < 9; k++) S[k] += t[Math.floor(k / 3)] * t[k % 3];
+    for (k = 0; k < 3; k++) bz[k] += t[k] * z;
+  }
+  var c = gcSolveN([[S[0], S[1], S[2]], [S[3], S[4], S[5]], [S[6], S[7], S[8]]], bz), res = [];
+  for (y = 0; y < h; y += 2) for (x = 0; x < w; x += 2) {
+    z = a[y * w + x]; if (!(z > 0)) continue;
+    res.push(z - (c[0] + c[1] * (x / w - 0.5) + c[2] * (y / h - 0.5)));
+  }
+  return gcMAD(res, gcMedian(res));
 }
 
 // Plano robusto (grado 1) por canal ajustado fuera del objeto sobre la vista srcId; devuelve el id de la copia corregida.

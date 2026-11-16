@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 
 import halo as _halo
+import cielo as _cielo
 import medidas as M
 from medidas import _r
 
@@ -907,10 +908,20 @@ def _halo_candidato(p, croma=False, **op):
     return cro if croma else poly
 
 
+def _srgc_survey(p, survey):
+    """Referencia de SRGC: la que se pida o, por defecto, NSNS RGB en color y NSNS visual en mono. En capas de banda
+    estrecha conviene pasar la de su raya: «NSNS Ha (north) — mono», «NSNS [OIII] (north) — mono»,
+    «NSNS [SII] (north) — mono» (nombres exactos; uno desconocido cae en la referencia por defecto de SASpro)."""
+    if survey:
+        return str(survey)
+    return "NSNS RGB continuum (north) — colour" if p.shape[0] >= 3 else "NSNS visual continuum (north) — mono"
+
+
 def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpert=True, muestras=120, tipo=None,
-                        halo=True, halo_opciones=None, diagnostico=True):
-    """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF), GraXpert IA y el polinomio fuera del halo
-    (+ crominancia), mide y recomienda. La vista no cambia."""
+                        halo=True, halo_opciones=None, diagnostico=True, srgc=None, srgc_survey=None, cadenas=True):
+    """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF), GraXpert IA, el polinomio fuera del halo
+    (+ crominancia), SRGC (si la vista tiene astrometría) y las cadenas con nuestro modelo del cielo con máscara o de
+    bordes; mide y recomienda. La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if not M.lineal(p[:, ::8, ::8]):
@@ -928,10 +939,46 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
         op = dict(halo_opciones or {})
         lista.append(("Polinomio fuera del halo", "halo", {**op, "croma": False}, _halo_candidato))
         lista.append(("Polinomio fuera del halo + crominancia", "halo", {**op, "croma": True}, _halo_candidato))
+    # SRGC (Survey Reference Gradient Correction de SASpro), como en el vídeo de Seti Astro: 500 muestras y exclusión
+    # del 15 % (con el 50 % por defecto estropeaba el color de M31). Necesita astrometría e internet. Comparación del
+    # 16 nov 2026: en M31 no se lleva nada de galaxia; en IC 1396 es, con el polinomio 1, lo único que no aplana la nebulosa.
+    usar_srgc = srgc if srgc is not None else _tiene_wcs(d)
+    if usar_srgc:
+        lista.append(("SRGC (referencia " + _srgc_survey(p, srgc_survey) + ", 500 muestras, exclusión 15 %)", "srgc",
+                      {"survey": _srgc_survey(p, srgc_survey), "degree": 1, "work_long_side": 1024, "samples": 500,
+                       "exclude": 15}))
     r = _comparar(ctx, d, "gradiente", lista, lambda q: M.medir_gradiente(base, q))
     if _HALO_CACHE:
         r["halo"] = next(iter(_HALO_CACHE.values()))[2]
         _HALO_CACHE.clear()
+    if usar_srgc and not any(c["proceso"] == "srgc" for c in r["candidatos"]):
+        r["errores"].append("SRGC no se pudo probar (¿sin internet o sin astrometría válida?).")
+    # Cadenas con nuestro modelo del cielo con máscara / de bordes (cielo.py) sobre los candidatos que respetan el
+    # objeto. En M31 empataron con el ganador de PixInsight; en una nebulosa que llena el campo aplanan, y entonces el
+    # freno de aplanado (medidas.aplanado_gradiente) las saca de la recomendación.
+    if cadenas and r["candidatos"]:
+        try:
+            masc, ncc, ntot = _cielo.mascara_cielo(M.binar(M.lum(p), _cielo.B))
+            r["cielo_cajas"] = f"{ncc} de {ntot} cajas de cielo"
+            fuentes = [("Polinomio fuera del halo + crominancia", False), ("ABE polinomio 1", False), ("SRGC", True)]
+            n = len(lista)
+            for prefijo, bordes in fuentes:
+                c0 = next((c for c in r["candidatos"] if c["metodo"].startswith(prefijo)), None)
+                if c0 is None:
+                    continue
+                n += 1
+                t0 = time.perf_counter()
+                q = _cielo.corregir(_p(_cargar_candidato(c0["id"])[0]), masc, bordes=bordes)
+                nombre = c0["metodo"].split(" (")[0] + (" + bordes" if bordes else " + cielo con máscara")
+                m = M.medir_gradiente(base, q)
+                cid = _guardar_candidato("gradiente", n, _a_sas(q, d.image),
+                                         {"nombre": nombre, "proceso": "cielo.py", "preset": {"sobre": c0["id"], "bordes": bordes},
+                                          "huella_base": M.huella(d.image), "uid": getattr(d, "uid", None), "metricas": m})
+                r["candidatos"].append({"id": cid, "metodo": nombre, "proceso": "cielo.py",
+                                        "preset": {"sobre": c0["id"], "bordes": bordes}, "metricas": m,
+                                        "segundos": _r(time.perf_counter() - t0, 1)})
+        except Exception as e:
+            r["errores"].append(f"cadenas con el modelo del cielo: {e}")
     r["recomendado"], r["criterio"], r["motivo"] = M.elegir_gradiente(r["candidatos"], base["objeto_campo_pct"], tipo)
     # Qué es cada mancha que queda en la recomendada: canal, exceso o hueco, si sigue al objeto, y veredicto.
     if diagnostico and r["recomendado"] and p.shape[0] >= 3:

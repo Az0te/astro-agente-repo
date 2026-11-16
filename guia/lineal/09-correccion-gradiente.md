@@ -59,6 +59,12 @@ Entre los candidatos que no se comen el objeto y no dejan manchas visibles se re
 
 **Encadenar dos métodos** puede ganar a cualquiera solo: uno automático de base y otro de acabado (en una toma con mucha contaminación y sin flats, astroimagetw obtuvo lo mejor con un modelo automático seguido de la corrección de gradiente nativa, que además quitó la sombra que dejó el primero). Medir la cadena como un candidato más. Si no convence, hacer la comparativa de candidatos del detalle.
 
+**Galaxia con cielo libre o nebulosa que llena el campo: métodos distintos** (comparación del 16 nov 2026, M31 HDR e IC 1396 en cuatro rayas, misma vara de medir en PixInsight y SASpro):
+- **Galaxia con cielo libre** (M31): gana una cadena, el modelo con base de referencia y bordes seguido del **modelo del cielo con máscara** (se lleva ~1 % del objeto, cielo casi plano y sin color). Sin modelo con referencia (SASpro), lo mismo encima del **polinomio fuera del halo + crominancia** empata. Los extractores que sólo «aplanan» (IA, corrección nativa automática) se llevan 3–4 % del halo.
+- **Nebulosa o polvo que llena el campo** (IC 1396): no hay cielo de verdad; las cajas de cielo caen sobre nebulosa y el modelo del cielo con máscara la aplana (18–63 %). Sólo dos familias no aplanan nada: el **polinomio de grado 1** y la **corrección referida a un survey** (SRGC de SASpro, con la referencia de cada raya). Medir siempre el **aplanado de la estructura grande frente al polinomio 1** y no aceptar modelos que aplanen > 5 % más: ese aplanado es el que el estirado convierte en grano.
+- **Modelo con base de referencia de banda ancha en capas de banda estrecha: no.** La referencia no se parece a la raya (correlación del ajuste 0,55–0,72 frente a 0,98 en banda ancha) y se lleva nebulosa. Si el ajuste a la referencia tiene correlación < 0,9, descartarlo.
+- **SRGC**: con la exclusión de muestras del 50 % por defecto estropeó el color de M31; con 500 muestras y exclusión del 15 % (como en el vídeo de su autor) no se lleva nada. Necesita astrometría e internet.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-09); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** Modelo liso y sin objeto; fondo no aplastado con la misma visualización antes y después; contraste objeto−cielo ≥ 90 % en polvo/IFN; la astrometría sigue al terminar. Anillo oscuro alrededor de un objeto extenso = se ha comido el halo: volver atrás y usar plano robusto o muestras manuales.

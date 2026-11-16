@@ -299,8 +299,13 @@ def elegir_gradiente(c, objeto_campo_pct, tipo=None):
     def resid(x): v = x["metricas"]["gradiente_restante"]; return v if v is not None else 9
     def eat(x): v = x["metricas"]["objeto_quitado_pct"]; return abs(v) if v is not None else 100
 
+    import re as _re
     extenso, tope = tope_gradiente(objeto_campo_pct, tipo)
-    fuera = set(aplanado_gradiente(c, extenso))
+    # El freno de aplanado es para nebulosas y polvo que llenan el campo (IC 1396). En una galaxia con cielo libre (M31,
+    # 16 nov 2026) cualquier buena corrección «aplana» frente al polinomio 1 porque quita gradiente que el plano deja:
+    # el freno sacaba a SRGC, al halo + crominancia y a las cadenas, y sólo quedaba el polinomio 1.
+    galaxia = bool(_re.search(r"(?i)galax", str(tipo or "")))
+    fuera = set(aplanado_gradiente(c, extenso and not galaxia))
     c = [x for x in c if x["id"] not in fuera] or c
     seguros = [x for x in c if eat(x) <= tope and absc(x) < 0.3]
     limpios = [x for x in c if absc(x) < 0.3]
@@ -311,7 +316,13 @@ def elegir_gradiente(c, objeto_campo_pct, tipo=None):
         # A «se lleva» parecido (≤ 0,5 puntos) gana el que deja menos gradiente: en M31 el polinomio 1 (0 %) ganaba por
         # el orden de la lista dejando el 22 % del gradiente frente al 8 % del de fuera del halo (14 nov 2026).
         e0 = min(eat(x) for x in cerca)
-        mejor = min([x for x in cerca if eat(x) <= e0 + 0.5], key=resid)
+        # Lo que queda en el cielo: el plano (gradiente_restante) y también las manchas (irregularidad_cielo, rango en
+        # rejilla 4×3). Con sólo el plano, en M31 el halo + crominancia (0,078 / 0,111) ganaba a su cadena con el modelo
+        # del cielo con máscara (0,084 / 0,051), que deja el cielo la mitad de desnivelado y sin color (16 nov 2026).
+        def queda(x):
+            ir = x["metricas"].get("irregularidad_cielo")
+            return max(resid(x), ir) if ir is not None and objeto_campo_pct <= 40 else resid(x)
+        mejor = min([x for x in cerca if eat(x) <= e0 + 0.5], key=queda)
     else:
         mejor = min(limpios, key=eat) if limpios else min(c, key=absc) if c else None
     criterio = (f"campo con objeto extenso o polvo: se tolera que el modelo se lleve ≤ {tope:g} % del objeto"
