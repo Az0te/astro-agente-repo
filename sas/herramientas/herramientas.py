@@ -299,6 +299,19 @@ def _version_sas():
         return None
 
 
+def _sas_al_menos(*minimo):
+    """True si SASpro es al menos la versión 'minimo' (p. ej. 1, 24, 5). En 1.24.5 llegaron los arreglos que pidió
+    Rafael (16 nov 2026): save_document, close_document, stat_stretch y WaveScale sin ventana, ra_deg y halo_b_gon.
+    Si no se sabe la versión, False (se usan los caminos de siempre)."""
+    v = _version_sas()
+    if not v:
+        return False
+    nums = [int(x) for x in re.findall(r"\d+", str(v))[:3]]
+    while len(nums) < 3:
+        nums.append(0)
+    return tuple(nums) >= tuple(minimo)
+
+
 def ping(ctx):
     """Comprueba que el puente y SASpro responden."""
     v_sas = _version_sas()
@@ -548,6 +561,21 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
         bits = "8-bit" if fmt in ("jpg",) else "16-bit" if fmt == "png" else "32-bit floating point"
     m = _meta(d)
     img = d.image
+    # SASpro 1.24.5: save_document guarda como «Guardar como» (cabecera actual y astrometría). Si no existe, el camino de
+    # siempre (cabecera fusionada con wcs_header).
+    if hasattr(ctx, "save_document"):
+        try:
+            ctx.save_document(str(p), doc=d, bit_depth=bits)
+            if p.exists():
+                try:
+                    import multicapa
+                    multicapa._anotar_origen(str(p), [x for x in (m.get("file_path"), _nombre(d)) if x])
+                except Exception:
+                    pass
+                return {"fichero": str(p), "formato": fmt, "bits": bits, "bytes": p.stat().st_size, "vista": _nombre(d),
+                        "metodo": "save_document"}
+        except TypeError:
+            pass                                   # firma distinta: camino de siempre
     cab = _cabecera_para_guardar(m, np.shape(img)[:2])
     # En SASpro la cabecera está en metadata["fits_header"] (no en "original_header") y la astrometría en "wcs_header".
     # Antes se pasaba original_header (None) y el fichero salía con 7 palabras clave: sin OBJECT, exposición ni WCS
@@ -658,6 +686,7 @@ PROCESOS = {
     "extract_luminance", "recombine_luminance", "nbextract", "plate_solve", "debayer",
     "geom_flip_horizontal", "geom_flip_vertical", "geom_rotate_clockwise", "geom_rotate_counterclockwise",
     "geom_rotate_180", "geom_rescale", "geom_invert",
+    "halo_b_gon",                      # SASpro 1.24.5
 }
 
 
@@ -988,11 +1017,15 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
     if not M.lineal(p[:, ::8, ::8]):
         raise RuntimeError("La imagen ya parece estirada (mediana > 0,05).")
     lista = []
+    # SASpro 1.24.5: el estirado estadístico sin ventana ya llega a su mediana si se pasa normalize=False (con Normalize
+    # reescala para que el máximo sea 1) y acepta el punto negro; antes dejaba la imagen casi negra o se pasaba.
+    nuevo = _sas_al_menos(1, 24, 5)
+    extra = {"normalize": False, "no_black_clip": False, "blackpoint_sigma": 5.0} if nuevo else {}
     for m in medianas or []:
-        lista.append((f"estirado estadístico enlazado {m}", "stat_stretch", {"target_median": float(m), "linked": True}))
+        lista.append((f"estirado estadístico enlazado {m}", "stat_stretch", {"target_median": float(m), "linked": True, **extra}))
         if p.shape[0] == 3:
             lista.append((f"estirado estadístico por canal {m}", "stat_stretch",
-                          {"target_median": float(m), "linked": False}))
+                          {"target_median": float(m), "linked": False, **extra}))
         if propio:
             lista.append((f"estirado MTF propio enlazado {m}", "estirado_mtf", {"mediana": float(m), "enlazado": True}))
             lista.append((f"estadístico de SASpro, función directa, enlazado {m}", "estirado_sas_directo",
@@ -1015,7 +1048,9 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
     buenos = []
     for x in r["candidatos"]:
         med, obj = x["metricas"].get("mediana") or 0, (x.get("preset") or {}).get("target_median")
-        if med < 0.02 or (obj and abs(med - obj) > 0.5 * obj):
+        # Con 1.24.5 el estadístico debe caer en su mediana: se descarta si se desvía más de un 20 %.
+        tol = 0.2 if nuevo else 0.5
+        if med < 0.02 or (obj and abs(med - obj) > tol * obj):
             r["errores"].append(f"{x['metodo']}: no estira (mediana {med}"
                                 + (f", objetivo {obj}" if obj else "") + "); descartado.")
         else:
@@ -1145,6 +1180,11 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5),
               (lambda q, k: M.comprimir_nucleo(q, n, k))) for k in (fuerzas or [])]
     lista += [(f"WaveScale HDR compresión {c:g}", "wavescale_hdr", {"compresion": float(c)},
                (lambda q, compresion: _wavescale_hdr(q, compresion))) for c in (hdr or [])]
+    # SASpro 1.24.5: el comando sin ventana ya termina (devuelve True o lanza error). Se añade como candidato más; si el
+    # nombre de algún parámetro no coincide, sale en errores y queda el cálculo con la función pura de arriba.
+    if _sas_al_menos(1, 24, 5):
+        lista += [(f"WaveScale HDR (comando de SASpro) compresión {c:g}", "wavescale_hdr",
+                   {"compression_factor": float(c), "n_scales": 5, "mask_gamma": 5.0}) for c in (hdr or [])]
     r = _comparar(ctx, d, "nucleo", lista, lambda q: M.medir_nucleo(q, n))
     for x in r["candidatos"]:
         m1, fal = x["metricas"], []
@@ -1442,6 +1482,70 @@ def reducirEstrellasCandidatos(ctx, vista=None, fwhm_objetivo=None, area_objetiv
         r["recomendado"] = mejor["id"]
     r["leyenda"] = ("fwhm_px: tamaño de las estrellas no saturadas. area_pct: píxeles de estrella encendidos (> 0,05): "
                     "baja con halos más pequeños y menos débiles. La vista NO ha cambiado: aplicarCandidato(id).")
+    return _galeria(r, p)
+
+
+def _anillos_estrellas(L, n_max=400):
+    """Máscara de anillo (3–12 px) alrededor de las estrellas brillantes (> p99,9), sin tocar otras estrellas."""
+    umbral = float(np.percentile(L[::4, ::4], 99.9))
+    nucleo = (L >= umbral).astype(np.float32)
+    cerca = M._caja(nucleo, 3) > 0
+    lejos = M._caja(nucleo, 12) > 0
+    return lejos & ~cerca
+
+
+def halosCandidatos(ctx, vista=None, reducciones=(1, 2, 3), lineal=False, cielo_max_pct=2.0):
+    """NL halos de estrellas (SASpro ≥ 1.24.5): Halo-B-Gon a varias reducciones (0–3) frente a no hacer nada. Mide el
+    brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes (sobre el cielo), la FWHM, los anillos
+    oscuros (píxeles del anillo por debajo del cielo − 3σ: corrección pasada) y el cambio del cielo. Recomienda la mayor
+    reducción sin anillos oscuros nuevos ni cambio del cielo > cielo_max_pct %. La vista no cambia."""
+    if not _sas_al_menos(1, 24, 5):
+        raise RuntimeError(f"Halo-B-Gon como comando necesita SASpro 1.24.5 o posterior (instalada: {_version_sas()}).")
+    d = _doc(ctx, vista)
+    p = _p(d.image)
+    if not lineal and M.lineal(p[:, ::8, ::8]):
+        raise RuntimeError("La imagen parece lineal: pasa lineal: true o estírala antes.")
+    L0 = M.lum(p)
+    anillo = _anillos_estrellas(L0)
+    if anillo.sum() < 200:
+        raise RuntimeError("No hay estrellas brillantes suficientes para medir halos.")
+    c0 = M.cielo(p)
+
+    def medir(q):
+        L = M.lum(q)
+        c = M.cielo(q)
+        cie, rui = float(c["cielo"]), float(c["ruido"])
+        fw, _ = _fwhm_estrellas(L)
+        halo = float(np.median(L[anillo])) - cie
+        oscuro = 100.0 * float((L[anillo] < cie - 3 * max(rui, 1e-6)).mean())
+        return {"halo": _r(halo, 5), "fwhm_px": _r(fw, 2), "anillo_oscuro_pct": _r(oscuro, 2), "cielo": c["cielo"]}
+
+    lista = [(f"Halo-B-Gon reducción {int(k)}", "halo_b_gon", {"reduction": int(k), "linear": bool(lineal)})
+             for k in (reducciones or [])]
+    r = _comparar(ctx, d, "halos", lista, medir)
+    m0 = medir(p)
+    r["antes"] = m0
+    for x in r["candidatos"]:
+        m, fal = x["metricas"], []
+        if m0["halo"] and m["halo"] is not None:
+            m["halo_baja_pct"] = _r(100.0 * (1 - m["halo"] / m0["halo"]), 1) if m0["halo"] > 0 else None
+        if (m["anillo_oscuro_pct"] or 0) - (m0["anillo_oscuro_pct"] or 0) > 1.0:
+            fal.append(f"anillos oscuros alrededor de las estrellas ({m['anillo_oscuro_pct']} % del anillo bajo el cielo)")
+        if c0["cielo"] and abs(float(m["cielo"]) / float(c0["cielo"]) - 1) * 100 > cielo_max_pct:
+            fal.append(f"el cielo cambia más de un {cielo_max_pct:g} %")
+        x["no_cumple"] = fal
+    ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if ok:
+        mejor = max(ok, key=lambda x: (x.get("preset") or {}).get("reduction", 0))
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: el halo baja un {mejor['metricas'].get('halo_baja_pct')} %, sin anillos oscuros "
+                       "nuevos ni cambio del cielo. Míralo a 1:1 en estrellas brillantes.")
+    else:
+        r["recomendado"] = None
+        r["motivo"] = "Ninguna reducción cumple (ver no_cumple): deja los halos o prueba reducciones menores."
+    r["leyenda"] = ("halo: brillo medio del anillo de 3–12 px alrededor de las estrellas brillantes sobre el cielo. "
+                    "anillo_oscuro_pct: parte del anillo por debajo del cielo − 3σ (halo quitado de más). "
+                    "La vista NO ha cambiado: aplicarCandidato(id).")
     return _galeria(r, p)
 
 
@@ -1957,6 +2061,9 @@ def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucio
         ra_g, dec_g = _a_grados(ra1, True), _a_grados(dec1, False)
         if ciega or ra_g is None or dec_g is None:
             preset["seed_mode"] = "none"
+        elif _sas_al_menos(1, 24, 5):
+            # 1.24.5: unidades explícitas (una RA decimal ≤ 24 sin unidad se sigue leyendo en horas, como en el diálogo).
+            preset.update(seed_mode="manual", ra_deg=float(ra_g), dec_deg=float(dec_g))
         else:
             preset.update(seed_mode="manual", ra=_sexagesimal(ra_g, True), dec=_sexagesimal(dec_g, False))
         if esc:
@@ -2013,6 +2120,13 @@ def cerrarVista(ctx, vista, sin_guardar=False):
     n = _n_deshacer(d) or 0
     if n and not sin_guardar:
         raise RuntimeError(f"'{nombre}' tiene {n} pasos sin guardar: guárdala (guardarImagen) o pasa sin_guardar: true.")
+    # SASpro 1.24.5: ctx.close_document(doc, force). Con force no pregunta (la comprobación de cambios ya está arriba).
+    if hasattr(ctx, "close_document"):
+        try:
+            ctx.close_document(d, force=True)
+            return {"cerrada": nombre, "abiertas": [_nombre(x) for x in _docs(ctx)], "metodo": "close_document"}
+        except TypeError:
+            pass                                   # firma distinta: se sigue con el cierre de la subventana
     sw = None
     for f in ("_find_subwindow_for_doc",):
         try:
@@ -2097,6 +2211,7 @@ LISTA = {
     "quitarVerde": quitarVerde,
     "quitarPatron2px": quitarPatron2px,
     "reducirEstrellasCandidatos": reducirEstrellasCandidatos,
+    "halosCandidatos": halosCandidatos,
     "neutralizarFondo": neutralizarFondo,
     "calibrarColor": calibrarColor,
     "resolverAstrometria": resolverAstrometria,

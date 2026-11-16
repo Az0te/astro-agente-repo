@@ -3004,6 +3004,15 @@ def _leer_fichero(siril, ruta, info):
     k = 65535.0 if d.dtype == np.uint16 else (255.0 if d.dtype == np.uint8 else 1.0)
     d = d.astype(np.float32) / np.float32(k)
     td = getattr(f, "top_down", None)
+    # FITS de SASpro: van de arriba abajo y lo dicen con ROWORDER = 'TOP-DOWN' (el autor, 16 nov 2026). Si la cabecera lo
+    # dice y sirilpy no lo ha marcado, manda la cabecera (antes se veían volteados).
+    try:
+        cab = str(getattr(f, "header", "") or "")
+        m = re.search(r"ROWORDER\s*=\s*'\s*(TOP-DOWN|BOTTOM-UP)", cab, re.I)
+        if m:
+            td = m.group(1).upper() == "TOP-DOWN"
+    except Exception:
+        pass
     if td is not None and bool(td) != bool(info["top_down"]):
         d = d[:, ::-1, :]
     return d

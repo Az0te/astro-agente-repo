@@ -46,3 +46,22 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 - El estirado estadístico a mediana 0,2–0,3 deja algunas imágenes casi negras: `estirarCandidatos` lo descarta y añade un MTF propio.
 - WaveScale HDR sin ventana se cuelga: no se usa por defecto.
 - SFCC y Halo-B-Gon sólo tienen ventana: sin herramienta.
+
+## SASpro 1.24.5 (arreglos pedidos por Rafael, nov 2026)
+
+Las herramientas miran la versión al ejecutarse: con 1.24.5 o posterior usan lo nuevo y, con versiones anteriores, siguen
+con los rodeos de arriba.
+
+- `guardarImagen` guarda con `save_document` (como «Guardar como», con la astrometría) y `cerrarVista` cierra con
+  `close_document`.
+- `estirarCandidatos` vuelve a ofrecer el estirado estadístico de SASpro (sin normalizar, para que la mediana caiga en el
+  objetivo); se descarta si se desvía más de un 20 %.
+- `nucleoCandidatos` añade el comando WaveScale HDR, que ya termina, junto al cálculo propio.
+- `resolverAstrometria` pasa la semilla en grados con `ra_deg`/`dec_deg`. Una RA decimal de 24 o menos sin unidad se lee
+  en horas, como en el diálogo de SASpro.
+- Herramienta nueva `halosCandidatos`: Halo-B-Gon a varias reducciones, con el halo medido alrededor de las estrellas
+  brillantes y control de anillos oscuros.
+- Se quedan sin herramienta, por decisión del autor: SFCC (el usuario debe revisar el emparejado de estrellas) y el
+  apilado (Stacking Suite).
+- Los FITS que guarda SASpro van de arriba abajo con `ROWORDER = 'TOP-DOWN'` y el WCS volteado: son coherentes. Un
+  programa que no lea ROWORDER los verá volteados.

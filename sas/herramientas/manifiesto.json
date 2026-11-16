@@ -1028,6 +1028,23 @@
    }
   },
   {
+   "nombre": "halosCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 900,
+   "paso": "no-lineal/09-recombinar-estrellas.md",
+   "descripcion": "NL halos de estrellas (necesita SASpro 1.24.5 o posterior): Halo-B-Gon a varias reducciones (0–3) frente a no hacer nada. Mide el brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes, la FWHM, los anillos oscuros (corrección pasada) y el cambio del cielo; recomienda la mayor reducción sin anillos oscuros nuevos ni cambio del cielo. La vista no cambia: aplicarCandidato(id).",
+   "resumen": "NL: compara Halo-B-Gon a varias reducciones (SASpro ≥ 1.24.5).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string", "description": "La vista (nombre o uid). Sin ella, la activa."},
+     "reducciones": {"type": "array", "items": {"type": "integer"}, "description": "Reducciones a probar, 0–3 (por defecto [1, 2, 3])."},
+     "lineal": {"type": "boolean", "description": "La imagen está en lineal (por defecto no: después de estirar)."}
+    }
+   }
+  },
+  {
    "nombre": "reducirEstrellasCandidatos",
    "fichero": "herramientas.py",
    "nivel": "lectura",
