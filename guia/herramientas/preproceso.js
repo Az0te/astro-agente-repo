@@ -924,8 +924,8 @@ function ppEjecutar(prog, args, maxMinutos) {
 // <noche>/FLAT agrupados por filtro y exposición; sus darks de flats de <noche>/DARK (misma exposición, gain y offset)
 // → master darkflat (media, winsorized) → ImageCalibration de los flats → ImageIntegration (media, multiplicativa,
 // winsorized con flujos igualados). Deja "<noche>/Master Flat <filtro> <exp>s <noche>.xisf" (lanzarWBPP los prefiere
-// a la carpeta FLAT) y los intermedios en <noche>/_flats_trabajo. carpeta: la de una noche, una lista o la del objeto
-// (todas sus noches con FLAT). Opciones: sobrescribir (false: si el master ya existe, se salta).
+// a la carpeta FLAT) y "<noche>/Master DarkFlat ...xisf"; los flats calibrados intermedios se borran. carpeta: la de una noche, una lista o la del objeto
+// (todas sus noches con FLAT). Opciones: sobrescribir (false: si el master ya existe, se salta), conservarIntermedios.
 function hacerMasterFlats(carpeta, o) {
   o = o || {};
   var noches = [];
@@ -975,6 +975,12 @@ function hacerMasterFlats(carpeta, o) {
       var m = { noche: nombreNoche, filtro: fil, exposicion_s: h0.exp, flats: G.length, master: destino };
       try {
         if (File.exists(destino) && !o.sobrescribir) { m.nota = "ya existía (sobrescribir: true para rehacerlo)"; r.masters.push(m); return; }
+        // Saturación en un flat bruto, por canal CFA (un canal al 100 % no se ve en la mediana del master).
+        try {
+          var lv = ppFlatLevel(G[Math.floor(G.length / 2)].fichero, h0.BAYERPAT || o.bayer);
+          m.saturados_pct = {};
+          for (var cc in lv) { m.saturados_pct[cc] = lv[cc].saturados_pct; if (lv[cc].saturados_pct > 1) r.no_cumple.push(nom + ": flat saturado en " + cc + " (" + lv[cc].saturados_pct + " % a >= 0,98): no corrige ese canal; repetir los flats con menos exposición o brillo."); }
+        } catch (e) { }
         var D = hd.filter(function (d) { return Math.abs(d.exp - h0.exp) <= Math.max(0.05 * h0.exp, 0.02) && (d.gain === null || h0.gain === null || d.gain == h0.gain) &&
                                                 (d.offset === null || h0.offset === null || d.offset == h0.offset) && d.bin == h0.bin && d.ancho == h0.ancho; });
         if (!File.directoryExists(trab)) File.createDirectory(trab, true);
@@ -982,7 +988,8 @@ function hacerMasterFlats(carpeta, o) {
         if (D.length) {
           var wd = integrar(D.map(function (d) { return d.fichero; }), 0, 4, 0);
           var dmed = wd.mainView.image.median() * 65535;
-          dkPath = trab + "MasterDarkFlat " + fil + " " + h0.exp.toFixed(2) + "s " + nombreNoche + ".xisf";
+          // En la raíz de la noche, junto al master flat (como lo deja Rafael: [[donde-guardar-masters]]).
+          dkPath = n + "/Master DarkFlat " + fil + " " + h0.exp.toFixed(2) + "s " + nombreNoche + ".xisf";
           guardar(wd, dkPath, D[0], "Master Dark"); wd.forceClose();
           m.darkflats = D.length; m.darkflat_mediana_adu = +dmed.toFixed(1);
         } else r.no_cumple.push(nom + ": sin darks de flats de " + h0.exp + " s en " + n + "/DARK: master flat sin calibrar (queda el bias dentro).");
@@ -1000,8 +1007,11 @@ function hacerMasterFlats(carpeta, o) {
         var c = im.median(new Rect(W / 2 - q, H / 2 - q, W / 2 + q, H / 2 + q)), z = function (x, y) { return +(im.median(new Rect(x, y, x + q, y + q)) / c).toFixed(3); };
         m.mediana_adu = +(im.median() * 65535).toFixed(0);
         m.esquinas_sobre_centro = [z(20, 20), z(W - 20 - q, 20), z(20, H - 20 - q), z(W - 20 - q, H - 20 - q)];
-        m.saturados_pct = 0;
         guardar(wf, destino, h0, "Master Flat"); wf.forceClose();
+        if (Math.min.apply(null, m.esquinas_sobre_centro) > 0.99)
+          r.control.revisar_a_ojo.push(nom + ": flat sin viñeteo (esquinas " + m.esquinas_sobre_centro.join("/") + "): ¿saturado o de otro tren óptico?");
+        // Los flats calibrados intermedios sobran (conservarIntermedios: true para dejarlos).
+        if (dkPath && !o.conservarIntermedios) ppBorrarArbol(trab + "cal " + fil + " " + h0.exp.toFixed(2) + "s");
         // Controles: nivel del flat, darkflat cerca del bias, esquinas creíbles.
         if (m.mediana_adu > 0.85 * 65535) r.no_cumple.push(nom + ": flat muy alto (mediana " + m.mediana_adu + " ADU): cerca de saturar.");
         if (m.mediana_adu < 0.08 * 65535) r.control.revisar_a_ojo.push(nom + ": flat muy bajo (mediana " + m.mediana_adu + " ADU).");
@@ -1013,6 +1023,7 @@ function hacerMasterFlats(carpeta, o) {
       } catch (e) { m.error = String(e.message || e); r.no_cumple.push(nom + ": " + m.error); }
       r.masters.push(m);
     });
+    if (!o.conservarIntermedios && File.directoryExists(trab)) try { ppBorrarArbol(trab.replace(/\/$/, "")); } catch (e) { }
   });
   r.control.medido.push(r.masters.length + " master flats en " + noches.length + " noches. lanzarWBPP usa los de la carpeta de cada noche.");
   return r;
