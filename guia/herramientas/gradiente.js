@@ -838,6 +838,15 @@ function gradienteCandidatos(viewId, o) {
   // a la corrección referida a un survey (SRGC), por delante del plano en las cajas de cielo (IC 1396, 16 nov 2026).
   // Las medidas de cielo de aquí usan esas cajas, que en estos campos son nebulosa, así que no lo verían.
   var oscuras = nebulosa && elegibles.filter(function (x) { return x.metodo === "Polinomio celdas oscuras" && eat(x) <= 1 && absCorr(x) < 0.3; })[0];
+  // Pero sólo cuando las medidas de cielo no son fiables (pocas cajas de cielo) o el plano oscuro no deja mucho más
+  // gradiente que el elegido (17-11-2026, IC 1805 OIII: con el 47 % de cajas de cielo ganó «celdas oscuras» dejando el
+  // 49 % del gradiente frente al 5 % de polinomio + bordes, que sólo se llevaba un 2,3 % del objeto).
+  var cajasCielo = r.manchas_original && isFinite(r.manchas_original.cajas_cielo_pct) ? r.manchas_original.cajas_cielo_pct : null;
+  if (oscuras && best && oscuras !== best && cajasCielo !== null && cajasCielo >= 40 && resid(oscuras) > resid(best) + 0.15) {
+    r.alternativa_oscuras = oscuras.vista + " (" + oscuras.metodo + "): no elegido porque deja el " + Math.round(100 * resid(oscuras)) +
+                            " % del gradiente frente al " + Math.round(100 * resid(best)) + " % del recomendado, con " + cajasCielo + " % de cajas de cielo (medida fiable).";
+    oscuras = null;
+  }
   if (oscuras) best = oscuras;
   if (best) {
     var bc = best.metricas.gcStructCopy;
