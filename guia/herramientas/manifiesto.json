@@ -220,8 +220,8 @@
    "fichero": "preproceso.js",
    "nivel": "lectura",
    "timeout_s": 1800,
-   "descripcion": "Paso 3 lineal: mide los subs con ImageAnalysis y rechaza por FWHM, excentricidad y nubes dentro de cada grupo (carpeta, filtro, exposición). Devuelve tabla, aprobados, dudosos, rechazados con motivo, pesos y un fichero de lista de aprobados para lanzarWBPP. Puede tardar varios minutos: devuelve un trabajo.",
-   "resumen": "Paso 3 lineal: mide subs (FWHM, excentricidad, nubes), rechaza por grupo y deja la lista para lanzarWBPP. Devuelve un trabajo.",
+   "descripcion": "Paso 3 lineal: mide los subs con ImageAnalysis y rechaza por FWHM, excentricidad y nubes dentro de cada grupo (carpeta, filtro, exposición). Devuelve tabla, aprobados, dudosos, rechazados con motivo, pesos y un fichero de lista de aprobados (lista_aprobados) para lights de lanzarWBPP. Si el usuario pide apilar «los subs aprobados» y no da una lista, son los que aprueba esta función: ejecútala sin preguntar. Puede tardar varios minutos: devuelve un trabajo.",
+   "resumen": "Paso 3 lineal: mide subs (FWHM, excentricidad, nubes), rechaza por grupo y deja lista_aprobados para lanzarWBPP («subs aprobados» del usuario = esta lista). Devuelve un trabajo.",
    "paso": "lineal/03-blink-subframeselector.md",
    "params": {
     "type": "object",
