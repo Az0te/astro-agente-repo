@@ -13,7 +13,7 @@ Rafael envió el informe en inglés (`bugs_saspro_en.md` / `correo_saspro_en.md`
 | Guardar XISF perdía la astrometría | nuevo `ctx.save_document(path, doc=None, bit_depth=None, jpeg_quality=None, export_opts=None)`, igual que Guardar como; además Guardar como escribía la cabecera con la que se abrió la imagen, no la actual (arreglado) | guardarImagen: usar `save_document` si existe |
 | Cerrar documentos desde script | nuevo `ctx.close_document(doc=None, force=False)` (sin force pregunta si hay cambios, como en la GUI) | cerrarVista: usar `close_document(force=True)` si existe |
 | RA decimal ≤ 24 leída como horas | **se mantiene** (como en el diálogo); los preajustes aceptan `ra_deg`, `ra_hours`, `dec_deg` y el texto `10.68°`, `00h42m44s`, `+41d16m09s` | resolverAstrometria ya pasa sexagesimal; con 1.24.5, `ra_deg`/`dec_deg` |
-| Halo-B-Gon | nuevo comando `ctx.run_command("halo_b_gon", {"reduction": 0-3, "linear": False})` | herramienta nueva (reducción de halos) cuando esté instalada |
+| Halo-B-Gon | nuevo comando `ctx.run_command("halo_b_gon", {"reduction": 0-3, "linear": False})` | herramienta nueva (reducción de halos); desde el 16 nov, en versiones sin el comando (1.24.4 y anteriores) se usa su función interna `halobgon.compute_halo_b_gon` |
 
 **Hecho el 16 nov (commit 6524d4b):** todo lo de la tabla, con detección de versión (`_sas_al_menos(1, 24, 5)` o
 `hasattr`) y los rodeos antiguos para versiones anteriores; `halosCandidatos` nueva. Probado con ctx falso y el puente
@@ -21,7 +21,7 @@ falso. **Pendiente:** prueba real cuando Rafael instale 1.24.5 (comprobar tambi�
 `wavescale_hdr`: se usaron `compression_factor`, `n_scales`, `mask_gamma`).
 
 Se quedan como están (decisión del autor):
-- **SFCC sin ventana:** depende de una consulta al catálogo, una astrometría y el emparejado de estrellas que el usuario debe revisar antes de aceptar; no quiere que corra desatendido.
+- **SFCC sin ventana:** depende de una consulta al catálogo, una astrometría y el emparejado de estrellas que el usuario debe revisar antes de aceptar; no quiere que corra desatendido. Por eso SetiAstroPilot no la monta con sus funciones internas: si se hace, que sea una calibración propia que enseñe el emparejado y pida el visto bueno.
 - **Stacking Suite sin ventana:** es una aplicación completa con su estado, ficheros y ajustes; exponerla como comando es el papel de «atender peticiones de otro programa» que no quiere para SASpro.
 - **Orden de filas en FITS:** SASpro y PixInsight trabajan de arriba abajo; SASpro voltea el WCS con los píxeles y escribe ROWORDER, así que sus ficheros son coherentes. Lo que se vea volteado en otros programas es cosa de esos programas (en Siril: comprobar que lee ROWORDER).
 - **remove_green con preserve_lightness:** funciona como está pensado; para el SCNR clásico, sin esa opción.
