@@ -1,5 +1,29 @@
 # Borradores de informes de fallos para Seti Astro Suite Pro
 
+## Respuesta del autor (16 nov 2026) y qué cambia en SetiAstroPilot
+
+Rafael envió el informe en inglés (`bugs_saspro_en.md` / `correo_saspro_en.md`). Frank contestó que en **1.24.5**:
+
+| Punto | En 1.24.5 | Qué hacer en SetiAstroPilot cuando esté instalada |
+|---|---|---|
+| `base_document()` TypeError | arreglado | se puede volver a usar (hoy `_activo` lo rodea) |
+| `stat_stretch` sin ventana (casi negro / se pasa) | arreglado: con recorte de negro los píxeles bajo el punto negro iban a negativo y la curva los volvía blancos; con Normalize arrastraba toda la imagen. Ahora el script acepta todas las opciones (`no_black_clip`, `blackpoint_sigma`…) y lo que no se pase usa los valores por defecto de la herramienta, no los del diálogo. El comando sigue con `normalize=True` por defecto | pasar `normalize=False` para que la mediana caiga en el objetivo; volver a ofrecer `stat_stretch` en estirarCandidatos junto al MTF propio |
+| WaveScale HDR sin ventana se colgaba | arreglado: termina, devuelve True y lanza error si falla | se puede usar el comando en vez de `compute_wavescale_hdr` |
+| Cosmic Clarity sin PyTorch esperaba siempre | arreglado: muestra el motivo y lanza error | `_comprobar_ia` puede quedar como aviso previo |
+| Guardar XISF perdía la astrometría | nuevo `ctx.save_document(path, doc=None, bit_depth=None, jpeg_quality=None, export_opts=None)`, igual que Guardar como; además Guardar como escribía la cabecera con la que se abrió la imagen, no la actual (arreglado) | guardarImagen: usar `save_document` si existe |
+| Cerrar documentos desde script | nuevo `ctx.close_document(doc=None, force=False)` (sin force pregunta si hay cambios, como en la GUI) | cerrarVista: usar `close_document(force=True)` si existe |
+| RA decimal ≤ 24 leída como horas | **se mantiene** (como en el diálogo); los preajustes aceptan `ra_deg`, `ra_hours`, `dec_deg` y el texto `10.68°`, `00h42m44s`, `+41d16m09s` | resolverAstrometria ya pasa sexagesimal; con 1.24.5, `ra_deg`/`dec_deg` |
+| Halo-B-Gon | nuevo comando `ctx.run_command("halo_b_gon", {"reduction": 0-3, "linear": False})` | herramienta nueva (reducción de halos) cuando esté instalada |
+
+Se quedan como están (decisión del autor):
+- **SFCC sin ventana:** depende de una consulta al catálogo, una astrometría y el emparejado de estrellas que el usuario debe revisar antes de aceptar; no quiere que corra desatendido.
+- **Stacking Suite sin ventana:** es una aplicación completa con su estado, ficheros y ajustes; exponerla como comando es el papel de «atender peticiones de otro programa» que no quiere para SASpro.
+- **Orden de filas en FITS:** SASpro y PixInsight trabajan de arriba abajo; SASpro voltea el WCS con los píxeles y escribe ROWORDER, así que sus ficheros son coherentes. Lo que se vea volteado en otros programas es cosa de esos programas (en Siril: comprobar que lee ROWORDER).
+- **remove_green con preserve_lightness:** funciona como está pensado; para el SCNR clásico, sin esa opción.
+- **ABE escala a máximo 1:** intencionado.
+
+---
+
 Encontrados al probar SetiAstroPilot con SASpro **1.24.2.post2** (Windows 11, instalador) el 13 nov 2026, con un master
 de M31 (ASI2600MC, 6248 × 4176, 32 bits, XISF de WBPP). **Borradores**: no se han publicado. Rafael decide si se envían
 y dónde (https://github.com/setiastro/setiastrosuitepro/issues). El código citado es de la rama `main` de GitHub.
