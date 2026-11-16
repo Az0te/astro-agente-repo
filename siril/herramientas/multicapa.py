@@ -260,6 +260,130 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=No
                     "cargado y ya calibrado de color; para una paleta, paletasCandidatos con todas las rayas."}
 
 
+# --- revisión del recorte: obligatoria antes del gradiente (igual que SetiAstroPilot) ---------------------------
+# Rafael (16 nov 2026): «hay que checkear bien los recortes antes de seguir con los gradientes». IC 1396: franjas de
+# cobertura parcial (más ruido, menos subs) de hasta 128 px; el gradiente se ajustaba mal y la esquina salió cian.
+
+def _esquinas_jpg(p, ruta, lado=256):
+    from PIL import Image
+    q = p
+    if P._lineal(p[:, ::8, ::8]):
+        med = np.median(p[:, ::8, ::8], axis=(1, 2), keepdims=True)
+        mad = np.median(np.abs(p[:, ::8, ::8] - med), axis=(1, 2), keepdims=True) * 1.4826
+        q = np.clip((p - (med - 2.8 * mad)) / np.maximum(12 * mad, 1e-9), 0, 1)
+    c, h, w = q.shape
+    L = min(lado, h // 2, w // 2)
+    trozos = [q[:, :L, :L], q[:, :L, w - L:], q[:, h - L:, :L], q[:, h - L:, w - L:]]
+    lienzo = np.zeros((3, 2 * L + 4, 2 * L + 4), np.float32)
+    for k, t in enumerate(trozos):
+        t3 = np.repeat(t, 3, axis=0) if t.shape[0] == 1 else t
+        y, x = (k // 2) * (L + 4), (k % 2) * (L + 4)
+        lienzo[:, y:y + L, x:x + L] = t3
+    Image.fromarray((np.clip(np.moveaxis(lienzo, 0, -1), 0, 1) * 255).astype(np.uint8)).save(ruta, quality=90)
+    return str(ruta)
+
+
+def revisarRecorte(siril, ficheros, carpeta=None, aplicar=True, margen=8, umbral_ruido=1.25):
+    """Paso 5b lineal (OBLIGATORIO antes del gradiente): revisa los bordes de los masters alineados (cobertura por el
+    ruido en cada canal, franjas de 8/32/64 px frente al interior, mosaico de esquinas), propone el recorte común (lo
+    peor de cada lado + margen) y, con aplicar, guarda <nombre>_rec.fit recortados igual. La imagen cargada no cambia.
+    Igual que revisarRecorte de SetiAstroPilot."""
+    if isinstance(ficheros, str):
+        ficheros = [x.strip() for x in ficheros.split(";") if x.strip()]
+    fs = [H._ruta(f, "ficheros") for f in ficheros]
+    previa = None
+    try:
+        previa = siril.get_image_filename()
+    except Exception:
+        pass
+    if not previa:
+        siril.cmd("load", H._arg_cmd(H.ruta_legible(fs[0])[0]))
+    info = H._info(siril)
+    lados = {"izquierda": 0, "derecha": 0, "arriba": 0, "abajo": 0}
+    datos, por_fichero, forma = [], {}, None
+    for f in fs:
+        d = P._leer_fichero(siril, H.ruta_legible(f)[0], info)          # orden de filas de Siril
+        disp = d if info["top_down"] else d[:, ::-1, :]                    # fila 0 arriba
+        if forma is None:
+            forma = disp.shape[1:]
+        elif disp.shape[1:] != forma:
+            raise RuntimeError(f"{f.name} mide {disp.shape[2]}×{disp.shape[1]} y el primero {forma[1]}×{forma[0]}: alinéalos antes.")
+        cob = {}
+        for i in range(disp.shape[0]):
+            for k, v in P._cobertura_ruido(disp[i], umbral=umbral_ruido).items():
+                cob[k] = max(cob.get(k, 0), v)
+        for k in lados:
+            lados[k] = max(lados[k], cob[k])
+        por_fichero[f.name] = {"cobertura_ruido_px": cob, "franjas_antes": P._franjas_borde(disp)}
+        try:
+            cab = siril.load_image_from_file(str(H.ruta_legible(f)[0])).header or ""
+        except Exception:
+            cab = ""
+        datos.append((f, d, disp, cab))
+    h, w = forma
+    m = int(margen)
+    x0, x1 = lados["izquierda"] + m, w - lados["derecha"] - m
+    y0, y1 = lados["arriba"] + m, h - lados["abajo"] - m
+    if (x1 - x0) < 0.7 * w or (y1 - y0) < 0.7 * h:
+        raise RuntimeError(f"El recorte propuesto deja menos del 70 % ({x1 - x0}×{y1 - y0} de {w}×{h}): revisa los masters "
+                           f"(cobertura por lado: {lados}).")
+    destino = H._ruta(carpeta, "carpeta") if carpeta else fs[0].parent
+    destino.mkdir(parents=True, exist_ok=True)
+    prev = H.DATOS / "previas"
+    prev.mkdir(parents=True, exist_ok=True)
+    salidas, fallos = [], []
+    for f, d, disp, cab in datos:
+        rec_disp = np.ascontiguousarray(disp[:, y0:y1, x0:x1], dtype=np.float32)
+        fr = P._franjas_borde(rec_disp)
+        por_fichero[f.name]["franjas_despues"] = fr
+        por_fichero[f.name]["esquinas_jpg"] = _esquinas_jpg(rec_disp, prev / f"recorte_{re.sub(r'[^\w.-]', '_', f.stem)}.jpg")
+        for lado, filas in fr.items():
+            d8 = filas["8px"]
+            if max(d8["sigma_rel"]) > 1.5:
+                fallos.append(f"{f.name}: franja de 8 px {lado} con ruido ×{max(d8['sigma_rel'])}")
+            if rec_disp.shape[0] == 3 and d8["dominante_pct"] > 15:
+                fallos.append(f"{f.name}: franja de 8 px {lado} con dominante {d8['dominante_pct']} %")
+        if aplicar:
+            rec = rec_disp if info["top_down"] else rec_disp[:, ::-1, :]
+            dst = destino / f"{f.stem}_rec.fit"
+            k = 2
+            while dst.exists():
+                dst = destino / f"{f.stem}_rec_{k}.fit"
+                k += 1
+            if not str(cab).strip():
+                cab = "SIMPLE  =                    T\nBITPIX  =                  -32\nNAXIS   =                    2\nEND"
+            siril.save_image_file(np.ascontiguousarray(rec if rec.shape[0] > 1 else rec[0]), cab, str(dst))
+            H.GUARDADOS.add(H._clave(dst))
+            salidas.append(str(dst))
+            _anotar_origen(dst, [f])
+    if aplicar:
+        e = _estado()
+        e["alineados"] = [_raiz(s) for s in salidas]
+        e["recorte_ok"] = [_raiz(s) for s in salidas] if not fallos else []
+        _guardar_estado(e)
+    return {"pasa": not fallos, "fallos": fallos, "cobertura_por_lado_px": lados, "margen_px": m,
+            "recorte": [x0, y0, x1, y1], "quita_px": {"izquierda": x0, "derecha": w - x1, "arriba": y0, "abajo": h - y1},
+            "tam": [x1 - x0, y1 - y0], "recortados": salidas, "por_fichero": por_fichero,
+            "nota": ("Mira los mosaicos de esquinas (esquinas_jpg) antes de seguir. Usa los *_rec.fit para todo lo demás. "
+                     "Si los masters llevaban astrometría, vuelve a resolver el RGB recortado antes del color.") if not fallos else
+                    "NO PASA: revisa los fallos y las esquinas; sube el margen o recorta a mano antes del gradiente."}
+
+
+def recorte_revisado(fuente):
+    """True si la fuente viene de masters que pasaron revisarRecorte; False si viene de la última alineación sin revisar;
+    None si no se sabe (otro trabajo)."""
+    try:
+        e = _estado()
+        if not e.get("alineados") or not fuente:
+            return None
+        raices = _raices(fuente, e)
+        if any(a in r for r in raices for a in (e.get("recorte_ok") or [])):
+            return True
+        return False if any(a in r for r in raices for a in e["alineados"]) else None
+    except Exception:
+        return None
+
+
 # --- procedencia: qué masters alineados acaban en cada capa (igual que SetiAstroPilot) ---------------------
 # IC 1396 (14 nov 2026): las versiones de Siril y SASpro usaron sólo el RGB y el HaO3; el SHb y el SO3 quedaron fuera
 # sin que nada avisara. alinearMasters guarda qué alineó; desmezclar y unirCapas, de qué ficheros sale cada capa; y
@@ -296,6 +420,7 @@ def _anotar_alineados(ficheros):
     try:
         e = _estado()
         e["alineados"] = [_raiz(f) for f in ficheros]
+        e["recorte_ok"] = []                  # alineación nueva: falta revisarRecorte
         _guardar_estado(e)
     except Exception:
         pass
@@ -644,5 +769,6 @@ def combinarRGB(siril, r, g, b):
     return res
 
 
-LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand, "unirCapas": unirCapas,
+LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "revisarRecorte": revisarRecorte,
+                   "desmezclarDualBand": desmezclarDualBand, "unirCapas": unirCapas,
                    "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB}

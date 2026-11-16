@@ -1334,6 +1334,25 @@
    }
   },
   {
+   "nombre": "revisarRecorte",
+   "fichero": "multicapa.py",
+   "nivel": "disco",
+   "timeout_s": 900,
+   "paso": "lineal/05-staralignment-crop.md",
+   "descripcion": "Paso 5b, OBLIGATORIO tras alinearMasters y antes de cualquier gradiente: revisa los bordes de los masters alineados. Cobertura por el ruido en cada canal (franjas con menos subs), estadística de las franjas de 8/32/64 px de cada lado frente al interior (media, σ, dominante) y mosaico de las cuatro esquinas (esquinas_jpg: míralo). Propone el recorte común (lo peor de cada lado + margen) y, con aplicar, guarda <nombre>_rec.fit. Usa los _rec para todo lo demás. gradienteCandidatos no recomienda nada sobre capas de masters alineados sin este paso.",
+   "resumen": "Paso 5b: revisa y recorta los bordes de los masters alineados (antes del gradiente).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ficheros": {"type": "array", "items": {"type": "string"}, "description": "Los masters alineados (todos)."},
+     "carpeta": {"type": "string", "description": "Carpeta de salida (por defecto la de los alineados)."},
+     "aplicar": {"type": "boolean", "description": "Guardar los recortados (por defecto sí)."},
+     "margen": {"type": "integer", "description": "Margen extra en px por lado (por defecto 8)."}
+    },
+    "required": ["ficheros"]
+   }
+  },
+  {
    "nombre": "alinearMasters",
    "fichero": "multicapa.py",
    "nivel": "disco",

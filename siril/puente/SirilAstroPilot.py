@@ -110,7 +110,9 @@ class Manejador(socketserver.StreamRequestHandler):
         if nombre == "__detener":
             parar.set()
             return self.enviar({"estado": "ok", "resultado": "El puente se detiene."})
-        if nombre not in H.LISTA:
+        # Herramientas nuevas: la lista se recarga en el hilo de trabajo (_recargar_si_cambio) antes de comprobarla; aquí sólo
+        # se rechaza lo que no puede ser una herramienta (16 nov 2026: revisarRecorte, recién añadida, salía «no permitida»).
+        if nombre not in H.LISTA and not str(nombre).isidentifier():
             return self.enviar({"estado": "error", "error": f"Herramienta no permitida: {nombre}"})
         t = Trabajo(p.get("id"), nombre, p.get("args"))
         cola.put(t)

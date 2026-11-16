@@ -925,6 +925,19 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
     if base["objeto_campo_pct"] > 40:
         r["aviso_campo"] = (f"El objeto ocupa el {round(base['objeto_campo_pct'])} % del campo: gradiente_restante es "
                             "orientativo. Decide con previa y estadisticas(bordes).")
+    # Rafael (16 nov 2026): revisar bien los recortes antes del gradiente. Con varios masters alineados, si esta vista no
+    # sale de unos que pasaron revisarRecorte, aviso fuerte (las franjas de cobertura parcial tuercen el modelo).
+    try:
+        import multicapa
+        rv = multicapa.recorte_revisado(multicapa._fuente(ctx, d))
+        if rv is False:
+            r["AVISO_RECORTE"] = ("¡ANTES DEL GRADIENTE, revisarRecorte! Esta vista viene de masters alineados sin el recorte "
+                                  "revisado: las franjas de los bordes con menos subs tuercen el modelo (IC 1396: esquina "
+                                  "cian). Haz revisarRecorte(ficheros de los alineados) y usa los *_rec.")
+            r["recomendado"] = None
+            r["motivo"] = "Sin recomendación hasta revisar el recorte (AVISO_RECORTE). " + str(r.get("motivo") or "")
+    except Exception:
+        pass
     return _galeria(r, p, "modelo")
 
 

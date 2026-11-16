@@ -489,6 +489,78 @@ def saturar(p, k, fondo=None):
     return np.clip(L + g * d, 0, 1).astype(np.float32)
 
 
+def cobertura_ruido(x, b=16, umbral=1.25, pct=98.0, max_bloques=40):
+    """Cobertura por el RUIDO, en lineal y antes del gradiente: con menos subs el ruido sube (∝ 1/√N). Ruido local (MAD
+    del paso alto en bloques b×b) relativo al del centro; por borde, píxeles desde el borde con ruido > umbral × centro
+    (percentil 'pct' de las filas/columnas). IC 1396 (16 nov 2026): el S2O3 tenía 96–128 px a la derecha y 80 abajo con
+    más ruido; el gradiente se ajustaba mal ahí y la esquina salía cian. Igual que _cobertura_ruido de Siril."""
+    x = np.asarray(x, dtype=np.float32)
+    hp = x - _caja(x, 1)
+    h, w = hp.shape
+    hb, wb = h // b, w // b
+    blk = np.abs(hp[:hb * b, :wb * b]).reshape(hb, b, wb, b)
+    m = np.median(blk, axis=(1, 3)) * 1.4826
+    m = m / max(float(np.median(m[hb // 4:3 * hb // 4, wb // 4:3 * wb // 4])), 1e-12)
+    vistas = {"izquierda": m, "derecha": m[:, ::-1], "arriba": m.T, "abajo": m[::-1, :].T}
+    out = {}
+    for lado, a in vistas.items():
+        alto = a[:, :max_bloques] > umbral
+        corr = np.where(alto.all(axis=1), max_bloques, np.argmin(alto, axis=1))
+        out[lado] = int(np.percentile(corr, pct)) * b
+    return out
+
+
+def franjas_borde(p, anchos=(8, 32, 64), interior=(200, 400)):
+    """Estadística de los bordes: media y σ por canal en franjas de 8/32/64 px de cada lado frente a una franja interior
+    (200–400 px hacia dentro), y dominante de color de cada franja. Para ver bordes con menos señal, más ruido o color."""
+    p = np.asarray(p, dtype=np.float32)
+    c, h, w = p.shape
+    # σ = ruido robusto (MAD del paso alto), no la desviación típica: las estrellas y la nebulosa la inflaban (16 nov 2026).
+    hp = np.stack([p[i] - _caja(p[i], 1) for i in range(c)])
+    vistas = {"izquierda": (p, hp), "derecha": (p[:, :, ::-1], hp[:, :, ::-1]),
+              "arriba": (np.swapaxes(p, 1, 2), np.swapaxes(hp, 1, 2)),
+              "abajo": (np.swapaxes(p[:, ::-1, :], 1, 2), np.swapaxes(hp[:, ::-1, :], 1, 2))}
+
+    def mad(x):
+        return 1.4826 * np.median(np.abs(x - np.median(x, axis=1, keepdims=True)), axis=1)
+
+    out = {}
+    for lado, (a, ah) in vistas.items():
+        i0, i1 = min(interior[0], a.shape[2] // 3), min(interior[1], a.shape[2] // 2)
+        mr = np.median(a[:, :, i0:i1].reshape(c, -1), axis=1)
+        sr = mad(ah[:, :, i0:i1].reshape(c, -1))
+        filas = {}
+        for an in anchos:
+            mf = np.median(a[:, :, :an].reshape(c, -1), axis=1)
+            sf = mad(ah[:, :, :an].reshape(c, -1))
+            dom = 100.0 * float(np.ptp(mf / np.maximum(mr, 1e-9))) if c == 3 else 0.0
+            filas[f"{an}px"] = {"media_rel": [_r(float(v), 3) for v in mf / np.maximum(mr, 1e-9)],
+                                "sigma_rel": [_r(float(v), 3) for v in sf / np.maximum(sr, 1e-9)],
+                                "dominante_pct": _r(dom, 1)}
+        out[lado] = filas
+    return out
+
+
+def cuna_cobertura(L, r=16, banda=(300, 600), umbral=0.5, max_px=600, pct=98.0):
+    """Cuñas de cobertura parcial en cada borde (zona donde un master tiene menos subs o un canal no llega: la señal cae
+    pero no a 0, así que la máscara de datos no la ve). Por cada fila/columna, píxeles desde el borde en que la imagen
+    suavizada está por debajo de 'umbral' × su nivel en la banda 300–600 px hacia dentro; por lado, el percentil 'pct'.
+    IC 1396 c7 de Siril (16 nov 2026): el HaO3 caía a la mitad en 62–83 px arriba a la derecha y la esquina salía cian.
+    Igual que _cuna_cobertura de Siril. Devuelve {lado: px} en la orientación del array."""
+    s = suave(np.asarray(L, dtype=np.float32), r)
+    vistas = {"izquierda": s, "derecha": s[:, ::-1], "arriba": s.T, "abajo": s[::-1, :].T}
+    out = {}
+    for lado, a in vistas.items():
+        n = a.shape[1]
+        b0, b1 = min(banda[0], n // 3), min(banda[1], n // 2)
+        ref = np.median(a[:, b0:b1], axis=1)
+        mp = min(max_px, b0)
+        bajo = a[:, :mp] < umbral * np.maximum(ref, 1e-9)[:, None]
+        corrida = np.where(bajo.all(axis=1), mp, np.argmin(bajo, axis=1))
+        out[lado] = int(np.percentile(corrida, pct))
+    return out
+
+
 def patron_2px(x, r=12):
     """Patrón fijo de periodo 2 px (filas, columnas y diagonal alternas: resto de la matriz Bayer de un master OSC
     debayerizado), estimado con la segunda diferencia (no ve la estructura suave) y promediado en una ventana. En IC 1396

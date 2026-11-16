@@ -385,6 +385,114 @@ def desmezclarDualBand(ctx, vista=None, carpeta=None, filtro=None, quitar_patron
                     "combinarCandidatos(ha, oiii, vista=<RGB lineal ya calibrado de color>)."}
 
 
+# --- revisión del recorte: obligatoria antes del gradiente ---------------------------------------------------
+# Rafael (16 nov 2026): «hay que checkear bien los recortes antes de seguir con los gradientes». En IC 1396 los masters
+# alineados tenían franjas de cobertura parcial (más ruido: menos subs) de hasta 128 px a la derecha y 80 abajo; el
+# gradiente se ajustaba mal allí y la esquina de arriba a la derecha salió cian en la versión final.
+
+def _esquinas_jpg(p, ruta, lado=256):
+    """Mosaico 2×2 de las cuatro esquinas (autoestiradas) para mirar los bordes."""
+    from PIL import Image
+    q = M.autoestirar(p) if M.lineal(p[:, ::8, ::8]) else p
+    c, h, w = q.shape
+    L = min(lado, h // 2, w // 2)
+    trozos = [q[:, :L, :L], q[:, :L, w - L:], q[:, h - L:, :L], q[:, h - L:, w - L:]]
+    lienzo = np.zeros((3, 2 * L + 4, 2 * L + 4), np.float32)
+    for k, t in enumerate(trozos):
+        t3 = np.repeat(t, 3, axis=0) if t.shape[0] == 1 else t
+        y, x = (k // 2) * (L + 4), (k % 2) * (L + 4)
+        lienzo[:, y:y + L, x:x + L] = t3
+    Image.fromarray((np.clip(np.moveaxis(lienzo, 0, -1), 0, 1) * 255).astype(np.uint8)).save(ruta, quality=90)
+    return str(ruta)
+
+
+def revisarRecorte(ctx, ficheros, carpeta=None, aplicar=True, margen=8, umbral_ruido=1.25):
+    """Paso 5b lineal (OBLIGATORIO antes del gradiente): revisa los bordes de los masters alineados. Mide en cada canal
+    de cada master la cobertura por el ruido (franjas con menos subs: ruido > umbral × el del centro), la estadística de
+    las franjas de 8/32/64 px de cada lado frente al interior (media, σ y dominante de color) y guarda un mosaico de las
+    cuatro esquinas. Propone el recorte común (lo peor de cada lado + margen) y, con aplicar, guarda <nombre>_rec.xisf
+    recortados igual (WCS desplazado). Sólo después: desmezclarDualBand, gradienteCandidatos…"""
+    import json
+    if isinstance(ficheros, str):
+        ficheros = [x.strip() for x in ficheros.split(";") if x.strip()]
+    fs = [H._ruta(f) for f in ficheros]
+    datos, lados, por_fichero = [], {"izquierda": 0, "derecha": 0, "arriba": 0, "abajo": 0}, {}
+    forma = None
+    for f in fs:
+        p, cab, meta = _leer(ctx, f)
+        if forma is None:
+            forma = p.shape[1:]
+        elif p.shape[1:] != forma:
+            raise RuntimeError(f"{f.name} mide {p.shape[2]}×{p.shape[1]} y el primero {forma[1]}×{forma[0]}: alinéalos antes.")
+        cob = {}
+        for i in range(p.shape[0]):
+            cr = M.cobertura_ruido(p[i], umbral=umbral_ruido)
+            for k, v in cr.items():
+                cob[k] = max(cob.get(k, 0), v)
+        for k in lados:
+            lados[k] = max(lados[k], cob[k])
+        por_fichero[f.name] = {"cobertura_ruido_px": cob, "franjas_antes": M.franjas_borde(p)}
+        datos.append((f, p, cab, meta))
+    h, w = forma
+    m = int(margen)
+    x0, x1 = lados["izquierda"] + m, w - lados["derecha"] - m
+    y0, y1 = lados["arriba"] + m, h - lados["abajo"] - m
+    if (x1 - x0) < 0.7 * w or (y1 - y0) < 0.7 * h:
+        raise RuntimeError(f"El recorte propuesto deja menos del 70 % ({x1 - x0}×{y1 - y0} de {w}×{h}): revisa los masters "
+                           f"(cobertura por lado: {lados}).")
+    destino = H._ruta(carpeta) if carpeta else fs[0].parent
+    prev = Path.home() / ".setiastropilot" / "previas"
+    prev.mkdir(parents=True, exist_ok=True)
+    salidas, fallos = [], []
+    for f, p, cab, meta in datos:
+        rec = np.ascontiguousarray(p[:, y0:y1, x0:x1], dtype=np.float32)
+        fr = M.franjas_borde(rec)
+        por_fichero[f.name]["franjas_despues"] = fr
+        por_fichero[f.name]["esquinas_jpg"] = _esquinas_jpg(rec, prev / f"recorte_{H._seguro(f.stem)}.jpg")
+        for lado, filas in fr.items():
+            d8 = filas["8px"]
+            if max(d8["sigma_rel"]) > 1.5:
+                fallos.append(f"{f.name}: franja de 8 px {lado} con ruido ×{max(d8['sigma_rel'])}")
+            if rec.shape[0] == 3 and d8["dominante_pct"] > 15:
+                fallos.append(f"{f.name}: franja de 8 px {lado} con dominante {d8['dominante_pct']} %")
+        if aplicar:
+            wv = _wcs(cab, meta, p.shape[1:])
+            hdr = _cabecera_recortada(cab, wv, x0, y0)
+            dst = H._libre(destino / f"{f.stem}_rec.xisf")
+            img = rec[0] if rec.shape[0] == 1 else np.moveaxis(rec, 0, -1)
+            ctx.save_image(np.ascontiguousarray(img), str(dst), original_format="xisf", bit_depth="32-bit floating point",
+                           original_header=hdr, is_mono=(rec.shape[0] == 1))
+            salidas.append(str(dst))
+            _anotar_origen(str(dst), [str(f)])
+    if aplicar:
+        e = _estado()
+        e["alineados"] = [_raiz(s) for s in salidas]
+        e["recorte_ok"] = [_raiz(s) for s in salidas] if not fallos else []
+        _guardar_estado(e)
+    return {"pasa": not fallos, "fallos": fallos, "cobertura_por_lado_px": lados, "margen_px": m,
+            "recorte": [x0, y0, x1, y1], "quita_px": {"izquierda": x0, "derecha": w - x1, "arriba": y0, "abajo": h - y1},
+            "tam": [x1 - x0, y1 - y0], "recortados": salidas, "por_fichero": por_fichero,
+            "nota": ("Mira los mosaicos de esquinas (esquinas_jpg) antes de seguir. Usa los *_rec.xisf para todo lo demás "
+                     "(desmezclarDualBand, gradiente, color).") if not fallos else
+                    "NO PASA: revisa los fallos y las esquinas; sube el margen o recorta a mano antes del gradiente."}
+
+
+def recorte_revisado(fuente):
+    """True si la fuente (vista o fichero) viene de unos masters que pasaron revisarRecorte; None si no hay alineación."""
+    try:
+        e = _estado()
+        if not e.get("alineados"):
+            return None
+        raices = _raices(fuente, e)
+        ok = e.get("recorte_ok") or []
+        if any(a in r for r in raices for a in ok):
+            return True
+        # Sólo es «sin revisar» si viene de los masters de la última alineación (no de otro trabajo).
+        return False if any(a in r for r in raices for a in e["alineados"]) else None
+    except Exception:
+        return None
+
+
 # --- procedencia: qué masters alineados acaban en cada capa ------------------------------------------------
 # IC 1396 (14 nov 2026): las versiones de SASpro y de Siril usaron sólo el RGB y el HaO3; el SHb y el SO3 (4,9 h de
 # señal) quedaron fuera sin que nada avisara, y PixInsight los usó todos. Se guarda qué alineó alinearMasters y de qué
@@ -420,6 +528,7 @@ def _raiz(nombre):
 def _anotar_alineados(ficheros):
     e = _estado()
     e["alineados"] = [_raiz(f) for f in ficheros]
+    e["recorte_ok"] = []                      # alineación nueva: falta revisarRecorte
     _guardar_estado(e)
 
 
@@ -977,6 +1086,7 @@ def componerHDR(ctx, larga, corta, umbral=None, crecer=3, suavizar=8, nombre="HD
     return r
 
 
-LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "desmezclarDualBand": desmezclarDualBand,
+LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "revisarRecorte": revisarRecorte,
+                   "desmezclarDualBand": desmezclarDualBand,
                    "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB, "unirCapas": unirCapas,
                    "paletasCandidatos": paletasCandidatos, "componerHDR": componerHDR}
