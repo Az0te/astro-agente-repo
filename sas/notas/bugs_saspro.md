@@ -15,6 +15,11 @@ Rafael envió el informe en inglés (`bugs_saspro_en.md` / `correo_saspro_en.md`
 | RA decimal ≤ 24 leída como horas | **se mantiene** (como en el diálogo); los preajustes aceptan `ra_deg`, `ra_hours`, `dec_deg` y el texto `10.68°`, `00h42m44s`, `+41d16m09s` | resolverAstrometria ya pasa sexagesimal; con 1.24.5, `ra_deg`/`dec_deg` |
 | Halo-B-Gon | nuevo comando `ctx.run_command("halo_b_gon", {"reduction": 0-3, "linear": False})` | herramienta nueva (reducción de halos) cuando esté instalada |
 
+**Hecho el 16 nov (commit 6524d4b):** todo lo de la tabla, con detección de versión (`_sas_al_menos(1, 24, 5)` o
+`hasattr`) y los rodeos antiguos para versiones anteriores; `halosCandidatos` nueva. Probado con ctx falso y el puente
+falso. **Pendiente:** prueba real cuando Rafael instale 1.24.5 (comprobar también los nombres del preset de
+`wavescale_hdr`: se usaron `compression_factor`, `n_scales`, `mask_gamma`).
+
 Se quedan como están (decisión del autor):
 - **SFCC sin ventana:** depende de una consulta al catálogo, una astrometría y el emparejado de estrellas que el usuario debe revisar antes de aceptar; no quiere que corra desatendido.
 - **Stacking Suite sin ventana:** es una aplicación completa con su estado, ficheros y ajustes; exponerla como comando es el papel de «atender peticiones de otro programa» que no quiere para SASpro.
