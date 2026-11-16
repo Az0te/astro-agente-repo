@@ -43,11 +43,13 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 | L15 Estrellas | `separarEstrellas` | StarNet o DarkStar (remove_stars), SyQon, StarXTerminator (`motor: starx`); deja activa la starless (SASpro activaba la de estrellas) |
 | L16 Continuo | `medirContinuo`, `restarContinuo` | k por fotometría de estrellas (capas con estrellas); resta en las starless, negativos ≤ 0,5 % y emisión ≥ 80 % |
 | NL Halos | `halosCandidatos` → `aplicarCandidato` | Halo-B-Gon (comando en 1.24.5; antes, su función interna) |
+| NL4 Máscaras | `crearMascara`, `aplicarConMascara`, `pixelMath` | máscara de luminancia, cielo, estrellas, color o estructura difusa de SASpro; aplicar un candidato u otra vista a través de ella (efecto, fuga, bordes); PixelMath de SASpro (`img` o `$T`) |
+| Utilidades | `alinearPorEstrellas`, `correccionCosmetica`, `quitarPedestal`, `medirEstrellas` | astroalign de SASpro (sin astrometría), Cosmetic Correction, pedestal por canal, FWHM y excentricidad con SEP |
 | NL1 Estirado | `estirarCandidatos` → `aplicarCandidato` | estirado estadístico enlazado y por canal, GHS con pivote en el cielo y un estirado MTF propio; descarta los que no llegan a su mediana |
 | NL3 SCNR | `quitarVerde` | Remove Green conservando la luminosidad |
 | Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | compresor del bulbo propio (como en Siril); WaveScale HDR solo si se pide; meseta, anillos, brillo y estructura del bulbo |
-| Contraste local | `contrasteCandidatos` → `aplicarCandidato` | CLAHE (sólo escalas medias, 25/50 %), ondículas y máscara de enfoque, propios; contraste ganado por ruido añadido |
-| NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | saturación propia que conserva la luminancia, cielo protegido; dominante < 5 %, sin recortes nuevos |
+| Contraste local | `contrasteCandidatos` → `aplicarCandidato` | CLAHE (sólo escalas medias, 25/50 %), ondículas y máscara de enfoque, propios; Texture Clarity (claridad) y multiescala de SASpro; contraste ganado por ruido añadido |
+| NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | saturación propia que conserva la luminancia, cielo protegido, y SatChroma de SASpro (croma Lab); dominante < 5 %, sin recortes nuevos |
 | L11 / NL7 Nitidez | `nitidezCandidatos` → `aplicarCandidato` | Cosmic Clarity sharpen; detalle ganado y ruido del cielo ≤ ×1,15 |
 | L14 / NL6 Ruido | `ruidoCandidatos` → `aplicarCandidato` | Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator (RC Astro), GraXpert denoise; detalle perdido < 10 % |
 | NL8 Estrellas | `estirarEstrellas` → `aplicarCandidato` | Star Stretch y arcsinh propio sobre la vista de estrellas |

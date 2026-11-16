@@ -378,7 +378,7 @@
    "fichero": "herramientas.py",
    "nivel": "vista",
    "timeout_s": 1800,
-   "descripcion": "Lanza un proceso de SASpro de la lista blanca sobre una vista con su preset (claves y valores: ayudaProceso). Ejemplos: abe, graxpert, background_neutral, white_balance, remove_green, stat_stretch, star_stretch, ghs, curves, wavescale_hdr, wavescale_dark_enhance, cosmic_clarity, convo, syqon_starless, remove_stars, plate_solve, geometría, halo_b_gon; y RC Astro con su programa rc-astro: rc_bxt (stars, nonstellar, halos, correct_only), rc_nxt (denoise, color, iteraciones), rc_sxt (deja la starless; para las estrellas, separarEstrellas motor starx). Con deshacer. Avisa si la imagen no cambia.",
+   "descripcion": "Lanza un proceso de SASpro de la lista blanca sobre una vista con su preset (claves y valores: ayudaProceso). Ejemplos: abe, graxpert, background_neutral, white_balance, remove_green, stat_stretch, star_stretch, ghs, curves, wavescale_hdr, wavescale_dark_enhance, cosmic_clarity, convo, syqon_starless, remove_stars, plate_solve, geometría, halo_b_gon; y RC Astro con su programa rc-astro: rc_bxt (stars, nonstellar, halos, correct_only), rc_nxt (denoise, color, iteraciones), rc_sxt (deja la starless; para las estrellas, separarEstrellas motor starx); y funciones sin ventana de SASpro: texture_clarity (texture_amount, texture_radius, unsharp_amount, unsharp_radius, unsharp_threshold, clarity_amount, clarity_radius, mask_strength) y satchroma (points [[tono 0–1, ganancia 0–3]...], strength, mode 0 saturación HSV / 1 croma Lab). Con deshacer. Avisa si la imagen no cambia.",
    "resumen": "Lanza un proceso de SASpro (lista blanca) con su preset.",
    "params": {
     "type": "object",
@@ -936,8 +936,8 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Contraste local (no lineal, después del núcleo y antes de saturar): compara CLAHE (25 % y 50 % del detalle de escalas medias, sin levantar el fondo), realce por ondículas de las escalas 2–4 y máscara de enfoque; mide el contraste local en el objeto, el ruido del cielo (≤ ×1,25; ×1,10 en galaxias), la dominante y los recortes, y recomienda el de más contraste por ruido añadido. La vista NO cambia (aplicarCandidato).",
-   "resumen": "Contraste local: compara CLAHE, ondículas y enfoque; no cambia la vista.",
+   "descripcion": "Contraste local (no lineal, después del núcleo y antes de saturar): compara CLAHE (25 % y 50 % del detalle de escalas medias, sin levantar el fondo), realce por ondículas de las escalas 2–4, máscara de enfoque y escala grande (propios), y Texture Clarity (claridad 0,25 y 0,5) y la descomposición multiescala de SASpro; mide el contraste local en el objeto, el ruido del cielo (≤ ×1,25; ×1,10 en galaxias), la dominante y los recortes, y recomienda el de más contraste por ruido añadido. La vista NO cambia (aplicarCandidato).",
+   "resumen": "Contraste local: compara CLAHE, ondículas, enfoque, Texture Clarity y multiescala; no cambia la vista.",
    "params": {
     "type": "object",
     "properties": {
@@ -953,9 +953,16 @@
         "clahe_suave",
         "clahe_medio",
         "ondiculas",
-        "enfoque"
+        "enfoque",
+        "grande_suave",
+        "grande_fuerte",
+        "claridad_suave",
+        "claridad_media",
+        "textura",
+        "multiescala"
        ]
-      }
+      },
+      "description": "Por defecto todos menos textura (escala fina de Texture Clarity, sube el grano)."
      },
      "tipo": {
       "type": "string",
@@ -998,7 +1005,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, con el cielo protegido; mide saturación del objeto y del cielo, dominante del cielo (< 5 %) y recortes nuevos, y recomienda la mayor que cumple. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, con el cielo protegido, y con SatChroma de SASpro (croma Lab ×1,25 y ×1,5); mide saturación del objeto y del cielo, dominante del cielo (< 5 %) y recortes nuevos, y recomienda la mayor que cumple. La vista NO cambia (aplicarCandidato).",
    "resumen": "NL5: compara saturaciones; no cambia la vista.",
    "params": {
     "type": "object",
@@ -1017,6 +1024,11 @@
      "proteger_cielo": {
       "type": "boolean",
       "description": "Reducir el aumento en el cielo (por defecto true)."
+     },
+     "satchroma": {
+      "type": "array",
+      "items": {"type": "number"},
+      "description": "Aumentos de croma con SatChroma de SASpro (por defecto [0.25, 0.5]; [] para no probarlo)."
      }
     }
    }
@@ -1098,6 +1110,139 @@
       "type": "boolean",
       "description": "Incluir BXT solo corrección (por defecto true)."
      }
+    }
+   }
+  },
+  {
+   "nombre": "crearMascara",
+   "fichero": "mascaras.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "no-lineal/04-mascaras.md",
+   "descripcion": "Paso 4 no lineal: crea una máscara gris 0–1 en una vista nueva y mide su cobertura (media, % > 0,5, media en el cielo y en el objeto). No la aplica. tipo: luminancia (brillo ^ gamma), cielo (1 − luminancia: protege el objeto), estrellas (paso alto > 5σ, crecida), color (por tono, ponderada por saturación) o estructura (estructura difusa de SASpro: nebulosa extensa sin estrellas).",
+   "resumen": "Paso 4: crea una máscara (luminancia, cielo, estrellas, color o estructura) en una vista nueva.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string", "description": "Vista de la que sale la máscara. Sin ella, la activa."},
+     "tipo": {"type": "string", "enum": ["luminancia", "cielo", "estrellas", "color", "estructura"]},
+     "gamma": {"type": "number", "description": "Gamma de la máscara (luminancia, cielo, color). >1 la estrecha a lo más brillante. Por defecto 1."},
+     "suavizar": {"type": "integer", "description": "Radio de suavizado en px (por defecto 2)."},
+     "tono": {"type": "string", "description": "Con tipo color: rojo, naranja, amarillo, verde, cian, azul, magenta o grados."},
+     "ancho": {"type": "number", "description": "Con tipo color: ancho en grados (30)."},
+     "crecer": {"type": "integer", "description": "Con tipo estrellas: px que crece cada estrella (2)."},
+     "invertir": {"type": "boolean"},
+     "nombre": {"type": "string", "description": "Nombre de la vista de la máscara (por defecto <vista>_mask_<tipo>)."}
+    }
+   }
+  },
+  {
+   "nombre": "aplicarConMascara",
+   "fichero": "mascaras.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "no-lineal/04-mascaras.md",
+   "descripcion": "Paso 4 no lineal: pone en la vista un resultado a través de una máscara, con deshacer: original·(1 − k·m) + procesado·k·m. El procesado es un candidato de la última comparación hecha sobre esta vista (contraste_2, saturacion_1…) u otra vista del mismo tamaño. Mide el efecto donde m > 0,8, la fuga donde m < 0,05 y los bordes duros; con objetivo avisa si la máscara parece invertida.",
+   "resumen": "Paso 4: aplica un candidato u otra vista a través de una máscara.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "mascara": {"type": "string", "description": "Vista de la máscara (de crearMascara)."},
+     "vista": {"type": "string", "description": "Vista a cambiar. Sin ella, la activa."},
+     "candidato": {"type": "string", "description": "Id de un candidato (de cualquier comparación sobre esta vista)."},
+     "procesada": {"type": "string", "description": "O bien otra vista con el resultado (mismo tamaño)."},
+     "fuerza": {"type": "number", "description": "0–1 (por defecto 1)."},
+     "invertir": {"type": "boolean"},
+     "objetivo": {"type": "string", "enum": ["fondo", "brillante"], "description": "Para avisar si la máscara parece invertida."}
+    },
+    "required": ["mascara"]
+   }
+  },
+  {
+   "nombre": "pixelMath",
+   "fichero": "mascaras.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "descripcion": "PixelMath de SASpro (su evaluador): img (o $T) es la vista e img[0..2] sus canales; valen los títulos de las otras vistas abiertas (saneados) y funciones como mtf, iif, clamp, gauss, luma, med, max, min. Sobre la vista con deshacer, o en una vista nueva con 'nueva'. expr para todos los canales o expr_r / expr_g / expr_b; con varias líneas, la última es el resultado.",
+   "resumen": "PixelMath de SASpro sobre una vista o en una nueva.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string"},
+     "expr": {"type": "string"},
+     "expr_r": {"type": "string"},
+     "expr_g": {"type": "string"},
+     "expr_b": {"type": "string"},
+     "nueva": {"type": "string", "description": "Nombre de una vista nueva para el resultado (si no, cambia la vista)."}
+    }
+   }
+  },
+  {
+   "nombre": "alinearPorEstrellas",
+   "fichero": "utilidades.py",
+   "nivel": "vista",
+   "timeout_s": 1200,
+   "paso": "lineal/05-staralignment-crop.md",
+   "descripcion": "L5 sin astrometría: alinea vistas contra la de referencia emparejando estrellas (astroalign de SASpro: rotación, escala y espejo). Cada una sale en una vista nueva <nombre>_alin del tamaño de la referencia, con estrellas emparejadas, escala, rotación, desplazamiento y % sin datos. Con masters resueltos es mejor alinearMasters.",
+   "resumen": "L5: alinea vistas por estrellas (sin astrometría).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vistas": {"type": "array", "items": {"type": "string"}, "description": "Vistas a alinear (la referencia puede ir incluida)."},
+     "referencia": {"type": "string", "description": "Vista de referencia (por defecto la primera)."}
+    },
+    "required": ["vistas"]
+   }
+  },
+  {
+   "nombre": "correccionCosmetica",
+   "fichero": "utilidades.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "descripcion": "Cosmetic Correction de SASpro sobre la vista (píxeles calientes y fríos), con deshacer. Sin parámetros, los de SASpro. Devuelve cuántos píxeles cambiaron (ppm).",
+   "resumen": "Quita píxeles calientes y fríos (Cosmetic Correction).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string"},
+     "hot_sigma": {"type": "number"},
+     "cold_sigma": {"type": "number"},
+     "protect_sigma": {"type": "number"},
+     "calientes": {"type": "boolean", "description": "Corregir calientes (true)."},
+     "frios": {"type": "boolean", "description": "Corregir fríos (true)."},
+     "bayer": {"type": "string", "description": "RGGB, BGGR… solo para un master OSC sin debayer."}
+    }
+   }
+  },
+  {
+   "nombre": "quitarPedestal",
+   "fichero": "utilidades.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "descripcion": "Resta el pedestal de la vista (mismo criterio que Pedestal Removal de SASpro), con deshacer: min, percentile (pct, por defecto 0,1) o first_nonzero, por canal o global. Devuelve lo restado por canal.",
+   "resumen": "Resta el pedestal (Pedestal Removal).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string"},
+     "modo": {"type": "string", "enum": ["percentile", "min", "first_nonzero"]},
+     "pct": {"type": "number"},
+     "por_canal": {"type": "boolean"}
+    }
+   }
+  },
+  {
+   "nombre": "medirEstrellas",
+   "fichero": "utilidades.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "descripcion": "Mide las estrellas de la vista: número, FWHM y excentricidad medianas con SEP (la medida de SASpro) y la FWHM por momentos; en segundos de arco si la cabecera tiene FOCALLEN y XPIXSZ. Avisa si la excentricidad pasa de 0,6. Solo lectura.",
+   "resumen": "FWHM, excentricidad y número de estrellas.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string"},
+     "sigma": {"type": "number", "description": "Umbral de detección en σ (5)."}
     }
    }
   },

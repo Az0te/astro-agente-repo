@@ -694,6 +694,7 @@ PROCESOS = {
     "geom_rotate_180", "geom_rescale", "geom_invert",
     "halo_b_gon",                      # comando en SASpro 1.24.5; antes, función interna (INTERNOS)
     "rc_bxt", "rc_nxt", "rc_sxt",      # RC Astro con su programa rc-astro (rc.py), no son comandos de SASpro
+    "texture_clarity", "satchroma",    # funciones sin ventana de SASpro (INTERNOS)
 }
 
 
@@ -750,8 +751,28 @@ def _rc_interno(producto):
 
 # Procesos de la lista blanca que no son comandos de SASpro (RC Astro) o que, si la SASpro instalada no los tiene como
 # comando, se hacen con su función interna (Halo-B-Gon antes de 1.24.5).
+def _texture_clarity(doc, preset):
+    """Texture Clarity de SASpro sin ventana (texture_clarity_headless: aplica con apply_edit). Amounts −1–1, radios
+    0,1–10 px, umbral 0–0,1, mask_strength 0–1 (1 = solo medios tonos)."""
+    from setiastro.saspro.texture_clarity import texture_clarity_headless
+    claves = ("texture_amount", "texture_radius", "unsharp_amount", "unsharp_radius", "unsharp_threshold",
+              "clarity_amount", "clarity_radius", "mask_strength")
+    texture_clarity_headless(doc, **{k: float(v) for k, v in preset.items() if k in claves})
+
+
+def _satchroma(doc, preset):
+    """SatChroma de SASpro sin ventana: points [[tono 0–1, ganancia 0–3], ...], strength, mode 0 (saturación HSV) o 1
+    (croma Lab; SASpro lo lee como entero y, con texto, no aplica nada y devuelve False)."""
+    from setiastro.saspro.satchroma_tool import apply_satchroma_headless
+    preset = dict(preset)
+    m = str(preset.get("mode", 0)).lower()
+    preset["mode"] = 1 if ("chroma" in m or "lab" in m or m == "1") else 0
+    if apply_satchroma_headless(doc, preset, None) is False:
+        raise RuntimeError("SatChroma no se aplicó (mira el registro de SASpro).")
+
+
 INTERNOS = {"halo_b_gon": _halo_b_gon_interno, "rc_bxt": _rc_interno("bxt"), "rc_nxt": _rc_interno("nxt"),
-            "rc_sxt": _rc_interno("sxt")}
+            "rc_sxt": _rc_interno("sxt"), "texture_clarity": _texture_clarity, "satchroma": _satchroma}
 
 
 # Procesos de SASpro que necesitan el entorno de IA (PyTorch en %LOCALAPPDATA%\SASpro\runtime\...\venv).
@@ -1413,11 +1434,39 @@ CONTRASTE = {
 }
 
 
+def _multiescala(p, ganancias=(1.0, 1.2, 1.25, 1.15), sigma=1.0):
+    """Descomposición multiescala de SASpro (multiscale_decompose / multiscale_reconstruct, funciones puras): capas de
+    detalle × ganancia (la primera, la más fina, en 1 para no subir el ruido) y residuo intacto."""
+    from setiastro.saspro.multiscale_decomp import multiscale_decompose, multiscale_reconstruct
+    img = p[0] if p.shape[0] == 1 else np.moveaxis(p, 0, -1)
+    det, res = multiscale_decompose(np.ascontiguousarray(img, dtype=np.float32), len(ganancias), float(sigma))
+    det = [np.asarray(x, dtype=np.float32) * float(g) for x, g in zip(det, ganancias)]
+    out = np.asarray(multiscale_reconstruct(det, res), dtype=np.float32)
+    out = out[np.newaxis] if out.ndim == 2 else np.moveaxis(out, -1, 0)
+    return np.clip(out, 0, 1)
+
+
+LOCALES["multiescala"] = _multiescala
+
+# Contraste con procesos de SASpro sin ventana (se prueban en la vista y se deshacen, como los comandos).
+CONTRASTE_SAS = {
+    "claridad_suave": ("Texture Clarity: claridad 0,25 (r 3)", "texture_clarity",
+                       {"clarity_amount": 0.25, "clarity_radius": 3.0, "mask_strength": 1.0}),
+    "claridad_media": ("Texture Clarity: claridad 0,5 (r 3)", "texture_clarity",
+                       {"clarity_amount": 0.5, "clarity_radius": 3.0, "mask_strength": 1.0}),
+    "textura": ("Texture Clarity: textura 0,3 (r 1)", "texture_clarity",
+                {"texture_amount": 0.3, "texture_radius": 1.0, "mask_strength": 1.0}),
+    "multiescala": ("multiescala de SASpro: capas 2–4 × 1,2–1,25", "multiescala", {}),
+}
+
+
 def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque", "grande_suave",
-                                                  "grande_fuerte"), ruido_max=None, tipo=None):
+                                                  "grande_fuerte", "claridad_suave", "claridad_media", "multiescala"),
+                        ruido_max=None, tipo=None):
     """Contraste local (no lineal, antes de saturar): compara CLAHE, realce de escalas medias por ondículas y máscara
-    de enfoque (propios, como en Siril). Mide el contraste local en el objeto, el ruido del cielo, la dominante y los
-    recortes, y recomienda el de más contraste por ruido añadido. La vista no cambia."""
+    de enfoque (propios, como en Siril), y Texture Clarity y la descomposición multiescala de SASpro. Mide el contraste
+    local en el objeto, el ruido del cielo, la dominante y los recortes, y recomienda el de más contraste por ruido
+    añadido. La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if M.lineal(p[:, ::8, ::8]):
@@ -1454,6 +1503,8 @@ def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", 
         if mt in CONTRASTE:
             nombre, f = CONTRASTE[mt]
             lista.append((nombre, mt, {}, (lambda q, f=f: f(q))))
+        elif mt in CONTRASTE_SAS:
+            lista.append(CONTRASTE_SAS[mt])
     r = _comparar(ctx, d, "contraste", lista, medir)
     for x in r["candidatos"]:
         m, fal = x["metricas"], []
@@ -1777,9 +1828,10 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
 
 
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5), proteger_cielo=True,
-                         dominante_max=5.0, ceros_max=0.5):
-    """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades; mide saturación del objeto y del
-    cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que cumple. La vista no cambia."""
+                         dominante_max=5.0, ceros_max=0.5, satchroma=(0.25, 0.5)):
+    """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades y con SatChroma de SASpro (croma
+    Lab, ganancia uniforme 1 + k); mide saturación del objeto y del cielo, dominante del cielo y recortes nuevos, y
+    recomienda la mayor que cumple. La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if p.shape[0] != 3:
@@ -1805,6 +1857,9 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     m0 = medir(p)
     lista = [(f"saturar +{k:g}", "saturar_propio", {"k": float(k), "fondo": fondo},
               (lambda q, k, fondo: M.saturar(q, k, fondo))) for k in (cantidades or [])]
+    lista += [(f"SatChroma croma ×{1 + k:g}", "satchroma",
+               {"mode": 1, "strength": 1.0,
+                "points": [[i / 6.0, 1.0 + float(k)] for i in range(7)]}) for k in (satchroma or [])]
     r = _comparar(ctx, d, "saturacion", lista, medir)
     for x in r["candidatos"]:
         m, fal = x["metricas"], []
@@ -2448,3 +2503,13 @@ LISTA.update(_web.LISTA_WEB)
 import multicapa as _multicapa  # noqa: E402
 
 LISTA.update(_multicapa.LISTA_MULTICAPA)
+
+# Máscaras y PixelMath: en mascaras.py.
+import mascaras as _mascaras  # noqa: E402
+
+LISTA.update(_mascaras.LISTA_MASCARAS)
+
+# Alinear por estrellas, Cosmetic Correction, pedestal y FWHM: en utilidades.py.
+import utilidades as _utilidades  # noqa: E402
+
+LISTA.update(_utilidades.LISTA_UTILIDADES)
