@@ -1167,7 +1167,10 @@ function seleccionarSubs(x, o) {
   var mejor = null;
   apr.forEach(function (s) { if (s.psf_signal_weight && (!mejor || s.psf_signal_weight > mejor.psf_signal_weight)) mejor = s; });
   if (mejor) { r.mejor_sub = mejor.fichero; r.control.medido.push("Mejor sub (PSF Signal Weight " + mejor.psf_signal_weight.toFixed(3) + ", FWHM " + mejor.fwhm_px + " px): " + mejor.nombre + "."); }
-  if (o.tabla) r.tabla = subs.map(function (s) { var t = {}; for (var k in s) if (k != "fichero" && k != "motivos" && k != "dudas") t[k] = s[k]; return t; });
+  // tabla: true ya no va en el resultado: con 230 subs llenaba el contexto de un modelo local (32k) y salía recortada
+  // (16-11-2026). Va al CSV; sólo tabla: "json" la devuelve entera.
+  if (o.tabla === "json") r.tabla = subs.map(function (s) { var t = {}; for (var k in s) if (k != "fichero" && k != "motivos" && k != "dudas") t[k] = s[k]; return t; });
+  else if (o.tabla && !o.csv) o.csv = dirOut + "/subs_tabla.csv";
   // En el mismo script también vale r.aprobados_rutas (no sale en JSON.stringify).
   Object.defineProperty(r, "aprobados_rutas", { value: apr.map(function (s) { return s.fichero; }), enumerable: false });
   if (apr.length < 0.5 * subs.length) r.no_cumple.push("Se rechaza más de la mitad de los subs (" + rech.length + " de " + subs.length + "): revisar los umbrales o la sesión.");

@@ -242,7 +242,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { fwhmTol: 0.5, fwhmDuda: 0.35, eccDelta: 0.1, eccDuda: 0.07, nubeZ: 2.5, nubeDuda, lista, csv, tabla }"
+      "description": "Opcional. { fwhmTol: 0.5, fwhmDuda: 0.35, eccDelta: 0.1, eccDuda: 0.07, nubeZ: 2.5, nubeDuda, lista (ruta), csv (ruta), tabla (true: la tabla completa va a un CSV, no al resultado; no hace falta para apilar) }"
      }
     },
     "required": [
