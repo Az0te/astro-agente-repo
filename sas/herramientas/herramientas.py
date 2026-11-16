@@ -1659,9 +1659,33 @@ def _anillos_estrellas(L, n_max=400):
     return lejos & ~cerca
 
 
+def _halo_b_gon_mascara(p, reduction=1, linear=False, crecer=12, suavizar=4):
+    """Halo-B-Gon solo alrededor de las estrellas. Su curva oscurece toda la imagen (M31, 16 nov 2026: el cielo de
+    0,117 a 0,037 con reducción 1) y en la ventana de SASpro se usa con una máscara de estrellas: aquí, máscara de
+    estrellas (paso alto > 5σ) crecida 'crecer' px para cubrir el halo y suavizada."""
+    from setiastro.saspro.halobgon import compute_halo_b_gon
+    rgb = np.repeat(p[0][..., None], 3, axis=2) if p.shape[0] == 1 else np.moveaxis(p, 0, -1)
+    res = np.asarray(compute_halo_b_gon(np.clip(np.ascontiguousarray(rgb), 0, 1), int(reduction), bool(linear)),
+                     dtype=np.float32)
+    res = res.mean(axis=2)[None] if p.shape[0] == 1 else np.moveaxis(res, -1, 0)
+    # La curva baja también el fondo: dentro de la máscara eso deja anillos oscuros (M31: 1–12 % del anillo bajo el
+    # cielo). Se le devuelve el fondo de escala grande de la original, así solo baja el exceso de las estrellas y halos.
+    res = np.stack([res[c] - M.suave(res[c], 64) + M.suave(p[c], 64) for c in range(p.shape[0])])
+    L = M.lum(p)
+    hp = L - M._caja(L, 5)
+    v = hp[::4, ::4]
+    s = 1.4826 * float(np.median(np.abs(v - np.median(v))))
+    m = (M._caja((hp > 5 * max(s, 1e-9)).astype(np.float32), int(crecer)) > 0).astype(np.float32)
+    m = np.clip(M.suave(m, 2 * int(suavizar)), 0, 1)[None]
+    return np.clip(p * (1 - m) + res * m, 0, 1).astype(np.float32)
+
+
+LOCALES["halo_b_gon_mascara"] = _halo_b_gon_mascara
+
+
 def halosCandidatos(ctx, vista=None, reducciones=(1, 2, 3), lineal=False, cielo_max_pct=2.0):
-    """NL halos de estrellas: Halo-B-Gon a varias reducciones (0–3) frente a no hacer nada (en SASpro < 1.24.5, con su
-    función interna en vez del comando). Mide el
+    """NL halos de estrellas: Halo-B-Gon de SASpro (su función de cálculo) a varias reducciones (0–3), solo dentro de
+    una máscara de estrellas crecida, frente a no hacer nada. Mide el
     brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes (sobre el cielo), la FWHM, los anillos
     oscuros (píxeles del anillo por debajo del cielo − 3σ: corrección pasada) y el cambio del cielo. Recomienda la mayor
     reducción sin anillos oscuros nuevos ni cambio del cielo > cielo_max_pct %. La vista no cambia."""
@@ -1684,8 +1708,8 @@ def halosCandidatos(ctx, vista=None, reducciones=(1, 2, 3), lineal=False, cielo_
         oscuro = 100.0 * float((L[anillo] < cie - 3 * max(rui, 1e-6)).mean())
         return {"halo": _r(halo, 5), "fwhm_px": _r(fw, 2), "anillo_oscuro_pct": _r(oscuro, 2), "cielo": c["cielo"]}
 
-    lista = [(f"Halo-B-Gon reducción {int(k)}", "halo_b_gon", {"reduction": int(k), "linear": bool(lineal)})
-             for k in (reducciones or [])]
+    lista = [(f"Halo-B-Gon reducción {int(k)} (máscara de estrellas)", "halo_b_gon_mascara",
+              {"reduction": int(k), "linear": bool(lineal)}) for k in (reducciones or [])]
     r = _comparar(ctx, d, "halos", lista, medir)
     m0 = medir(p)
     r["antes"] = m0

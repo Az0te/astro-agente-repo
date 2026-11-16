@@ -1178,6 +1178,24 @@
    }
   },
   {
+   "nombre": "recortarVista",
+   "fichero": "utilidades.py",
+   "nivel": "vista",
+   "timeout_s": 120,
+   "descripcion": "Recorte de una vista en una vista nueva (la original no cambia): rect [x0, y0, x1, y1] o un recorte centrado de ancho × alto. Para probar procesos lentos en un trozo. No conserva la astrometría.",
+   "resumen": "Recorte en una vista nueva.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {"type": "string"},
+     "rect": {"type": "array", "items": {"type": "integer"}, "description": "[x0, y0, x1, y1] en píxeles (x1, y1 excluidos)."},
+     "ancho": {"type": "integer"},
+     "alto": {"type": "integer"},
+     "nombre": {"type": "string"}
+    }
+   }
+  },
+  {
    "nombre": "alinearPorEstrellas",
    "fichero": "utilidades.py",
    "nivel": "vista",
@@ -1275,7 +1293,7 @@
    "nivel": "lectura",
    "timeout_s": 900,
    "paso": "no-lineal/09-recombinar-estrellas.md",
-   "descripcion": "NL halos de estrellas: Halo-B-Gon de SASpro (comando en 1.24.5; en versiones anteriores, su función interna) a varias reducciones (0–3) frente a no hacer nada. Mide el brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes, la FWHM, los anillos oscuros (corrección pasada) y el cambio del cielo; recomienda la mayor reducción sin anillos oscuros nuevos ni cambio del cielo. La vista no cambia: aplicarCandidato(id).",
+   "descripcion": "NL halos de estrellas: Halo-B-Gon de SASpro (su función de cálculo) solo dentro de una máscara de estrellas crecida 12 px (sin máscara oscurece toda la imagen) a varias reducciones (0–3) frente a no hacer nada. Mide el brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes, la FWHM, los anillos oscuros (corrección pasada) y el cambio del cielo; recomienda la mayor reducción sin anillos oscuros nuevos ni cambio del cielo. La vista no cambia: aplicarCandidato(id).",
    "resumen": "NL: compara Halo-B-Gon a varias reducciones.",
    "params": {
     "type": "object",

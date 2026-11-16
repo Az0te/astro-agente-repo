@@ -149,5 +149,33 @@ def medirEstrellas(ctx, vista=None, sigma=5.0):
     return r
 
 
-LISTA_UTILIDADES = {"alinearPorEstrellas": alinearPorEstrellas, "correccionCosmetica": correccionCosmetica,
+def recortarVista(ctx, vista=None, rect=None, ancho=None, alto=None, nombre=None):
+    """Recorte de la vista en una vista nueva (la original no cambia): rect [x0, y0, x1, y1] o un recorte centrado de
+    ancho × alto. Sirve para probar procesos lentos en un trozo. El recorte no conserva la astrometría."""
+    d = H._doc(ctx, vista)
+    p = H._p(d.image)
+    h, w = p.shape[1:]
+    if rect:
+        x0, y0, x1, y1 = (int(v) for v in rect)
+    elif ancho and alto:
+        x0, y0 = max(0, (w - int(ancho)) // 2), max(0, (h - int(alto)) // 2)
+        x1, y1 = min(w, x0 + int(ancho)), min(h, y0 + int(alto))
+    else:
+        raise ValueError("Indica rect [x0, y0, x1, y1] o ancho y alto.")
+    x0, y0, x1, y1 = max(0, x0), max(0, y0), min(w, x1), min(h, y1)
+    if x1 - x0 < 16 or y1 - y0 < 16:
+        raise ValueError("Recorte demasiado pequeño o fuera de la imagen.")
+    q = p[:, y0:y1, x0:x1].copy()
+    m = dict(H._meta(d))
+    for k in ("file_path", "wcs_header", "wcs"):
+        m.pop(k, None)
+    m.update(display_name=nombre or f"{H._nombre(d)}_recorte", mono=q.shape[0] == 1)
+    img = q[0] if q.shape[0] == 1 else np.moveaxis(q, 0, -1)
+    nv = ctx.open_new_document(np.ascontiguousarray(img), metadata=m, name=m["display_name"])
+    H._reactivar(ctx, d)
+    return {"vista": H._nombre(H._base(nv)) if nv is not None else m["display_name"], "rect": [x0, y0, x1, y1],
+            "tam": [x1 - x0, y1 - y0]}
+
+
+LISTA_UTILIDADES = {"recortarVista": recortarVista, "alinearPorEstrellas": alinearPorEstrellas, "correccionCosmetica": correccionCosmetica,
                     "quitarPedestal": quitarPedestal, "medirEstrellas": medirEstrellas}
