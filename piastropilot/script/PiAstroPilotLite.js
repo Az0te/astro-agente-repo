@@ -1687,7 +1687,7 @@ function plConstruirDialogo(aj) {
    this.bLimpiar = new PushButton(pPrompt);
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
-      self.mensajes = []; self.registro = ""; self.entradas = []; self.pideAprobados = false; plBorrarTemporales();
+      self.mensajes = []; self.registro = ""; self.entradas = []; self.pideAprobados = false; self.soloApilado = false; plBorrarTemporales();
       self.bienvenida(); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0;
       self.usoSesion = null; self.actualizarUso();
@@ -2235,6 +2235,11 @@ function plConstruirDialogo(aj) {
       // «Con los subs aprobados»: lo recuerda la conversación entera (la respuesta «lánzalo» no lo repite).
       if (/sub\w*\s+(aprobad|seleccionad|buen)|aprobados/i.test(t)) this.pideAprobados = true;
       if (/todos los (subs|lights)|sin selecci/i.test(t)) this.pideAprobados = false;
+      // Sólo el apilado (16-11-2026: tras WBPP siguió con alineado, gradiente, BXT, StarX y ruido sin pedirlo). «lánzalo»
+      // o «sigue» no lo cambian; pedir el procesado lo quita.
+      var completo = /complet|hasta el final|de principio a fin|y (luego )?proc[eé]sa|todo el proceso/i;
+      if (/apil|wbpp|preprocesad|integra(r|ci)/i.test(t) && !completo.test(t)) this.soloApilado = true;
+      else if (completo.test(t) || /\bproc[eé]sa(lo|la)?\b|gradiente|estir/i.test(t)) this.soloApilado = false;
       if (/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) && this.objetivoSerie) this.serie = true;
       else { this.serie = true; this.pasosSerie = 0; this.objetivoSerie = t; }
       this.mensajes.push({ role: "user", content: t });
@@ -2259,6 +2264,11 @@ function plConstruirDialogo(aj) {
       if (this.serie && r.ok && /"exportarFinal"/.test(s)) {   // exportado: fin del procesado
          this.serie = false;
          this.anotar("Serie de pasos", "Terminada tras exportar (" + (this.pasosSerie || 0) + " pasos).");
+      }
+      // Sólo se pidió el apilado: con WBPP terminado la serie acaba aquí.
+      if (this.serie && r.ok && this.soloApilado && /"estadoWBPP"/.test(s) && /"terminado":\s*true/.test(r.texto)) {
+         this.serie = false;
+         this.anotar("Serie de pasos", "Terminada: apilado hecho (lo que pediste). Para seguir con el procesado, pídelo.");
       }
       // Plan de WBPP sin confirmar: la serie para para que el usuario lo vea, salvo que pidiera el procesado completo
       // (Rafael, 16-11-2026). Lo decide el programa, no el modelo: un modelo local seguía con confirmar: true.
