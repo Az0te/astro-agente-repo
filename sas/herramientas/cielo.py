@@ -118,6 +118,36 @@ def _subir(m, H, W):
             + m[y0][:, x1] * (1 - fy) * fx + m[y1][:, x1] * fy * fx)
 
 
+def plano_oscuras(p, frac=0.25):
+    """Plano (grado 1) por canal ajustado sólo en las celdas de 64 px más oscuras (fracción frac). Para nebulosas o
+    polvo que llenan el campo: en IC 1396 (16 nov 2026) fue lo que más se pareció a SRGC (distancia Hα 2,6 frente a
+    10,4 del plano en las cajas de cielo; OIII 0,88/1,07, SII 1,18/2,08, Hβ 1,02/1,73) sin aplanar nada."""
+    p = np.asarray(p, dtype=np.float32)
+    out = np.array(p, copy=True)
+    k = max(1, round(64 / B))
+    H, W = p.shape[1:]
+    for c in range(p.shape[0]):
+        Lb = _binar(p[c])
+        h, w = Lb.shape[0] // k, Lb.shape[1] // k
+        cel = np.median(Lb[:h * k, :w * k].reshape(h, k, w, k).transpose(0, 2, 1, 3).reshape(h, w, -1), axis=2)
+        yy, xx = np.mgrid[0:h, 0:w]
+        X, Y = (xx + 0.5) / w - 0.5, (yy + 0.5) / h - 0.5
+        sel = cel <= np.percentile(cel, 100 * frac)
+        A = np.stack([np.ones(sel.sum()), X[sel], Y[sel]], 1)
+        z = cel[sel].astype(np.float64)
+        keep = np.ones(len(z), bool)
+        for _ in range(6):
+            co, *_ = np.linalg.lstsq(A[keep], z[keep], rcond=None)
+            r = z - A @ co
+            s = 1.4826 * float(np.median(np.abs(r[keep] - np.median(r[keep]))))
+            keep = np.abs(r) < 3 * max(s, 1e-12)
+        Yf, Xf = np.mgrid[0:H, 0:W].astype(np.float32)
+        Xf = (Xf + 0.5) / W - 0.5
+        Yf = (Yf + 0.5) / H - 0.5
+        out[c] = p[c] - (co[1] * Xf + co[2] * Yf).astype(np.float32)   # sin el término constante: conserva el nivel
+    return out
+
+
 def corregir(q, mascara, bordes=False):
     """q: (C, H, W) lineal. Resta el modelo del cielo con máscara (bordes=False: suavizado 1/15, en todo el campo) o el
     gradiente de bordes (bordes=True: suavizado 1/16, peso 1 hasta el 4 % del lado menor y 0 desde el 20 %)."""

@@ -176,6 +176,32 @@ function grPolyCoef(img, excl, grado) {
 }
 
 // Expresión de PixelMath del polinomio a resolución completa.
+// Plano (grado 1) ajustado sólo en las celdas de 64 px más oscuras (fracción frac del campo) de un canal binado.
+// Nebulosas que llenan el campo (IC 1396, 16 nov 2026): las cajas de cielo de la máscara del objeto aceptaban como cielo
+// el 60–88 % del campo, que era nebulosa, y el plano se inclinaba siguiéndola (Hα: distancia a SRGC 10,4). Con el 25 %
+// más oscuro la distancia baja a 2,6 (OIII 0,88, SII 1,18, Hβ 1,02 frente a 1,07, 2,08 y 1,73) y no aplana nada.
+function grPlanoOscuras(img, bin, frac) {
+  var w = img.w, h = img.h, a = img.a, k = Math.max(1, Math.round(64 / bin)), nx = Math.floor(w / k), ny = Math.floor(h / k), cel = [];
+  for (var j = 0; j < ny; j++) for (var i = 0; i < nx; i++) {
+    var v = [];
+    for (var y = j * k; y < (j + 1) * k; y++) for (var x = i * k; x < (i + 1) * k; x++) { var z = a[y * w + x]; if (z > 0) v.push(z); }
+    if (v.length > 0.5 * k * k) cel.push({ x: (i + 0.5) / nx - 0.5, y: (j + 0.5) / ny - 0.5, z: gcMedian(v), ok: true });
+  }
+  if (cel.length < 20) throw new Error("muy pocas celdas con datos");
+  var zs = cel.map(function (c) { return c.z; }).sort(function (p, q) { return p - q; }), lim = zs[Math.floor(frac * (zs.length - 1))];
+  cel = cel.filter(function (c) { return c.z <= lim; });
+  var co = [0, 0, 0];
+  for (var it = 0; it < 6; it++) {
+    var A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], b = [0, 0, 0], r, q;
+    cel.forEach(function (c) { if (!c.ok) return; var t = [1, c.x, c.y]; for (r = 0; r < 3; r++) { b[r] += t[r] * c.z; for (q = 0; q < 3; q++) A[r][q] += t[r] * t[q]; } });
+    co = gcSolveN(A, b);
+    var res = cel.map(function (c) { return c.z - (co[0] + co[1] * c.x + co[2] * c.y); });
+    var okRes = res.filter(function (e, n) { return cel[n].ok; }), s = gcMAD(okRes, gcMedian(okRes));
+    cel.forEach(function (c, n) { c.ok = Math.abs(res[n]) < 3 * Math.max(s, 1e-12); });
+  }
+  return co;
+}
+
 function grPolyExpr(c) {
   var X = "((x()+0.5)/w()-0.5)", Y = "((y()+0.5)/h()-0.5)", s = c[0].toExponential(8) + " + " + c[1].toExponential(8) + "*" + X + " + " + c[2].toExponential(8) + "*" + Y;
   if (c.length >= 6) s += " + " + c[3].toExponential(8) + "*" + X + "*" + X + " + " + c[4].toExponential(8) + "*" + X + "*" + Y + " + " + c[5].toExponential(8) + "*" + Y + "*" + Y;
@@ -560,6 +586,33 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
+  // Plano en las celdas de 64 px más oscuras (16 nov 2026, ver grPlanoOscuras): para nebulosas y polvo que llenan el campo.
+  // celdasOscuras: false para no probarlo; celdasOscurasFrac (0,25) para la fracción de celdas.
+  if (o.celdasOscuras !== false) {
+    try {
+      var exO = [];
+      for (var cho = 0; cho < Math.min(3, nch); ++cho) exO.push(grPolyExpr(grPlanoOscuras(grChanBinned(viewId, cho, bin), bin, o.celdasOscurasFrac || 0.25)));
+      var oid = grDuplicate(viewId, "GC_OSC1"), omid = grFreeId(oid + "_modelo");
+      var PMo = new PixelMath;
+      PMo.useSingleExpression = (nch < 3); PMo.expression = exO[0];
+      if (nch >= 3) { PMo.expression1 = exO[1]; PMo.expression2 = exO[2]; }
+      PMo.createNewImage = true; PMo.showNewImage = true; PMo.newImageId = omid; PMo.newImageWidth = 0; PMo.newImageHeight = 0;
+      PMo.rescale = false; PMo.truncate = false; PMo.newImageSampleFormat = gcK(PixelMath, "f32");
+      PMo.newImageColorSpace = nch >= 3 ? gcK(PixelMath, "RGB") : gcK(PixelMath, "Gray");
+      if (!PMo.executeOn(win.mainView)) throw new Error("PixelMath del modelo falló");
+      var cenO = function (e) { return "(" + e.split(" + ")[0] + ")"; };
+      var PMoc = new PixelMath;
+      PMoc.useSingleExpression = (nch < 3); PMoc.expression = "$T - (" + exO[0] + ") + " + cenO(exO[0]);
+      if (nch >= 3) { PMoc.expression1 = "$T - (" + exO[1] + ") + " + cenO(exO[1]); PMoc.expression2 = "$T - (" + exO[2] + ") + " + cenO(exO[2]); }
+      PMoc.rescale = false; PMoc.truncate = false; PMoc.createNewImage = false;
+      if (!PMoc.executeOn(View.viewById(oid))) throw new Error("PixelMath de la corrección falló");
+      r.candidatos.push({ vista: oid, modelo: omid, metodo: "Polinomio celdas oscuras",
+                          parametros: "grado 1 ajustado en el " + Math.round(100 * (o.celdasOscurasFrac || 0.25)) + " % de celdas de 64 px más oscuras, por canal",
+                          metricas: grMeasure(base, omid, oid, range0),
+                          notas: "Para nebulosas o polvo que llenan el campo: el cielo son las zonas más oscuras, no las cajas «fuera del objeto»." });
+    } catch (e) { r.errores.push("Polinomio en celdas oscuras: " + e); }
+  }
+
   // Polinomio fuera del halo (+ crominancia) (14 nov 2026): para objetos grandes y difusos cuyo halo exterior se sale de
   // la máscara. Ver grHalo en gradbordes.js. halo: false para no probarlo; haloOpts para la geometría.
   if (o.halo !== false && nch >= 3) {
@@ -781,6 +834,11 @@ function gradienteCandidatos(viewId, o) {
   var sinManchas = safe.filter(function (x) { return manchas(x) === false; });
   var best = sinManchas.length ? pick(sinManchas, function (x) { return eat(x) + 0.01 * absCorr(x); })
            : safe.length ? pick(safe, resid) : clean.length ? pick(clean, eat) : pick(elegibles, absCorr);
+  // Nebulosa o polvo que llena el campo: el plano en las celdas más oscuras (si no se come nada) es el que más se parece
+  // a la corrección referida a un survey (SRGC), por delante del plano en las cajas de cielo (IC 1396, 16 nov 2026).
+  // Las medidas de cielo de aquí usan esas cajas, que en estos campos son nebulosa, así que no lo verían.
+  var oscuras = nebulosa && elegibles.filter(function (x) { return x.metodo === "Polinomio celdas oscuras" && eat(x) <= 1 && absCorr(x) < 0.3; })[0];
+  if (oscuras) best = oscuras;
   if (best) {
     var bc = best.metricas.gcStructCopy;
     r.recomendado = best.vista;

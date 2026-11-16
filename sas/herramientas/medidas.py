@@ -325,6 +325,15 @@ def elegir_gradiente(c, objeto_campo_pct, tipo=None):
         mejor = min([x for x in cerca if eat(x) <= e0 + 0.5], key=queda)
     else:
         mejor = min(limpios, key=eat) if limpios else min(c, key=absc) if c else None
+    # Nebulosa o polvo que llena el campo (IC 1396, 16 nov 2026): las medidas de cielo de arriba usan celdas que aquí son
+    # nebulosa y no ven la diferencia. Lo que más se pareció a SRGC fue SRGC + plano en celdas oscuras y, sin SRGC, el
+    # plano en celdas oscuras; si no se comen nada, se prefieren.
+    if extenso and not galaxia:
+        for nombre in ("SRGC + polinomio celdas oscuras", "Polinomio celdas oscuras"):
+            x = next((x for x in c if x.get("metodo") == nombre and eat(x) <= tope and absc(x) < 0.3), None)
+            if x is not None:
+                mejor = x
+                break
     criterio = (f"campo con objeto extenso o polvo: se tolera que el modelo se lleve ≤ {tope:g} % del objeto"
                 if extenso else f"se tolera que el modelo se lleve ≤ {tope:g} % del objeto")
     if not mejor:

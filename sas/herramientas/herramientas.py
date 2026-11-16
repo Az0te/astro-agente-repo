@@ -942,6 +942,8 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
     # SRGC (Survey Reference Gradient Correction de SASpro), como en el vídeo de Seti Astro: 500 muestras y exclusión
     # del 15 % (con el 50 % por defecto estropeaba el color de M31). Necesita astrometría e internet. Comparación del
     # 16 nov 2026: en M31 no se lleva nada de galaxia; en IC 1396 es, con el polinomio 1, lo único que no aplana la nebulosa.
+    # Plano en las celdas más oscuras (cielo.plano_oscuras): para nebulosas o polvo que llenan el campo.
+    lista.append(("Polinomio celdas oscuras", "oscuras", {"frac": 0.25}, _cielo.plano_oscuras))
     usar_srgc = srgc if srgc is not None else _tiene_wcs(d)
     if usar_srgc:
         lista.append(("SRGC (referencia " + _srgc_survey(p, srgc_survey) + ", 500 muestras, exclusión 15 %)", "srgc",
@@ -960,7 +962,8 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
         try:
             masc, ncc, ntot = _cielo.mascara_cielo(M.binar(M.lum(p), _cielo.B))
             r["cielo_cajas"] = f"{ncc} de {ntot} cajas de cielo"
-            fuentes = [("Polinomio fuera del halo + crominancia", False), ("ABE polinomio 1", False), ("SRGC", True)]
+            fuentes = [("Polinomio fuera del halo + crominancia", False), ("ABE polinomio 1", False), ("SRGC", True),
+                       ("SRGC", "oscuras")]
             n = len(lista)
             for prefijo, bordes in fuentes:
                 c0 = next((c for c in r["candidatos"] if c["metodo"].startswith(prefijo)), None)
@@ -968,8 +971,12 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
                     continue
                 n += 1
                 t0 = time.perf_counter()
-                q = _cielo.corregir(_p(_cargar_candidato(c0["id"])[0]), masc, bordes=bordes)
-                nombre = c0["metodo"].split(" (")[0] + (" + bordes" if bordes else " + cielo con máscara")
+                q0 = _p(_cargar_candidato(c0["id"])[0])
+                if bordes == "oscuras":      # SRGC + plano en celdas oscuras: lo más cercano a SRGC con algo menos de desnivel
+                    q, nombre = _cielo.plano_oscuras(q0), c0["metodo"].split(" (")[0] + " + polinomio celdas oscuras"
+                else:
+                    q = _cielo.corregir(q0, masc, bordes=bordes)
+                    nombre = c0["metodo"].split(" (")[0] + (" + bordes" if bordes else " + cielo con máscara")
                 m = M.medir_gradiente(base, q)
                 cid = _guardar_candidato("gradiente", n, _a_sas(q, d.image),
                                          {"nombre": nombre, "proceso": "cielo.py", "preset": {"sobre": c0["id"], "bordes": bordes},
