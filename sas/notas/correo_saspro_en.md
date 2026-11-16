@@ -22,6 +22,11 @@ astrophotos step by step inside the programs I already use: https://github.com/A
   and SASpro and compared with the same measurements. SASpro got very close to the PixInsight result, using Cosmic
   Clarity, StarNet, the stretch functions and SASpro's own tools.
 
+The project still needs a few more days of work, but I plan to present it publicly **next Sunday (22 November)**,
+SASpro part included (SetiAstroPilot and the comparison with PixInsight and Siril) — provided you have no objection.
+If you would prefer anything changed or left out (the name, how SASpro is described, the issues below), just let me
+know and I'll adapt it before then.
+
 Driving SASpro headless through `ScriptContext` works remarkably well — thank you for making it scriptable. Along the
 way I found the issues below. Each has steps, expected vs. actual and, where I could find it, the likely cause (code
 references are to `main` on GitHub). I'm happy to test fixes or share the scripts.
