@@ -227,15 +227,23 @@ function documentarObjeto(vistaONombre, o) {
     try {
       var txt = wbTexto(WB_HTTPS + "simbad.cfa.harvard.edu/simbad/sim-coo?Coord=" + wbEnc(ra.toFixed(5) + " " + (dec >= 0 ? "+" : "") + dec.toFixed(5)) +
                         "&Radius=15&Radius.unit=arcmin&output.format=ASCII&OutputMode=LIST&maxObject=40", { timeout: 30 });
-      var extensos = ["HII", "RNe", "DNe", "PN", "SNR", "G", "GlC", "OpC", "Cld", "MoC", "ISM", "GiG", "SBG", "Cl*", "As*", "SFR", "bub", "EmO"];
-      txt.split("\n").some(function (l) {
+      // No el más cercano sin más: por prioridad de tipo y, a igual tipo, el más cercano (16-11-2026: master sin OBJECT de
+      // la nebulosa del Corazón → salió LDN 1368, una nube oscura de 5' a 2' del centro, antes que IC 1805 a 9').
+      // Primero emisión y cúmulos (suelen ser el objeto del encuadre), luego polvo, y las galaxias al final (cualquier
+      // campo tiene galaxias de fondo diminutas).
+      var prioridad = ["HII", "SNR", "PN", "RNe", "OpC", "GlC", "Cl*", "As*", "SFR", "EmO", "bub", "DNe", "Cld", "MoC", "ISM", "G", "GiG", "SBG"];
+      var cands = [];
+      txt.split("\n").forEach(function (l, i) {
         var c = l.split("|");
-        if (c.length > 4 && extensos.indexOf(c[3].trim()) >= 0) {
-          var x = simbad(c[2].trim());
-          if (x.encontrado && x.tipo_simbad) { s = x; return true; }
-        }
-        return false;
+        if (c.length > 4 && prioridad.indexOf(c[3].trim()) >= 0) cands.push({ nombre: c[2].trim(), p: prioridad.indexOf(c[3].trim()), i: i });
       });
+      cands.sort(function (a, b) { return a.p - b.p || a.i - b.i; });
+      for (var ci = 0; ci < cands.length && ci < 6 && !s; ++ci) {
+        try { var x = simbad(cands[ci].nombre); if (x.encontrado && x.tipo_simbad) s = x; } catch (e) { }
+      }
+      if (s) avisos.push("objeto elegido por coordenadas (sin OBJECT en la cabecera): " + s.nombre + "; otros cerca: " +
+                         cands.filter(function (c) { return c.nombre != s.nombre; }).slice(0, 4).map(function (c) { return c.nombre; }).join(", ") +
+                         ". Si no es el objeto, pregunta al usuario.");
     } catch (e) { avisos.push("SIMBAD por coordenadas: " + (e.message || e)); }
   }
   if (s) {
@@ -245,9 +253,18 @@ function documentarObjeto(vistaONombre, o) {
     fuentes.push(s.fuente);
   } else avisos.push("no se ha podido identificar el objeto en SIMBAD");
   // 2. Descripción (Wikipedia).
-  var busca = (s && s.nombre) || nombre;
+  var busca = String((s && s.nombre) || nombre || "").replace(/^NAME\s+/i, "");   // SIMBAD: «NAME Heart Nebula»
   if (busca) {
-    try { var wk = wikipedia(busca, o); if (wk.resumen) { r.resumen = wk.resumen; r.url = wk.url; fuentes.push(wk.fuente + ": " + wk.url); } }
+    // Sólo un artículo cuyo título nombre el objeto (o uno de sus otros nombres): si no, wikipedia() devolvía el primer
+    // resultado de la búsqueda (16-11-2026: «LDN 1368» → un artículo de baloncesto).
+    var nom = function (x) { return String(x || "").toLowerCase().replace(/^name\s+/, "").replace(/[\s_-]+/g, ""); };
+    var claves = [busca].concat((s && s.identificadores) || []).map(nom).filter(function (x) { return x.length >= 3; });
+    try {
+      var wk = wikipedia(busca, o), tit = nom(wk.titulo), res = nom(wk.resumen).substring(0, 400);
+      var vale = wk.resumen && claves.some(function (k) { return tit.indexOf(k) >= 0 || res.indexOf(k) >= 0; });
+      if (vale) { r.resumen = wk.resumen; r.url = wk.url; fuentes.push(wk.fuente + ": " + wk.url); }
+      else if (wk.resumen) avisos.push("Wikipedia no tiene un artículo de " + busca + " (devolvió «" + wk.titulo + "», descartado).");
+    }
     catch (e) { avisos.push("Wikipedia: " + (e.message || e)); }
   }
   // 3. Emisión esperada (por tipo; si el resumen habla de reflexión, se añade).
