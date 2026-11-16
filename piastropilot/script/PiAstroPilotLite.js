@@ -2240,7 +2240,12 @@ function plConstruirDialogo(aj) {
       var completo = /complet|hasta el final|de principio a fin|y (luego )?proc[eé]sa|todo el proceso/i;
       if (/apil|wbpp|preprocesad|integra(r|ci)/i.test(t) && !completo.test(t)) this.soloApilado = true;
       else if (completo.test(t) || /\bproc[eé]sa(lo|la)?\b|gradiente|estir/i.test(t)) this.soloApilado = false;
+      // Analizar o proponer un plan no es procesar: se analiza, se da el plan y se para (17-11-2026: «analízame la imagen
+      // y proponme un plan» arrancó la serie y se puso con el gradiente).
+      var soloPlan = /anali[zc]|\bplan\b|prop[oó]n|recomi[eé]nd|qu[eé] (me )?(harías|recomiendas|aconsejas)/i.test(t) &&
+                     !/proc[eé]sa|hasta el final|complet|apl[ií]ca|corrige|ap[ií]la|lanza|haz(lo|me el|me la| el| la)/i.test(t);
       if (unPaso) { this.serie = false; this.pasosSerie = 0; }   // enlace «Siguiente paso»: sólo ese paso
+      else if (soloPlan) { this.serie = false; this.pasosSerie = 0; this.objetivoSerie = t; }
       else if (/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) && this.objetivoSerie) this.serie = true;
       else { this.serie = true; this.pasosSerie = 0; this.objetivoSerie = t; }
       this.mensajes.push({ role: "user", content: t });

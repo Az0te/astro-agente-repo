@@ -74,7 +74,18 @@ function simbad(objeto, o) {
   while ((f = re.exec(txt)) !== null) fl.push(f[1] + " " + f[2]);
   if (fl.length) r.magnitudes = fl;
   var ids = /Identifiers \(\d+\):\s*([\s\S]*?)(\n\s*\n|Bibcodes|Measures|Notes)/.exec(txt);
-  if (ids) r.identificadores = ids[1].split(/\s{2,}|\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s; }).slice(0, 20);
+  if (ids) {
+    var todos = ids[1].split(/\s{2,}|\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+    r.identificadores = todos.slice(0, 20);
+    // Nombres propios («NAME Andromeda Galaxy»): para buscar en Wikipedia; con «M 31» salía la autopista M-31.
+    var nombres = todos.filter(function (s) { return /^NAME /.test(s); }).map(function (s) { return s.replace(/^NAME\s+/, ""); });
+    if (nombres.length) r.nombres_propios = nombres.slice(0, 5);
+  }
+  // Galaxia con núcleo activo: SIMBAD da el tipo del núcleo (M 31 → AGN). Si el objeto es extenso, es una galaxia.
+  if (/^(AGN|Sy1|Sy2|SyG|LIN|LINER|QSO|Bla|BLL|rG|H2G|EmG|bCG|LSB)$/.test(r.tipo_simbad || "") && r.tamano_arcmin && r.tamano_arcmin[0] > 2) {
+    r.tipo_simbad_nucleo = r.tipo_simbad; r.tipo_simbad = "G";
+    r.tipo = WB_TIPOS.G + " (SIMBAD da el tipo del núcleo: " + (WB_TIPOS[r.tipo_simbad_nucleo] || r.tipo_simbad_nucleo) + ")";
+  }
   // Un cúmulo con nebulosa catalogada (SIMBAD da un solo tipo: IC 1805 sale como OpC y es la nebulosa del Corazón,
   // SH 2-190; 16-11-2026, el modelo concluyó que en 3 nm no habría señal). Sharpless, RCW y Gum son regiones HII.
   if (/^(OpC|Cl\*|As\*|SFR)$/.test(r.tipo_simbad || "") && r.identificadores) {
@@ -180,6 +191,9 @@ function estrellasBrillantes(ra, dec, radio, magMax) {
     var m = /(\d+)\s+(\d+)\s+([\d.]+)\s+([+-])(\d+)\s+(\d+)\s+([\d.]+)/.exec(c[3]);
     var v = parseFloat(c[6]);
     if (!m || !isFinite(v)) return;
+    // Sólo estrellas (tipos con «*»): el núcleo de una galaxia brillante sale en la búsqueda (M31, AGN de V 3,4) y no es
+    // una estrella con halo (17-11-2026).
+    if (!/\*/.test(c[2])) return;
     var p = wbSexa(m[1], m[2], m[3], m[4], m[5], m[6], m[7]);
     out.push({ nombre: c[1].trim(), tipo: c[2].trim(), V: v, ra_grados: +p[0].toFixed(4), dec_grados: +p[1].toFixed(4),
                distancia_arcmin: +(60 * wbAngulo(ra, dec, p[0], p[1])).toFixed(1) });
@@ -253,20 +267,26 @@ function documentarObjeto(vistaONombre, o) {
     fuentes.push(s.fuente);
   } else avisos.push("no se ha podido identificar el objeto en SIMBAD");
   // 2. Descripción (Wikipedia).
-  var busca = String((s && s.nombre) || nombre || "").replace(/^NAME\s+/i, "");   // SIMBAD: «NAME Heart Nebula»
-  if (busca) {
-    // Sólo un artículo cuyo título nombre el objeto (o uno de sus otros nombres): si no, wikipedia() devolvía el primer
-    // resultado de la búsqueda (16-11-2026: «LDN 1368» → un artículo de baloncesto).
-    var nom = function (x) { return String(x || "").toLowerCase().replace(/^name\s+/, "").replace(/[\s_-]+/g, ""); };
-    var claves = [busca].concat((s && s.identificadores) || []).map(nom).filter(function (x) { return x.length >= 3; });
+  // Se prueban varios nombres: la designación (sin «NAME ») y los nombres propios de SIMBAD, primero los que dicen
+  // Galaxy/Nebula/Cluster («M 31» daba la autopista M-31 y «Andromeda» una planta). Vale el primer artículo que hable
+  // de astronomía y nombre el objeto (o uno de sus otros nombres) en el título o al principio.
+  var designacion = String((s && s.nombre) || nombre || "").replace(/^NAME\s+/i, "");
+  var propios = ((s && s.nombres_propios) || []).slice().sort(function (a, b) {
+    var p = function (x) { return /galax|nebul|cluster|cloud/i.test(x) ? 0 : 1; }; return p(a) - p(b); });
+  var intentosWk = [designacion].concat(propios).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).slice(0, 4);
+  var nom = function (x) { return String(x || "").toLowerCase().replace(/^name\s+/, "").replace(/[\s_-]+/g, ""); };
+  var claves = intentosWk.concat((s && s.identificadores) || []).map(nom).filter(function (x) { return x.length >= 3; });
+  var descartados = [];
+  for (var iw = 0; iw < intentosWk.length && !r.resumen; ++iw) {
     try {
-      var wk = wikipedia(busca, o), tit = nom(wk.titulo), res = nom(wk.resumen).substring(0, 400);
-      var vale = wk.resumen && claves.some(function (k) { return tit.indexOf(k) >= 0 || res.indexOf(k) >= 0; });
+      var wk = wikipedia(intentosWk[iw], o), tit = nom(wk.titulo), res = nom(wk.resumen).substring(0, 400);
+      var astro = /galax|nebul|c[uú]mulo|cluster|estrell|star|constela|supernova|astron|light.?year|a[ñn]os luz|parsec/i.test(wk.resumen || "");
+      var vale = wk.resumen && astro && claves.some(function (k) { return tit.indexOf(k) >= 0 || res.indexOf(k) >= 0; });
       if (vale) { r.resumen = wk.resumen; r.url = wk.url; fuentes.push(wk.fuente + ": " + wk.url); }
-      else if (wk.resumen) avisos.push("Wikipedia no tiene un artículo de " + busca + " (devolvió «" + wk.titulo + "», descartado).");
-    }
-    catch (e) { avisos.push("Wikipedia: " + (e.message || e)); }
+      else if (wk.resumen) descartados.push("«" + intentosWk[iw] + "» → «" + wk.titulo + "»");
+    } catch (e) { descartados.push("«" + intentosWk[iw] + "»: " + (e.message || e)); }
   }
+  if (!r.resumen && descartados.length) avisos.push("Wikipedia sin artículo fiable del objeto (descartados: " + descartados.join("; ") + ").");
   // 3. Emisión esperada (por tipo; si el resumen habla de reflexión, se añade).
   var em = WB_EMISION[r.tipo_simbad] || null;
   if (s && s.nebulosa_asociada) em = WB_EMISION.HII;   // cúmulo dentro de una región HII (IC 1805, IC 1396...)
