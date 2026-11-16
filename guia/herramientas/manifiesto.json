@@ -360,7 +360,7 @@
    "fichero": "hdr.js",
    "nivel": "disco",
    "timeout_s": 900,
-   "descripcion": "Paso 6 lineal: HDRComposition de una toma larga y una o varias cortas ya alineadas (ficheros o vistas), con umbral medido de la meseta de saturación y controles (sustituido, razón de flujo, escalón en la transición).",
+   "descripcion": "Paso 6 lineal, OBLIGATORIO con varios masters RGB de distinta exposición (después de alinearMasters y ANTES del gradiente): HDRComposition de una toma larga y una o varias cortas ya alineadas (ficheros o vistas), con umbral medido de la meseta de saturación y controles (sustituido, razón de flujo, escalón en la transición).",
    "paso": "lineal/06-hdr-composition.md",
    "params": {
     "type": "object",
@@ -443,7 +443,7 @@
    "nivel": "copias",
    "timeout_s": 1800,
    "descripcion": "Paso 9 lineal con VARIAS vistas (RGB + líneas desmezcladas): gradienteCandidatos en cada una, deja la recomendada como <vista>_gc, cierra los demás candidatos y devuelve sólo un resumen corto. Úsala en vez de un bucle de gradienteCandidatos. Las corregidas vuelven en r.corregidas y r.vista_corregida (original -> <vista>_gc). Si ya comparaste y sólo quieres quedarte con un candidato: gradienteVarias({\"Ha_raw\": \"GC_POLY2_2\"}) (no repite la comparación). Una vista con <vista>_gc ya hecha no se repite.",
-   "resumen": "Paso 9 lineal con VARIAS vistas: gradienteCandidatos en cada una y deja <vista>_gc. Con {vista: candidato} solo aplica el elegido.",
+   "resumen": "Paso 9 lineal con VARIAS vistas de filtros distintos (no masters RGB de distinta exposición: ésos van antes a componerHDR): gradienteCandidatos en cada una y deja <vista>_gc. Con {vista: candidato} solo aplica el elegido.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
     "type": "object",
@@ -597,7 +597,7 @@
    "fichero": "combinacion.js",
    "nivel": "copias",
    "timeout_s": 600,
-   "descripcion": "Paso 10 lineal: combina dos masters alineados del mismo canal pesando por 1/σ² tras LinearFit; controla ruido y nitidez.",
+   "descripcion": "Paso 10 lineal: combina dos masters alineados del mismo canal y la misma exposición pesando por 1/σ² tras LinearFit (dos RGB dan una RGB); controla ruido y nitidez. Con exposiciones distintas no: componerHDR.",
    "paso": "lineal/10-combinacion-rgb-nb.md",
    "params": {
     "type": "object",
@@ -690,7 +690,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { spcc: { r, g, b, qe, narrowband } del perfil (vacío = OSC sin filtro), nuevaVista, fondoAuto (experimental), forzarBandaAncha }"
+      "description": "Opcional. { spcc: { r, g, b, qe, narrowband: [[nm, ancho] x3] } (vacío = OSC sin filtro; el Triband como única imagen se calibra como RGB, en banda ancha), triband: \"estrecha\" (sólo si el Triband se combina con otros datos: usa sus bandas del perfil), nuevaVista, fondoAuto (experimental), forzarBandaAncha (dual band) }"
      }
     },
     "required": [
@@ -1166,6 +1166,23 @@
      "vista",
      "opciones"
     ]
+   }
+  },
+  {
+   "nombre": "recuperarColorNucleo",
+   "fichero": "nucleo.js",
+   "nivel": "copias",
+   "timeout_s": 300,
+   "descripcion": "Paso 5 no lineal, núcleo blanco (saturación del núcleo < 0,04 en medirMeseta o nucleoCandidatos): devuelve al núcleo estirado el color medido en la lineal (proporciones R:G:B de la misma imagen antes de estirar), mezclado al 30–50 % con máscara de luminancia, en una copia. Mide la saturación y la meseta antes y después.",
+   "resumen": "Paso 5 no lineal: color del núcleo blanco desde la lineal (proporciones R:G:B), en una copia.",
+   "paso": "no-lineal/05-boost.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": { "type": "string", "description": "Id de la starless estirada (con el núcleo blanco)." },
+     "opciones": { "type": "object", "description": "{ lineal: fichero o id de la misma imagen antes de estirar (la starless lineal del checkpoint; obligatorio), fuerza: 0.4 (0,3–0,5), desde: 0.35, ancho: 0.30, nuevaVista }" }
+    },
+    "required": ["vista"]
    }
   },
   {

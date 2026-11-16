@@ -112,7 +112,7 @@ function medirMeseta(viewId, o) {
   // En una galaxia es no_cumple; en otro tipo (o sin tipo) sólo aviso: el punto más brillante puede ser una estrella blanca.
   if (m.saturacion_nucleo !== null && m.saturacion_nucleo < 0.04)
     (/galax/i.test(o.tipo || "") ? m.no_cumple : (m.avisos = m.avisos || [])).push("núcleo blanco: saturación mediana " + m.saturacion_nucleo + " (< 0,04; con color 0,06–0,18): recuperar su color " +
-                     "con las proporciones R:G:B de la imagen lineal en el núcleo, al 30–50 % (ficha no-lineal 05, «Núcleo blanco»)");
+                     "con recuperarColorNucleo(vista, { lineal: <starless lineal, la misma imagen antes de estirar>, fuerza: 0,4 }) (ficha no-lineal 05, «Núcleo blanco»)");
   var ref = o.referencia ? View.viewById(nuId(o.referencia)) : null;
   if (ref && !ref.isNull && ref.image.width === v.image.width && ref.image.height === v.image.height) {
     var t0 = nuTextura(nuLum(ref), m.centro, r), t1 = nuTextura(a, m.centro, r);
@@ -139,6 +139,54 @@ function nuPerfil(a, cx, cy, rMax, salto) {
   for (var j = 0; j < nb; ++j) p.push(n[j] ? s[j] / n[j] : 0);
   for (var q = 1; q < nb - 1; ++q) if (p[q + 1] - p[q] > salto) anillos.push(4 * q);
   return { perfil: p, anillos_px: anillos };
+}
+
+// Núcleo blanco (ficha no-lineal 05): devuelve al núcleo estirado el color que tenía en lineal. En cada píxel del
+// núcleo (máscara de luminancia con rampa desde 'desde' de ancho 'ancho'), mezcla al 'fuerza' (0,3–0,5) la versión con
+// la misma luminancia estirada y las proporciones R:G:B de la lineal. La lineal tiene que ser la misma imagen antes de
+// estirar (misma geometría): la starless lineal del checkpoint. Hasta el 13 nov 2026 la guía lo pedía y no había función
+// (Opus se paró en M31 por eso).
+function recuperarColorNucleo(viewId, o) {
+  viewId = nuId(viewId); o = o || {};
+  var v = View.viewById(viewId);
+  if (!v || v.isNull) throw new Error("No existe la vista " + viewId);
+  if (v.image.numberOfChannels !== 3) throw new Error("recuperarColorNucleo necesita una imagen RGB");
+  v.image.resetSelections();
+  if (v.image.median() < 0.02) throw new Error("La imagen parece lineal: esto va después de estirar");
+  if (!o.lineal) throw new Error("Falta lineal: la vista (o el fichero) de la misma imagen antes de estirar, p. ej. la starless lineal del checkpoint");
+  var linId = null, cerrarLin = null, lp = String(o.lineal).replace(/\\/g, "/");
+  if (File.exists(lp)) {
+    var ws = ImageWindow.open(lp, "nuLineal", "verbosity 0", true);
+    for (var q = 1; q < ws.length; ++q) ws[q].forceClose();
+    cerrarLin = ws[0]; linId = ws[0].mainView.id;
+  } else {
+    var lv = View.viewById(nuId(o.lineal));
+    if (!lv || lv.isNull) throw new Error("No existe la vista ni el fichero lineal " + o.lineal);
+    linId = lv.id;
+  }
+  var L = View.viewById(linId);
+  try {
+    if (L.image.width !== v.image.width || L.image.height !== v.image.height || L.image.numberOfChannels !== 3)
+      throw new Error("La lineal no tiene la misma geometría (" + L.image.width + "x" + L.image.height + "): tiene que ser la misma imagen antes de estirar");
+    var f = (o.fuerza !== undefined) ? o.fuerza : 0.4, desde = (o.desde !== undefined) ? o.desde : 0.35, ancho = o.ancho || 0.30;   // peso completo desde 0,65 (ficha 05)
+    var a0 = nuLum(v), m0 = nuMeseta(a0, 0.95), sat0 = nuSatNucleo(v, m0.centro, 64);
+    var w = nuCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_colornucleo"), true), out = w.mainView;
+    var Lt = "(($T[0]+$T[1]+$T[2])/3)", Ll = "max((" + linId + "[0]+" + linId + "[1]+" + linId + "[2])/3, 0.000001)";
+    var m = "min(max((" + Lt + " - " + desde + ")/" + ancho + ", 0), 1)";
+    var P = new PixelMath; P.useSingleExpression = false;
+    var ex = function (c) { return "$T[" + c + "] + " + f + "*" + m + "*(" + Lt + "*" + linId + "[" + c + "]/" + Ll + " - $T[" + c + "])"; };
+    P.expression = ex(0); P.expression1 = ex(1); P.expression2 = ex(2);
+    P.createNewImage = false; P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
+    if (!P.executeOn(out)) throw new Error("PixelMath del color del núcleo falló");
+    var a1 = nuLum(out), m1 = nuMeseta(a1, 0.95, m0.centro), sat1 = nuSatNucleo(out, m0.centro, 64), noCumple = [];
+    if (sat1 !== null && sat1 < 0.04) noCumple.push("el núcleo sigue blanco (saturación " + sat1 + "): subir fuerza (máx. 0,6) o bajar desde (0,45)");
+    if (m1.radio_px > Math.max(3, m0.radio_px)) noCumple.push("la meseta sube a " + m1.radio_px + " px: bajar fuerza");
+    return { vista: out.id, original: viewId, lineal: linId, fuerza: f, mascara: { desde: desde, ancho: ancho },
+             saturacion_nucleo: { antes: sat0, despues: sat1 }, meseta: { antes: m0.radio_px, despues: m1.radio_px }, no_cumple: noCumple,
+             control: { medido: { nucleo_con_color: sat1 === null || sat1 >= 0.04 },
+                        revisar_a_ojo: ["núcleo al 100 %: color cálido creíble, sin anillo ni borde de la máscara en el bulbo"],
+                        nota: "Es color medido en la lineal (proporciones R:G:B del propio núcleo), no inventado." } };
+  } finally { if (cerrarLin) cerrarLin.forceClose(); }
 }
 
 function comprimirNucleo(viewId, o) {
@@ -225,7 +273,12 @@ function comprimirNucleo(viewId, o) {
   for (var j = 0; j < mb.length; j += 3) if (mb[j] > 0.5) { bm0 += a0.L[j]; bm1 += a1.L[j]; ++nb; }
   bm0 = nb ? bm0 / nb : 0; bm1 = nb ? bm1 / nb : 0;
   var baja = bm0 > 0 ? 100 * (1 - bm1 / bm0) : 0, noCumple = [];
-  if (despues.radio_px > 3) noCumple.push("el núcleo sigue quemado (meseta " + despues.radio_px + " px): repetir sobre la original con mezcla 0,8 o capas 8");
+  // Si la original no estaba quemada, la compresión es la que crea la meseta: no se comprime (Qwen 64k repitió con
+  // mezcla 0,8 y capas 8, empeoró las dos veces y se paró; M31, 13 nov 2026).
+  if (despues.radio_px > 3 && antes.radio_px <= 3)
+    noCumple.push("la compresión CREA una meseta de " + despues.radio_px + " px y la original no estaba quemada (" + antes.radio_px +
+                  " px): no comprimir; seguir con " + viewId + (sat0 !== null && sat0 < 0.04 ? " y, si el núcleo es blanco, recuperarColorNucleo" : "") + ". No repetir con más mezcla ni más capas");
+  else if (despues.radio_px > 3) noCumple.push("el núcleo sigue quemado (meseta " + despues.radio_px + " px): repetir sobre la original con mezcla 0,8 o capas 8");
   if (nuevos.length) noCumple.push("anillo oscuro nuevo a " + nuevos.join(", ") + " px del centro: repetir con mezcla menor (0,4) o capas 6");
   if (otra) noCumple.push("otra meseta quemada de " + otra.radio_px + " px en [" + otra.centro.join(", ") + "] (¿galaxia satélite o estrella?): " +
     "si es una galaxia, repetir sobre la original con mascaraDesde 0,25 para que la máscara la incluya; si es una estrella, ignorar");
@@ -235,7 +288,7 @@ function comprimirNucleo(viewId, o) {
   var texX = (tx0 > 0 && tx1 !== null) ? +(tx1 / tx0).toFixed(2) : null, sat1 = nuSatNucleo(v, antes.centro, 64);
   if (texX !== null && texX > 3) noCumple.push("núcleo cocinado: la textura fina del bulbo sube ×" + texX + " (máx. ×3): repetir con mezcla menor (0,4) o capas 6");
   if (sat1 !== null && sat1 < 0.04 && (sat0 === null || sat0 >= 0.04))
-    noCumple.push("el núcleo se queda blanco (saturación " + sat1 + " < 0,04; antes " + sat0 + "): mezcla menor o recuperar su color de la lineal");
+    noCumple.push("el núcleo se queda blanco (saturación " + sat1 + " < 0,04; antes " + sat0 + "): mezcla menor o recuperarColorNucleo con la lineal");
   return {
     vista: v.id, original: viewId, aplicado: true,
     metodo: metodo === "ghc" ? "GradientHDRCompression (exponente " + ((o.exponente !== undefined) ? o.exponente : 0.6) + ")" : "HDRMultiscaleTransform",
@@ -293,6 +346,25 @@ function nucleoCandidatos(viewId, o) {
     if (mc !== ma) return mc < ma ? c : a;
     return c.r.brillo_bulbo.baja_pct < a.r.brillo_bulbo.baja_pct ? c : a;
   }, null);
+  // «Sin comprimir» también es un candidato (13 nov 2026, M31): el estirado no tenía meseta (0 px) y las tres compresiones
+  // la creaban (5–8 px); Opus y Qwen 32k se pararon dos veces repitiendo el arreglo. Si el mejor comprimido deja más
+  // meseta que la original y la original no está quemada, se recomienda no comprimir.
+  var m0 = best.r.meseta_antes ? best.r.meseta_antes.radio_px : null;
+  if (m0 !== null && m0 <= 3 && best.r.meseta_despues.radio_px > Math.max(3, m0)) {
+    if (o.cerrar !== false) conVista.forEach(function (c) { var w = ImageWindow.windowById(c.r.vista); if (!w.isNull) w.forceClose(); });
+    var sat0 = best.r.saturacion_nucleo ? best.r.saturacion_nucleo.antes : null;
+    return {
+      vista: viewId, original: viewId, aplicado: false, recomendado: "sin comprimir",
+      comparados: cands.map(function (c) { return c.r ? { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null, cumple: !c.r.no_cumple.length, elegido: false } : { metodo: c.etiqueta, error: c.error }; })
+        .concat([{ metodo: "sin comprimir", meseta_px: m0, elegido: true }]),
+      meseta_antes: best.r.meseta_antes,
+      motivo: "La original no está quemada (meseta " + m0 + " px) y todas las compresiones crean meseta (la mejor " + best.r.meseta_despues.radio_px +
+              " px): no se comprime; se sigue con " + viewId + ".",
+      no_cumple: (sat0 !== null && sat0 < 0.04) ? ["núcleo blanco (saturación " + sat0 + "): recuperarColorNucleo(\"" + viewId + "\", { lineal: <starless lineal> }) antes de saturar"] : [],
+      segundos: Math.round((Date.now() - t0) / 1000),
+      control: { medido: { nucleo_con_estructura: true }, revisar_a_ojo: ["núcleo al 100 %: gradiente suave hacia el centro"], nota: "No comprimir es un resultado válido." }
+    };
+  }
   var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_nucleo"), vista = null;
   conVista.forEach(function (c) {
     var w = ImageWindow.windowById(c.r.vista);

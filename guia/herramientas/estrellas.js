@@ -323,6 +323,19 @@ function estirarEstrellasCandidatos(viewId, o) {
   var slSt = stIdDe(o.starless), slAct = stIdDe(o.starlessActual || o.starless);
   if (slAct && ImageWindow.windowById(slAct).isNull) { avisos.push("no existe la starless " + slAct + ": candidatos sin previa combinada ni aporte"); slAct = null; }
 
+  // Sin { starless }: la starless estirada del Paso 1 se busca en el registro de estirados (la más reciente que siga
+  // abierta y tenga el tamaño de esta capa). Qwen 64k no la pasó en M31 (13 nov 2026), cayó al arcsinh k 3000 y la final
+  // salió con la mitad de estrellas (10 659 frente a ~21 000).
+  if (!slSt && metodo === "extraer" && typeof esLeerRegistros === "function") {
+    var regs = esLeerRegistros(), ids = Object.keys(regs).sort(function (a, b) { return (regs[b].fecha || 0) - (regs[a].fecha || 0); });
+    for (var ri = 0; ri < ids.length && !slSt; ++ri) {
+      var wr = ImageWindow.windowById(ids[ri]);
+      if (wr.isNull || wr.mainView.image.width !== sim.width || wr.mainView.image.height !== sim.height) continue;
+      if (typeof esRegistro === "function" && !esRegistro(ids[ri])) continue;
+      slSt = ids[ri];
+      avisos.push("starless del Paso 1 tomada del registro de estirados: " + slSt + " (pásala en starless para elegirla tú)");
+    }
+  }
   // 1. Estirado recomendado.
   if (metodo === "extraer") {
     if (!slSt) avisos.push("el mismo estirado que la starless necesita { starless: <la starless estirada en el Paso 1> }: se usa arcsinh k 3000");

@@ -28,7 +28,8 @@ function hdrOpen(x, id) {
     if (v && !v.isNull) return { win: v.window, view: v, tmp: false };
     throw new Error("No existe la vista ni el fichero " + s);
   }
-  var w = ImageWindow.open(s, id || "hdrIN", "verbosity 0", true)[0];
+  var ws = ImageWindow.open(s, id || "hdrIN", "verbosity 0", true), w = ws[0];
+  for (var i = 1; i < ws.length; ++i) try { ws[i].forceClose(); } catch (e) { }   // mapas de rechazo de WBPP
   return { win: w, view: w.mainView, tmp: true, path: s };
 }
 
@@ -167,6 +168,14 @@ function componerHDR(lista, o) {
   var id = (typeof o.nuevaVista === "string" && o.nuevaVista) || "HDR";
   if (hdrW.mainView.id != id) { var free = id; for (var n = 2; !ImageWindow.windowById(free).isNull; ++n) free = id + "_" + n; hdrW.mainView.id = free; }
   if (ins[0].win.hasAstrometricSolution && !hdrW.hasAstrometricSolution) try { hdrW.copyAstrometricSolution(ins[0].win); } catch (e) { }
+  // Cabecera de la toma larga (FILTER, INSTRUME, TELESCOP…): sin ella, calibrarColor no reconocía el filtro Triband de
+  // la HDR y hacía SPCC de banda ancha (M31, 13 nov 2026). EXPTIME queda el de la larga. Antes de revisar el WCS, para
+  // que la revisión vea la cabecera final.
+  try {
+    var ya = {}; hdrW.keywords.forEach(function (k) { ya[k.name] = true; });
+    var faltan = ins[0].win.keywords.filter(function (k) { return !ya[k.name] && !/^(SIMPLE|BITPIX|NAXIS\d*|EXTEND|BZERO|BSCALE)$/.test(k.name); });
+    if (faltan.length) hdrW.keywords = hdrW.keywords.concat(faltan);
+  } catch (e) { }
   hdrRevisarWCS(hdrW, ins, r);
   r.vista = hdrW.mainView.id;
   r.mascaras = masks.map(function (w) { return w.mainView.id; });

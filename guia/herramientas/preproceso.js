@@ -584,14 +584,17 @@ function ppPlanSesiones(o) {
     });
   }
   var juegos = ppJuegosFlats(o.flats ? ppSub(o.flats, "FLAT") : []);
+  var al = o.aliasFiltros || {}, alias = function (f) { return (f !== undefined && al[f] !== undefined) ? al[f] : f; };
+  juegos.forEach(function (x) { x.filtro = alias(x.filtro); });
   defs.forEach(function (s) {
     var h0 = ppHeader(s.lights[0]), hl = ppHeader(s.lights[s.lights.length - 1]);
     s.noche = ppNoche(h0) || "";
-    s.filtro = h0.filtro || "";
+    s.filtro = alias(h0.filtro) || "";
     s.sinFiltro = !h0.filtro;
     var j = null;
     if (s.flats) {
       var js = ppJuegosFlats(s.flats);
+      js.forEach(function (x) { x.filtro = alias(x.filtro); });
       if (js.length) { j = js[0]; if (js.length > 1) j = { ficheros: [].concat.apply([], js.map(function (x) { return x.ficheros; })), master: false, etiqueta: js.map(function (x) { return x.etiqueta; }).join(" + "), filtro: js[0].filtro }; }
     } else if (juegos.length) {
       // el último juego de la misma noche o anterior; si no hay, el primero posterior. Mismo filtro si el flat lo dice.
@@ -885,7 +888,8 @@ function ppAbrirSTF(path, id) {
   var ws = ImageWindow.windows, w = null;
   for (var i = 0; i < ws.length; ++i) if (ws[i].filePath == path) w = ws[i];
   if (!w) {
-    w = ImageWindow.open(path)[0];
+    var wsAb = ImageWindow.open(path); w = wsAb[0];
+    for (var q = 1; q < wsAb.length; ++q) try { wsAb[q].forceClose(); } catch (e) { }   // mapas de rechazo de WBPP
     if (id) { var n = id.replace(/[^A-Za-z0-9_]/g, "_"); if (/^[0-9]/.test(n)) n = "_" + n; if (ImageWindow.windowById(n).isNull) w.mainView.id = n; }
   }
   // STF enlazado (mismos parámetros en todos los canales): por canal desequilibra los colores.

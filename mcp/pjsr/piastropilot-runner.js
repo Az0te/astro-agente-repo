@@ -274,10 +274,17 @@ function pprPrevia(id, o) {
 
 function pprAbrir(f) {
    if (!f || !File.exists(f)) throw new Error("No existe el fichero " + f);
-   var ws = ImageWindow.open(f), ids = [];
-   for (var i = 0; i < ws.length; ++i) { ws[i].show(); ids.push(ws[i].mainView.id); }
+   var ws = ImageWindow.open(f), ids = [], cerradas = [];
+   // Los masters de WBPP traen los mapas de rechazo (…_rejection_low/high, slope): no son imágenes para procesar y los
+   // modelos los arrastraban o gastaban llamadas en cerrarlos (M31, 13 nov 2026). Se abre sólo la principal.
+   for (var i = 0; i < ws.length; ++i) {
+      if (i > 0 && /rejection|slope|weight/i.test(ws[i].mainView.id)) { cerradas.push(ws[i].mainView.id); ws[i].forceClose(); continue; }
+      ws[i].show(); ids.push(ws[i].mainView.id);
+   }
    if (!ids.length) throw new Error("PixInsight no ha podido abrir " + f);
-   return { fichero: f, vistas: ids };
+   var r = { fichero: f, vistas: ids, vista: ids[0] };
+   if (cerradas.length) r.nota = "Cerrados los mapas de rechazo de WBPP que trae el fichero (" + cerradas.length + "): sólo queda la imagen principal.";
+   return r;
 }
 
 function pprGuardar(id, f, sobrescribir) {
@@ -383,6 +390,7 @@ var LISTA = {
    crearMascara:         function (a) { return crearMascara(a.vista, a.opciones || {}); },
    aplicarConMascara:    function (a) { return aplicarConMascara(a.vista, a.opciones || {}); },
    comprimirNucleo:      function (a) { return comprimirNucleo(a.vista, a.opciones || {}); },
+   recuperarColorNucleo: function (a) { return recuperarColorNucleo(a.vista, a.opciones || {}); },
    medirMeseta:          function (a) { return medirMeseta(a.vista, a.opciones || {}); },
    saturarAlFallo:       function (a) { return saturarAlFallo(a.vista, a.opciones || {}); },
  fondoCandidatos:      function (a) { return fondoCandidatos(a.vista, a.opciones || {}); },
@@ -400,6 +408,40 @@ var LISTA = {
    darkStructureEnhance: function (a) { return darkStructureEnhance(a.vista, a.opciones || {}); },
    backgroundEnhance:    function (a) { return backgroundEnhance(a.vista, a.opciones || {}); }
 };
+
+// Las vistas nuevas heredan la cabecera de la vista de entrada (FILTER, INSTRUME, EXPTIME…). Muchas funciones crean la
+// copia con new ImageWindow y la cabecera se perdía: tras bxtCorrectOnly, calibrarColor ya no sabía que era el Triband y
+// Opus se paró a pedir las bandas (M31, 13 nov 2026). Se hace aquí, una vez, para todas las funciones.
+function pprHeredarCabecera(a, antes) {
+   var origen = null;
+   [a && a.vista, a && a.starless, a && a.original, a && a.a].forEach(function (x) {
+      if (origen || typeof x !== "string") return;
+      try { var w = ImageWindow.windowById(x); if (!w.isNull && w.keywords.length) origen = w; } catch (e) { }
+   });
+   if (!origen) return;
+   ImageWindow.windows.forEach(function (w) {
+      try {
+         if (antes.indexOf(w.mainView.id) >= 0) return;
+         if (/mask|mascara|modelo|model|_rejection|ccFondoRef/i.test(w.mainView.id)) return;
+         // Las copias nuevas suelen traer unas pocas palabras clave de PixInsight (8 en una capa de estrellas), pero no
+         // FILTER: se añaden las del origen que falten, sin tocar las que ya tiene.
+         var ya = {}; w.keywords.forEach(function (k) { ya[k.name] = true; });
+         if (ya.FILTER) return;
+         var faltan = origen.keywords.filter(function (k) { return !ya[k.name] && !/^(SIMPLE|BITPIX|NAXIS\d*|EXTEND|BZERO|BSCALE)$/.test(k.name); });
+         if (faltan.length) w.keywords = w.keywords.concat(faltan);
+      } catch (e) { }
+   });
+}
+(function () {
+   for (var n in LISTA) if (LISTA.hasOwnProperty(n)) (function (n, f) {
+      LISTA[n] = function (a) {
+         var antes = []; try { antes = ImageWindow.windows.map(function (w) { return w.mainView.id; }); } catch (e) { }
+         var v = f(a);
+         try { pprHeredarCabecera(a, antes); } catch (e) { }
+         return v;
+      };
+   })(n, LISTA[n]);
+})();
 
 // ---------------------------------------------------------------------------------------------------------------
 // Llamadas propuestas por un modelo sin herramientas (módulo PiAstroPilot): {"llamadas":[{"funcion","parametros"}]}.
@@ -461,6 +503,15 @@ function pprJsonTolerante(texto) {
 // oscura». Se pasan a minúsculas, sin acentos y con «_» en vez de espacios antes de llamar a la función (11 nov 2026:
 // metodo "NXT" acababa en la rama equivocada). No se tocan nombres propios ni ids (paleta, vista, ficheros, canal).
 var PPR_ENUMS = { tipo: 1, metodo: 1, metodos: 1, modo: 1, estrellas: 1, metodoEstrellas: 1, objetivo: 1, referencia: 1 };
+// «referencia» es una enumeración en unas funciones y una ruta o un id de vista en otras (alinearMasters): una ruta o
+// un id no se normalizan. Antes salía «d:\cmp_ref\…\masterlight_bin-1_…_antlia_triband_rgb_ultra_ii_rgb.xisf» y
+// alinearMasters no encontraba ni el fichero ni la vista (M31, 13 nov 2026, Opus dos veces).
+function pprEsRutaOId(v) {
+   if (typeof v !== "string") return false;
+   if (/[\/\\:]|\.(xisf|fits?|fts|tiff?)$/i.test(v)) return true;
+   try { if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(v) && !ImageWindow.windowById(v).isNull) return true; } catch (e) { }
+   return false;
+}
 function pprNormalizarEnum(v) {
    if (typeof v === "string") {
       var s = v.trim().toLowerCase(), de = "áéíóúüñ", a = "aeiouun";
@@ -476,7 +527,7 @@ function pprNormalizarOpciones(p) {
    if (!p || typeof p !== "object" || p instanceof Array) return p;
    var o = p.opciones;
    if (o && typeof o === "object" && !(o instanceof Array))
-      for (var k in o) if (o.hasOwnProperty(k) && PPR_ENUMS.hasOwnProperty(k)) o[k] = pprNormalizarEnum(o[k]);
+      for (var k in o) if (o.hasOwnProperty(k) && PPR_ENUMS.hasOwnProperty(k) && !pprEsRutaOId(o[k])) o[k] = pprNormalizarEnum(o[k]);
    pprCorregirIds(p);
    return p;
 }

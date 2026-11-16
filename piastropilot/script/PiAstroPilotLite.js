@@ -40,6 +40,7 @@ var PL_CLAVE = "PiAstroPilotLite";
 var PL_RUTA_SCRIPT = File.extractDrive(#__FILE__) + File.extractDirectory(#__FILE__);   // .../piastropilot/script
 var PL_TMP = File.systemTempDirectory + "/PiAstroPilotLite";
 var PL_MAX_CORRECCIONES = 3;
+var PL_ESPERA_WBPP_MIN = 180;   // espera máxima de estadoWBPP a que termine WBPP
 var PL_MAX_SERIE = 60;   // tope de pasos seguidos en una serie («hasta el final»)
 // Ojo: el preprocesador de PJSR toma la barra-asterisco y la doble barra como comentarios aunque estén dentro de
 // cadenas, regex o comentarios de línea. No escribirlas seguidas en este fichero (trocear las cadenas).
@@ -565,9 +566,28 @@ function plListaFunciones(guia) {
       if (p > 0 && p < 220) d = d.substring(0, p + 1);
       var mp = /^(lineal|no-lineal)\/(\d+)-/.exec(String(x.paso || ""));
       var paso = mp ? " (Paso " + parseInt(mp[2], 10) + (mp[1] == "lineal" ? " lineal" : " no lineal") + ")" : "";
-      out.push("- " + plFirmaLlamada(x) + " [" + x.nivel + "]" + paso + ": " + plRecortar(d, 220));
+      out.push("- " + plFirmaLlamada(x) + " [" + x.nivel + "]" + paso + ": " + plRecortar(d, 220) + plDetalleObjetos(x, 220));
    });
    return out.join("\n");
+}
+
+// Lo que va DENTRO de los parámetros objeto (calibracion, wbpp, opciones…): sin esto el modelo sólo veía
+// «revisarCalibracion {calibracion*}» y no sabía qué claves poner (13 nov 2026; por el MCP sí las ve).
+function plDetalleObjetos(x, max) {
+   var pr = (x.params && x.params.properties) || {}, s = "";
+   for (var k in pr) if (pr[k] && pr[k].type == "object" && pr[k].description)
+      s += " · " + k + " = " + (max ? plRecortar(pr[k].description, max) : pr[k].description);
+   return s;
+}
+
+// Ayuda completa de los parámetros de una función, para los mensajes de error.
+function plAyudaParametros(nombre, man) {
+   var x = man && man.porNombre[nombre];
+   if (!x) return "";
+   var pr = (x.params && x.params.properties) || {}, req = (x.params && x.params.required) || [], l = [];
+   for (var k in pr) l.push("  - " + k + (req.indexOf(k) >= 0 ? " (obligatorio)" : "") + (pr[k].type ? " [" + pr[k].type + "]" : "") +
+                            (pr[k].description ? ": " + pr[k].description : ""));
+   return l.length ? "\nParámetros de " + nombre + ":\n" + l.join("\n") : "";
 }
 
 function plListaVentanas() {
@@ -802,7 +822,9 @@ function plOllamaChat(aj, sistema, mensajes, estado) {
       uso.entrada += j.prompt_eval_count || 0;
       uso.salida += j.eval_count || 0;
       uso.cache += j.prompt_eval_cached_count || 0;
-      var texto = String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "").trim();
+      // También un <think> sin cerrar al final (rama b6wzqh, 13 nov 2026: Qwen 64k dejaba todo el turno dentro del razonamiento).
+      var texto = String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "")
+                                                              .replace(/<think>[\s\S]*$/, "").trim();
       var pensado = String(j.message && j.message.thinking || "").trim() || ultimoPensado;   // tras think=false ya no llega
       ultimoPensado = pensado;
       if (texto.length || !pensado.length) {
@@ -903,21 +925,52 @@ function plCodexChat(aj, sistema, mensajes, estado, modelo) {
 }
 
 // Los últimos mensajes que caben en el presupuesto (siempre al menos el último).
-function plRecortarHistorial(mensajes) {
-   var out = [], total = 0;
+// Presupuesto de historial según el modelo (13 nov 2026): 24 000 caracteres se quedaban cortos en un preprocesado
+// (una tabla de seleccionarSubs llenaba casi todo). Claude/Codex tienen contexto de sobra; con Ollama depende del
+// num_ctx, que los modelos de Rafael llevan en el nombre (qwen38-64k, qwen38-32k).
+function plPresupuestoHistorial(aj) {
+   if (!aj || aj.proveedor != "ollama") return 80000;
+   var m = /(\d+)k\b/i.exec(String(aj.modeloOllama || "")), k = m ? parseInt(m[1], 10) : 0;
+   return k >= 64 ? 60000 : PL_PRESUPUESTO_HISTORIAL;
+}
+
+// Un resultado grande ya visto (tablas de seleccionarSubs, inventarios) se manda recortado: principio y final.
+var PL_MAX_MENSAJE_VIEJO = 8000;
+function plRecortarViejo(m) {
+   var c = m.content;
+   if (c.length <= PL_MAX_MENSAJE_VIEJO) return m;
+   return { role: m.role, content: c.substring(0, 5500) + "\n…[recortado en el historial: " + (c.length - 7500) +
+            " caracteres]…\n" + c.substring(c.length - 2000) };
+}
+
+function plRecortarHistorial(mensajes, presupuesto) {
+   var out = [], total = 0, tope = presupuesto || PL_PRESUPUESTO_HISTORIAL;
    for (var i = mensajes.length - 1; i >= 0; --i) {
-      total += mensajes[i].content.length;
-      if (out.length && total > PL_PRESUPUESTO_HISTORIAL) break;
-      out.unshift(mensajes[i]);
+      var mi = (i < mensajes.length - 1 && !plEsPeticion(mensajes[i])) ? plRecortarViejo(mensajes[i]) : mensajes[i];
+      total += mi.content.length;
+      if (out.length && total > tope) break;
+      out.unshift(mi);
    }
    while (out.length > 1 && out[0].role != "user") out.shift();
+   // La última petición del usuario (no un resultado, una corrección ni «sigue») no se pierde nunca: con resultados
+   // grandes (seleccionarSubs) el recorte la dejaba fuera y el modelo olvidaba rutas y objetivo (13 nov 2026).
+   var peticion = null;
+   for (var j = mensajes.length - 1; j >= 0 && !peticion; --j)
+      if (plEsPeticion(mensajes[j])) peticion = mensajes[j];
+   if (peticion && out.indexOf(peticion) < 0 && !out.some(function (o) { return o.content === peticion.content; }))
+      out.unshift({ role: "user", content: "[Petición del usuario que sigue en marcha (recortada del historial)]\n" + peticion.content },
+                  { role: "assistant", content: "Entendido; sigo con esa petición." });
    return out;
+}
+function plEsPeticion(m) {
+   return m.role == "user" && !/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(m.content) &&
+          !/^(Las llamadas han|Resultado de tus llamadas|Tus llamadas han fallado|\[Petición del usuario)/.test(m.content);
 }
 
 // paso = clave del paso de la guía elegido en la pestaña Prompt ("" = prompt libre); decide el modelo con pesos N.
 // Devuelve { texto, modelo, porque }.
 function plPreguntar(aj, mensajes, estado, paso) {
-   var sistema = plPromptSistema(aj), m = plRecortarHistorial(mensajes), e = plElegirModelo(aj, paso || ""), t;
+   var sistema = plPromptSistema(aj), m = plRecortarHistorial(mensajes, plPresupuestoHistorial(aj)), e = plElegirModelo(aj, paso || ""), t;
    // Recordatorio al final de la última petición (los modelos locales atienden más a lo último que leen); no se guarda.
    if (m.length && m[m.length - 1].role == "user") {
       m = m.slice();
@@ -981,16 +1034,22 @@ function plValidarLlamada(ll, man, L) {
 // texto después del bloque); igual que pprJsonTolerante del runner. Si sigue sin ser válido, el error de siempre.
 function plJsonTolerante(texto) {
    try { return JSON.parse(texto); } catch (e0) {
-      var s = String(texto).trim().replace(/,\s*([}\]])/g, "$1"), pila = [], enCadena = false, escape = false, fin = -1;
+      var s = String(texto).trim().replace(/,\s*([}\]])/g, "$1"), pila = [], enCadena = false, escape = false, fin = -1, out = "";
       for (var i = 0; i < s.length; ++i) {
          var c = s.charAt(i);
-         if (enCadena) { if (escape) escape = false; else if (c == "\\") escape = true; else if (c == "\"") enCadena = false; continue; }
+         if (enCadena) { out += c; if (escape) escape = false; else if (c == "\\") escape = true; else if (c == "\"") enCadena = false; continue; }
          if (c == "\"") enCadena = true;
          else if (c == "{" || c == "[") pila.push(c == "{" ? "}" : "]");
-         else if (c == "}" || c == "]") { if (pila.length && pila[pila.length - 1] == c) { pila.pop(); if (!pila.length) { fin = i; break; } } else break; }
+         else if (c == "}" || c == "]") {
+            // «]» con un objeto sin cerrar: falta la «}» de la llamada (Opus, 13 nov 2026: tres veces «…true}}]}» con una
+            // llave de menos). Se cierran los objetos abiertos hasta el corchete.
+            if (c == "]") while (pila.length && pila[pila.length - 1] == "}" && pila.indexOf("]") >= 0) { out += "}"; pila.pop(); }
+            if (pila.length && pila[pila.length - 1] == c) { pila.pop(); if (!pila.length) { out += c; fin = i; break; } } else break;
+         }
+         out += c;
       }
-      if (fin >= 0) s = s.substring(0, fin + 1);
-      else if (!enCadena) s = s.replace(/,\s*$/, "") + pila.reverse().join("");
+      if (fin >= 0) s = out;
+      else if (!enCadena) s = out.replace(/,\s*$/, "") + pila.reverse().join("");
       try { return JSON.parse(s); } catch (e1) { throw e0; }
    }
 }
@@ -1014,6 +1073,7 @@ function plEjecutarLlamadas(aj, texto) {
    for (var i = 0; i < lista.length; ++i) {
       var err = plValidarLlamada(lista[i], man, L);
       if (err) return { ok: false, texto: "ERROR en la llamada " + (i + 1) + ": " + err + ". No se ha ejecutado nada." +
+                        plAyudaParametros(lista[i] && lista[i].funcion, man) +
                         "\nVistas abiertas (ids exactos): " + plResumenVistas(), segundos: 0 };
    }
    for (var j = 0; j < lista.length; ++j) {
@@ -1025,14 +1085,27 @@ function plEjecutarLlamadas(aj, texto) {
       console.noteln("[PiAstroPilotLite] " + ll.funcion + " " + JSON.stringify(p));
       try {
          var v = L[ll.funcion](p), s;
+         // WBPP va en otra instancia y tarda decenas de minutos: si no ha terminado, se espera aquí (mirando cada
+         // 30 s, hasta PL_ESPERA_WBPP_MIN) en vez de devolver «sin terminar» al modelo, que en una serie de pasos
+         // gastaba un paso y una consulta en cada vistazo (13 nov 2026).
+         if (ll.funcion == "estadoWBPP") {
+            var tW = Date.now();
+            while (v && typeof v === "object" && v.terminado === false && Date.now() - tW < PL_ESPERA_WBPP_MIN * 60000) {
+               for (var w = 0; w < 300; ++w) { plEventos(); plDormir(100); }
+               v = L[ll.funcion](p);
+            }
+            if (v && typeof v === "object") v.esperado_min = Math.round((Date.now() - tW) / 6000) / 10;
+         }
          try { s = typeof v === "string" ? v : JSON.stringify(v === undefined ? null : v, null, 1); } catch (x) { s = String(v); }
          salida.push(ll.funcion + ":\n" + s);
       } catch (e) {
          var linea = e && e.lineNumber ? " (línea " + e.lineNumber + ")" : "";
+         if (plGlobal().PL_DEPURAR && e && e.stack) linea += "\n" + e.stack;
          var vistas = "";
          try { if (String(e).indexOf("Vistas abiertas") < 0) vistas = "\nVistas abiertas (ids exactos): " + plResumenVistas(); } catch (x) {}
          return { ok: false, texto: plRecortar((salida.length ? salida.join("\n\n") + "\n\n" : "") + "ERROR en " + ll.funcion + ": " +
-                  (e && e.message ? e.message : String(e)) + linea + vistas, 6000), segundos: (Date.now() - t0) / 1000 };
+                  (e && e.message ? e.message : String(e)) + linea + plAyudaParametros(ll.funcion, man) + vistas, 6000),
+                  segundos: (Date.now() - t0) / 1000 };
       }
    }
    // 20000 caracteres (antes 6000 cortaba análisis + ficha del objeto; el módulo manda hasta 30000 a interpretar).
@@ -2488,12 +2561,18 @@ function plPrueba(salida, cli) {
 //   PixInsight.exe -n --automation-mode --no-focus-stealing
 //      -r=<Lite>,--pasada,<ollama|claude|codex>,<modelo>,<carpeta>,<peticion.txt> --force-exit
 var PL_MAX_SIGUE = 6;
-function plPasada(proveedor, modelo, carpeta, ficheroPeticion) {
+function plPasada(proveedor, modelo, carpeta, ficheroPeticion, maxSigue) {
+   // maxSigue: «sigue» automáticos como mucho (por defecto PL_MAX_SIGUE; 0 en una comparación por etapas, donde la
+   // etapa acaba cuando el modelo para y cada etapa sigue desde la mejor salida de los dos modelos).
+   var topeSigue = maxSigue !== undefined && maxSigue !== null && isFinite(parseInt(maxSigue, 10)) ? parseInt(maxSigue, 10) : PL_MAX_SIGUE;
    carpeta = plCarpeta(String(carpeta).replace(/\\/g, "/").replace(/[\/]+$/, ""));
    var peticion = String(File.readTextFile(ficheroPeticion)).replace(/^﻿/, "").trim();
    var aj = new PLAjustes();
    aj.cargar();
    aj.guardar = function () {};   // nada de lo que cambie la pasada llega a los ajustes guardados
+   // La guía de al lado del script, no la de los ajustes: así una pasada puede correr desde una copia congelada del
+   // repo aunque se cambie de rama a mitad (13 nov 2026: un cambio a main a mitad de la etapa 2 la invalidó).
+   aj.guia = plPadre(plPadre(PL_RUTA_SCRIPT)) + "/guia";
    aj.proveedor = proveedor; aj.ponerModelo(modelo);
    aj.internet = false; aj.voz = false;
    aj.carpetaInformes = carpeta;
@@ -2527,12 +2606,12 @@ function plPasada(proveedor, modelo, carpeta, ficheroPeticion) {
          out.temperatura = aj.temperatura;
          out.modeloEfectivo = aj.modelo();
          var texto = peticion;
-         for (var v = 0; v <= PL_MAX_SIGUE; ++v) {
+         for (var v = 0; v <= topeSigue; ++v) {
             d.enviarTexto(texto);
             guardar(d);
             if (out.exportado) break;
             texto = "sigue hasta el final";
-            if (v < PL_MAX_SIGUE) ++out.sigue;
+            if (v < topeSigue) ++out.sigue;
          }
          out.informe = d.crearInforme();
       } catch (e) { out.error = String(e && e.message ? e.message : e); }
@@ -2548,8 +2627,16 @@ function plPasada(proveedor, modelo, carpeta, ficheroPeticion) {
 function plMain() {
    var args = (typeof Runtime !== "undefined" && Runtime.jsArguments) ? Runtime.jsArguments :
               (typeof jsArguments !== "undefined") ? jsArguments : [];
+   // Llamadas de la guía sin chat (mismo validador y runner que el chat):  -r=<Lite>,--llamadas,<llamadas.json>,<salida.txt>
+   if (args.length >= 3 && String(args[0]) == "--llamadas") {
+      var ajL = new PLAjustes(); ajL.cargar(); ajL.guardar = function () {};
+      plGlobal().PL_DEPURAR = true;   // sin chat: los errores llevan la pila
+      var rL = plEjecutarLlamadas(ajL, String(File.readTextFile(String(args[1]))));
+      File.writeTextFile(String(args[2]), (rL.ok ? "OK" : "ERROR") + "\n" + rL.texto);
+      return;
+   }
    if (args.length >= 5 && String(args[0]) == "--pasada") {
-      plPasada(String(args[1]), String(args[2]), String(args[3]), String(args[4]));
+      plPasada(String(args[1]), String(args[2]), String(args[3]), String(args[4]), args.length > 5 ? String(args[5]) : null);
       return;
    }
    if (args.length && String(args[0]) == "--prueba") {

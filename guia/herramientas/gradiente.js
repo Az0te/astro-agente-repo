@@ -26,6 +26,9 @@
 // Las herramientas gradcompare.js y procesos.js se cargan desde la misma carpeta que este fichero. Si se
 // usa desde otra ubicación, definir antes del eval: var GUIA_HERRAMIENTAS = "<ruta>/guia/herramientas";
 
+// Umbrales de manchas_color (grManchas), medidos en M31 (13 nov 2026): GraXpert IA 13, GraXpert 8 21, polinomio 2 38
+// (manchas verdes y violetas que se veían en la miniatura), polinomio 1 53.
+var GR_MANCHAS_LEVE = 20, GR_MANCHAS_SE_VEN = 30;
 var GR_DIR = (typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS
            : File.homeDirectory + "/astro-agente-repo/guia/herramientas";
 if (typeof gcPrepare !== "function") eval(File.readTextFile(GR_DIR + "/gradcompare.js"));
@@ -183,6 +186,46 @@ function grPolyExpr(c) {
 // al original. Antes era la rejilla 4×3 de toda la imagen, que en objetos grandes (galaxia grande) medía la galaxia y no el
 // gradiente, y hacía ganar a GraXpert aunque se comiera parte de ella (5 nov 2026).
 // come_objeto_pct: señal del objeto que se lleva el modelo (gcScore.eat), en % de la señal del objeto.
+// Manchas de gran escala que deja la corrección (13 nov 2026, M31: el polinomio de grado 2 se llevaba menos objeto que
+// nadie pero dejaba manchas verdes y violetas en el cielo; Opus las vio en la miniatura, los Qwen no pueden verlas).
+// Celdas de 128 px del cielo (el 40 % más oscuro por luminancia, para no medir el objeto): mediana por celda de R−G,
+// B−G y de la luminancia; dispersión robusta (MAD) entre celdas, en unidades del ruido por píxel del cielo, ×100 para
+// leerlo cómodo. Plano = 0; cuanto más alto, más manchas al estirar. Un gradiente liso que quede también sube la de
+// luminancia, por eso se lee junto con gradiente_restante.
+// (Fusión con la rama b6wzqh, 16 nov 2026: renombrada de grManchas a grManchasColor; grManchas(vista, base, o) de
+// gradbordes.js es otra función con otro resultado y las dos en el mismo ámbito se pisaban.)
+function grManchasColor(viewId) {
+  try {
+    var v = View.viewById(viewId), im = v.image, W = im.width, H = im.height, nc = im.numberOfChannels, S = 128, st = 4;
+    var nch = Math.min(3, nc), ch = [];
+    for (var c = 0; c < nch; ++c) ch.push(new Float32Array(S * S));
+    var med = function (a) { var s = a.slice().sort(function (p, q) { return p - q; }); return s[s.length >> 1]; };
+    var mad = function (a) { var m = med(a); return 1.4826 * med(a.map(function (x) { return Math.abs(x - m); })); };
+    var cells = [];
+    for (var y0 = S; y0 + 2 * S <= H; y0 += S) for (var x0 = S; x0 + 2 * S <= W; x0 += S) {   // sin el borde exterior
+      var L = [], rg = [], bg = [];
+      for (var c2 = 0; c2 < nch; ++c2) im.getSamples(ch[c2], new Rect(x0, y0, x0 + S, y0 + S), c2);
+      for (var y = 0; y < S; y += st) for (var x = 0; x < S; x += st) {
+        var i = y * S + x, l = 0;
+        for (var k = 0; k < ch.length; ++k) l += ch[k][i];
+        L.push(l / ch.length);
+        if (ch.length >= 3) { rg.push(ch[0][i] - ch[1][i]); bg.push(ch[2][i] - ch[1][i]); }
+      }
+      var mL = med(L);
+      if (mL <= 0) continue;   // bordes sin datos
+      cells.push({ L: mL, rg: rg.length ? med(rg) : 0, bg: bg.length ? med(bg) : 0, ruido: mad(L) });
+    }
+    if (cells.length < 12) return null;
+    cells.sort(function (p, q) { return p.L - q.L; });
+    var sky = cells.slice(0, Math.max(8, Math.floor(0.4 * cells.length)));
+    var ruido = med(sky.map(function (c) { return c.ruido; }));
+    if (!(ruido > 0)) return null;
+    var col = ch.length >= 3 ? Math.max(mad(sky.map(function (c) { return c.rg; })), mad(sky.map(function (c) { return c.bg; }))) : 0;
+    var lum = mad(sky.map(function (c) { return c.L; }));
+    return { color: +(100 * col / ruido).toFixed(1), luminancia: +(100 * lum / ruido).toFixed(1), celdas: sky.length };
+  } catch (e) { return null; }
+}
+
 function grMeasure(base, modelId, correctedId, range0) {
   var m = gcStructCopy(base, modelId), s = gcMetrics(base, correctedId);
   if (base.flat0 === undefined) { var s0 = gcScore(base, base.O.a, "original"); base.flat0 = s0.flat; base.vis0 = s0.visible; }
@@ -197,7 +240,8 @@ function grMeasure(base, modelId, correctedId, range0) {
   var corr = +m.corr.toFixed(3), resto = isFinite(fr) ? +fr.toFixed(3) : NaN, come = +(100 * s.eat).toFixed(1);
   // gradiente_visible (12 nov 2026): desnivel de las esquinas del cielo ya estirado (gcVisible); < 0,008 plano, > 0,015 se ve.
   var vis = isFinite(s.visible) ? +s.visible.toFixed(4) : NaN;
-  return { copia_objeto: corr, objeto_quitado_pct: come, gradiente_restante: resto, fondo_medido_en: fuente, copia: m.copy,
+  var mn = grManchasColor(correctedId);
+  return { manchas_color: mn ? mn.color : null, manchas_luminancia: mn ? mn.luminancia : null, copia_objeto: corr, objeto_quitado_pct: come, gradiente_restante: resto, fondo_medido_en: fuente, copia: m.copy,
            gradiente_visible: vis, gradiente_visible_antes: isFinite(base.vis0) ? +base.vis0.toFixed(4) : NaN,
            se_ve: !isFinite(vis) ? "sin medir" : vis < 0.008 ? "plano" : vis <= 0.015 ? "leve" : "se ve",
            gcStructCopy: corr, fondoResidual: resto, come_objeto_pct: come };
@@ -699,6 +743,8 @@ function gradienteCandidatos(viewId, o) {
   // Entre los seguros, mejor uno cuyo cielo no se vea desnivelado al estirar (gradiente_visible ≤ 0,015), si lo hay.
   var noSeVe = safe.filter(function (x) { return vis(x) <= 0.015; });
   if (noSeVe.length) safe = noSeVe;
+  // (Fusión con la rama b6wzqh, 16 nov 2026: su criterio de manchas_color se ha quitado aquí: definía otra función
+  // manchas() que, al estar después, sustituía a la de arriba y anulaba el filtro «sin manchas» de grManchas.)
   var clean = r.candidatos.filter(function (x) { return absCorr(x) < 0.3; });
   // 14 nov 2026: entre los seguros sin manchas visibles, el que MENOS objeto se lleva (Rafael: perder la menor
   // información posible; el cielo ya está bien por definición). Si todos tienen manchas, el más plano, como antes.
@@ -739,6 +785,19 @@ function gradienteCandidatos(viewId, o) {
       titulo: "Corrección de gradiente - " + viewId, vista: viewId,
       analisis: o.analisis || "", candidatos: r.candidatos, intermedias: r.intermedias,
       recomendado: r.recomendado, motivo: r.motivo, informe: "", errores: r.errores }, null, 2));
+  }
+  // Se cierran los candidatos no recomendados y sus modelos (con la segunda pasada son ~20 vistas y los Qwen gastaban
+  // 30–40 llamadas en cerrarlas una a una, M31 13 nov 2026). Sus medidas y miniaturas quedan en el resultado; para
+  // aplicar otro, repetir con { dejarCandidatos: true }.
+  if (!o.dejarCandidatos && r.recomendado) {
+    var cerrados = 0;
+    r.candidatos.forEach(function (c) {
+      if (c.vista === r.recomendado) return;
+      [c.vista, c.modelo].forEach(function (id) { if (!id) return; var w = ImageWindow.windowById(id); if (!w.isNull) { w.forceClose(); ++cerrados; } });
+    });
+    (r.intermedias || []).forEach(function (id) { var w = ImageWindow.windowById(id); if (!w.isNull) { w.forceClose(); ++cerrados; } });
+    if (cerrados) r.nota_vistas = "Cerradas " + cerrados + " vistas de los demás candidatos y auxiliares; queda abierto el recomendado (" +
+                                  r.recomendado + ") y su modelo. Para aplicar otro candidato: gradienteCandidatos(vista, { dejarCandidatos: true }).";
   }
   grPrevios.push(r);
   if (grPrevios.length > 1 && !o.noCompactar) grPrevios.forEach(function (g) { grCompactar(g, o); });
