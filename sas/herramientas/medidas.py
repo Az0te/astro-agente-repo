@@ -242,9 +242,37 @@ def medir_gradiente(base, pc):
     come = 100.0 * float(exceso[obj].sum()) / base["senal_obj"] if base["senal_obj"] > 0 and obj.any() else float("nan")
     irreg = rango_rejilla(C, cie) / base["rango0"] if base["rango0"] and base["rango0"] > 0 else float("nan")
     resid = amplitud_plano(C, cie, v) / base["plano0"] if base["plano0"] > 0 else float("nan")
+    # Estructura de escala grande que queda (dispersión de la imagen corregida sin su plano): un modelo que se come la
+    # nebulosa extensa la baja. IC 1396 c8 (16 nov 2026): el polinomio 2 dejó el OIII un 23 % más plano que el 1 y el
+    # estirado a mediana 0,20 lo amplificó más (más grano). Igual que _medir_gradiente de Siril.
+    rc = C - ajuste_poli(C, v, 1)
+    est = 1.4826 * float(np.median(np.abs(rc[v] - np.median(rc[v])))) if v.any() else float("nan")
     return {"copia_objeto": _r(corr, 3), "objeto_quitado_pct": _r(come, 1), "gradiente_restante": _r(resid, 3),
             "irregularidad_cielo": _r(irreg, 3), "negativos_pct": _r(100.0 * float((pc < 0).mean()), 3),
-            "escala_pct": _r(100.0 * alfa, 2)}
+            "escala_pct": _r(100.0 * alfa, 2), "estructura_grande": _r(est, 8)}
+
+
+def aplanado_gradiente(c, extenso, umbral=5.0):
+    """Cuánto más aplana cada modelo la estructura grande que el polinomio 1 (aplanado_vs_p1_pct). En campos con objeto
+    extenso, los que aplanan > 'umbral' % más no se recomiendan (se devuelven sus ids). Igual que en Siril."""
+    import re as _re
+    ref = next((x for x in c if _re.search(r"polinomio 1\b", str(x.get("metodo", ""))) and
+                x["metricas"].get("estructura_grande")), None)
+    fuera = []
+    if ref is None:
+        return fuera
+    e0 = float(ref["metricas"]["estructura_grande"])
+    for x in c:
+        e = x["metricas"].get("estructura_grande")
+        if e is None or e0 <= 0:
+            continue
+        ap = 100.0 * (1.0 - float(e) / e0)
+        x["metricas"]["aplanado_vs_p1_pct"] = _r(ap, 1)
+        if extenso and ap > umbral:
+            fuera.append(x["id"])
+            x.setdefault("no_cumple", []).append(f"aplana la estructura grande un {_r(ap, 1)} % más que el polinomio 1 "
+                                                  f"(> {umbral:g} %): se lleva nebulosa extensa")
+    return fuera
 
 
 def escala_uniforme(M, L, valido):
@@ -272,6 +300,8 @@ def elegir_gradiente(c, objeto_campo_pct, tipo=None):
     def eat(x): v = x["metricas"]["objeto_quitado_pct"]; return abs(v) if v is not None else 100
 
     extenso, tope = tope_gradiente(objeto_campo_pct, tipo)
+    fuera = set(aplanado_gradiente(c, extenso))
+    c = [x for x in c if x["id"] not in fuera] or c
     seguros = [x for x in c if eat(x) <= tope and absc(x) < 0.3]
     limpios = [x for x in c if absc(x) < 0.3]
     if seguros:

@@ -563,9 +563,35 @@ def _medir_gradiente(base, pc):
     come = 100.0 * float(exceso[obj].sum()) / base["senal_obj"] if base["senal_obj"] > 0 and obj.any() else float("nan")
     irreg = _rango_rejilla(C, cielo) / base["rango0"] if base["rango0"] and base["rango0"] > 0 else float("nan")
     resid = _amplitud_plano(C, cielo, v) / base["plano0"] if base["plano0"] > 0 else float("nan")
+    # Estructura de escala grande que queda (igual que medidas.medir_gradiente de SetiAstroPilot): un modelo que se come
+    # la nebulosa extensa la baja (IC 1396 c8: el polinomio 2 dejó el OIII un 23 % más plano y con más grano al estirar).
+    rc = C - _ajuste_poli(C, v, 1)
+    est = 1.4826 * float(np.median(np.abs(rc[v] - np.median(rc[v])))) if v.any() else float("nan")
     return {"copia_objeto": _r(corr, 3), "objeto_quitado_pct": _r(come, 1), "gradiente_restante": _r(resid, 3),
             "irregularidad_cielo": _r(irreg, 3), "negativos_pct": _r(100.0 * float((pc < 0).mean()), 3),
-            "escala_pct": _r(100.0 * alfa, 2)}
+            "escala_pct": _r(100.0 * alfa, 2), "estructura_grande": _r(est, 8)}
+
+
+def _aplanado_gradiente(c, extenso, umbral=5.0):
+    """Cuánto más aplana cada modelo la estructura grande que el polinomio 1; en campos extensos, los que aplanan
+    > 'umbral' % más no se recomiendan (igual que medidas.aplanado_gradiente)."""
+    ref = next((x for x in c if re.search(r"polinomio 1\b", str(x.get("metodo", ""))) and
+                x["metricas"].get("estructura_grande")), None)
+    fuera = []
+    if ref is None:
+        return fuera
+    e0 = float(ref["metricas"]["estructura_grande"])
+    for x in c:
+        e = x["metricas"].get("estructura_grande")
+        if e is None or e0 <= 0:
+            continue
+        ap = 100.0 * (1.0 - float(e) / e0)
+        x["metricas"]["aplanado_vs_p1_pct"] = _r(ap, 1)
+        if extenso and ap > umbral:
+            fuera.append(x["id"])
+            x.setdefault("no_cumple", []).append(f"aplana la estructura grande un {_r(ap, 1)} % más que el polinomio 1 "
+                                                  f"(> {umbral:g} %): se lleva nebulosa extensa")
+    return fuera
 
 
 def _escala_uniforme(M, L, valido):
@@ -807,6 +833,8 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
     # un RBF que se llevaba el 2,4 % de la nebulosa). Ahí se tolera ≤ 1 % y, a gradiente parecido, gana el que menos se lleva.
     extenso = base["objeto_campo_pct"] > 25 or bool(re.search(r"(?i)nebul|polvo|dust|ifn|oscur|extens|molecular", str(tipo or "")))
     tope = 1.0 if extenso else 3.0
+    fuera = set(_aplanado_gradiente(c, extenso))
+    c = [x for x in c if x["id"] not in fuera] or c
     seguros = [x for x in c if eat(x) <= tope and absc(x) < 0.3]
     limpios = [x for x in c if absc(x) < 0.3]
     if seguros:
