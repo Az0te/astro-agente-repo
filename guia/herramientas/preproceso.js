@@ -695,6 +695,7 @@ function ppPlanSesiones(o) {
     // Filtros de la noche (mono con varios filtros por noche: un flat por filtro; 16-11-2026, IC 1805 Ha/O3/S2).
     var filtros = [];
     s.lights.forEach(function (f) { var x = s.filtro; try { x = alias(ppHeader(f).filtro) || ""; } catch (e) { } if (filtros.indexOf(x) < 0) filtros.push(x); });
+    s.filtros = filtros;
     var js = null;
     if (s.flats) { js = ppJuegosFlats(s.flats); js.forEach(function (x) { x.filtro = alias(x.filtro); }); }
     s.flatJuegos = [];
@@ -736,8 +737,15 @@ function ppPlanSesiones(o) {
   var nombres = ppUnique(defs, function (s) { return s.nombre; });
   if (nombres.length < defs.length) throw new Error("Dos sesiones con el mismo nombre: " + defs.map(function (s) { return s.nombre; }).join(", "));
   r.sesiones = defs;
-  r.plan = defs.map(function (s) { return { noche: s.nombre, lights: s.lights.length, filtro: s.filtro || "(sin FILTER)", flat: s.flatEtiqueta }; });
+  r.plan = defs.map(function (s) { return { noche: s.nombre, lights: s.lights.length,
+    filtro: (s.filtros && s.filtros.length > 1 ? s.filtros.map(function (x) { return x || "(sin FILTER)"; }).join(", ") : s.filtro || "(sin FILTER)"), flat: s.flatEtiqueta }; });
   r.control.medido.push(defs.length + " noches, " + r.lights + " lights.");
+  // Lights por carpetas y no por la lista de seleccionarSubs: van todos (16-11-2026, IC 1805: se pidió «con los subs
+  // aprobados» y el modelo se saltó seleccionarSubs).
+  var porLista = [].concat(o.lights || []).some(function (x) { return /\.txt$/i.test(String(x)); });
+  if (!porLista && !(o.sesiones instanceof Array))
+    r.control.revisar_a_ojo.push("Lights: TODOS los de las carpetas (" + r.lights + "), sin selección. Si el usuario pidió los subs aprobados, " +
+                                 "antes seleccionarSubs y aquí lights: su lista_aprobados.");
   var jf = [].concat.apply([], defs.map(function (s) { return s.flatJuegos || []; }));
   r.juegos_flat = jf.length;
   if (jf.length && jf.every(function (j) { return j.master; }) && o.flatDarks)
