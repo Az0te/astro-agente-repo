@@ -2,6 +2,12 @@
 windows/vc17/x64/
 windows/vc17/*.user
 windows/vc17/*.bak
+# Caché del IDE (IntelliSense, estado de la solución)
+.vs/
+*.suo
+*.VC.db
+*.VC.opendb
+*.vsidx
 build*/
 *.dll
 *.xsgn
