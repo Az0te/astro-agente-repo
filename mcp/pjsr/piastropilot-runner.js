@@ -348,6 +348,7 @@ var LISTA = {
    lanzarWBPP:           function (a) { return lanzarWBPP(a.wbpp || {}); },
    estadoWBPP:           function (a) { return estadoWBPP(a.salida, a.opciones || {}); },
    drizzleWBPP:          function (a) { return drizzleWBPP(a.salida, a.opciones || {}); },
+   hacerMasterFlats:     function (a) { return hacerMasterFlats(a.carpeta, a.opciones || {}); },
    alinearMasters:       function (a) { return alinearMasters(a.masters, a.opciones || {}); },
    componerHDR:          function (a) { return componerHDR(a.masters, a.opciones || {}); },
    desmezclarDualBand:   function (a) { return desmezclarDualBand(a.vista, a.opciones || {}); },

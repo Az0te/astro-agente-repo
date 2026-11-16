@@ -321,6 +321,31 @@
    }
   },
   {
+   "nombre": "hacerMasterFlats",
+   "fichero": "preproceso.js",
+   "nivel": "disco",
+   "timeout_s": 1800,
+   "descripcion": "Paso 4 lineal: hace los master flats con PixInsight (nunca con scripts externos) a partir de <noche>/FLAT y sus darks de flats de <noche>/DARK: por filtro y exposición, master darkflat → calibración de los flats → integración multiplicativa. Deja <noche>/Master Flat <filtro> <exp>s <noche>.xisf, que lanzarWBPP usa antes que la carpeta FLAT. Comprueba el nivel del flat, que el darkflat esté en el bias y las esquinas. Puede tardar minutos: devuelve un trabajo.",
+   "resumen": "Paso 4 lineal: master flats con PixInsight por noche, filtro y exposición (FLAT + DARK de la noche), con controles.",
+   "paso": "lineal/04-preprocesado.md",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de una noche (con FLAT y DARK) o del objeto (todas sus noches con FLAT)."
+     },
+     "opciones": {
+      "type": "object",
+      "description": "Opcional. { sobrescribir: false }"
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
    "nombre": "alinearMasters",
    "fichero": "alineado.js",
    "nivel": "disco",

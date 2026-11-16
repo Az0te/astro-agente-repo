@@ -919,6 +919,105 @@ function ppEjecutar(prog, args, maxMinutos) {
   return { codigo: P.exitCode, salida: out };
 }
 
+// Master flats con PixInsight (16-11-2026: unos master flats hechos con un script de Python leyeron mal los FITS de
+// 16 bits en torno a 32768 —BZERO— y metieron motas y esquinas falsas en todo el apilado). Por noche: los flats de
+// <noche>/FLAT agrupados por filtro y exposición; sus darks de flats de <noche>/DARK (misma exposición, gain y offset)
+// → master darkflat (media, winsorized) → ImageCalibration de los flats → ImageIntegration (media, multiplicativa,
+// winsorized con flujos igualados). Deja "<noche>/Master Flat <filtro> <exp>s <noche>.xisf" (lanzarWBPP los prefiere
+// a la carpeta FLAT) y los intermedios en <noche>/_flats_trabajo. carpeta: la de una noche, una lista o la del objeto
+// (todas sus noches con FLAT). Opciones: sobrescribir (false: si el master ya existe, se salta).
+function hacerMasterFlats(carpeta, o) {
+  o = o || {};
+  var noches = [];
+  [].concat(carpeta).forEach(function (c) {
+    var d = String(c).replace(/\\/g, "/").replace(/\/$/, "");
+    if (File.directoryExists(d + "/FLAT")) noches.push(d);
+    else {
+      var subs = [];
+      ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) {
+        ppSearch(d + "/" + e, true).forEach(function (f) { var dd = ppDir(f); if (/\/FLAT$/i.test(dd) && !/\/_/.test(dd.substring(d.length))) { var n = dd.replace(/\/FLAT$/i, ""); if (subs.indexOf(n) < 0) subs.push(n); } });
+      });
+      subs.sort().forEach(function (n) { noches.push(n); });
+    }
+  });
+  if (!noches.length) throw new Error("No hay carpetas FLAT en " + carpeta);
+  var r = { masters: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
+  function integrar(lista, norm, rej, rejNorm) {
+    var I = new ImageIntegration;
+    I.images = lista.map(function (f) { return [true, f, "", ""]; });
+    I.combination = 0; I.normalization = norm; I.weightMode = 0; I.rejection = rej; I.rejectionNormalization = rejNorm;
+    I.sigmaLow = 3; I.sigmaHigh = 3; I.generateRejectionMaps = false; I.evaluateSNR = false; I.generateDrizzleData = false;
+    I.closePreviousImages = false; I.generate64BitResult = false;
+    if (!I.executeGlobal()) throw new Error("ImageIntegration falló");
+    return ImageWindow.activeWindow;
+  }
+  function guardar(w, path, h, tipo) {
+    var F = new FileFormat(File.extractExtension(h.fichero).toLowerCase(), true, false), fi = new FileFormatInstance(F), k = [];
+    fi.open(h.fichero, "verbosity 0");
+    fi.keywords.forEach(function (x) { if (["FILTER", "EXPTIME", "EXPOSURE", "GAIN", "OFFSET", "XBINNING", "YBINNING", "TELESCOP", "INSTRUME", "CCD-TEMP", "SET-TEMP",
+                                            "DATE-OBS", "XPIXSZ", "YPIXSZ", "FOCALLEN", "READOUTM", "BAYERPAT", "XBAYROFF", "YBAYROFF"].indexOf(x.name) >= 0) k.push(x); });
+    fi.close();
+    k.push(new FITSKeyword("IMAGETYP", "'" + tipo + "'", "Type of image"));
+    k.push(new FITSKeyword("HISTORY", "", "PiAstroPilot hacerMasterFlats (ImageIntegration de PixInsight)"));
+    w.keywords = k;
+    if (h.filtro) try { w.mainView.setPropertyValue("Instrument:Filter:Name", h.filtro); } catch (e) { }
+    if (!w.saveAs(path, false, false, false, false)) throw new Error("No se pudo guardar " + path);
+  }
+  noches.forEach(function (n) {
+    var nombreNoche = n.substring(n.lastIndexOf("/") + 1), trab = n + "/_flats_trabajo/";
+    var hf = ppList(n + "/FLAT").map(function (f) { try { return ppHeader(f); } catch (e) { return null; } }).filter(function (h) { return h && ppTipoCal(h) != "dark" && ppTipoCal(h) != "flatdark"; });
+    var hd = File.directoryExists(n + "/DARK") ? ppList(n + "/DARK").map(function (f) { try { return ppHeader(f); } catch (e) { return null; } }).filter(function (h) { return h; }) : [];
+    var grupos = {}, orden = [];
+    hf.forEach(function (h) { var k = (h.filtro || "") + "|" + (isFinite(h.exp) ? h.exp.toFixed(3) : "?") + "|" + h.gain + "|" + h.offset + "|" + h.bin; if (!grupos[k]) { grupos[k] = []; orden.push(k); } grupos[k].push(h); });
+    orden.forEach(function (k) {
+      var G = grupos[k], h0 = G[0], fil = h0.filtro || "SinFiltro", nom = fil + " " + nombreNoche;
+      var destino = n + "/Master Flat " + fil + " " + (isFinite(h0.exp) ? h0.exp.toFixed(2) : "?") + "s " + nombreNoche + ".xisf";
+      var m = { noche: nombreNoche, filtro: fil, exposicion_s: h0.exp, flats: G.length, master: destino };
+      try {
+        if (File.exists(destino) && !o.sobrescribir) { m.nota = "ya existía (sobrescribir: true para rehacerlo)"; r.masters.push(m); return; }
+        var D = hd.filter(function (d) { return Math.abs(d.exp - h0.exp) <= Math.max(0.05 * h0.exp, 0.02) && (d.gain === null || h0.gain === null || d.gain == h0.gain) &&
+                                                (d.offset === null || h0.offset === null || d.offset == h0.offset) && d.bin == h0.bin && d.ancho == h0.ancho; });
+        if (!File.directoryExists(trab)) File.createDirectory(trab, true);
+        var calib = G.map(function (h) { return h.fichero; }), dkPath = null;
+        if (D.length) {
+          var wd = integrar(D.map(function (d) { return d.fichero; }), 0, 4, 0);
+          var dmed = wd.mainView.image.median() * 65535;
+          dkPath = trab + "MasterDarkFlat " + fil + " " + h0.exp.toFixed(2) + "s " + nombreNoche + ".xisf";
+          guardar(wd, dkPath, D[0], "Master Dark"); wd.forceClose();
+          m.darkflats = D.length; m.darkflat_mediana_adu = +dmed.toFixed(1);
+        } else r.no_cumple.push(nom + ": sin darks de flats de " + h0.exp + " s en " + n + "/DARK: master flat sin calibrar (queda el bias dentro).");
+        if (dkPath) {
+          var out = trab + "cal " + fil + " " + h0.exp.toFixed(2) + "s/";
+          if (!File.directoryExists(out)) File.createDirectory(out, true);
+          var C = new ImageCalibration;
+          C.targetFrames = calib.map(function (f) { return [true, f]; });
+          C.masterBiasEnabled = false; C.masterDarkEnabled = true; C.masterDarkPath = dkPath; C.optimizeDarks = false; C.masterFlatEnabled = false;
+          C.outputDirectory = out; C.outputExtension = ".xisf"; C.outputPostfix = "_c"; C.overwriteExistingFiles = true; C.outputPedestal = 0; C.onError = 1;
+          if (!C.executeGlobal()) throw new Error("ImageCalibration falló");
+          calib = ppSearch(out + "*_c.xisf", false).sort();
+        }
+        var wf = integrar(calib, 2, 4, 2), im = wf.mainView.image, W = im.width, H = im.height, q = Math.round(Math.min(W, H) / 10);
+        var c = im.median(new Rect(W / 2 - q, H / 2 - q, W / 2 + q, H / 2 + q)), z = function (x, y) { return +(im.median(new Rect(x, y, x + q, y + q)) / c).toFixed(3); };
+        m.mediana_adu = +(im.median() * 65535).toFixed(0);
+        m.esquinas_sobre_centro = [z(20, 20), z(W - 20 - q, 20), z(20, H - 20 - q), z(W - 20 - q, H - 20 - q)];
+        m.saturados_pct = 0;
+        guardar(wf, destino, h0, "Master Flat"); wf.forceClose();
+        // Controles: nivel del flat, darkflat cerca del bias, esquinas creíbles.
+        if (m.mediana_adu > 0.85 * 65535) r.no_cumple.push(nom + ": flat muy alto (mediana " + m.mediana_adu + " ADU): cerca de saturar.");
+        if (m.mediana_adu < 0.08 * 65535) r.control.revisar_a_ojo.push(nom + ": flat muy bajo (mediana " + m.mediana_adu + " ADU).");
+        if (m.darkflat_mediana_adu !== undefined && m.darkflat_mediana_adu > 0.02 * m.mediana_adu)
+          r.no_cumple.push(nom + ": el master darkflat (" + m.darkflat_mediana_adu + " ADU) está muy por encima del bias esperado: ¿luz en los darks de flats?");
+        if (Math.min.apply(null, m.esquinas_sobre_centro) < 0.5) r.control.revisar_a_ojo.push(nom + ": alguna esquina por debajo del 50 % del centro (" + m.esquinas_sobre_centro.join(", ") + "): comprobar el flat a la vista.");
+        r.control.medido.push(nom + ": " + G.length + " flats" + (m.darkflats ? " - " + m.darkflats + " darkflats (" + m.darkflat_mediana_adu + " ADU)" : "") +
+                              " → mediana " + m.mediana_adu + " ADU, esquinas " + m.esquinas_sobre_centro.join("/") + ".");
+      } catch (e) { m.error = String(e.message || e); r.no_cumple.push(nom + ": " + m.error); }
+      r.masters.push(m);
+    });
+  });
+  r.control.medido.push(r.masters.length + " master flats en " + noches.length + " noches. lanzarWBPP usa los de la carpeta de cada noche.");
+  return r;
+}
+
 // Drizzle (×2 por defecto) sobre una salida de WBPP terminada, en otra instancia de PixInsight. WBPP siempre deja
 // los datos de drizzle (.xdrz, con el rechazo y los pesos de su integración) y los de normalización local (.xnml):
 // esto es el mismo DrizzleIntegration que hace WBPP cuando se le activa el drizzle. En OSC, Bayer drizzle (enableCFA:
