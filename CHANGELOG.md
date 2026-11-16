@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- **WBPP: plan antes de lanzar y modo sesiones automático** (16 nov 2026, Rafael, `preproceso.js`, Lite, guía). Segunda pasada de PiAstroPilot con IC 1805: el modelo llamó a `lanzarWBPP` sin `sesiones` y WBPP rechazó los 12 masters en FITS y calibró sin flats.
+  - `lanzarWBPP` sin `confirmar: true` ya no lanza: devuelve el plan (`esperando_confirmacion`) para que el usuario lo vea; se lanza repitiendo la llamada con `confirmar: true`. Sin parar sólo si el usuario pidió el procesado completo. **Las llamadas a `lanzarWBPP` de antes sin `confirmar` ya no lanzan.**
+  - Con lights en varias carpetas o masters en FITS pasa sola a `sesiones: "auto"` (lo dice en `control.medido`).
+  - `seleccionarSubs` acepta `lista: true` / `csv: true` (antes, error «String expected»).
+  - Lite: la serie de pasos para sola con el plan de WBPP salvo «procesado completo» / «hasta el final». En el módulo para el modelo con «PARO:» (lo pide el resultado y el manifiesto); el texto del prompt del módulo no cambia hasta la próxima build.
+  - Guía: «Plan antes de apilar» en el Paso 4 y `confirmar` en el Anexo J.
+
 - **Apilado de mono con varios filtros por noche** (16 nov 2026, Rafael, `preproceso.js`, `web.js`). Lo que falló en la primera pasada de PiAstroPilot (build109, Qwen) con IC 1805 (ATR2600M, Hα/OIII/SII de 3 nm, masters de NINA junto a `LIGHT` en cada noche):
   - **`lanzarWBPP` con salida `.../masters` dejaba fuera todos los lights**: con `detectMasterIncludingFullPath` WBPP los tomó por masters en FITS y los rechazó (0 operaciones). La salida ya no puede contener «master» (tampoco en plural) y se avisa antes del plan.
   - `lanzarWBPP`: un flat por noche Y por filtro (`flatJuegos`), los masters de flat que están en la carpeta de la noche, darks de flats por tipo (`ppTipoCal`, `ppCalRecursivo`) y masters en FITS copiados como `.xisf` en `_entrada`. Si todos los flats son masters (ya calibrados), no se pasan darks de flats.

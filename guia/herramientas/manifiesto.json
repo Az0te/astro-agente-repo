@@ -255,15 +255,15 @@
    "fichero": "preproceso.js",
    "nivel": "disco",
    "timeout_s": 60,
-   "descripcion": "Paso 4 lineal: lanza WBPP en una segunda instancia de PixInsight sin ventanas (se cierra sola). Después, estadoWBPP(salida) hasta que diga terminado. Rutas sin comas y cortas (<256 caracteres con los nombres de WBPP). Varias noches: sesiones \"auto\" (o una lista) calibra cada noche con SU flat y registra todas a UNA referencia (referencia: mejor_sub de seleccionarSubs); agrupar \"global\" (por defecto, un master) o \"noche\" (un master por noche). Primero planSolo: true para enseñar al usuario qué flat va con cada noche. Monta <salida>/_entrada con enlaces duros: la salida en el mismo disco que los datos.",
-   "resumen": "Paso 4 lineal: lanza WBPP en otra instancia. Varias noches: sesiones \"auto\", referencia común, flat de cada noche; planSolo para ver el plan.",
+   "descripcion": "Paso 4 lineal: SIN confirmar: true NO lanza nada: devuelve el plan (noches, lights, flat de cada noche y filtro, darks, salida) para enseñárselo al usuario; escribe entonces «PARO:» y espera su visto bueno. Con confirmar: true lanza WBPP en una segunda instancia de PixInsight sin ventanas (se cierra sola); sólo sin parar si el usuario pidió el procesado completo hasta el final. Después, estadoWBPP(salida) hasta que diga terminado. Rutas sin comas y cortas (<256 caracteres con los nombres de WBPP). Varias noches o masters en FITS: modo sesiones (se pone solo), que calibra cada noche y filtro con SU flat y registra todas a UNA referencia (referencia: mejor_sub de seleccionarSubs); agrupar \"global\" (por defecto, un master) o \"noche\" (un master por noche). lights: mejor la lista_aprobados de seleccionarSubs. Monta <salida>/_entrada con enlaces duros: la salida en el mismo disco que los datos.",
+   "resumen": "Paso 4 lineal: sin confirmar: true devuelve el plan (PARO y visto bueno del usuario); con confirmar: true lanza WBPP en otra instancia. Varias noches: flat de cada noche y filtro, referencia común.",
    "paso": "lineal/04-preprocesado.md",
    "params": {
     "type": "object",
     "properties": {
      "wbpp": {
       "type": "object",
-      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master ni masters: p. ej. D:/Astronomia/<objeto>/wbpp), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), planSolo, copiar (otro disco), forzar, aliasFiltros: { \"viejo\": \"bueno\" } (filtro mal nombrado en la cabecera: fuerza sesiones y esos ficheros van como copia .xisf con FILTER corregido), parametros: { nombre: valor de la automatización de WBPP } }"
+      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master ni masters: p. ej. D:/Astronomia/<objeto>/wbpp), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), confirmar (true = lanzar de verdad, tras el visto bueno del usuario), planSolo, copiar (otro disco), forzar, aliasFiltros: { \"viejo\": \"bueno\" } (filtro mal nombrado en la cabecera: fuerza sesiones y esos ficheros van como copia .xisf con FILTER corregido), parametros: { nombre: valor de la automatización de WBPP } }"
      }
     },
     "required": [

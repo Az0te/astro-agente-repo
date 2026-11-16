@@ -451,8 +451,36 @@ function inventario(carpeta, o) {
 function lanzarWBPP(o) {
   o = o || {};
   if (o.aliasFiltros && !o.sesiones) o.sesiones = "auto";
+  // Varias carpetas de lights (noches) o masters en FITS: siempre por sesiones. Sin ellas WBPP recibe las carpetas tal
+  // cual, rechaza los masters FITS y calibra sin flats (16-11-2026, IC 1805: el modelo no pasó sesiones).
+  if (!o.sesiones && !o.sinSesiones) {
+    var Ls = [], cal = [];
+    try { Ls = ppList(ppSub(o.lights || o.carpeta, "LIGHT")); } catch (e) { }
+    try { cal = [].concat(ppList(ppSub(o.flats, "FLAT")), ppList(o.darks), ppList(ppSub(o.flatDarks, "DARK"))); } catch (e) { }
+    var nDirs = ppUnique(Ls, function (f) { return ppDir(f); }).length;
+    var fitsM = cal.filter(function (f) { return /master/i.test(File.extractName(f)) && !/\.xisf$/i.test(f); }).length;
+    if (nDirs > 1 || fitsM) {
+      o.sesiones = "auto";
+      o._sesionesAuto = "sesiones \"auto\" puesto por la herramienta (" + (nDirs > 1 ? nDirs + " carpetas de lights" : "") +
+                        (nDirs > 1 && fitsM ? " y " : "") + (fitsM ? fitsM + " masters en FITS" : "") + "): un flat por noche y filtro, masters a XISF.";
+    }
+  }
   PP_ALIAS = o.aliasFiltros || null;
   try { return ppLanzarWBPP(o); } finally { PP_ALIAS = null; }
+}
+
+// Sin confirmar: WBPP no se lanza; se devuelve el plan para que el usuario lo vea antes (Rafael, 16-11-2026: «que
+// antes de lanzar WBPP, si no es procesado hasta el final, enseñe el plan»). El apilado tarda y ocupa disco: un plan
+// mal hecho (flats sin emparejar, salida que WBPP malinterpreta) se ve aquí y no tras una hora de calibración.
+function ppSinConfirmar(p, salida) {
+  p.lanzado = false;
+  p.salida = salida;
+  p.esperando_confirmacion = "Plan listo, WBPP NO se ha lanzado. Enséñale este plan al usuario (noches, lights, el flat de cada " +
+    "noche y filtro, darks, salida) y escribe una línea «PARO: plan de WBPP listo, ¿lo lanzo?». Cuando el usuario dé el visto " +
+    "bueno, repite la misma llamada con confirmar: true. Sólo si el usuario pidió el procesado completo hasta el final " +
+    "puedes repetirla con confirmar: true sin parar.";
+  if (p.no_cumple && p.no_cumple.length) p.esperando_confirmacion += " Antes, arregla los no_cumple: con ellos no se lanza (salvo forzar: true).";
+  return p;
 }
 
 function ppLanzarWBPP(o) {
@@ -466,7 +494,8 @@ function ppLanzarWBPP(o) {
       throw new Error("La carpeta de salida no puede llevar las palabras light, flat, dark, bias ni master(s) (WBPP las lee en la ruta y tomaría los lights por masters): " +
                       salida + ". Usar p. ej. " + salida.replace(/[^\/]*master[^\/]*$/i, "wbpp"));
     plan = ppPlanSesiones(o);
-    if (o.planSolo) { var ps = {}; for (var kp in plan) if (kp != "sesiones") ps[kp] = plan[kp]; return ps; }
+    if (o._sesionesAuto) plan.control.medido.unshift(o._sesionesAuto);
+    if (o.planSolo || !o.confirmar) { var ps = {}; for (var kp in plan) if (kp != "sesiones") ps[kp] = plan[kp]; return o.planSolo ? ps : ppSinConfirmar(ps, salida); }
     if (plan.no_cumple.length && !o.forzar)
       throw new Error("No lanzo WBPP: " + plan.no_cumple.join(" ") + " (ver el plan con planSolo: true; forzar: true para lanzarlo igual).");
   }
@@ -474,6 +503,10 @@ function ppLanzarWBPP(o) {
   o.lights = ppSub(o.lights, "LIGHT"); o.flats = ppSub(o.flats, "FLAT"); o.flatDarks = ppSub(o.flatDarks, "DARK");
   var files = plan ? null : [].concat(ppList(o.lights), ppList(o.flats), ppList(o.darks), ppList(o.flatDarks), ppList(o.bias));
   if (!plan && ppList(o.lights).length == 0) throw new Error("No hay lights");
+  if (!plan && !o.confirmar)
+    return ppSinConfirmar({ lights: ppList(o.lights).length, flats: ppList(o.flats).length, darks: ppList(o.darks).length,
+                            darks_de_flats: ppList(o.flatDarks).length, bias: ppList(o.bias).length, no_cumple: [],
+                            control: { medido: ["Sin sesiones: WBPP recibe estas carpetas tal cual."], revisar_a_ojo: [] } }, salida);
   if (!File.directoryExists(salida)) File.createDirectory(salida, true);
   // autoIntegrationMode false: si no, WBPP pasa a FastIntegration los grupos de 200 subs o más (sin normalización
   // local ni datos de drizzle, y con 349 subs de NGC 281 dejó fuera 10 que no alineó; 12-11-2026).
@@ -1111,6 +1144,10 @@ function seleccionarSubs(x, o) {
   var rech = subs.filter(function (s) { return s.motivos.length; }), apr = subs.filter(function (s) { return !s.motivos.length; });
   // Resultado corto (el modelo lo recibe entero): la tabla completa sólo con { tabla: true } o en el CSV, y los
   // aprobados como fichero de lista (una ruta por línea) que lanzarWBPP acepta en lights.
+  // lista y csv: rutas; un true (el modelo pasó { lista: true, tabla: true }, 16-11-2026) = el fichero por defecto.
+  if (o.csv === true) o.csv = File.systemTempDirectory + "/subs.csv";
+  if (typeof o.csv !== "string") delete o.csv;
+  if (typeof o.lista !== "string") delete o.lista;
   var dirOut = o.csv ? File.extractDrive(o.csv) + File.extractDirectory(o.csv) : File.systemTempDirectory;
   if (!File.directoryExists(dirOut)) File.createDirectory(dirOut, true);   // la carpeta del CSV puede no existir
   var lista = o.lista || (dirOut + "/subs_aprobados.txt");

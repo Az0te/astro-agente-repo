@@ -81,11 +81,12 @@ Ficha: [lineal/04-preprocesado.md](../../lineal/04-preprocesado.md)
 **En una llamada (PixInsight 1.9.6+)** (`herramientas/preproceso.js`):
 
 1. `revisarCalibracion({ lights, flats, flatDarks, darks, bias })` lee las cabeceras sin abrir ventanas y mide unos pocos flats por canal Bayer. Avisa en `no_cumple` si falta el dark de la exposición de los lights, si los flats son de otro filtro o de otro telescopio (`TELESCOP`), si faltan darks de flats o bias, si un flat está saturado o si la temperatura varía más de 2 °C. Un flat por encima de 0,85 en un canal va a `revisar_a_ojo`. Los masters sin palabras clave se leen de sus propiedades XISF o del nombre ("Master Dark 300s -10C 100Ga 50Of").
-2. `lanzarWBPP({ lights, flats, flatDarks, darks, salida })` arranca WBPP en **otra instancia de PixInsight en modo automatización**, que se cierra sola al acabar. No bloquea la sesión. En `lights` se puede pasar `lista_aprobados` de `seleccionarSubs` (Paso 3). La salida tiene que ser una **ruta corta**: Windows no crea ficheros de más de 256 caracteres. El resto de ajustes (drizzle, normalización local, autocrop) son los últimos guardados en WBPP; se cambian con `parametros` (nombres de la ayuda de automatización, Alt+A en la ventana de WBPP).
+2. `lanzarWBPP({ lights, flats, flatDarks, darks, salida })` **sin `confirmar: true` no lanza nada**: devuelve el plan (noches, lights, flat de cada noche y filtro, darks, salida) con `esperando_confirmacion`. Se enseña al usuario y se para con «PARO:» hasta su visto bueno; sin parar sólo si pidió el procesado completo hasta el final. Con `confirmar: true` arranca WBPP en **otra instancia de PixInsight en modo automatización**, que se cierra sola al acabar. No bloquea la sesión. En `lights` se puede pasar `lista_aprobados` de `seleccionarSubs` (Paso 3). La salida tiene que ser una **ruta corta**: Windows no crea ficheros de más de 256 caracteres. El resto de ajustes (drizzle, normalización local, autocrop) son los últimos guardados en WBPP; se cambian con `parametros` (nombres de la ayuda de automatización, Alt+A en la ventana de WBPP).
 3. `estadoWBPP(salida)`: repetir hasta `terminado: true`; entonces abre el master de lights (el recortado si lo hay) con un STF automático. Resume el log: pasos con éxitos y fallos, errores, avisos, ficheros fallidos, masters generados y qué master dark y flat usó cada grupo.
 
 **Varias noches con un flat por noche** (`sesiones`). WBPP en automatización empareja flats y lights por filtro y por palabras clave. Con cabeceras incompletas (DWARF: lights sin `IMAGETYP`, master flats sin `FILTER` ni `IMAGETYP`) no sabe qué flat va con cada noche. `lanzarWBPP({ sesiones: "auto", lights: <carpeta con una subcarpeta por noche>, flats, darks, salida, referencia, agrupar })` monta `<salida>/_entrada` con **enlaces duros** (no copia datos; la salida tiene que ir en el mismo disco que los subs) y pone en la ruta lo que falta en la cabecera: `LIGHT/NOCHE_N1-20260911/…` y `FLAT/NOCHE_N1-20260911/FILTER_Duo-Band/masterFlat….xisf`. WBPP lee el tipo y el filtro de la ruta cuando la cabecera no los trae, y la palabra clave `NOCHE` siempre: cada noche se calibra con su flat.
 
+- Con lights en más de una carpeta o con masters en FITS, `lanzarWBPP` pasa sola a `sesiones: "auto"`: sin ellas WBPP rechaza los masters FITS y calibraría sin flats. Con varios filtros por noche (mono), cada filtro lleva el flat de su noche.
 - `sesiones: "auto"`: una noche por carpeta de lights (o por `DATE-OBS` si están todos en una). Si la carpeta de la noche tiene `FLAT` al lado, se usa ese flat. Si no, de los de `flats` se usa el último de la misma noche o de una anterior, según `DATE-OBS` o la fecha del nombre. La noche cuenta desde las 12:00, así que una toma de la 01:00 es de la noche anterior. También se puede dar la lista `[{ lights, flats, darks, nombre }]`.
 - `referencia`: un light de los de entrada (WBPP usa su versión calibrada y debayerizada) o una imagen ya calibrada. `seleccionarSubs` devuelve `mejor_sub`, el de mayor PSF Signal Weight. Sin `referencia`, WBPP elige una sola para todas las noches.
 - `agrupar: "global"` (por defecto) calibra por noche y saca un solo master. `"noche"` saca un master por noche, todos registrados a la misma referencia, pero WBPP normaliza localmente cada noche con su propia referencia. En la prueba A/B/C de NGC 281, un master por noche salió ~3 % peor en SNR que el global.
@@ -100,11 +101,11 @@ Ficha: [lineal/04-preprocesado.md](../../lineal/04-preprocesado.md)
 ]}
 ```
 
-Si `no_cumple` está vacío (o el usuario lo acepta), en otra respuesta:
+Si `no_cumple` está vacío (o el usuario lo acepta), en otra respuesta el plan (sin `confirmar`) y, tras el visto bueno del usuario, la misma llamada con `"confirmar": true`:
 
 ```json
 {"llamadas": [
-  {"funcion": "lanzarWBPP", "parametros": {"wbpp": {"lights": "<LIGHT>", "flats": "<FLAT>", "flatDarks": "<DARK de flats>", "darks": ["<master dark>"], "salida": "C:/wbpp/objeto"}}}
+  {"funcion": "lanzarWBPP", "parametros": {"wbpp": {"lights": "<lista_aprobados>", "flats": "<FLAT>", "flatDarks": "<DARK de flats>", "darks": ["<master dark>"], "salida": "C:/wbpp/objeto", "confirmar": true}}}
 ]}
 ```
 

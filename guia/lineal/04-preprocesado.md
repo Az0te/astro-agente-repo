@@ -37,6 +37,8 @@
 
 **Medidas por sub.** Las métricas sobre los FITS crudos CFA ordenan bien, pero los valores absolutos están sesgados (en debayerizado VNG el FWHM sale ~15–20 % mayor y la excentricidad ~0,06 menor). Para umbrales absolutos, debayerizar una muestra. Fondo por sub = mediana − bias (bias con offset 50 ≈ 500 ADU). Gradiente por sub = rejilla 4×4 de medianas; en crudo incluye el viñeteo (~2,4 %). Un velo fino se ve como fondo +5–8 % con 15–18 % menos estrellas respecto a sus vecinos.
 
+**Plan antes de apilar.** El apilado tarda y ocupa disco: antes de lanzarlo, enseñar al usuario el plan (noches, subs, el flat de cada noche y filtro, darks y carpeta de salida) y esperar su visto bueno. Sólo se lanza sin parar si pidió el procesado completo hasta el final.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-04); en Siril, [Anexo I](../anexos/I-siril.md).
 
 La revisión de la calibración antes de lanzar el preprocesado, leyendo sólo cabeceras y unos pocos flats, encontró en una nebulosa oscura (nov 2026) lo que en octubre costó una tarde: sin dark de 240 s, flats sin `FILTER`, flats con otro `TELESCOP` y flats saturados. En una galaxia grande detectó los flats con el azul saturado y que no había dark de 60 s. En una nebulosa dual band, que los flats y los lights llevaban nombres de filtro distintos para el mismo filtro (renombrado en el programa de captura después de los flats): hay que emparejarlos con un alias o corregir `FILTER` en copias de los flats.

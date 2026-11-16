@@ -701,6 +701,9 @@ function plPromptSistema(aj) {
    "antes de recombinar, nunca en el Paso 1; tres candidatos: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 %), " +
    "colorCandidatos (Paso 5: saturación, equilibrio y contraste) y nitidezCandidatos (Paso 7). Enseña la tabla con la recomendada, " +
    "para con «PARO:» y sigue con la vista que elija el usuario; cierra las demás con cerrarVista.\n" +
+   "- WBPP (Rafael, 16 nov 2026): lanzarWBPP sin confirmar devuelve el PLAN y no lanza nada. Enséñalo (noches, lights, flat de cada " +
+   "noche y filtro, darks, salida) y para con «PARO:» hasta que el usuario dé el visto bueno; entonces repite la llamada con " +
+   "confirmar: true. Sin parar sólo si el usuario pidió el procesado completo hasta el final.\n" +
    "- Mientras esta ventana está abierta el usuario NO puede tocar PixInsight ni abrir ficheros. Ve las imágenes sólo como " +
    "miniaturas en el chat: cada previa {vista} y cada comparación sale como imagen en la ficha del resultado. Si quieres que " +
    "mire algo, pide previa (con opciones.rect para un recorte al 100 %) y dile que mire la miniatura; nunca le mandes a abrir " +
@@ -2245,6 +2248,13 @@ function plConstruirDialogo(aj) {
       if (this.serie && r.ok && /"exportarFinal"/.test(s)) {   // exportado: fin del procesado
          this.serie = false;
          this.anotar("Serie de pasos", "Terminada tras exportar (" + (this.pasosSerie || 0) + " pasos).");
+      }
+      // Plan de WBPP sin confirmar: la serie para para que el usuario lo vea, salvo que pidiera el procesado completo
+      // (Rafael, 16-11-2026). Lo decide el programa, no el modelo: un modelo local seguía con confirmar: true.
+      if (this.serie && r.ok && /"lanzarWBPP"/.test(s) && /esperando[_ ]confirmaci/i.test(r.texto) &&
+          !/(procesado|resoluci[oó]n|proceso)\s+complet|hasta el final|de principio a fin/i.test(this.objetivoSerie || "")) {
+         this.serie = false;
+         this.anotar("Serie de pasos", "Parada: plan de WBPP listo. Revísalo y escribe «lánzalo» (o pide cambios).");
       }
       // Como en el módulo: un resultado con datos se manda al modelo para que lo interprete y recomiende el paso
       // siguiente, con las líneas «Siguiente paso: ...» que el chat pinta como enlaces.
