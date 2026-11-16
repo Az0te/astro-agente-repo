@@ -746,7 +746,14 @@ function ppPlanSesiones(o) {
   if (!porLista && !(o.sesiones instanceof Array))
     r.control.revisar_a_ojo.push("Lights: TODOS los de las carpetas (" + r.lights + "), sin selección. Si el usuario pidió los subs aprobados, " +
                                  "antes seleccionarSubs y aquí lights: su lista_aprobados.");
-  var jf = [].concat.apply([], defs.map(function (s) { return s.flatJuegos || []; }));
+  // Masters que saldrán (16-11-2026: el modelo anunció 6 —noches × filtros— y con agrupar global son 3, uno por filtro).
+  var filTodos = [];
+  defs.forEach(function (s) { (s.filtros || [s.filtro]).forEach(function (x) { if (filTodos.indexOf(x) < 0) filTodos.push(x); }); });
+  var porNoche = o.agrupar == "noche";
+  r.masters_esperados = porNoche ? defs.reduce(function (a, s) { return a + (s.filtros || [s.filtro]).length; }, 0) : filTodos.length;
+  r.control.medido.push("Saldrán " + r.masters_esperados + " masters de lights: " + (porNoche ? "uno por noche y filtro (agrupar: \"noche\")."
+                        : "uno por filtro (" + filTodos.map(function (x) { return x || "sin FILTER"; }).join(", ") + ") con las noches juntas (agrupar: \"global\")."));
+  var jf =[].concat.apply([], defs.map(function (s) { return s.flatJuegos || []; }));
   r.juegos_flat = jf.length;
   if (jf.length && jf.every(function (j) { return j.master; }) && o.flatDarks)
     r.control.medido.push("Los " + jf.length + " flats son masters (ya calibrados): no se pasan darks de flats a WBPP.");
