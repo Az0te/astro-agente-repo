@@ -625,8 +625,10 @@ function ppJuegosFlats(lista) {
     if (master) juegos.push({ ficheros: [h.fichero], master: true, h: h, etiqueta: File.extractName(h.fichero) + File.extractExtension(h.fichero) });
     else {
       var d = ppDir(h.fichero);
-      if (!porDir[d]) { porDir[d] = { ficheros: [], master: false, h: h, etiqueta: d + " (" + "flats sueltos)" }; juegos.push(porDir[d]); }
-      porDir[d].ficheros.push(h.fichero);
+      // Por carpeta, filtro y exposición: con mono y varios filtros en la misma carpeta FLAT, un juego por filtro.
+      var kd = d + "|" + (h.filtro || "") + "|" + (isFinite(h.exp) ? h.exp.toFixed(2) : "");
+      if (!porDir[kd]) { porDir[kd] = { ficheros: [], master: false, h: h, etiqueta: d + (h.filtro ? " " + h.filtro : "") + " (" + "flats sueltos)" }; juegos.push(porDir[kd]); }
+      porDir[kd].ficheros.push(h.fichero);
     }
   });
   juegos.forEach(function (j) {
@@ -670,9 +672,14 @@ function ppPlanSesiones(o) {
     }
     orden.forEach(function (k) {
       var L = porDir[k], d = ppDir(L[0]), fl = null;
-      if (/\/LIGHT$/i.test(d) && File.directoryExists(d.replace(/\/LIGHT$/i, "/FLAT"))) fl = ppList(d.replace(/\/LIGHT$/i, "/FLAT"));
-      // Sin subcarpeta FLAT: los flats sueltos o masters en la carpeta de la noche, junto a LIGHT (NINA: <fecha>/LIGHT
-      // y "Master Flat Ha 3nm ... .fits" en <fecha>).
+      // Primero los master flats de la carpeta de la noche, junto a LIGHT (NINA: <fecha>/LIGHT y "Master Flat Ha 3nm ...
+      // .xisf" en <fecha>): si alguien los ha hecho, son los que valen aunque siga estando la carpeta FLAT con los brutos
+      // (16-11-2026, IC 1805: masters rehechos con PixInsight y los brutos devueltos desde la copia).
+      if (/\/LIGHT$/i.test(d))
+        fl = ppList(d.replace(/\/LIGHT$/i, "")).filter(function (f) {
+          try { var h = ppHeader(f); return ppTipoCal(h) == "flat" && (/master/i.test(File.extractName(f)) || /master/i.test(h.tipo) || (h.ncombine || 0) > 1); } catch (e) { return false; } });
+      if ((!fl || !fl.length) && /\/LIGHT$/i.test(d) && File.directoryExists(d.replace(/\/LIGHT$/i, "/FLAT"))) fl = ppList(d.replace(/\/LIGHT$/i, "/FLAT"));
+      // Ni masters ni FLAT: flats sueltos en la carpeta de la noche.
       if ((!fl || !fl.length) && /\/LIGHT$/i.test(d))
         fl = ppList(d.replace(/\/LIGHT$/i, "")).filter(function (f) { try { return ppTipoCal(ppHeader(f)) == "flat"; } catch (e) { return false; } });
       defs.push({ lights: L, flats: fl && fl.length ? fl : null, darks: null });
