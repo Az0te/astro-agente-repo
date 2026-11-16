@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+- **Apilado de mono con varios filtros por noche** (16 nov 2026, Rafael, `preproceso.js`, `web.js`). Lo que falló en la primera pasada de PiAstroPilot (build109, Qwen) con IC 1805 (ATR2600M, Hα/OIII/SII de 3 nm, masters de NINA junto a `LIGHT` en cada noche):
+  - **`lanzarWBPP` con salida `.../masters` dejaba fuera todos los lights**: con `detectMasterIncludingFullPath` WBPP los tomó por masters en FITS y los rechazó (0 operaciones). La salida ya no puede contener «master» (tampoco en plural) y se avisa antes del plan.
+  - `lanzarWBPP`: un flat por noche Y por filtro (`flatJuegos`), los masters de flat que están en la carpeta de la noche, darks de flats por tipo (`ppTipoCal`, `ppCalRecursivo`) y masters en FITS copiados como `.xisf` en `_entrada`. Si todos los flats son masters (ya calibrados), no se pasan darks de flats.
+  - `revisarCalibracion`: cada fichero por su tipo y no por la carpeta (los master darkflat ya no salen como flats «muy oscuros»); cada grupo de lights sólo con los flats de su filtro; cámara mono, un canal `L` en lugar de R, G y B repetidos; con master flats, los darks de flats no hacen falta.
+  - `seleccionarSubs`: sólo lights (con la carpeta del objeto medía el master dark de la raíz) y, si junto a los lights hay una carpeta de rechazados, lo que rebasa un umbral queda como dudoso en vez de rechazarse otra vez (`reseleccionar: true` para lo contrario).
+  - `simbad`: un cúmulo con Sharpless, RCW o Gum entre sus identificadores es también una región HII (`nebulosa_asociada`, `nota`); IC 1805 salía sólo como cúmulo abierto y el modelo concluyó que en 3 nm no habría señal. `documentarObjeto` usa entonces la emisión de una región HII.
+
 - **WBPP con varias noches y un flat por noche** (12 nov 2026, Rafael, `preproceso.js`). `lanzarWBPP` acepta `sesiones` (`"auto"` o lista), `referencia`, `agrupar` (`"global"` por defecto o `"noche"`), `planSolo`, `copiar` y `forzar`. Monta `<salida>/_entrada` con enlaces duros y pone en la ruta el tipo, la noche (`NOCHE_…`, palabra clave de agrupación) y el filtro, que WBPP lee cuando la cabecera no los trae (DWARF). `estadoWBPP` comprueba el flat de cada noche (`flats_por_noche`). `seleccionarSubs` devuelve `mejor_sub`. Nueva `drizzleWBPP` (sólo si se pide): DrizzleIntegration ×2 sobre los `.xdrz` y `.xnml` que deja WBPP, Bayer drizzle en OSC. Siril: `drizzle` acepta la escala (`true` = ×2) y en OSC hace Bayer drizzle.
   - `ppHeader` tumbaba PixInsight al leer una propiedad XISF que no existe (master flat de la DWARF): ahora sólo lee las que están.
   - `ExternalProcess.startDetached` con lista de argumentos falla en la versión actual ("String expected"): la segunda instancia se arranca con un `.cmd` y `start`.

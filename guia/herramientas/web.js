@@ -75,6 +75,18 @@ function simbad(objeto, o) {
   if (fl.length) r.magnitudes = fl;
   var ids = /Identifiers \(\d+\):\s*([\s\S]*?)(\n\s*\n|Bibcodes|Measures|Notes)/.exec(txt);
   if (ids) r.identificadores = ids[1].split(/\s{2,}|\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s; }).slice(0, 20);
+  // Un cúmulo con nebulosa catalogada (SIMBAD da un solo tipo: IC 1805 sale como OpC y es la nebulosa del Corazón,
+  // SH 2-190; 16-11-2026, el modelo concluyó que en 3 nm no habría señal). Sharpless, RCW y Gum son regiones HII.
+  if (/^(OpC|Cl\*|As\*|SFR)$/.test(r.tipo_simbad || "") && r.identificadores) {
+    var hii = r.identificadores.filter(function (s) { return /^(SH ?2-|Sh2-|RCW |Gum )/i.test(s); });
+    var neb = r.identificadores.filter(function (s) { return /^(LBN |NGC |IC |Ced |vdB )/i.test(s) && s.replace(/\s+/g, "") != String(r.nombre).replace(/\s+/g, ""); });
+    if (hii.length) {
+      r.nebulosa_asociada = hii.concat(neb.filter(function (s) { return /^LBN /i.test(s); }));
+      r.nota = "Además del cúmulo es una región HII (" + hii.join(", ") + "): nebulosa de EMISIÓN, con señal fuerte en Hα, [OIII] y [SII]; " +
+               "los filtros de banda estrecha son los adecuados. El tipo '" + r.tipo + "' de SIMBAD es sólo el del cúmulo.";
+    } else if (neb.some(function (s) { return /^LBN /i.test(s); }))
+      r.nota = "Además del cúmulo tiene nebulosa brillante catalogada (" + neb.join(", ") + "): mirar en Wikipedia si es de emisión o de reflexión antes de decidir filtros.";
+  }
   return r;
 }
 
@@ -240,7 +252,9 @@ function documentarObjeto(vistaONombre, o) {
   }
   // 3. Emisión esperada (por tipo; si el resumen habla de reflexión, se añade).
   var em = WB_EMISION[r.tipo_simbad] || null;
+  if (s && s.nebulosa_asociada) em = WB_EMISION.HII;   // cúmulo dentro de una región HII (IC 1805, IC 1396...)
   if (em) r.emision = { lineas: em.lineas, filtros: em.filtros, nota: em.nota };
+  if (s && s.nota) avisos.push(s.nota);
   // SIMBAD da un solo tipo (IC 1396 sale como cúmulo abierto aunque es sobre todo una región HII): se completa con el resumen.
   var extra = [];
   if (r.resumen && /emisi[oó]n|emission|regi[oó]n HII|HII region|H II/i.test(r.resumen) && r.tipo_simbad !== "HII" && r.tipo_simbad !== "PN" && r.tipo_simbad !== "SNR")

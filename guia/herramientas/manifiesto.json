@@ -263,7 +263,7 @@
     "properties": {
      "wbpp": {
       "type": "object",
-      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), planSolo, copiar (otro disco), forzar, aliasFiltros: { \"viejo\": \"bueno\" } (filtro mal nombrado en la cabecera: fuerza sesiones y esos ficheros van como copia .xisf con FILTER corregido), parametros: { nombre: valor de la automatización de WBPP } }"
+      "description": "{ lights (carpeta, lista o fichero de lista de seleccionarSubs), flats, flatDarks, darks, bias, salida (carpeta corta, sin las palabras light/flat/dark/bias/master ni masters: p. ej. D:/Astronomia/<objeto>/wbpp), sesiones: \"auto\" | [{ lights, flats, darks, nombre }], agrupar: \"global\" | \"noche\", referencia (ruta de un light, p. ej. mejor_sub), planSolo, copiar (otro disco), forzar, aliasFiltros: { \"viejo\": \"bueno\" } (filtro mal nombrado en la cabecera: fuerza sesiones y esos ficheros van como copia .xisf con FILTER corregido), parametros: { nombre: valor de la automatización de WBPP } }"
      }
     },
     "required": [

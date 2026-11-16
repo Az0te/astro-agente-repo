@@ -35,9 +35,10 @@ function ppSearch(patron, recursivo) {
 }
 
 // Carpeta de noche → su subcarpeta n (LIGHT, FLAT o DARK) si ella misma no tiene imágenes. Acepta listas.
-function ppSub(x, n) {
-  if (x instanceof Array) return x.map(function (e) { return ppSub(e, n); });
-  if (typeof x !== "string" || ppList(x).length > 0) return x;
+// forzar: buscar las subcarpetas n aunque la carpeta tenga imágenes (la del objeto con el master dark en la raíz).
+function ppSub(x, n, forzar) {
+  if (x instanceof Array) return x.map(function (e) { return ppSub(e, n, forzar); });
+  if (typeof x !== "string" || (!forzar && ppList(x).length > 0)) return x;
   var d = x.replace(/\\/g, "/").replace(/\/$/, "");
   if (File.directoryExists(d + "/" + n)) return d + "/" + n;
   // Carpeta del objeto: todas sus subcarpetas n (una por noche), sin las que empiezan por "_" (_proc, _rechazados).
@@ -131,12 +132,14 @@ function ppQuantile(a, q) {
   return i + 1 < b.length ? b[i] * (1 - f) + b[i + 1] * f : b[i];
 }
 
-// Nivel de un flat por canal CFA (RGGB por defecto): mediana y % de píxeles >= 0,98 del rango.
+// Nivel de un flat por canal CFA (RGGB por defecto): mediana y % de píxeles >= 0,98 del rango. bayer "MONO": un
+// solo canal L (16-11-2026, IC 1805 con ATR2600M: salían R, G y B repetidos de una cámara mono).
 function ppFlatLevel(path, bayer) {
   var w = ImageWindow.open(path, "ppFLAT", "verbosity 0", true);
   if (!w || w.length == 0) throw new Error("No se pudo abrir " + path);
   var im = w[0].mainView.image, W = im.width, H = im.height, row = new Float32Array(W);
   var pat = (bayer || "RGGB").toUpperCase(), ch = { R: [], G: [], B: [] }, sat = { R: 0, G: 0, B: 0 }, n = { R: 0, G: 0, B: 0 };
+  if (pat == "MONO") { pat = "LLLL"; ch = { L: [] }; sat = { L: 0 }; n = { L: 0 }; }
   for (var y = 0; y < H; y += 2) {
     for (var dy = 0; dy < 2; ++dy) {
       im.getSamples(row, new Rect(0, y + dy, W, y + dy + 1), 0);
@@ -166,6 +169,15 @@ function revisarCalibracion(o) {
   var D = ppList(o.darks).map(ppHeader), F = ppList(o.flats).map(ppHeader), FD = ppList(o.flatDarks).map(ppHeader);
   // aliasFiltros: { "nombre viejo": "nombre bueno" } para filtros renombrados en el programa de captura.
   if (o.aliasFiltros) L.concat(D, F, FD).forEach(function (h) { if (o.aliasFiltros[h.filtro] !== undefined) h.filtro = o.aliasFiltros[h.filtro]; });
+  // Cada fichero a su sitio por su tipo (ppTipoCal), no por la carpeta: con NINA los masters de flats y de darks de
+  // flats están juntos en la carpeta de la noche, y los darkflats se medían como flats "muy oscuros" (16-11-2026).
+  var tipo = function (h) { return ppTipoCal(h); }, visto = {};
+  var todos = F.concat(FD).filter(function (h) { if (visto[h.fichero]) return false; visto[h.fichero] = true; return true; });
+  F = todos.filter(function (h) { var t = tipo(h); return t == "flat" || t == ""; });
+  FD = todos.filter(function (h) { var t = tipo(h); return t == "flatdark" || t == "dark" || t == "bias"; });
+  D = D.filter(function (h) { var t = tipo(h); return t != "flat" && t != "flatdark" && t != "light"; });
+  // Mono si ni los lights ni los flats dicen patrón Bayer (o bayer: "MONO"/"RGGB"... en las opciones).
+  var bayerLights = o.bayer || (L.some(function (h) { return h.BAYERPAT; }) ? null : (F.some(function (h) { return h.BAYERPAT; }) ? null : "MONO"));
   var B = ppList(o.bias).map(ppHeader);
   var tolExp = o.tolExposicion || 1, tolTemp = o.tolTemperatura || 2;
 
@@ -209,26 +221,35 @@ function revisarCalibracion(o) {
         r.no_cumple.push(etiqueta + ": " + (fSen.length - fTel.length) + " flats dicen telescopio '" +
                          ppUnique(fSen.filter(function (f) { return fTel.indexOf(f) < 0; }), function (f) { return f.TELESCOP; }).join("', '") +
                          "' y los lights '" + h0.TELESCOP + "'. Un flat de otro tren óptico no corrige el viñeteado ni el polvo.");
-      r.flats.push({ grupo: etiqueta, n: fSen.length, mismo_filtro: fFil.length, exposiciones_s: ppUnique(fSen, function (f) { return f.exp; }) });
+      // Sólo los flats de su filtro (con varios filtros por noche, los demás no son suyos); si no hay, todos.
+      var fUso = fFil.length ? fFil : fSen;
+      var masterDe = function (f) { return /master/i.test(f.tipo) || /master/i.test(File.extractName(f.fichero)) || (f.ncombine || 0) > 1; };
+      var todosMaster = fUso.every(masterDe);
+      r.flats.push({ grupo: etiqueta, n: fUso.length, masters: fUso.filter(masterDe).length,
+                     noches: ppUnique(fUso, function (f) { return ppNoche(f) || "?"; }).join(", "),
+                     exposiciones_s: ppUnique(fUso, function (f) { return f.exp; }) });
 
-      // Darks de flats (o bias) para cada exposición de flat.
-      var fExps = ppUnique(fSen, function (f) { return f.exp; });
+      // Darks de flats (o bias) para cada exposición de flat de su filtro. Un master flat ya está calibrado: WBPP no le
+      // resta nada, así que con sólo masters los darks de flats no hacen falta.
+      var fExps = ppUnique(fUso, function (f) { return f.exp; });
       for (var e = 0; e < fExps.length; ++e) {
         var fd = FD.concat(D).filter(function (d) { return sameSensor(d, h0) && Math.abs(d.exp - fExps[e]) <= Math.max(0.05 * fExps[e], 0.01); });
-        if (fd.length == 0 && B.length == 0)
+        if (todosMaster) r.darks_de_flats.push({ grupo: etiqueta, exposicion_flat_s: fExps[e], darks: fd.length, bias: B.length, nota: "master flat: no se usan" });
+        else if (fd.length == 0 && B.length == 0)
           r.no_cumple.push(etiqueta + ": no hay darks de flats de " + fExps[e] + " s ni bias.");
-        else r.darks_de_flats.push({ exposicion_flat_s: fExps[e], darks: fd.length, bias: B.length });
+        else r.darks_de_flats.push({ grupo: etiqueta, exposicion_flat_s: fExps[e], darks: fd.length, bias: B.length });
       }
+      if (todosMaster) r.control.medido.push(etiqueta + ": los flats son masters (ya calibrados); WBPP no usa darks de flats con ellos.");
 
       // Nivel de los flats: unos pocos ficheros (por defecto 3) de los del mismo filtro, si los hay; cada uno una vez.
-      var fMed = fFil.length ? fFil : fSen;
+      var fMed = fUso;
       var nf = Math.min(o.flatsMedidos || 3, fMed.length);
       r._medidos = r._medidos || [];
       for (var i = 0; i < nf; ++i) {
         var fh = fMed[Math.floor(i * (fMed.length - 1) / Math.max(1, nf - 1))];
         if (r._medidos.indexOf(fh.fichero) >= 0) continue;
         r._medidos.push(fh.fichero);
-        var lv = ppFlatLevel(fh.fichero, fh.BAYERPAT);
+        var lv = ppFlatLevel(fh.fichero, fh.BAYERPAT || bayerLights || h0.BAYERPAT);
         r.control.medido.push("flat " + File.extractName(fh.fichero) + ": " + JSON.stringify(lv));
         for (var c in lv) {
           if (lv[c].saturados_pct > 1)
@@ -440,6 +461,10 @@ function ppLanzarWBPP(o) {
   if (salida.length > 60) throw new Error("Ruta de salida demasiado larga (" + salida.length + " caracteres): usar una de menos de 60");
   var plan = null;
   if (o.sesiones) {
+    // Antes del plan, para que planSolo ya lo diga (ppMontarEntrada lo vuelve a comprobar).
+    if (/(^|[^A-Za-z0-9])(bias|darks?|flats?|lights?)([^A-Za-z0-9]|$)|master|noche_/i.test(salida))
+      throw new Error("La carpeta de salida no puede llevar las palabras light, flat, dark, bias ni master(s) (WBPP las lee en la ruta y tomaría los lights por masters): " +
+                      salida + ". Usar p. ej. " + salida.replace(/[^\/]*master[^\/]*$/i, "wbpp"));
     plan = ppPlanSesiones(o);
     if (o.planSolo) { var ps = {}; for (var kp in plan) if (kp != "sesiones") ps[kp] = plan[kp]; return ps; }
     if (plan.no_cumple.length && !o.forzar)
@@ -488,6 +513,7 @@ function ppLanzarWBPP(o) {
   if (plan) {
     res.sesiones = info.sesiones;
     res.enlaces = entrada.enlazados; res.copiados = entrada.copiados;
+    if (entrada.convertidos) res.masters_a_xisf = entrada.convertidos + " masters en FITS copiados como .xisf en _entrada (WBPP sólo acepta masters XISF)";
     if (entrada.filtro_corregido) res.filtro_corregido = entrada.filtro_corregido + " ficheros copiados con FILTER corregido (aliasFiltros)";
     res.referencia = entrada.referencia || "auto (WBPP elige una para todas las noches)";
     res.control = plan.control;
@@ -520,10 +546,43 @@ function ppNoche(h) {
 
 function ppDir(f) { return (File.extractDrive(f) + File.extractDirectory(f)).replace(/\\/g, "/"); }
 
+// Tipo de un fichero de calibración: "flatdark", "flat", "dark", "bias", "light" o "" (no se sabe). Primero el
+// nombre si dice darkflat/flatdark (NINA guarda los darks de flats con IMAGETYP 'Master Dark'), luego IMAGETYP y
+// por último el nombre (16-11-2026, IC 1805: el master dark de 120 s de la raíz se tomó como flat de las dos noches).
+function ppTipoCal(h) {
+  var n = File.extractName(h.fichero), t = h.tipo || "";
+  if (/dark[\s_-]*flat|flat[\s_-]*dark/i.test(n) || /dark[\s_-]*flat|flat[\s_-]*dark/i.test(t)) return "flatdark";
+  var de = function (x) {
+    if (/flat/i.test(x)) return "flat";
+    if (/dark/i.test(x)) return "dark";
+    if (/bias|offset/i.test(x)) return "bias";
+    if (/light|science/i.test(x)) return "light";
+    return "";
+  };
+  return de(t) || de(n.replace(/\d+\s*Of\b/ig, ""));
+}
+
+// Ficheros de calibración bajo una carpeta, en todas sus subcarpetas menos las de lights, las que empiezan por "_" y
+// las de salida de WBPP. Con tipos: sólo los de esos tipos (ppTipoCal).
+function ppCalRecursivo(dir, tipos) {
+  var raiz = String(dir).replace(/\\/g, "/").replace(/\/$/, ""), out = [];
+  ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) {
+    ppSearch(raiz + "/" + e, true).forEach(function (f) {
+      var rel = ppDir(f).substring(raiz.length) + "/";
+      if (/\/_/.test(rel) || /\/(lights?|calibrated|registered|debayered|cosmetized|master|logs)\//i.test(rel)) return;
+      if (tipos) { var h = null; try { h = ppHeader(f); } catch (x) { return; } if (tipos.indexOf(ppTipoCal(h)) < 0) return; }
+      out.push(f.replace(/\\/g, "/"));
+    });
+  });
+  return out.sort();
+}
+
 // Juegos de flats: cada master por separado y los flats sueltos por carpeta. De un mismo master en .fits y .xisf se
 // queda el .xisf (WBPP sólo acepta masters en XISF).
 function ppJuegosFlats(lista) {
   var hs = ppList(lista).map(function (f) { try { return ppHeader(f); } catch (e) { return null; } }).filter(function (h) { return h; });
+  // Sólo flats: un dark, darkflat, bias o light en la carpeta de flats no es un juego de flats.
+  hs = hs.filter(function (h) { var t = ppTipoCal(h); return t == "flat" || t == ""; });
   var xisf = {};
   hs.forEach(function (h) { if (/\.xisf$/i.test(h.fichero)) xisf[File.extractName(h.fichero).toLowerCase()] = true; });
   hs = hs.filter(function (h) { return /\.xisf$/i.test(h.fichero) || !xisf[File.extractName(h.fichero).toLowerCase()]; });
@@ -540,7 +599,6 @@ function ppJuegosFlats(lista) {
   juegos.forEach(function (j) {
     j.noche = ppNoche(j.h);
     j.filtro = j.h.filtro;
-    if (j.master && !/\.xisf$/i.test(j.ficheros[0])) j.soloFits = true;
     if (!j.master) j.etiqueta = j.etiqueta.replace(" (flats sueltos)", " (" + j.ficheros.length + " flats)");
   });
   return juegos;
@@ -580,10 +638,20 @@ function ppPlanSesiones(o) {
     orden.forEach(function (k) {
       var L = porDir[k], d = ppDir(L[0]), fl = null;
       if (/\/LIGHT$/i.test(d) && File.directoryExists(d.replace(/\/LIGHT$/i, "/FLAT"))) fl = ppList(d.replace(/\/LIGHT$/i, "/FLAT"));
+      // Sin subcarpeta FLAT: los flats sueltos o masters en la carpeta de la noche, junto a LIGHT (NINA: <fecha>/LIGHT
+      // y "Master Flat Ha 3nm ... .fits" en <fecha>).
+      if ((!fl || !fl.length) && /\/LIGHT$/i.test(d))
+        fl = ppList(d.replace(/\/LIGHT$/i, "")).filter(function (f) { try { return ppTipoCal(ppHeader(f)) == "flat"; } catch (e) { return false; } });
       defs.push({ lights: L, flats: fl && fl.length ? fl : null, darks: null });
     });
   }
-  var juegos = ppJuegosFlats(o.flats ? ppSub(o.flats, "FLAT") : []);
+  var fGlob = o.flats ? ppSub(o.flats, "FLAT") : [];
+  // Carpeta del objeto con los flats repartidos por noches: todos los flats de dentro (sin los de lights).
+  if (typeof fGlob === "string" && File.directoryExists(fGlob.replace(/\\/g, "/").replace(/\/$/, ""))) {
+    var fRec = ppCalRecursivo(fGlob, ["flat"]);
+    if (fRec.length) fGlob = fRec;
+  }
+  var juegos = ppJuegosFlats(fGlob);
   var al = o.aliasFiltros || {}, alias = function (f) { return (f !== undefined && al[f] !== undefined) ? al[f] : f; };
   juegos.forEach(function (x) { x.filtro = alias(x.filtro); });
   defs.forEach(function (s) {
@@ -591,26 +659,40 @@ function ppPlanSesiones(o) {
     s.noche = ppNoche(h0) || "";
     s.filtro = alias(h0.filtro) || "";
     s.sinFiltro = !h0.filtro;
-    var j = null;
-    if (s.flats) {
-      var js = ppJuegosFlats(s.flats);
-      js.forEach(function (x) { x.filtro = alias(x.filtro); });
-      if (js.length) { j = js[0]; if (js.length > 1) j = { ficheros: [].concat.apply([], js.map(function (x) { return x.ficheros; })), master: false, etiqueta: js.map(function (x) { return x.etiqueta; }).join(" + "), filtro: js[0].filtro }; }
-    } else if (juegos.length) {
-      // el último juego de la misma noche o anterior; si no hay, el primero posterior. Mismo filtro si el flat lo dice.
-      var cand = juegos.filter(function (x) { return !x.filtro || !s.filtro || x.filtro == s.filtro; });
-      if (!cand.length) cand = juegos;
-      var antes = cand.filter(function (x) { return x.noche && s.noche && x.noche <= s.noche; }).sort(function (a, b) { return a.noche < b.noche ? -1 : 1; });
-      var despues = cand.filter(function (x) { return x.noche && s.noche && x.noche > s.noche; }).sort(function (a, b) { return a.noche < b.noche ? -1 : 1; });
-      j = antes.length ? antes[antes.length - 1] : despues.length ? despues[0] : (cand.length == 1 ? cand[0] : null);
-      if (j && !antes.length) r.control.revisar_a_ojo.push("Noche " + s.noche + ": no hay flat de esa noche ni anterior; uso " + j.etiqueta + " (posterior).");
-      if (j && antes.length && j.noche != s.noche) r.control.medido.push("Noche " + s.noche + ": flat de la noche " + j.noche + " (" + j.etiqueta + ").");
-    }
-    s.flatJuego = j;
-    s.flatEtiqueta = j ? j.etiqueta : "ninguno";
-    if (!j) r.no_cumple.push("Noche " + (s.noche || File.extractName(s.lights[0])) + ": sin flat.");
-    else if (j.soloFits) r.no_cumple.push("Noche " + s.noche + ": el master flat " + j.etiqueta + " sólo está en FITS; WBPP sólo acepta masters en XISF (guardarlo como .xisf).");
-    else if (j.filtro && s.filtro && j.filtro != s.filtro) r.no_cumple.push("Noche " + s.noche + ": flat con filtro '" + j.filtro + "' y lights '" + s.filtro + "'.");
+    // Filtros de la noche (mono con varios filtros por noche: un flat por filtro; 16-11-2026, IC 1805 Ha/O3/S2).
+    var filtros = [];
+    s.lights.forEach(function (f) { var x = s.filtro; try { x = alias(ppHeader(f).filtro) || ""; } catch (e) { } if (filtros.indexOf(x) < 0) filtros.push(x); });
+    var js = null;
+    if (s.flats) { js = ppJuegosFlats(s.flats); js.forEach(function (x) { x.filtro = alias(x.filtro); }); }
+    s.flatJuegos = [];
+    filtros.forEach(function (fil) {
+      var j = null, nom = "Noche " + (s.noche || File.extractName(s.lights[0])) + (filtros.length > 1 || fil ? " (" + (fil || "sin FILTER") + ")" : "");
+      if (js && js.length) {
+        var c = js.filter(function (x) { return !x.filtro || !fil || x.filtro == fil; });
+        if (!c.length && filtros.length == 1) c = js;
+        if (c.length == 1) j = c[0];
+        else if (c.length > 1) {
+          var ms = c.filter(function (x) { return x.master; });
+          j = ms.length == 1 ? ms[0] : { ficheros: [].concat.apply([], c.map(function (x) { return x.ficheros; })), master: false, etiqueta: c.map(function (x) { return x.etiqueta; }).join(" + "), filtro: c[0].filtro };
+        }
+      } else if (juegos.length) {
+        // el último juego de la misma noche o anterior; si no hay, el primero posterior. Mismo filtro si el flat lo dice.
+        var cand = juegos.filter(function (x) { return !x.filtro || !fil || x.filtro == fil; });
+        if (!cand.length && filtros.length == 1) cand = juegos;
+        var antes = cand.filter(function (x) { return x.noche && s.noche && x.noche <= s.noche; }).sort(function (a, b) { return a.noche < b.noche ? -1 : 1; });
+        var despues = cand.filter(function (x) { return x.noche && s.noche && x.noche > s.noche; }).sort(function (a, b) { return a.noche < b.noche ? -1 : 1; });
+        j = antes.length ? antes[antes.length - 1] : despues.length ? despues[0] : (cand.length == 1 ? cand[0] : null);
+        if (j && !antes.length) r.control.revisar_a_ojo.push(nom + ": no hay flat de esa noche ni anterior; uso " + j.etiqueta + " (posterior).");
+        if (j && antes.length && j.noche != s.noche) r.control.medido.push(nom + ": flat de la noche " + j.noche + " (" + j.etiqueta + ").");
+      }
+      if (!j) r.no_cumple.push(nom + ": sin flat.");
+      else {
+        if (j.filtro && fil && j.filtro != fil) r.no_cumple.push(nom + ": flat con filtro '" + j.filtro + "' y lights '" + fil + "'.");
+        j = { ficheros: j.ficheros, master: j.master, etiqueta: j.etiqueta, filtro: j.filtro || fil, noche: j.noche };
+        s.flatJuegos.push(j);
+      }
+    });
+    s.flatEtiqueta = s.flatJuegos.length ? s.flatJuegos.map(function (x) { return (filtros.length > 1 ? x.filtro + ": " : "") + x.etiqueta; }).join("; ") : "ninguno";
     if (hl && ppNoche(hl) && ppNoche(hl) != s.noche) r.control.revisar_a_ojo.push("La carpeta " + ppDir(s.lights[0]) + " tiene lights de más de una noche (" + s.noche + " y " + ppNoche(hl) + "): se tratan como una sola.");
   });
   defs.sort(function (a, b) { return a.noche < b.noche ? -1 : a.noche > b.noche ? 1 : 0; });
@@ -623,6 +705,10 @@ function ppPlanSesiones(o) {
   r.sesiones = defs;
   r.plan = defs.map(function (s) { return { noche: s.nombre, lights: s.lights.length, filtro: s.filtro || "(sin FILTER)", flat: s.flatEtiqueta }; });
   r.control.medido.push(defs.length + " noches, " + r.lights + " lights.");
+  var jf = [].concat.apply([], defs.map(function (s) { return s.flatJuegos || []; }));
+  r.juegos_flat = jf.length;
+  if (jf.length && jf.every(function (j) { return j.master; }) && o.flatDarks)
+    r.control.medido.push("Los " + jf.length + " flats son masters (ya calibrados): no se pasan darks de flats a WBPP.");
   return r;
 }
 
@@ -638,7 +724,9 @@ function ppNombreSeguro(f, esMaster) {
 
 // Monta <salida>/_entrada con enlaces duros (o copias con copiar: true) y devuelve los ficheros para WBPP.
 function ppMontarEntrada(plan, salida, o) {
-  if (/(^|[^A-Za-z0-9])(bias|darks?|flats?|lights?|master)([^A-Za-z0-9]|$)|noche_/i.test(salida))
+  // "masters" también: con detectMasterIncludingFullPath WBPP tomó los 202 lights de D:/.../IC1805/masters por masters
+  // en FITS y los rechazó todos (16-11-2026). Cualquier palabra que CONTENGA master basta para ese fallo.
+  if (/(^|[^A-Za-z0-9])(bias|darks?|flats?|lights?)([^A-Za-z0-9]|$)|master|noche_/i.test(salida))
     throw new Error("La carpeta de salida no puede llevar las palabras light, flat, dark, bias ni master (WBPP las lee en la ruta): " + salida);
   var base = salida + "/_entrada", pares = [], ficheros = [], referencia = null;
   var refIn = o.referencia ? String(o.referencia).replace(/\\/g, "/") : null;
@@ -650,6 +738,9 @@ function ppMontarEntrada(plan, salida, o) {
     if (h && h.filtroCabecera !== undefined) {          // alias: copia .xisf con FILTER corregido
       dst = dst.replace(/\.[^.\/]+$/, "") + ".xisf";
       pares.push([src.replace(/\\/g, "/"), dst, h.filtro]);
+    } else if (esMaster && !/\.xisf$/i.test(src)) {   // master en FITS: WBPP sólo acepta masters XISF, copia .xisf
+      dst = dst.replace(/\.[^.\/]+$/, "") + ".xisf";
+      pares.push([src.replace(/\\/g, "/"), dst, null, true]);
     } else pares.push([src.replace(/\\/g, "/"), dst]);
     ficheros.push(dst);
     return dst;
@@ -657,15 +748,28 @@ function ppMontarEntrada(plan, salida, o) {
   plan.sesiones.forEach(function (s) {
     var dL = "LIGHT/NOCHE_" + s.nombre;
     s.lights.forEach(function (f) { var d = poner(f, dL, false); if (refIn && f.replace(/\\/g, "/") == refIn) referencia = d; });
-    if (s.flatJuego) {
-      var fil = s.flatJuego.filtro || s.filtro || "NoFilter";
+    (s.flatJuegos || []).forEach(function (j) {
+      var fil = j.filtro || s.filtro || "NoFilter";
       var dF = "FLAT/NOCHE_" + s.nombre + "/FILTER_" + fil.replace(/[^- A-Za-z0-9]/g, "-");
-      s.flatJuego.ficheros.forEach(function (f) { poner(f, dF, s.flatJuego.master); });
-    }
+      j.ficheros.forEach(function (f) { poner(f, dF, j.master); });
+    });
     if (s.darks) s.darks.forEach(function (f) { poner(f, "DARK/NOCHE_" + s.nombre, /master/i.test(File.extractName(f))); });
   });
-  ppList(o.darks).forEach(function (f) { poner(f, "DARK", /master/i.test(File.extractName(f))); });
-  ppList(ppSub(o.flatDarks, "DARK")).forEach(function (f) { poner(f, "DARK/FLATDARK", /master/i.test(File.extractName(f))); });
+  // Darks: sin los flats ni los darks de flats que haya en la misma carpeta.
+  var tipoDe = function (f) { try { return ppTipoCal(ppHeader(f)); } catch (e) { return ""; } };
+  ppList(o.darks).filter(function (f) { var t = tipoDe(f); return t != "flat" && t != "flatdark" && t != "light"; })
+    .forEach(function (f) { poner(f, "DARK", /master/i.test(File.extractName(f))); });
+  // Darks de flats: si la carpeta (o sus subcarpetas por noche) tiene darkflats, sólo esos; si no, lo que haya.
+  // Con sólo master flats (ya calibrados) no van: WBPP no recalibra un master y un darkflat suelto en DARK/ sólo
+  // confunde el emparejado de darks (16-11-2026, IC 1805: masters de flat hechos ya con su darkflat).
+  var juegosFlat = [].concat.apply([], plan.sesiones.map(function (s) { return s.flatJuegos || []; }));
+  var soloMasters = juegosFlat.length > 0 && juegosFlat.every(function (j) { return j.master; });
+  var fd = ppSub(o.flatDarks, "DARK"), fdl = [];
+  if (!soloMasters) {
+    if (typeof fd === "string" && File.directoryExists(fd.replace(/\\/g, "/").replace(/\/$/, ""))) fdl = ppCalRecursivo(fd, ["flatdark"]);
+    if (!fdl.length) fdl = ppList(fd).filter(function (f) { var t = tipoDe(f); return t != "flat" && t != "light"; });
+    fdl.forEach(function (f) { poner(f, "DARK/FLATDARK", /master/i.test(File.extractName(f))); });
+  }
   ppList(o.bias).forEach(function (f) { poner(f, "BIAS", /master/i.test(File.extractName(f))); });
   if (refIn && !referencia) {
     if (!File.exists(refIn)) throw new Error("No existe la referencia " + refIn);
@@ -673,16 +777,17 @@ function ppMontarEntrada(plan, salida, o) {
   }
   // Enlaces duros: mismo disco. Si el disco es otro, copiar sólo con copiar: true.
   var unidad = function (p) { var m = p.match(/^([A-Za-z]):/); return m ? m[1].toUpperCase() : ""; };
-  var otros = pares.filter(function (p) { return !p[2] && unidad(p[0]) != unidad(p[1]); });
+  var otros = pares.filter(function (p) { return !p[2] && !p[3] && unidad(p[0]) != unidad(p[1]); });
   if (otros.length && !o.copiar)
     throw new Error(otros.length + " ficheros están en otro disco que la salida (p. ej. " + otros[0][0] + "): poner la salida en el mismo disco (enlaces sin copiar) o pasar copiar: true.");
   // Lo de un intento anterior se rehace (los enlaces no ocupan; borrar un enlace no toca el original).
   if (File.directoryExists(base)) ppBorrarArbol(base);
   var dirs = ppUnique(pares, function (p) { return ppDir(p[1]); });
   dirs.forEach(function (d) { File.createDirectory(d, true); });
-  var enlazados = 0, copiados = 0, reescritos = 0, lineas = [];
+  var enlazados = 0, copiados = 0, reescritos = 0, convertidos = 0, lineas = [];
   pares.forEach(function (p) {
     if (p[2]) { ppReescribirFiltro(p[0], p[1], p[2]); ++reescritos; }
+    else if (p[3]) { ppReescribirFiltro(p[0], p[1], null); ++convertidos; }
     else if (unidad(p[0]) != unidad(p[1])) { File.copyFile(p[1], p[0]); ++copiados; }
     else lineas.push(p);
   });
@@ -698,7 +803,7 @@ function ppMontarEntrada(plan, salida, o) {
     if (enlazados < lineas.length)
       throw new Error("Sólo se crearon " + enlazados + " de " + lineas.length + " enlaces en " + base + " (¿disco no NTFS?). Probar con copiar: true.");
   }
-  return { ficheros: ficheros, referencia: referencia, enlazados: enlazados, copiados: copiados, filtro_corregido: reescritos };
+  return { ficheros: ficheros, referencia: referencia, enlazados: enlazados, copiados: copiados, filtro_corregido: reescritos, convertidos: convertidos };
 }
 
 // Copia src en dst (.xisf) con FILTER (y la propiedad Instrument:Filter:Name) = filtro. El original no se toca.
@@ -707,12 +812,14 @@ function ppReescribirFiltro(src, dst, filtro) {
   if (!ws || !ws.length) throw new Error("No se pudo abrir " + src + " para corregir el filtro");
   var w = ws[0];
   try {
-    var k = w.keywords, hay = false;
-    for (var i = 0; i < k.length; ++i)
-      if (k[i].name == "FILTER") { k[i] = new FITSKeyword("FILTER", "'" + filtro + "'", k[i].comment); hay = true; }
-    if (!hay) k.push(new FITSKeyword("FILTER", "'" + filtro + "'", "Filtro corregido (aliasFiltros)"));
-    w.keywords = k;
-    try { w.mainView.setPropertyValue("Instrument:Filter:Name", filtro); } catch (e) { }
+    if (filtro !== null && filtro !== undefined) {   // null: sólo pasar a XISF (master en FITS)
+      var k = w.keywords, hay = false;
+      for (var i = 0; i < k.length; ++i)
+        if (k[i].name == "FILTER") { k[i] = new FITSKeyword("FILTER", "'" + filtro + "'", k[i].comment); hay = true; }
+      if (!hay) k.push(new FITSKeyword("FILTER", "'" + filtro + "'", "Filtro corregido (aliasFiltros)"));
+      w.keywords = k;
+      try { w.mainView.setPropertyValue("Instrument:Filter:Name", filtro); } catch (e) { }
+    }
     if (!w.saveAs(dst, false, false, false, false)) throw new Error("No se pudo guardar " + dst);
   } finally {
     for (var j = 0; j < ws.length; ++j) ws[j].forceClose();
@@ -913,6 +1020,11 @@ function ppAbrirSTF(path, id) {
 function seleccionarSubs(x, o) {
   o = o || {};
   var fs = ppList(ppSub(x, "LIGHT"));   // una o varias carpetas; de una carpeta de noche, su LIGHT
+  // Sólo lights: en la carpeta del objeto puede estar el master dark (16-11-2026, IC 1805: se midió el master dark de
+  // la raíz como único sub). Sin lights ahí, sus subcarpetas LIGHT.
+  var esLight = function (f) { try { var t = ppTipoCal(ppHeader(f)); return t == "light" || t == ""; } catch (e) { return true; } };
+  fs = fs.filter(esLight);
+  if (fs.length == 0 && typeof x === "string") fs = ppList(ppSub(x, "LIGHT", true)).filter(esLight);
   if (fs.length == 0) throw new Error("No hay subs en " + x + ": ni imágenes en la carpeta ni subcarpetas LIGHT (de la noche o de las noches del objeto). " +
                                       "Pasa la carpeta LIGHT, la de la noche, la del objeto o una lista de ficheros; no escribas tu propia búsqueda.");
   var fwhmTol = o.fwhmTol !== undefined ? o.fwhmTol : 0.5, fwhmDuda = o.fwhmDuda !== undefined ? o.fwhmDuda : 0.35, eccDelta = o.eccDelta !== undefined ? o.eccDelta : 0.1;
@@ -978,6 +1090,24 @@ function seleccionarSubs(x, o) {
     resumen.push({ grupo: grupos[g], n: S.length, fwhm_ref_px: +fRef.toFixed(3), fwhm_max_px: +fMax.toFixed(3),
                    excentricidad_max: +eMax.toFixed(3), rechazados: S.filter(function (s) { return s.motivos.length; }).length });
   }
+  // Selección previa: si junto a los lights hay una carpeta de rechazados con imágenes, los subs ya se filtraron y
+  // los umbrales (relativos al propio grupo) volverían a recortar la cola de lo que queda. Entonces lo que rebasa
+  // un umbral pasa a dudoso (el peso ya lo rebaja), salvo las nubes muy claras (z > nubeZ + 1) y lo que no se pudo
+  // medir. reseleccionar: true para rechazar igual (16-11-2026, IC 1805: 37 quitados a mano y 28 más aquí).
+  var previos = 0, dirsL = ppUnique(fs, function (f) { return ppDir(f); });
+  dirsL.forEach(function (d) {
+    ["rechazados", "_rechazados", "rechazos", "_rechazos", "descartados", "_descartados"].forEach(function (n) {
+      if (File.directoryExists(d + "/" + n)) previos += ppList(d + "/" + n).length;
+    });
+  });
+  if (previos > 0 && !o.reseleccionar) {
+    subs.forEach(function (s) {
+      var quedan = s.motivos.filter(function (m) { var z = m.match(/\(z ([\d.]+)/); return /no se pudo medir/.test(m) || (z && parseFloat(z[1]) > nubeZ + 1); });
+      s.motivos.forEach(function (m) { if (quedan.indexOf(m) < 0) s.dudas.push(m + " [ya hubo selección previa]"); });
+      s.motivos = quedan;
+    });
+    resumen.forEach(function (g) { g.rechazados = subs.filter(function (s) { return s.grupo == g.grupo && s.motivos.length; }).length; });
+  }
   var rech = subs.filter(function (s) { return s.motivos.length; }), apr = subs.filter(function (s) { return !s.motivos.length; });
   // Resultado corto (el modelo lo recibe entero): la tabla completa sólo con { tabla: true } o en el CSV, y los
   // aprobados como fichero de lista (una ruta por línea) que lanzarWBPP acepta en lights.
@@ -1006,6 +1136,10 @@ function seleccionarSubs(x, o) {
   var conTrazos = subs.filter(function (s) { return s.trazos; }).map(function (s) { return s.nombre; });
   if (conTrazos.length) r.control.revisar_a_ojo.push("Trazos (satélites o aviones) en " + conTrazos.join(", ") + ": no se rechazan; los quita el rechazo de la integración.");
   r.control.medido.push(subs.length + " subs medidos, " + apr.length + " aprobados, " + rech.length + " rechazados.");
+  if (previos > 0)
+    r.control.medido.push("Ya hubo una selección previa (" + previos + " subs en la carpeta de rechazados): " +
+                          (o.reseleccionar ? "se ha vuelto a rechazar con los umbrales normales (reseleccionar: true)."
+                                           : "lo que rebasa un umbral queda como dudoso, no se rechaza (salvo nubes con z > " + (nubeZ + 1) + "). No volver a filtrar sin que lo pida el usuario."));
   if (o.csv) {
     var lines = ["sub;grupo;estrellas;fwhm_px;excentricidad;nube;peso;aprobado;motivos"];
     subs.forEach(function (s) { lines.push([s.nombre, s.grupo, s.estrellas, s.fwhm_px, s.excentricidad, s.nube, s.peso, s.motivos.length ? "no" : "sí", s.motivos.join(" / ")].join(";")); });
