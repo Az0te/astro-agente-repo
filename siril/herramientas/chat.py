@@ -39,6 +39,24 @@ OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 MODELO_LOCAL = "qwen38-32k"
 CLAUDE = "Claude (CLI)"
 MAX_RONDAS = 30
+# APIs compatibles con OpenAI (chat/completions) con clave: el bucle de herramientas es el mismo que con Ollama.
+# Pensadas para quien no tiene gráfica ni suscripción (17 nov 2026). La clave se lee de la variable de entorno (o del
+# registro de Windows, por si se creó con el chat ya abierto); el modelo se cambia con <CLAVE sin _API_KEY>_MODELO.
+APIS = {
+    "Gemini (API, nivel gratuito)": {"url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                                     "clave": "GEMINI_API_KEY", "modelo": "gemini-2.5-flash", "vision": True,
+                                     "limite": 50000, "web": "https://aistudio.google.com/apikey"},
+    "OpenRouter (API)": {"url": "https://openrouter.ai/api/v1/chat/completions", "clave": "OPENROUTER_API_KEY",
+                         "modelo": "deepseek/deepseek-chat-v3-0324:free", "vision": False, "limite": 50000,
+                         "web": "https://openrouter.ai/keys"},
+    "Groq (API)": {"url": "https://api.groq.com/openai/v1/chat/completions", "clave": "GROQ_API_KEY",
+                   "modelo": "llama-3.3-70b-versatile", "vision": False, "limite": 24000,
+                   "web": "https://console.groq.com/keys"},
+    "DeepSeek (API, de pago)": {"url": "https://api.deepseek.com/chat/completions", "clave": "DEEPSEEK_API_KEY",
+                                "modelo": "deepseek-chat", "vision": False, "limite": 50000,
+                                "web": "https://platform.deepseek.com/api_keys"},
+}
+MAX_IMAGENES = 6                                        # previas por resultado que se mandan a un modelo con visión
 MAX_RESULTADO = 6000                                    # caracteres de cada resultado que vuelven al modelo local
 MAX_EMPUJONES = 2                                       # turnos vacíos seguidos (todo en «thinking») que se reintentan
 MAX_SEGUIR = 3                                          # en HASTA EL FINAL, cierres sin llamada seguidos que se reanudan
@@ -311,11 +329,111 @@ def _texto_del_razonamiento(pensado, maximo=2500):
     return texto if len(texto) >= 80 else ""
 
 
-class MotorLocal:
-    """Ollama con herramientas: el bucle de llamadas lo hace este script, contra el puente."""
+def clave_api(variable):
+    """Clave de la variable de entorno; si no está (el chat se abrió antes de crearla), la del registro de Windows."""
+    v = os.environ.get(variable, "").strip()
+    if v or os.name != "nt":
+        return v
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
+            return str(winreg.QueryValueEx(k, variable)[0]).strip()
+    except OSError:
+        return ""
 
-    def __init__(self, modelo):
-        self.modelo = modelo
+
+def modelo_api(api):
+    return os.environ.get(api["clave"].replace("_API_KEY", "_MODELO"), "").strip() or api["modelo"]
+
+
+def _espera_429(e, intento):
+    """Segundos que pide el servidor (Retry-After o retryDelay de Gemini); si no dice nada, 10, 20, 40…"""
+    try:
+        ra = e.headers.get("Retry-After")
+        if ra:
+            return min(120.0, float(ra))
+    except (TypeError, ValueError, AttributeError):
+        pass
+    try:
+        m = re.search(r'"retryDelay":\s*"(\d+(?:\.\d+)?)s"', getattr(e, "_cuerpo", "") or "")
+        if m:
+            return min(120.0, float(m.group(1)) + 1)
+    except (TypeError, ValueError):
+        pass
+    return min(120.0, 10.0 * 2 ** intento)
+
+
+def pedir_api(api, modelo, mensajes, herramientas, emitir):
+    """Una petición chat/completions. Devuelve (mensaje con role/content/tool_calls, tokens de entrada, de salida)."""
+    clave = clave_api(api["clave"])
+    if not clave:
+        raise RuntimeError(f"Falta la clave: crea la variable de entorno {api['clave']} con tu clave ({api['web']}).")
+    cuerpo = {"model": modelo, "messages": mensajes, "tools": herramientas}
+    datos = json.dumps(cuerpo).encode("utf-8")
+    for intento in range(6):
+        req = urllib.request.Request(api["url"], data=datos, headers={
+            "Content-Type": "application/json", "Authorization": f"Bearer {clave}",
+            "HTTP-Referer": "https://github.com/Az0te/astro-agente-repo", "X-Title": "AstroPilot"})
+        try:
+            with urllib.request.urlopen(req, timeout=900) as f:
+                r = json.loads(f.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as e:
+            try:
+                e._cuerpo = e.read().decode("utf-8", "replace")
+            except Exception:
+                e._cuerpo = ""
+            if e.code in (429, 500, 502, 503, 504) and intento < 5:
+                s = _espera_429(e, intento)
+                emitir({"tipo": "aviso", "texto": f"La API respondió {e.code} ({'límite de uso' if e.code == 429 else 'ocupada'}): "
+                                                  f"espero {s:.0f} s y reintento ({intento + 1} de 5)."})
+                time.sleep(s)
+                continue
+            raise RuntimeError(f"La API respondió {e.code}: {e._cuerpo[:600]}") from None
+    if r.get("error"):
+        raise RuntimeError(f"La API devolvió un error: {json.dumps(r['error'], ensure_ascii=False)[:600]}")
+    ch = (r.get("choices") or [{}])[0]
+    m = ch.get("message") or {}
+    u = r.get("usage") or {}
+    out = {"role": "assistant", "content": m.get("content") or ""}
+    if m.get("tool_calls"):
+        out["tool_calls"] = [{"id": t.get("id") or f"llamada_{i}", "type": "function",
+                              "function": {"name": (t.get("function") or {}).get("name", ""),
+                                           "arguments": (t.get("function") or {}).get("arguments") or "{}"}}
+                             for i, t in enumerate(m["tool_calls"])]
+    return out, int(u.get("prompt_tokens") or 0), int(u.get("completion_tokens") or 0)
+
+
+def mensaje_imagenes(nombre, rutas):
+    """Mensaje de usuario con las previas de un resultado (modelos con visión). None si no hay ninguna legible."""
+    partes = []
+    for p in rutas[:MAX_IMAGENES]:
+        try:
+            b = Path(p).read_bytes()
+        except OSError:
+            continue
+        partes.append({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,"
+                                                                 + __import__("base64").b64encode(b).decode("ascii")}})
+    if not partes:
+        return None
+    return {"role": "user", "_imagenes": True,
+            "content": [{"type": "text", "text": f"Previas que ha devuelto {nombre} (en el orden del resultado):"}] + partes}
+
+
+def _olvidar_imagenes(mensajes, guardar=2):
+    """Sólo los últimos 'guardar' mensajes de previas llevan las imágenes; los viejos se quedan en una línea."""
+    con = [m for m in mensajes if m.get("_imagenes") and isinstance(m.get("content"), list)]
+    for m in con[:-guardar]:
+        m["content"] = m["content"][0]["text"].replace("Previas que ha devuelto", "(Ya viste las previas de") + ")"
+
+
+class MotorLocal:
+    """Ollama con herramientas: el bucle de llamadas lo hace este script, contra el puente. Con 'api' (una entrada de
+    APIS), lo mismo contra una API compatible con OpenAI con clave (Gemini, OpenRouter, Groq, DeepSeek)."""
+
+    def __init__(self, modelo, api=None):
+        self.api = api
+        self.modelo = modelo_api(api) if api else modelo
         self.mensajes = []
         self.funcs = manifiesto()
         self.timeouts = {f["nombre"]: int(f.get("timeout_s", 120)) for f in self.funcs}
@@ -344,55 +462,72 @@ class MotorLocal:
                 emitir({"tipo": "aviso", "clave": "detenido"})
                 break
             herr = herramientas_ollama(self.funcs, internet)
-            estimado = _compactar(self.mensajes, limite=limite_historial(herr))
-            cuerpo = {"model": self.modelo, "messages": [{k: v for k, v in m.items() if not k.startswith("_")}
-                                                        for m in self.mensajes], "tools": herr,
-                      "stream": False, "options": {"num_ctx": 32768}}
-            if sin_pensar:                       # sólo en la petición que sigue a un empujón
-                cuerpo["think"] = False
-                sin_pensar = False
-            # Ollama responde 500 cuando no puede leer la llamada a herramienta que ha escrito el modelo (XML cortado:
-            # 11 nov 2026, IC 1396). Es esporádico: se repite hasta 3 veces y la última con un aviso de formato.
-            r = None
-            for intento in range(3):
-                if intento == 2:
-                    cuerpo["messages"] = cuerpo["messages"] + [{"role": "user", "content": "Tu última respuesta tenía una "
-                                                                "llamada a herramienta mal formada (cortada). Repite la misma llamada completa y bien formada."}]
-                req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(cuerpo).encode("utf-8"),
-                                             headers={"Content-Type": "application/json"})
-                try:
-                    with urllib.request.urlopen(req, timeout=1800) as f:
-                        r = json.loads(f.read().decode("utf-8"))
-                    break
-                except urllib.error.HTTPError as e:
-                    if e.code != 500 or intento == 2:
-                        raise
-                    emitir({"tipo": "aviso", "texto": f"Ollama devolvió 500 (llamada mal formada); reintento {intento + 1}"})
-                    time.sleep(2)
-            tok_in += int(r.get("prompt_eval_count") or 0)
-            tok_out += int(r.get("eval_count") or 0)
-            m = r.get("message", {})
-            llamadas = m.get("tool_calls") or []
-            if not llamadas and not (m.get("content") or "").strip():
-                # Turno mudo (14 nov 2026, M31 en SASpro con qwen38-32k): Ollama devuelve stop con content vacío, sin
-                # llamadas y miles de tokens en «thinking» (en bucle, o con la respuesta redactada ahí). En vez de cerrar
-                # el turno, hasta MAX_EMPUJONES empujones con think=false en la petición siguiente. El thinking no
-                # vuelve al historial (se comería el contexto).
-                pensado = (m.get("thinking") or "").strip() or ultimo_pensado   # tras think=false ya no llega
-                ultimo_pensado = pensado
-                if pensado and racha < MAX_EMPUJONES:
-                    empujones += 1
-                    racha += 1
-                    emitir({"tipo": "aviso", "texto": f"El modelo dejó el turno vacío (todo en el razonamiento): "
-                                                      f"empujón {racha} de {MAX_EMPUJONES}."})
-                    self.mensajes.append({"role": "user", "content": EMPUJON})
-                    sin_pensar = True
-                    continue
-                final = _texto_del_razonamiento(pensado)
-                if final:
-                    m = dict(m, content="(tomado del razonamiento)\n\n" + final)
-                else:
+            if self.api:
+                _olvidar_imagenes(self.mensajes)
+                _compactar(self.mensajes, limite=self.api["limite"])
+                m, ti, to = pedir_api(self.api, self.modelo, [{k: v for k, v in x.items() if not k.startswith("_")}
+                                                              for x in self.mensajes], herr, emitir)
+                tok_in += ti
+                tok_out += to
+                llamadas = m.get("tool_calls") or []
+                if not llamadas and not m["content"].strip():
+                    if racha < MAX_EMPUJONES:
+                        empujones += 1
+                        racha += 1
+                        emitir({"tipo": "aviso", "texto": f"El modelo dejó el turno vacío: empujón {racha} de {MAX_EMPUJONES}."})
+                        self.mensajes.append({"role": "user", "content": EMPUJON})
+                        continue
                     emitir({"tipo": "aviso", "texto": "El modelo no respondió (turno vacío)."})
+            else:
+                estimado = _compactar(self.mensajes, limite=limite_historial(herr))
+                cuerpo = {"model": self.modelo, "messages": [{k: v for k, v in m.items() if not k.startswith("_")}
+                                                            for m in self.mensajes], "tools": herr,
+                          "stream": False, "options": {"num_ctx": 32768}}
+                if sin_pensar:                       # sólo en la petición que sigue a un empujón
+                    cuerpo["think"] = False
+                    sin_pensar = False
+                # Ollama responde 500 cuando no puede leer la llamada a herramienta que ha escrito el modelo (XML cortado:
+                # 11 nov 2026, IC 1396). Es esporádico: se repite hasta 3 veces y la última con un aviso de formato.
+                r = None
+                for intento in range(3):
+                    if intento == 2:
+                        cuerpo["messages"] = cuerpo["messages"] + [{"role": "user", "content": "Tu última respuesta tenía una "
+                                                                    "llamada a herramienta mal formada (cortada). Repite la misma llamada completa y bien formada."}]
+                    req = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps(cuerpo).encode("utf-8"),
+                                                 headers={"Content-Type": "application/json"})
+                    try:
+                        with urllib.request.urlopen(req, timeout=1800) as f:
+                            r = json.loads(f.read().decode("utf-8"))
+                        break
+                    except urllib.error.HTTPError as e:
+                        if e.code != 500 or intento == 2:
+                            raise
+                        emitir({"tipo": "aviso", "texto": f"Ollama devolvió 500 (llamada mal formada); reintento {intento + 1}"})
+                        time.sleep(2)
+                tok_in += int(r.get("prompt_eval_count") or 0)
+                tok_out += int(r.get("eval_count") or 0)
+                m = r.get("message", {})
+                llamadas = m.get("tool_calls") or []
+                if not llamadas and not (m.get("content") or "").strip():
+                    # Turno mudo (14 nov 2026, M31 en SASpro con qwen38-32k): Ollama devuelve stop con content vacío, sin
+                    # llamadas y miles de tokens en «thinking» (en bucle, o con la respuesta redactada ahí). En vez de cerrar
+                    # el turno, hasta MAX_EMPUJONES empujones con think=false en la petición siguiente. El thinking no
+                    # vuelve al historial (se comería el contexto).
+                    pensado = (m.get("thinking") or "").strip() or ultimo_pensado   # tras think=false ya no llega
+                    ultimo_pensado = pensado
+                    if pensado and racha < MAX_EMPUJONES:
+                        empujones += 1
+                        racha += 1
+                        emitir({"tipo": "aviso", "texto": f"El modelo dejó el turno vacío (todo en el razonamiento): "
+                                                          f"empujón {racha} de {MAX_EMPUJONES}."})
+                        self.mensajes.append({"role": "user", "content": EMPUJON})
+                        sin_pensar = True
+                        continue
+                    final = _texto_del_razonamiento(pensado)
+                    if final:
+                        m = dict(m, content="(tomado del razonamiento)\n\n" + final)
+                    else:
+                        emitir({"tipo": "aviso", "texto": "El modelo no respondió (turno vacío)."})
             self.mensajes.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls")})
             if m.get("content") and (not llamadas or m["content"].strip()):
                 emitir({"tipo": "texto", "texto": m["content"]})
@@ -407,6 +542,7 @@ class MotorLocal:
                     continue
                 break
             racha, seguir = 0, 0
+            imagenes, i_asistente = [], len(self.mensajes) - 1
             for ll in llamadas:
                 if cancelado():                  # Detener corta entre una herramienta y la siguiente
                     break
@@ -435,10 +571,31 @@ class MotorLocal:
                 if nombre == "exportarFinal":
                     emitir({"tipo": "exportado", "carpeta": _carpeta_export(txt)})
                     exportado = exportado or res.get("estado") == "ok"
-                self.mensajes.append({"role": "tool", "tool_name": nombre,
-                                      "content": txt[:MAX_RESULTADO] + ("…" if len(txt) > MAX_RESULTADO else "")})
+                contenido = txt[:MAX_RESULTADO] + ("…" if len(txt) > MAX_RESULTADO else "")
+                if self.api:
+                    self.mensajes.append({"role": "tool", "tool_call_id": ll.get("id"), "name": nombre, "content": contenido})
+                    if self.api.get("vision") and res.get("estado") == "ok":
+                        imagenes += [p for p in re.findall(r'"([^"]+?\.jpe?g)"', txt.replace("\\\\", "\\"))
+                                     if p not in imagenes]
+                else:
+                    self.mensajes.append({"role": "tool", "tool_name": nombre, "content": contenido})
+            if self.api:
+                # Toda llamada necesita su respuesta (si no, la API rechaza la petición siguiente): las que Detener dejó
+                # sin hacer se contestan como canceladas. Las previas van después, en un mensaje de usuario aparte.
+                hechas = len([x for x in self.mensajes[i_asistente + 1:] if x.get("role") == "tool"])
+                for ll in llamadas[hechas:]:
+                    self.mensajes.append({"role": "tool", "tool_call_id": ll.get("id"),
+                                          "name": ll.get("function", {}).get("name", ""),
+                                          "content": "Cancelada por el usuario (Detener)."})
+                if imagenes:
+                    mi = mensaje_imagenes(", ".join(sorted({ll.get("function", {}).get("name", "") for ll in llamadas})),
+                                          imagenes)
+                    if mi:
+                        self.mensajes.append(mi)
         emitir({"tipo": "fin", "tokens_entrada": tok_in, "tokens_salida": tok_out, "coste": 0.0,
-                "segundos": round(time.time() - t0, 1), "contexto": _compactar(self.mensajes), "empujones": empujones})
+                "segundos": round(time.time() - t0, 1),
+                "contexto": _compactar(self.mensajes, limite=self.api["limite"] if self.api else LIMITE_TOKENS_LOCAL),
+                "empujones": empujones})
 
 
 class MotorClaude:
@@ -872,7 +1029,10 @@ class Ventana(QMainWindow):
         self.l_modelo = QLabel()
         self.modelo = QComboBox()
         locales = sorted(modelos_ollama(), key=lambda m: (not m.startswith(MODELO_LOCAL), m))
-        self.modelo.addItems(locales + [CLAUDE] if locales else [CLAUDE, MODELO_LOCAL])
+        self.modelo.addItems((locales + [CLAUDE] if locales else [CLAUDE, MODELO_LOCAL]) + list(APIS))
+        for i, (n, a) in enumerate(APIS.items()):
+            self.modelo.setItemData(self.modelo.findText(n), f"{modelo_api(a)} · clave en {a['clave']} ({a['web']})",
+                                    Qt.ItemDataRole.ToolTipRole)
         if self.ajustes.get("modelo") and self.modelo.findText(self.ajustes["modelo"]) >= 0:
             self.modelo.setCurrentText(self.ajustes["modelo"])
         self.modelo.currentTextChanged.connect(self.cambio_modelo)
@@ -1085,7 +1245,8 @@ class Ventana(QMainWindow):
     def motor_actual(self):
         nombre = self.modelo.currentText()
         if self.motor is None or getattr(self.motor, "_nombre", None) != nombre:
-            self.motor = MotorClaude() if nombre == CLAUDE else MotorLocal(nombre)
+            self.motor = (MotorClaude() if nombre == CLAUDE else MotorLocal(nombre, api=APIS[nombre]) if nombre in APIS
+                          else MotorLocal(nombre))
             self.motor._nombre = nombre
         return self.motor
 
