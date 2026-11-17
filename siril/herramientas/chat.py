@@ -448,9 +448,31 @@ class MotorClaude:
         self.sesion = None
         self.proc = None
         self.funcs = manifiesto()
+        self.carpetas = set()
 
     def limpiar(self):
         self.sesion = None
+        self.carpetas = set()
+
+    def carpetas_de_trabajo(self, texto):
+        """Carpetas donde Claude puede escribir (dossier, notas): la de la imagen cargada y las que nombra el usuario,
+        cada una con la de encima. Sin --add-dir y Write(…) el CLI pide permiso y en -p nadie lo da
+        (17 nov 2026: dossier de IC 1396 en D:\\…\\IC1396\\master rechazado)."""
+        candidatas = []
+        try:
+            f = (puente("imagen", timeout=3).get("resultado") or {}).get("fichero")
+            if f:
+                candidatas.append(Path(f).parent)
+        except Exception:
+            pass
+        for m in re.findall(r'[A-Za-z]:[\\/][^\s"\'«»<>|*?]+', texto or ""):
+            p = Path(m.rstrip(".,;:)"))
+            candidatas.append(p if p.is_dir() else p.parent)
+        for p in candidatas:
+            for d in (p, p.parent):
+                if len(d.anchor) and d != Path(d.anchor) and d.is_dir():
+                    self.carpetas.add(str(d.resolve()))
+        return sorted(self.carpetas)
 
     def detener(self):
         if self.proc and self.proc.poll() is None:
@@ -472,6 +494,11 @@ class MotorClaude:
         abs_posix = abs_posix[:1].lower() + abs_posix[1:]
         permitidas = (f"mcp__sirilastropilot,Read(~/.sirilastropilot/**),Read(//{abs_posix}/**)"
                       + (",WebSearch,WebFetch" if internet else ""))
+        carpetas = self.carpetas_de_trabajo(texto)
+        for c in carpetas:
+            r = Path(c).as_posix()
+            r = r[:1].lower() + r[2:] if r[1:2] == ":" else r.lstrip("/")
+            permitidas += f",Read(//{r}/**),Write(//{r}/**),Edit(//{r}/**)"
         # Con SKILL.md y el Anexo I el prompt pasa de 25 000 caracteres: por fichero, no en la línea de comandos
         # (Windows corta en 32 767).
         sistema = MINIS / "prompt_sistema.md"
@@ -479,6 +506,8 @@ class MotorClaude:
         cmd = [exe, "-p", texto, "--output-format", "stream-json", "--verbose", "--strict-mcp-config",
                "--mcp-config", str(cfg), "--allowedTools", permitidas, "--add-dir", str(datos),
                "--append-system-prompt-file", str(sistema)]
+        for c in carpetas:
+            cmd += ["--add-dir", c]
         if os.environ.get("SIRILASTROPILOT_CLAUDE_MODELO"):      # p. ej. «opus» para pruebas comparativas
             cmd += ["--model", os.environ["SIRILASTROPILOT_CLAUDE_MODELO"]]
         if self.sesion:

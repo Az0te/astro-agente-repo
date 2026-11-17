@@ -1435,6 +1435,35 @@ bool PiAstroPilotInterface::StartClaude( const String& prompt )
       }
    }
 
+   // Carpetas de las imágenes abiertas (y la de encima): ahí guarda Claude dossieres, notas y
+   // versiones. Sin esto, Write fuera de las carpetas añadidas pide permiso y en -p nadie lo concede
+   // (17 nov 2026: dossier de IC 1396 en D:\...\IC1396\master rechazado).
+   {
+      StringList vistas;
+      for ( const ImageWindow& w : ImageWindow::AllWindows() )
+      {
+         if ( w.IsNull() )
+            continue;
+         String f = w.FilePath();
+         if ( f.IsEmpty() )
+            continue;
+         String d = File::ExtractDrive( f ) + File::ExtractDirectory( f );
+         for ( int k = 0; k < 2 && !d.IsEmpty(); ++k )
+         {
+            while ( d.EndsWith( '/' ) || d.EndsWith( '\\' ) )
+               d.DeleteRight( d.Length() - 1 );
+            if ( d.Length() <= 3 )   // nunca la raíz de una unidad
+               break;
+            if ( File::DirectoryExists( d ) && !vistas.Contains( d ) )
+            {
+               vistas << d;
+               args << "--add-dir" << d;
+            }
+            d = File::ExtractDrive( d ) + File::ExtractDirectory( d );
+         }
+      }
+   }
+
    // Configuración MCP propia de PiAstroPilot: así Claude Code ve los servidores
    // aunque no estén registrados en su configuración de usuario. Se reescribe en
    // cada uso con el servidor piastropilot (el antiguo, pixinsight, se retiró en la build 100).
