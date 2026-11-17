@@ -71,8 +71,19 @@ function pxPrevia(viewId, nombre, o) {
         enl = Math.max.apply(null, m) / Math.min.apply(null, m) < 1.25;
       } else enl = true;
     }
-    return pprPrevia(viewId, { fichero: f, lado: o.lado || 640, estirar: o.estirar, enlazado: enl }).fichero;
+    var res = pprPrevia(viewId, { fichero: f, lado: o.lado || 640, estirar: o.estirar, enlazado: enl, stf: o.stf, rect: o.rect });
+    if (o.devolverStf) return res;   // { fichero, stf } para estirar los candidatos igual
+    return res.fichero;
   } catch (e) { return null; }
+}
+
+// Previa de la imagen de partida y su estirado, para que las de los candidatos usen el mismo (pxPrevia con o.stf):
+// las diferencias de gradiente, ruido o deconvolución sólo se ven a ojo con el mismo estirado. Devuelve
+// { previa, stf } o null.
+function pxPreviaReferencia(viewId, nombre, o) {
+  o = o || {};
+  var r = pxPrevia(viewId, nombre, { lado: o.lado, rect: o.rect, estirar: o.estirar, devolverStf: true });
+  return r && r.fichero ? { previa: r.fichero, stf: r.stf } : null;
 }
 
 // Asigna filtros RGB (y gris, en SPFC) y QE por nombre; o modo banda estrecha con [longitud de onda, ancho].

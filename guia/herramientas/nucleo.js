@@ -315,6 +315,17 @@ function comprimirNucleo(viewId, o) {
 // 8 nov 2026: comparar siempre). Gana, entre los que cumplen, el que deja menos meseta y, a igualdad, el que menos
 // aplana el bulbo. La elegida queda como nuevaVista (<vista>_nucleo); la otra se cierra (cerrar: false para conservarla).
 //   var r = nucleoCandidatos("Starless_st", { exponentes: [0.6, 0.4], nuevaVista: "Starless_hdr" });
+// Recorte al 100 % (600×600) centrado en el núcleo: la meseta, los anillos y el color del núcleo sólo se juzgan así
+// (17 nov 2026: todas las opciones con su previa para compararlas a ojo).
+function nuPreviaNucleo(id, meseta) {
+  if (typeof PIASTROPILOT_PREVIAS !== "string" || !PIASTROPILOT_PREVIAS || typeof pprPrevia !== "function" || !meseta || !meseta.centro) return null;
+  try {
+    var im = View.viewById(id).image, L = Math.min(600, im.width, im.height);
+    var x0 = Math.max(0, Math.min(im.width - L, meseta.centro[0] - L / 2)), y0 = Math.max(0, Math.min(im.height - L, meseta.centro[1] - L / 2));
+    return pprPrevia(id, { fichero: PIASTROPILOT_PREVIAS + "/nuc100_" + id + ".jpg", lado: L, rect: [x0, y0, x0 + L, y0 + L], estirar: false }).fichero;
+  } catch (e) { return null; }
+}
+
 function nucleoCandidatos(viewId, o) {
   viewId = nuId(viewId); o = o || {};
   var t0 = Date.now(), cands = [], pruebas = [{ etiqueta: "HDRMT " + (o.capas || 7) + " capas", op: { metodo: "hdrmt" }, suf: "_nuc_hdrmt" }];
@@ -328,10 +339,16 @@ function nucleoCandidatos(viewId, o) {
     op.nuevaVista = viewId + p.suf;
     try {
       var rn = comprimirNucleo(viewId, op);
-      cands.push({ etiqueta: p.etiqueta, r: rn, previa: rn.vista && typeof pxPrevia === "function" ? pxPrevia(rn.vista, "nuc_" + rn.vista, { estirar: false }) : null });
+      cands.push({ etiqueta: p.etiqueta, r: rn, previa: rn.vista && typeof pxPrevia === "function" ? pxPrevia(rn.vista, "nuc_" + rn.vista, { estirar: false }) : null,
+                   previa_recorte: rn.vista ? nuPreviaNucleo(rn.vista, rn.meseta_antes) : null });
     }
     catch (e) { cands.push({ etiqueta: p.etiqueta, error: String(e && e.message ? e.message : e) }); }
   });
+  // La original, con las mismas previas, delante (también es la opción «sin comprimir»).
+  var m0c = cands.filter(function (c) { return c.r && c.r.meseta_antes; })[0];
+  var original = { metodo: "Original (sin comprimir)",
+                   previa: typeof pxPrevia === "function" ? pxPrevia(viewId, "nuc_" + viewId + "_original", { estirar: false }) : null,
+                   previa_recorte: m0c ? nuPreviaNucleo(viewId, m0c.r.meseta_antes) : null };
   var conVista = cands.filter(function (c) { return c.r && c.r.aplicado; });
   if (!conVista.length) {
     var r0 = cands.filter(function (c) { return c.r; })[0];
@@ -355,8 +372,9 @@ function nucleoCandidatos(viewId, o) {
     var sat0 = best.r.saturacion_nucleo ? best.r.saturacion_nucleo.antes : null;
     return {
       vista: viewId, original: viewId, aplicado: false, recomendado: "sin comprimir",
-      comparados: cands.map(function (c) { return c.r ? { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null, cumple: !c.r.no_cumple.length, elegido: false } : { metodo: c.etiqueta, error: c.error }; })
-        .concat([{ metodo: "sin comprimir", meseta_px: m0, elegido: true }]),
+      comparados: [{ metodo: "sin comprimir (original)", meseta_px: m0, elegido: true, previa: original.previa || undefined, previa_recorte: original.previa_recorte || undefined }]
+        .concat(cands.map(function (c) { return c.r ? { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null, cumple: !c.r.no_cumple.length, elegido: false,
+                                                           previa: c.previa || undefined, previa_recorte: c.previa_recorte || undefined } : { metodo: c.etiqueta, error: c.error }; })),
       meseta_antes: best.r.meseta_antes,
       motivo: "La original no está quemada (meseta " + m0 + " px) y todas las compresiones crean meseta (la mejor " + best.r.meseta_despues.radio_px +
               " px): no se comprime; se sigue con " + viewId + ".",
@@ -376,13 +394,14 @@ function nucleoCandidatos(viewId, o) {
   });
   return {
     vista: vista, original: viewId, aplicado: true,
-    comparados: cands.map(function (c) {
+    comparados: [{ metodo: original.metodo, meseta_px: best.r.meseta_antes ? best.r.meseta_antes.radio_px : null,
+                   previa: original.previa || undefined, previa_recorte: original.previa_recorte || undefined }].concat(cands.map(function (c) {
       if (!c.r) return { metodo: c.etiqueta, error: c.error, elegido: false };
       return { metodo: c.etiqueta, meseta_px: c.r.meseta_despues ? c.r.meseta_despues.radio_px : null,
                bulbo_baja_pct: c.r.brillo_bulbo ? c.r.brillo_bulbo.baja_pct : null, anillos_nuevos: c.r.anillos_nuevos_px ? c.r.anillos_nuevos_px.length : null,
                textura_nucleo_x: c.r.textura_nucleo_x, saturacion_nucleo: c.r.saturacion_nucleo ? c.r.saturacion_nucleo.despues : null,
-               cumple: !c.r.no_cumple.length, elegido: c === best, previa: c.previa || undefined };
-    }),
+               cumple: !c.r.no_cumple.length, elegido: c === best, previa: c.previa || undefined, previa_recorte: c.previa_recorte || undefined };
+    })),
     recomendado: best.etiqueta, meseta_antes: best.r.meseta_antes, meseta_despues: best.r.meseta_despues,
     motivo: best.etiqueta + (best.r.no_cumple.length ? ": ninguno cumple; es el de menos avisos." :
             ": deja la meseta en " + best.r.meseta_despues.radio_px + " px y el bulbo baja un " + best.r.brillo_bulbo.baja_pct + " %."),

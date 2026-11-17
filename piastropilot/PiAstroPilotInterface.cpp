@@ -1022,9 +1022,16 @@ static void CollectGuidePreviews( const JsonValue& o, std::vector<std::pair<Stri
          seen << mod;
          imgs.push_back( { Tr( u"Gradiente quitado (modelo)" ), mod } );
       }
+      // Recorte al 100 % (nitidez, núcleo): como en Lite, al lado de la previa.
+      String rec = o["previa_recorte"].type == JsonValue::Str ? o["previa_recorte"].s : String();
+      if ( !rec.IsEmpty() && !seen.Contains( rec ) && File::Exists( rec ) )
+      {
+         seen << rec;
+         imgs.push_back( { Tr( u"Recorte al 100 %" ), rec } );
+      }
    }
    for ( const auto& kv : o.o )
-      if ( kv.first != "previa" && kv.first != "previa_modelo" && kv.first != "jpg" )
+      if ( kv.first != "previa" && kv.first != "previa_modelo" && kv.first != "previa_recorte" && kv.first != "jpg" )
          CollectGuidePreviews( kv.second, imgs, seen );
 }
 
@@ -1840,7 +1847,9 @@ void PiAstroPilotInterface::ParseClaudeStream( bool final )
 // Imágenes (.jpg/.png) que existen y aparecen con ruta absoluta en un texto: la respuesta del modelo y, en Claude y
 // Codex, toda la salida del trabajo (rutas de los scripts, de los resultados y de los Read). Así se ven en el chat las
 // previas que el agente crea con sus herramientas (Rafael, 6 nov 2026: le pedía previas de paletas y no aparecían).
-static std::vector<std::pair<String, String>> ImagesInText( const IsoString& utf8, size_type maxImages = 12 )
+// 48 y no 12 (17 nov 2026): un gradiente con 11 candidatos da 23 miniaturas (original + corregida y gradiente quitado de
+// cada uno) y se cortaban; todas las opciones tienen que verse para compararlas.
+static std::vector<std::pair<String, String>> ImagesInText( const IsoString& utf8, size_type maxImages = 48 )
 {
    std::vector<std::pair<String, String>> out;
    std::string s( utf8.c_str() );
@@ -1873,10 +1882,17 @@ static std::vector<std::pair<String, String>> ImagesInText( const IsoString& utf
          continue;
       out.push_back( { File::ExtractNameAndExtension( path ), path } );
    }
-   // La plancha (si la hay) delante.
-   std::stable_partition( out.begin(), out.end(), []( const std::pair<String, String>& a )
-                          { return a.first.Lowercase().Contains( u"plancha" ); } );
-   return out;
+   // La plancha (si la hay) delante. Por copia y no con stable_partition: mueve Strings de PCL y una movida queda con datos
+   // nulos (Access violation al reasignarla, 17 nov 2026).
+   std::vector<std::pair<String, String>> ordered;
+   ordered.reserve( out.size() );
+   for ( const auto& a : out )
+      if ( a.first.Lowercase().Contains( u"plancha" ) )
+         ordered.push_back( a );
+   for ( const auto& a : out )
+      if ( !a.first.Lowercase().Contains( u"plancha" ) )
+         ordered.push_back( a );
+   return ordered;
 }
 
 void PiAstroPilotInterface::FinishJob( const String& response, bool error )

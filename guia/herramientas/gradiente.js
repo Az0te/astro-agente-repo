@@ -868,9 +868,20 @@ function gradienteCandidatos(viewId, o) {
     try { r.diagnostico_manchas = diagnosticoManchas(r.recomendado, { bin: bin, mascara: o.mascara }); }
     catch (e) { r.errores.push("Diagnóstico de manchas: " + e); }
   }
-  // Miniaturas para el chat: la corregida (con STF) y, al lado, el modelo de gradiente quitado.
+  // Miniaturas para el chat: la original y cada corregida con el MISMO estirado (el de la original), y al lado el
+  // gradiente quitado de cada una, todos los modelos también con un mismo estirado (17 nov 2026: con un STF por
+  // previa las diferencias no se veían; y con varias capas los nombres «grad_GC_POLY2» de una pisaban los de otra).
+  var pref = "grad_" + viewId + "_";
+  var refPrev = pxPreviaReferencia(viewId, pref + "original");
+  if (refPrev) r.previa_original = refPrev.previa;
+  var stfModelos = null;
   r.candidatos.forEach(function (c) {
-    var p = pxPrevia(c.vista, "grad_" + c.vista), pm = pxPrevia(c.modelo, "grad_" + c.modelo);
+    var p = pxPrevia(c.vista, pref + c.vista, { stf: refPrev ? refPrev.stf : undefined });
+    var pm = null;
+    if (c.modelo) {
+      if (!stfModelos) { var rm = pxPrevia(c.modelo, pref + c.modelo, { devolverStf: true }); if (rm) { pm = rm.fichero; stfModelos = rm.stf; } }
+      else pm = pxPrevia(c.modelo, pref + c.modelo, { stf: stfModelos });
+    }
     if (p) c.previa = p;
     if (pm) c.previa_modelo = pm;
     if (c.vista === r.recomendado) c.elegido = true;
@@ -980,6 +991,8 @@ function grCompactar(g, o) {
              come_objeto_pct: come, corr: corr, elegido: c === best,
              previa: c.previa, previa_modelo: c.previa_modelo };
   });
+  // La original delante, con el mismo estirado que las corregidas, para comparar.
+  if (g.previa_original) g.comparados.unshift({ metodo: "Original (sin corregir)", previa: g.previa_original });
   g.compacto = true;
   g.corregida = keep;
   g.recomendado = keep;

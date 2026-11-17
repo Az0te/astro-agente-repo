@@ -131,20 +131,80 @@ def _asegurar_restaurado(siril, crudo, huella, r):
     r.setdefault("errores", []).append("La imagen no ha vuelto a como estaba tras la comparación: abre de nuevo la de partida.")
 
 
-def _galeria(r, info, base, modo=None, lado=800):
-    """Miniaturas de cada candidato junto a su .npy: el resultado (<id>.jpg, autoestirado por canal si es lineal) y lo
-    que quita (<id>_quita.jpg). modo: 'modelo' (gradiente), 'estrellas', 'diferencia' (ruido, contraste, saturación) o
-    None. Marca el recomendado. Si algo falla, la comparación sigue sin galería."""
+def _params_estirado(q, objetivo=0.25, sombras=-2.8):
+    """Punto negro y tonos medios por canal de _autoestirar, para aplicar el MISMO estirado a varias imágenes."""
+    ps = []
+    for c in range(q.shape[0]):
+        x = q[c]
+        med = float(np.median(x))
+        mad = 1.4826 * float(np.median(np.abs(x - med)))
+        c0 = min(max(0.0, med + sombras * mad), 0.99)
+        mn = (med - c0) / (1 - c0)
+        ps.append((c0, float(_mtf(objetivo, np.float64(mn))) if mn > 0 else 0.5))
+    return ps
+
+
+def _estirar_con(q, ps):
+    out = np.empty_like(q, dtype=np.float32)
+    for c in range(q.shape[0]):
+        c0, m = ps[min(c, len(ps) - 1)]
+        out[c] = _mtf(m, np.clip((q[c] - c0) / (1 - c0), 0, 1))
+    return out
+
+
+def _galeria(r, info, base, modo=None, lado=800, original=True):
+    """Miniaturas de cada candidato junto a su .npy: el resultado (<id>.jpg) y lo que quita (<id>_quita.jpg), más la
+    imagen de partida (r["original"]). Si es lineal, TODAS con el mismo estirado (el de la de partida; en gradiente y
+    estrellas, el del recomendado, porque la de partida tiene otro fondo) para que las diferencias se vean de verdad.
+    modo: 'modelo' (gradiente), 'estrellas', 'diferencia' (ruido, contraste, saturación, núcleo: añade un recorte al
+    100 % del centro, previa_recorte) o None. Marca el recomendado. Si algo falla, la comparación sigue sin galería."""
     paso = max(1, int(np.ceil(max(info["alto"], info["ancho"]) / lado)))
-    b = base[:, ::paso, ::paso]
-    for c in r.get("candidatos", []):
+    b = base[:, ::paso, ::paso].astype(np.float32)
+    cands = r.get("candidatos", [])
+    lineal = _lineal(b)
+    zona = None
+    if modo == "diferencia":
+        h, w = base.shape[1], base.shape[2]
+        y0, x0 = max(0, h // 2 - 300), max(0, w // 2 - 300)
+        zona = (slice(y0, y0 + 600), slice(x0, x0 + 600))
+    ps = ps_orig = None
+    grupo = cands[0]['id'].rsplit('_', 1)[0] if cands and cands[0].get('id') else 'galeria'
+    try:
+        if lineal:
+            ps_orig = _params_estirado(b)
+        if not original:                        # paletas: la de partida no es comparable
+            raise StopIteration
+            ps = ps_orig
+            if modo in ("modelo", "estrellas") and cands:
+                ref = next((c for c in cands if c.get("id") == r.get("recomendado")), cands[0])
+                qr = _pantalla(np.load(TRABAJO / f"{ref['id']}.npy", mmap_mode="r"), info)[:, ::paso, ::paso].astype(np.float32)
+                ps = _params_estirado(qr)
+        ver = (lambda q, p: _estirar_con(q, p)) if lineal else (lambda q, p: q)
+        o = {"metodo": "Original (de partida)", "previa": _jpg(ver(b, ps_orig), TRABAJO / f"{grupo}_original.jpg")}
+        if zona:
+            o["previa_recorte"] = _jpg(ver(base[:, zona[0], zona[1]].astype(np.float32), ps_orig),
+                                       TRABAJO / f"{grupo}_original_100.jpg")
+        r["original"] = o
+    except StopIteration:
+        pass
+    except Exception as e:
+        r["original_error"] = str(e)[:120]
+    escala_modelo = None
+    for c in cands:
         try:
-            q = _pantalla(np.load(TRABAJO / f"{c['id']}.npy", mmap_mode="r"), info)[:, ::paso, ::paso].astype(np.float32)
-            c["previa"] = _jpg(_autoestirar(q) if _lineal(q) else q, TRABAJO / f"{c['id']}.jpg")
+            completo = _pantalla(np.load(TRABAJO / f"{c['id']}.npy", mmap_mode="r"), info)
+            q = completo[:, ::paso, ::paso].astype(np.float32)
+            lin = _lineal(q)                    # tras estirar, los candidatos ya no son lineales: se ven tal cual
+            c["previa"] = _jpg(_estirar_con(q, ps) if (ps and lin) else (_autoestirar(q) if lin else q), TRABAJO / f"{c['id']}.jpg")
+            if zona:
+                z = completo[:, zona[0], zona[1]].astype(np.float32)
+                c["previa_recorte"] = _jpg(_estirar_con(z, ps_orig) if (ps_orig and lin) else z, TRABAJO / f"{c['id']}_100.jpg")
             if modo:
                 d = b - q
-                if modo == "modelo":            # el fondo restado, estirado para verlo
-                    lo, hi = np.percentile(d, 1, axis=(1, 2), keepdims=True), np.percentile(d, 99, axis=(1, 2), keepdims=True)
+                if modo == "modelo":            # el fondo restado, con la misma escala en todos para comparar cuánto quita
+                    if escala_modelo is None:
+                        escala_modelo = (np.percentile(d, 1, axis=(1, 2), keepdims=True), np.percentile(d, 99, axis=(1, 2), keepdims=True))
+                    lo, hi = escala_modelo
                     v = (d - lo) / np.maximum(hi - lo, 1e-9)
                 elif modo == "estrellas":
                     v = _autoestirar(np.clip(d, 0, 1), objetivo=0.08)
@@ -2988,7 +3048,7 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
             r["aviso_masters"] = aviso + " (El RGB de banda ancha puede entrar después, para las estrellas.)"
     except Exception:
         pass
-    _galeria(r, info, p, None)
+    _galeria(r, info, p, None, original=False)
     return r
 
 

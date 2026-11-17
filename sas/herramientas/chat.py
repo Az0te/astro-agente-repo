@@ -225,7 +225,9 @@ def _galeria_de(txt):
     if not o or not isinstance(o.get("candidatos"), list):
         return None
     cs = [c for c in o["candidatos"] if isinstance(c, dict) and c.get("id")]
-    return {"candidatos": cs, "recomendado": o.get("recomendado"), "motivo": o.get("motivo")} if any(c.get("previa") for c in cs) else None
+    return ({"candidatos": cs, "recomendado": o.get("recomendado"), "motivo": o.get("motivo"),
+             "original": o.get("original") if isinstance(o.get("original"), dict) else None}
+            if any(c.get("previa") for c in cs) else None)
 
 
 def _resumir(txt, n=450):
@@ -1195,9 +1197,18 @@ class Ventana(QMainWindow):
     def poner_galeria(self, g):
         c = COLORES[TEMA["t"]]
         filas = []
+        orig = g.get("original") or {}
+        oimgs = ""
+        for clave in ("previa", "previa_recorte"):
+            p = orig.get(clave)
+            if p and os.path.isfile(p):
+                u = self.copia_mini(p)
+                oimgs += f'<a href="{u}"><img src="{u}" width="220"></a> '
+        if oimgs:
+            filas.append(f'<tr><td>{oimgs}</td><td><b>{html.escape(str(orig.get("metodo", "Original")))}</b></td></tr>')
         for cand in g["candidatos"]:
             imgs = ""
-            for clave in ("previa", "previa_quita"):
+            for clave in ("previa", "previa_quita", "previa_recorte"):
                 p = cand.get(clave)
                 if p and os.path.isfile(p):
                     u = self.copia_mini(p)

@@ -916,18 +916,76 @@ def _cargar_candidato(cid):
     return np.load(fn), json.loads(fj.read_text(encoding="utf-8"))
 
 
-def _galeria(r, base_p, modo=None, lado=800):
-    """Miniaturas de cada candidato (<id>.jpg) y de lo que quita (<id>_quita.jpg)."""
-    b = _reducir(base_p, lado)
-    for c in r.get("candidatos", []):
+def _params_estirado(q, objetivo=0.25, sombras=-2.8):
+    """Punto negro y tonos medios por canal (como el autoestirado), para aplicar el MISMO estirado a varias imágenes.
+    Sin fondo medible (capa de solo estrellas) queda en identidad."""
+    ps = []
+    for c in range(q.shape[0]):
+        x = np.asarray(q[c], dtype=np.float32)
+        med = float(np.median(x))
+        mad = 1.4826 * float(np.median(np.abs(x - med)))
+        c0 = min(max(0.0, med + sombras * mad), 0.99)
+        mn = (med - c0) / (1 - c0)
+        ps.append((c0, float(M.mtf(objetivo, np.float64(mn))) if mn > 0 else 0.5))
+    return ps
+
+
+def _estirar_con(q, ps):
+    out = np.empty(q.shape, dtype=np.float32)
+    for c in range(q.shape[0]):
+        c0, m = ps[min(c, len(ps) - 1)]
+        out[c] = M.mtf(m, np.clip((np.asarray(q[c], dtype=np.float32) - c0) / (1 - c0), 0, 1))
+    return out
+
+
+def _galeria(r, base_p, modo=None, lado=800, original=True):
+    """Miniaturas de cada candidato (<id>.jpg) y de lo que quita (<id>_quita.jpg), más la imagen de partida
+    (r["original"]). Si es lineal, TODAS con el mismo estirado (el de la de partida; en gradiente, el del recomendado,
+    porque la de partida tiene otro fondo) para que las diferencias se vean de verdad. Con modo 'diferencia' (ruido,
+    nitidez, deconvolución, núcleo, contraste) añade un recorte al 100 % del centro (previa_recorte)."""
+    b = _reducir(base_p, lado).astype(np.float32)
+    cands = r.get("candidatos", [])
+    lineal = M.lineal(b)
+    zona = None
+    if modo == "diferencia":
+        h, w = base_p.shape[1], base_p.shape[2]
+        y0, x0 = max(0, h // 2 - 300), max(0, w // 2 - 300)
+        zona = (slice(y0, y0 + 600), slice(x0, x0 + 600))
+    grupo = cands[0]["id"].rsplit("_", 1)[0] if cands and cands[0].get("id") else "galeria"
+    ps = ps_orig = None
+    try:
+        if lineal:
+            ps_orig = ps = _params_estirado(b)
+            if modo == "modelo" and cands:
+                ref = next((c for c in cands if c.get("id") == r.get("recomendado")), cands[0])
+                ps = _params_estirado(_reducir(_p(np.load(TRABAJO / f"{ref['id']}.npy", mmap_mode="r")), lado))
+        if original:                            # en paletas la de partida no es comparable
+            ver = (lambda q: _estirar_con(q, ps_orig)) if lineal else (lambda q: q)
+            o = {"metodo": "Original (de partida)", "previa": _jpg(ver(b), TRABAJO / f"{grupo}_original.jpg", 85)}
+            if zona:
+                o["previa_recorte"] = _jpg(ver(np.asarray(base_p[:, zona[0], zona[1]], dtype=np.float32)),
+                                           TRABAJO / f"{grupo}_original_100.jpg", 90)
+            r["original"] = o
+    except Exception as e:
+        r["original_error"] = str(e)[:120]
+    escala_modelo = None
+    for c in cands:
         try:
-            q = _reducir(_p(np.load(TRABAJO / f"{c['id']}.npy", mmap_mode="r")), lado)
-            c["previa"] = _jpg(M.autoestirar(q) if M.lineal(q) else q, TRABAJO / f"{c['id']}.jpg", 85)
+            completo = _p(np.load(TRABAJO / f"{c['id']}.npy", mmap_mode="r"))
+            q = _reducir(completo, lado)
+            lin = M.lineal(q)                   # tras estirar, los candidatos ya no son lineales: se ven tal cual
+            c["previa"] = _jpg(_estirar_con(q, ps) if (ps and lin) else (M.autoestirar(q) if lin else q),
+                               TRABAJO / f"{c['id']}.jpg", 85)
+            if zona:
+                z = np.asarray(completo[:, zona[0], zona[1]], dtype=np.float32)
+                c["previa_recorte"] = _jpg(_estirar_con(z, ps_orig) if (ps_orig and lin) else z, TRABAJO / f"{c['id']}_100.jpg", 90)
             if modo:
                 dlt = b - q
-                if modo == "modelo":
-                    lo = np.percentile(dlt, 1, axis=(1, 2), keepdims=True)
-                    hi = np.percentile(dlt, 99, axis=(1, 2), keepdims=True)
+                if modo == "modelo":            # misma escala en todos para comparar cuánto quita cada uno
+                    if escala_modelo is None:
+                        escala_modelo = (np.percentile(dlt, 1, axis=(1, 2), keepdims=True),
+                                         np.percentile(dlt, 99, axis=(1, 2), keepdims=True))
+                    lo, hi = escala_modelo
                     v = (dlt - lo) / np.maximum(hi - lo, 1e-9)
                 else:
                     s = 1.4826 * float(np.median(np.abs(dlt - np.median(dlt)))) or 1e-6

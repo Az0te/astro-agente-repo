@@ -436,6 +436,11 @@ function ruidoCandidatos(viewId, o) {
     base = wr.mainView.id;
   }
   var cands = [];
+  // Previas al 100 % (600×600 del centro de lo que se compara) con el mismo estirado que la original: reducidas a 640 px
+  // el ruido no se veía y con un STF por candidato tampoco las diferencias (17 nov 2026).
+  var bimg = View.viewById(base).image, lz = Math.min(600, bimg.width, bimg.height);
+  var zx = Math.round((bimg.width - lz) / 2), zy = Math.round((bimg.height - lz) / 2), zona = [zx, zy, zx + lz, zy + lz];
+  var refPrev = pxPreviaReferencia(base, "ruido_" + base + "_original", { rect: zona, lado: lz });
   pruebas.forEach(function (p, n) {
     var op = {};
     for (var k in o) if (["metodos", "niveles", "tgv", "nuevaVista", "cerrar", "principal", "recorte", "recorteMP", "ladoRecorte"].indexOf(k) < 0) op[k] = o[k];
@@ -446,7 +451,7 @@ function ruidoCandidatos(viewId, o) {
     try {
       var rr = reducirRuido(base, op);
       cands.push({ etiqueta: p.etiqueta, orden: n, r: rr, op: p.opCompleta, segundos: Math.round((Date.now() - t1) / 1000),
-                   previa: pxPrevia(rr.vista, "ruido_" + rr.vista) });
+                   previa: pxPrevia(rr.vista, "ruido_" + rr.vista, { rect: zona, lado: lz, stf: refPrev ? refPrev.stf : undefined }) });
     }
     catch (e) { cands.push({ etiqueta: p.etiqueta, orden: n, error: String(e && e.message ? e.message : e) }); }
   });
@@ -477,6 +482,7 @@ function ruidoCandidatos(viewId, o) {
              cumple: !c.r.no_cumple.length, no_cumple: c.r.no_cumple.length ? c.r.no_cumple : undefined, aviso: c.r.aviso || undefined,
              parametros: c.r.parametros && c.r.parametros.aplicado ? c.r.parametros.aplicado : undefined, segundos: c.segundos, elegido: c === best, previa: c.previa || undefined };
   });
+  if (refPrev) comparados.unshift({ metodo: "Original (sin reducir ruido)", previa: refPrev.previa });
   var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn"), vista = null, completa = null;
   cands.forEach(function (c) {
     if (!c.r) return;

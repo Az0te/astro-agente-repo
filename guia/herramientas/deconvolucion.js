@@ -185,6 +185,11 @@ function bxtCandidatos(viewId, o) {
   var R = dcCropRect(v, o.recorte || 1500), t0 = Date.now();
   var CR = new Rect(0, 0, R.width, R.height);
   var w0 = dcCropWindow(v, R, "BXTc_original"), base = dcMeasure(w0.mainView, CR);
+  // Previas al 100 % (600×600 del centro del recorte) con el mismo estirado que la original: los gusanos y el detalle
+  // sólo se comparan a ojo así (17 nov 2026: bxtCandidatos no enseñaba ninguna).
+  var lz = Math.min(600, R.width, R.height), zx = Math.round((R.width - lz) / 2), zy = Math.round((R.height - lz) / 2);
+  var zona = [zx, zy, zx + lz, zy + lz], prefP = "bxt_" + viewId + "_";
+  var refPrev = pxPreviaReferencia(w0.mainView.id, prefP + "original", { rect: zona, lado: lz });
   // Referencia con nonstellar 0: gusanos y contraste se miden respecto a ella, para aislar el efecto del nonstellar
   // (frente a la original, el cambio lo dominan las estrellas y el correct only).
   var wr = dcCropWindow(v, R, "BXTc_ref0");
@@ -197,10 +202,12 @@ function bxtCandidatos(viewId, o) {
     var w = dcCropWindow(v, R, id);
     dcBXT(w.mainView, stars, nsList[i], halos);
     var m = dcMeasure(w.mainView, CR, base);
-    variantes.push({ vista: id, nonstellar: nsList[i], stars: stars, halos: halos,
+    variantes.push({ vista: id, metodo: "BXT nonstellar " + nsList[i] + ", stars " + stars, nonstellar: nsList[i], stars: stars, halos: halos,
                      fwhm_px: m.fwhm_px, ringing: m.ringing,
                      gusanos: ref.hf.fondo > 0 ? +(m.hf.fondo / ref.hf.fondo).toFixed(3) : null,
                      contraste: ref.hf.objeto > 0 ? +(m.hf.objeto / ref.hf.objeto).toFixed(3) : null });
+    var pv = pxPrevia(id, prefP + id, { rect: zona, lado: lz, stf: refPrev ? refPrev.stf : undefined });
+    if (pv) variantes[variantes.length - 1].previa = pv;
     if (!o.dejarRecortes) w.forceClose();
   }
   if (!o.dejarRecortes) w0.forceClose();
@@ -212,6 +219,8 @@ function bxtCandidatos(viewId, o) {
   var motivo = rec ? "nonstellar más alto sin ringing y sin textura nueva en el fondo" :
                      "todas tienen ringing o gusanos: se recomienda el valor más bajo y revisar a ojo";
   if (!rec) rec = variantes[0];
+  variantes.forEach(function (c) { if (c === rec) c.elegido = true; });
+  if (refPrev) variantes.unshift({ vista: "BXTc_original", metodo: "Original (sin BXT)", previa: refPrev.previa });
   return {
     original: viewId, recorte: [R.left, R.top, R.width, R.height], tipo: o.tipo || "nebulosa",
     sin_bxt: { fwhm_px: base.fwhm_px, estrellas_medidas: base.estrellas, ringing: base.ringing },

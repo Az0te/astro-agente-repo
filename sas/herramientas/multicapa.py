@@ -1000,7 +1000,7 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     aviso = _aviso_sin_usar([_fuente(ctx, ha), _fuente(ctx, oiii), _fuente(ctx, sii), _fuente(ctx, hb)])
     if aviso:
         r["aviso_masters"] = aviso + " (El RGB de banda ancha puede entrar después, para las estrellas.)"
-    return H._galeria(r, H._p(d.image))
+    return H._galeria(r, H._p(d.image), original=False)
 
 
 # --- L6: composición HDR con tomas cortas (alternativa propia de la ficha) ----------------------------------

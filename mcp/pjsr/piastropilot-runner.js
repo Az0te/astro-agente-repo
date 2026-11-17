@@ -257,6 +257,12 @@ function pprPrevia(id, o) {
          var a = (c0[0] + c0[1] + c0[2]) / 3, b = (mid[0] + mid[1] + mid[2]) / 3;
          c0 = [a, a, a]; mid = [b, b, b];
       }
+      // o.stf = { c0, mid } de otra previa: el MISMO estirado para comparar candidatos a ojo (17 nov 2026; con un STF
+      // automático por candidato las diferencias de gradiente o de ruido se igualaban y no se veían).
+      if (o.stf && o.stf.c0 && o.stf.mid && o.stf.c0.length >= nc) {
+         estirar = true; c0 = o.stf.c0.slice(0, nc); mid = o.stf.mid.slice(0, nc);
+         while (c0.length < 3) { c0.push(c0[0]); mid.push(mid[0]); }
+      }
       var HT = new HistogramTransformation, H = [[0, 0.5, 1, 0, 1], [0, 0.5, 1, 0, 1], [0, 0.5, 1, 0, 1], [0, 0.5, 1, 0, 1], [0, 0.5, 1, 0, 1]];
       for (c = 0; c < nc; ++c)
          H[nc > 1 ? c : 3] = [c0[c], pprMTF(0.25, Math.max(1e-6, mid[c] - c0[c]) / (1 - c0[c])), 1, 0, 1];
@@ -266,7 +272,7 @@ function pprPrevia(id, o) {
       if (!nw.saveAs(f, false, false, false, false)) throw new Error("No se pudo guardar " + f);
       return { vista: id, fichero: f, ancho: v.image.width, alto: v.image.height, escala: factor > 1 ? "1/" + factor : "100 %",
                rect: o.rect ? [rc.x0, rc.y0, rc.x1, rc.y1] : null, estirada: estirar,
-               enlazado: estirar ? o.enlazado !== false : null };
+               enlazado: estirar ? o.enlazado !== false : null, stf: estirar ? { c0: c0, mid: mid } : null };
    } finally {
       nw.forceClose();
    }
