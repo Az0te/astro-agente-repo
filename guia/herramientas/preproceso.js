@@ -602,7 +602,7 @@ function ppCalRecursivo(dir, tipos) {
   ["*.fits", "*.fit", "*.fts", "*.xisf"].forEach(function (e) {
     ppSearch(raiz + "/" + e, true).forEach(function (f) {
       var rel = ppDir(f).substring(raiz.length) + "/";
-      if (/\/_/.test(rel) || /\/(lights?|calibrated|registered|debayered|cosmetized|master|logs)\//i.test(rel)) return;
+      if (/\/_/.test(rel) || /\/(lights?|calibrated|registered|debayered|cosmetized|master|logs)[\/]/i.test(rel)) return;   // [\/] y no \/ al final: con #include, «//» es un comentario
       if (tipos) { var h = null; try { h = ppHeader(f); } catch (x) { return; } if (tipos.indexOf(ppTipoCal(h)) < 0) return; }
       out.push(f.replace(/\\/g, "/"));
     });
