@@ -48,6 +48,22 @@ static String ElapsedText( double seconds )
    return String().Format( "%02d:%02d", s/60, s%60 );
 }
 
+// Quita el elemento i de un vector con Strings de PCL sin vector::erase: erase mueve los siguientes con asignación por
+// movimiento, una String de PCL movida queda con datos nulos y asignarle otra vez escribe en la dirección 0
+// (17 nov 2026, Access violation en GenericString::DetachFromData). Se copian los que quedan.
+template <class T>
+static void EraseCopying( std::vector<T>& v, size_t i )
+{
+   if ( i >= v.size() )
+      return;
+   std::vector<T> keep;
+   keep.reserve( v.size() - 1 );
+   for ( size_t j = 0; j < v.size(); ++j )
+      if ( j != i )
+         keep.push_back( v[j] );
+   v.swap( keep );
+}
+
 static void AstroPilotLog( const String& text )
 {
    Console().WriteLn( u"<end><cbr>[PiAstroPilot] " + text );
@@ -2303,7 +2319,7 @@ void PiAstroPilotInterface::e_Timer( Timer& )
          done = true;
 
       if ( done )
-         m_pendingDossiers.erase( m_pendingDossiers.begin() + i );
+         EraseCopying( m_pendingDossiers, i );
       else
          ++i;
    }
@@ -2345,7 +2361,7 @@ void PiAstroPilotInterface::e_Click( Button& sender, bool /*checked*/ )
       if ( MessageBox( Tr( u"¿Quitar el modelo \"" ) + m.name + Tr( u"\" de la lista?" ), "PiAstroPilot",
                        StdIcon::Question, StdButton::Yes, StdButton::No ).Execute() == StdButton::Yes )
       {
-         m_cfg.models.erase( m_cfg.models.begin() + m_cfg.currentModel );
+         EraseCopying( m_cfg.models, size_t( m_cfg.currentModel ) );
          m_cfg.currentModel = 0;
          m_cfg.Save();
          UpdateModelList();

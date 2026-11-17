@@ -97,7 +97,13 @@ static void Push( std::vector<PiAstroPilotChatEntry>& v, PiAstroPilotChatEntry::
    e.kind = k; e.title = title; e.text = text; e.time = PiAstroPilotUtil::Timestamp();
    v.push_back( e );
    if ( v.size() > 400 )   // la página no crece sin límite
-      v.erase( v.begin(), v.begin() + (v.size() - 400) );
+   {
+      // Sin erase(): mueve los elementos con asignación por movimiento y una String de PCL movida queda con datos nulos;
+      // la siguiente asignación sobre ella escribía en la dirección 0 (17 nov 2026: a partir de 400 entradas, cada línea
+      // nueva del chat daba «Access violation» en GenericString::DetachFromData). Copia de las 400 últimas.
+      std::vector<PiAstroPilotChatEntry> keep( v.end() - 400, v.end() );
+      v.swap( keep );
+   }
 }
 
 void PiAstroPilotChatDialog::AppendUser( const String& text )
