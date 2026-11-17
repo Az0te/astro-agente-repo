@@ -175,8 +175,7 @@ PCL_MODULE_EXPORT int InstallPixInsightModule( int mode )
    if ( mode == pcl::InstallMode::FullInstall )
    {
       new pcl::PiAstroPilotProcess;
-      new pcl::PiAstroPilotInterface;
-      new pcl::PiAstroPilotChatDialog;
+      new pcl::PiAstroPilotInterface;   // el Prompt va dentro, en su pestaña (build 110)
       new pcl::PiAstroPilotDossierDialog;
    }
 

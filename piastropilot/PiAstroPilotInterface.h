@@ -22,10 +22,12 @@
 #include <pcl/PushButton.h>
 #include <pcl/SectionBar.h>
 #include <pcl/Sizer.h>
+#include <pcl/TabBox.h>
 #include <pcl/Timer.h>
 #include <pcl/ToolButton.h>
 
 #include "PiAstroPilotAgent.h"
+#include "PiAstroPilotDialogs.h"
 #include "PiAstroPilotInstance.h"
 
 #include <memory>
@@ -175,35 +177,30 @@ private:
    bool   m_fullVisible = true;  // botón "Resolución Completa" visible
    bool   m_aiVisible = true;    // botón "Configurar IA" visible
 
+   // Build 110 (Rafael, 17 nov 2026): como PiAstroPilot Lite, una ventana con pestañas Prompt / Modelo / Ajustes y sin
+   // los botones de las fases ni «Resolución completa»: todo se pide por el Prompt.
    struct GUIData
    {
       GUIData( PiAstroPilotInterface& );
 
       VerticalSizer     Global_Sizer;
-         Label             Title_Label;
-         Label             View_Label;
-         Label             Model_Label;
-         HorizontalSizer   Model_Sizer;
-            ComboBox          Model_ComboBox;
-            ToolButton        AddModel_ToolButton;
-            ToolButton        RemoveModel_ToolButton;
-         HorizontalSizer   Prompt_Sizer;
-            PushButton        Prompt_Button;
-            PushButton        AIConfig_Button;
-         Control           Separator1_Control;
-         SectionBar        Linear_SectionBar;
-         Control           Linear_Control;
-            VerticalSizer     Linear_Sizer;
-         SectionBar        NonLinear_SectionBar;
-         Control           NonLinear_Control;
-            VerticalSizer     NonLinear_Sizer;
-         PushButton        Full_Button;
-         Control           Separator2_Control;
+         TabBox            Tabs;
+            PiAstroPilotChatDialog Chat_Panel;   // pestaña «Prompt»
+            Control           Model_Page;        // pestaña «Modelo»
+               VerticalSizer     Model_Page_Sizer;
+                  Label             Title_Label;
+                  Label             View_Label;
+                  Label             Model_Label;
+                  HorizontalSizer   Model_Sizer;
+                     ComboBox          Model_ComboBox;
+                     ToolButton        AddModel_ToolButton;
+                     ToolButton        RemoveModel_ToolButton;
+                  HorizontalSizer   AIConfig_Sizer;
+                     PushButton        AIConfig_Button;
          HorizontalSizer   Status_Sizer;
             Label             Status_Label;
             PushButton        Cancel_Button;
-         SectionBar        Config_SectionBar;
-         Control           Config_Control;
+            Control           Config_Control;    // pestaña «Ajustes»
             VerticalSizer     Config_Sizer;
                HorizontalSizer   Guide_Sizer;
                   Label             Guide_Label;
@@ -226,10 +223,6 @@ private:
                   Label             Language_Label;
                   ComboBox          Language_ComboBox;
 
-      std::vector<std::unique_ptr<HorizontalSizer>> stepRows;
-      std::vector<std::unique_ptr<PushButton>>      linearButtons;
-      std::vector<std::unique_ptr<PushButton>>      nonLinearButtons;
-
       Timer UpdateTimer;
    };
 
@@ -243,6 +236,7 @@ private:
    String RunWithRunner( const String& calls, const String& prelude );
 
    PiAstroPilotChatDialog& Chat();
+   void ShowChat();   // pone delante la pestaña «Prompt»
    void ShowDossier( const String& path );
 
    void LaunchStep( const PiAstroPilotStep& step );

@@ -14,6 +14,7 @@
 
 #include <pcl/CheckBox.h>
 #include <pcl/ComboBox.h>
+#include <pcl/Control.h>
 #include <pcl/Dialog.h>
 #include <pcl/Edit.h>
 #include <pcl/Label.h>
@@ -38,26 +39,17 @@ namespace pcl
 {
 
 // ----------------------------------------------------------------------------
-// Ventana de Prompt: conversación libre con el modelo seleccionado. También
-// muestra las respuestas de los botones de las fases.
+// Prompt: conversación con el modelo seleccionado. Desde la build 110 (17 nov
+// 2026) es la pestaña «Prompt» del panel, como en PiAstroPilot Lite, y no una
+// ventana aparte.
 // ----------------------------------------------------------------------------
 
-class PiAstroPilotChatDialog : public ProcessInterface
+class PiAstroPilotChatDialog : public Control
 {
 public:
 
    PiAstroPilotChatDialog();
    virtual ~PiAstroPilotChatDialog();
-
-   IsoString Id() const override;
-   MetaProcess* Process() const override;
-   String IconImageSVGFile() const override;
-   InterfaceFeatures Features() const override;
-   bool Launch( const MetaProcess&, const ProcessImplementation*, bool& dynamic, unsigned& /*flags*/ ) override;
-   bool IsInstanceGenerator() const override { return false; }
-   bool CanImportInstances() const override { return false; }
-
-   using ProcessInterface::Launch;
 
    void SetContext( const String& modelName, const String& viewId );
    void SetBusy( bool busy );

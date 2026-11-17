@@ -32,6 +32,10 @@ PiAstroPilotDossierDialog* ThePiAstroPilotDossier = nullptr;
 PiAstroPilotChatDialog::PiAstroPilotChatDialog()
 {
    ThePiAstroPilotChat = this;
+   GUI = new GUIData( *this );
+   GUI->Context_Label.SetText( m_context );
+   RefreshHistory();
+   Refresh();
 }
 
 PiAstroPilotChatDialog::~PiAstroPilotChatDialog()
@@ -41,40 +45,6 @@ PiAstroPilotChatDialog::~PiAstroPilotChatDialog()
       try { if ( m_dictation->IsRunning() ) m_dictation->Kill(); } catch ( ... ) {}
    if ( GUI != nullptr )
       delete GUI, GUI = nullptr;
-}
-
-IsoString PiAstroPilotChatDialog::Id() const
-{
-   return "PiAstroPilotPrompt";
-}
-
-MetaProcess* PiAstroPilotChatDialog::Process() const
-{
-   return ThePiAstroPilotProcess;
-}
-
-String PiAstroPilotChatDialog::IconImageSVGFile() const
-{
-   return "@module_icons_dir/PiAstroPilot.svg";
-}
-
-InterfaceFeatures PiAstroPilotChatDialog::Features() const
-{
-   return InterfaceFeature::None;
-}
-
-bool PiAstroPilotChatDialog::Launch( const MetaProcess&, const ProcessImplementation*, bool& dynamic, unsigned& /*flags*/ )
-{
-   if ( GUI == nullptr )
-   {
-      GUI = new GUIData( *this );
-      SetWindowTitle( Tr( u"PiAstroPilot - Prompt" ) );
-      GUI->Context_Label.SetText( m_context );
-      RefreshHistory();
-      Refresh();
-   }
-   dynamic = false;
-   return true;
 }
 
 void PiAstroPilotChatDialog::SetContext( const String& modelName, const String& viewId )
@@ -577,8 +547,6 @@ PiAstroPilotChatDialog::GUIData::GUIData( PiAstroPilotChatDialog& w )
    Global_Sizer.Add( Voice_Sizer );
 
    w.SetSizer( Global_Sizer );
-   w.EnsureLayoutUpdated();
-   w.AdjustToContents();
 }
 
 // ----------------------------------------------------------------------------

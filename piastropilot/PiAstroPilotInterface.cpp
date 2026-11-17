@@ -323,6 +323,7 @@ bool PiAstroPilotInterface::Launch( const MetaProcess& P, const ProcessImplement
       m_cfg.Load();
       PiAstroPilotUtil::CleanTemp( m_cfg.TempDir() );   // previas y scripts temporales de sesiones anteriores
       GUI = new GUIData( *this );
+      m_chat = &GUI->Chat_Panel;
       SetWindowTitle( "PiAstroPilot" );
       UpdateModelList();
       UpdateControls();
@@ -411,33 +412,12 @@ void PiAstroPilotInterface::UpdateControls()
    GUI->AddModel_ToolButton.Enable( !m_busy );
    GUI->Model_ComboBox.Enable( !m_busy );
 
-   for ( auto& b : GUI->linearButtons )
-      b->Enable( !m_busy );
-   for ( auto& b : GUI->nonLinearButtons )
-      b->Enable( !m_busy );
-
-   // "Resolución Completa" sólo con Claude o Codex (modelos en la nube).
-   if ( m_fullVisible != model.IsCloud() )
-   {
-      m_fullVisible = model.IsCloud();
-      GUI->Full_Button.SetVisible( m_fullVisible );
-      SetVariableHeight();
-      EnsureLayoutUpdated();
-      AdjustToContents();
-      SetFixedHeight();
-   }
-   GUI->Full_Button.Enable( !m_busy );
-
    // "Configurar IA" sólo con Claude o Codex (modelo inferior / superior).
    bool tiers = PiAstroPilotConfig::HasTiers( model );
    if ( m_aiVisible != tiers )
    {
       m_aiVisible = tiers;
       GUI->AIConfig_Button.SetVisible( tiers );
-      SetVariableHeight();
-      EnsureLayoutUpdated();
-      AdjustToContents();
-      SetFixedHeight();
    }
    GUI->AIConfig_Button.Enable( !m_busy );
 
@@ -483,11 +463,17 @@ PiAstroPilotChatDialog& PiAstroPilotInterface::Chat()
 {
    if ( !m_chat )
    {
-      m_chat = ThePiAstroPilotChat;
+      m_chat = &GUI->Chat_Panel;
       m_chat->SetContext( m_cfg.Current().name, m_viewId );
       m_chat->SetBusy( m_busy );
    }
    return *m_chat;
+}
+
+void PiAstroPilotInterface::ShowChat()
+{
+   if ( GUI != nullptr )
+      GUI->Tabs.SetCurrentPageIndex( 0 );
 }
 
 void PiAstroPilotInterface::ShowDossier( const String& path )
@@ -1214,6 +1200,18 @@ void PiAstroPilotInterface::RunCalls( const String& calls, bool ask )
                        u"restos de estrellas o manchas y dónde. Las medidas mandan: no juzgues el color (lo mide la dominante "
                        u"del cielo) y no pidas más estirado si las medidas dicen que se paró por el ruido o el recorte.";
          }
+         // Como en Lite (16 nov 2026): el plan de WBPP sin confirmar para la serie (salvo procesado completo), y con
+         // sólo el apilado pedido la serie acaba al terminar WBPP. Lo decide el programa, no el modelo.
+         if ( m_autoChain )
+         {
+            String goal = m_autoGoal.Lowercase();
+            bool completo = goal.Contains( u"complet" ) || goal.Contains( u"hasta el final" ) || goal.Contains( u"de principio a fin" );
+            if ( calls.Contains( u"\"lanzarWBPP\"" ) && (out.Contains( u"esperando_confirmacion" ) || out.Contains( u"Esperando confirmacion" )) && !completo )
+               StopAutoChain( Tr( u"plan de WBPP listo: revísalo y escribe «lánzalo» o pide cambios" ) );
+            else if ( calls.Contains( u"\"estadoWBPP\"" ) && (out.Contains( u"\"terminado\": true" ) || out.Contains( u"\"terminado\":true" )) && !completo &&
+                      (goal.Contains( u"apil" ) || goal.Contains( u"wbpp" ) || goal.Contains( u"preprocesad" )) )
+               StopAutoChain( Tr( u"apilado hecho (lo que pediste); para seguir con el procesado, pídelo" ) );
+         }
          QueueJob( JobKind::Interpret, Tr( u"Interpretar el resultado" ),
                    // 12000 cortaba el gradiente de 4 vistas y Qwen dio una por "truncada" (6 nov 2026): 30000 (~8.500
                    // tokens) cabe en los 32k del modelo local; si aun así se corta, se le dice.
@@ -1464,7 +1462,7 @@ bool PiAstroPilotInterface::StartClaude( const String& prompt )
    catch ( ... )
    {
       Chat().AppendInfo( Tr( u"No se pudo lanzar Claude Code (" ) + m_cfg.claudePath + Tr( u"). Revisa la ruta en Configuración." ) );
-      Chat().Launch();
+      ShowChat();
       return false;
    }
    return true;
@@ -1521,7 +1519,7 @@ bool PiAstroPilotInterface::StartCodex( const String& prompt )
    catch ( ... )
    {
       Chat().AppendInfo( Tr( u"No se pudo lanzar Codex. Instálalo con «npm install -g @openai/codex» y haz «codex login»." ) );
-      Chat().Launch();
+      ShowChat();
       return false;
    }
    return true;
@@ -1590,7 +1588,7 @@ bool PiAstroPilotInterface::StartHttp()
       {
          Chat().AppendInfo( Tr( u"Falta la clave de " ) + model.name + Tr( u": define la variable de entorno " ) + model.keyEnv +
                             Tr( u" y reinicia PixInsight." ) );
-         Chat().Launch();
+         ShowChat();
          return false;
       }
    }
@@ -1961,7 +1959,7 @@ void PiAstroPilotInterface::FinishJob( const String& response, bool error )
       AstroPilotLog( m_job.title + u" terminado (" + ElapsedText( NowSeconds() - m_job.startTime ) + u")." );
    }
 
-   chat.Launch();
+   ShowChat();
    UpdateControls();
 }
 
@@ -2312,13 +2310,6 @@ void PiAstroPilotInterface::e_Timer( Timer& )
 
 void PiAstroPilotInterface::e_Click( Button& sender, bool /*checked*/ )
 {
-   if ( sender == GUI->Prompt_Button )
-   {
-      UpdateView();
-      Chat().Launch();
-      return;
-   }
-
    if ( sender == GUI->AIConfig_Button )
    {
       m_cfg.LoadScores();   // relee la tabla por si se ha editado
@@ -2362,12 +2353,6 @@ void PiAstroPilotInterface::e_Click( Button& sender, bool /*checked*/ )
       return;
    }
 
-   if ( sender == GUI->Full_Button )
-   {
-      LaunchFull();
-      return;
-   }
-
    if ( sender == GUI->Cancel_Button )
    {
       if ( m_autoChain || m_autoRunPending )
@@ -2394,19 +2379,6 @@ void PiAstroPilotInterface::e_Click( Button& sender, bool /*checked*/ )
       }
       return;
    }
-
-   for ( size_t i = 0; i < GUI->linearButtons.size(); ++i )
-      if ( sender == *GUI->linearButtons[i] )
-      {
-         LaunchStep( PiAstroPilotStep::Linear()[i] );
-         return;
-      }
-   for ( size_t i = 0; i < GUI->nonLinearButtons.size(); ++i )
-      if ( sender == *GUI->nonLinearButtons[i] )
-      {
-         LaunchStep( PiAstroPilotStep::NonLinear()[i] );
-         return;
-      }
 }
 
 void PiAstroPilotInterface::e_ItemSelected( ComboBox& sender, int itemIndex )
@@ -2473,50 +2445,6 @@ void PiAstroPilotInterface::e_ToggleSection( SectionBar& /*sender*/, Control& /*
 // Construcción del panel
 // ----------------------------------------------------------------------------
 
-static void BuildStepButtons( PiAstroPilotInterface& w,
-                              const std::vector<PiAstroPilotStep>& steps,
-                              std::vector<std::unique_ptr<PushButton>>& buttons,
-                              std::vector<std::unique_ptr<HorizontalSizer>>& rows,
-                              VerticalSizer& sizer, Control& parent,
-                              Button::click_event_handler handler )
-{
-   sizer.SetSpacing( 4 );
-   for ( size_t i = 0; i < steps.size(); ++i )
-   {
-      const PiAstroPilotStep& s = steps[i];
-      PushButton* b = new PushButton( String(), Bitmap::Null(), parent );
-      b->SetText( Tr( s.label ) );
-      String tip = u"<p><b>" + Tr( s.label ) + Tr( u"</b></p><p>Pide al modelo seleccionado que ejecute este paso de la guía (" ) +
-                   s.file + u")" + (s.needsImage ? String( Tr( u" sobre la imagen activa" ) ) : String()) + u".</p>";
-      if ( s.comparative )
-         tip << Tr( u"<p>Hace un análisis previo, compara varios métodos (GraXpert, MGC, DBE...) con 2 o 3 valores cada uno "
-                u"sobre copias, y al final abre un dossier con las imágenes, las métricas y la recomendación del modelo. "
-                u"Tú eliges la que prefieras.</p>" );
-      b->SetToolTip( tip );
-      b->OnClick( handler, w );
-      buttons.emplace_back( b );
-   }
-   for ( size_t i = 0; i < buttons.size(); i += 2 )
-   {
-      HorizontalSizer* row = new HorizontalSizer;
-      row->SetSpacing( 4 );
-      row->Add( *buttons[i], 50 );
-      if ( i+1 < buttons.size() )
-         row->Add( *buttons[i+1], 50 );
-      else
-         row->AddStretch( 50 );
-      sizer.Add( *row );
-      rows.emplace_back( row );
-   }
-   parent.SetSizer( sizer );
-}
-
-static void MakeSeparator( Control& c )
-{
-   c.SetFixedHeight( 1 );
-   c.SetStyleSheet( "QWidget { background-color: palette(mid); }" );
-}
-
 PiAstroPilotInterface::GUIData::GUIData( PiAstroPilotInterface& w )
 {
    pcl::Font font = w.Font();
@@ -2558,42 +2486,23 @@ PiAstroPilotInterface::GUIData::GUIData( PiAstroPilotInterface& w )
    Model_Sizer.Add( AddModel_ToolButton );
    Model_Sizer.Add( RemoveModel_ToolButton );
 
-   Prompt_Button.SetText( Tr( u"Prompt" ) );
-   Prompt_Button.SetToolTip( Tr( u"<p>Abre la ventana de Prompt para hablar con el modelo seleccionado. "
-                             u"Ahí aparecen también las respuestas de los botones.</p>" ) );
-   Prompt_Button.OnClick( (Button::click_event_handler)&PiAstroPilotInterface::e_Click, w );
-
    AIConfig_Button.SetText( Tr( u"Configurar IA" ) );
    AIConfig_Button.SetToolTip( Tr( u"<p>Umbral N y puntuación de cada paso para elegir entre el modelo inferior "
                                u"(p. ej. Sonnet) y el superior (p. ej. Opus). Sólo con Claude o Codex.</p>" ) );
    AIConfig_Button.OnClick( (Button::click_event_handler)&PiAstroPilotInterface::e_Click, w );
 
-   Prompt_Sizer.SetSpacing( 4 );
-   Prompt_Sizer.Add( Prompt_Button, 50 );
-   Prompt_Sizer.Add( AIConfig_Button, 50 );
+   AIConfig_Sizer.Add( AIConfig_Button );
+   AIConfig_Sizer.AddStretch();
 
-   MakeSeparator( Separator1_Control );
-
-   //
-
-   Linear_SectionBar.SetTitle( Tr( u"Fase Lineal" ) );
-   Linear_SectionBar.SetSection( Linear_Control );
-   Linear_SectionBar.OnToggleSection( (SectionBar::section_event_handler)&PiAstroPilotInterface::e_ToggleSection, w );
-   BuildStepButtons( w, PiAstroPilotStep::Linear(), linearButtons, stepRows, Linear_Sizer, Linear_Control,
-                     (Button::click_event_handler)&PiAstroPilotInterface::e_Click );
-
-   NonLinear_SectionBar.SetTitle( Tr( u"Fase No Lineal" ) );
-   NonLinear_SectionBar.SetSection( NonLinear_Control );
-   NonLinear_SectionBar.OnToggleSection( (SectionBar::section_event_handler)&PiAstroPilotInterface::e_ToggleSection, w );
-   BuildStepButtons( w, PiAstroPilotStep::NonLinear(), nonLinearButtons, stepRows, NonLinear_Sizer, NonLinear_Control,
-                     (Button::click_event_handler)&PiAstroPilotInterface::e_Click );
-
-   Full_Button.SetText( Tr( u"Resolución Completa" ) );
-   Full_Button.SetToolTip( Tr( u"<p>Procesa la imagen activa de principio a fin siguiendo la guía "
-                           u"(sólo con Claude o Codex).</p>" ) );
-   Full_Button.OnClick( (Button::click_event_handler)&PiAstroPilotInterface::e_Click, w );
-
-   MakeSeparator( Separator2_Control );
+   Model_Page_Sizer.SetMargin( 8 );
+   Model_Page_Sizer.SetSpacing( 6 );
+   Model_Page_Sizer.Add( Title_Label );
+   Model_Page_Sizer.Add( View_Label );
+   Model_Page_Sizer.Add( Model_Label );
+   Model_Page_Sizer.Add( Model_Sizer );
+   Model_Page_Sizer.Add( AIConfig_Sizer );
+   Model_Page_Sizer.AddStretch();
+   Model_Page.SetSizer( Model_Page_Sizer );
 
    //
 
@@ -2680,6 +2589,7 @@ PiAstroPilotInterface::GUIData::GUIData( PiAstroPilotInterface& w )
    Language_Sizer.Add( Language_ComboBox );
    Language_Sizer.AddStretch();
 
+   Config_Sizer.SetMargin( 8 );
    Config_Sizer.SetSpacing( 4 );
    Config_Sizer.Add( Language_Sizer );
    Config_Sizer.Add( Guide_Sizer );
@@ -2687,43 +2597,26 @@ PiAstroPilotInterface::GUIData::GUIData( PiAstroPilotInterface& w )
    Config_Sizer.Add( Claude_Sizer );
    Config_Sizer.Add( ClaudeArgs_Sizer );
    Config_Sizer.Add( Data_Sizer );
+   Config_Sizer.AddStretch();
    Config_Control.SetSizer( Config_Sizer );
-
-   Config_SectionBar.SetTitle( Tr( u"Configuración" ) );
-   Config_SectionBar.SetSection( Config_Control );
-   Config_SectionBar.OnToggleSection( (SectionBar::section_event_handler)&PiAstroPilotInterface::e_ToggleSection, w );
 
    //
 
-   Global_Sizer.SetMargin( 8 );
+   Tabs.AddPage( Chat_Panel, Tr( u"Prompt" ) );
+   Tabs.AddPage( Model_Page, Tr( u"Modelo" ) );
+   Tabs.AddPage( Config_Control, Tr( u"Ajustes" ) );
+   Tabs.SetCurrentPageIndex( 0 );
+
+   Global_Sizer.SetMargin( 6 );
    Global_Sizer.SetSpacing( 6 );
-   Global_Sizer.Add( Title_Label );
-   Global_Sizer.Add( View_Label );
-   Global_Sizer.Add( Model_Label );
-   Global_Sizer.Add( Model_Sizer );
-   Global_Sizer.Add( Prompt_Sizer );
-   Global_Sizer.AddSpacing( 4 );
-   Global_Sizer.Add( Separator1_Control );
-   Global_Sizer.AddSpacing( 4 );
-   Global_Sizer.Add( Linear_SectionBar );
-   Global_Sizer.Add( Linear_Control );
-   Global_Sizer.Add( NonLinear_SectionBar );
-   Global_Sizer.Add( NonLinear_Control );
-   Global_Sizer.Add( Full_Button );
-   Global_Sizer.AddSpacing( 4 );
-   Global_Sizer.Add( Separator2_Control );
+   Global_Sizer.Add( Tabs, 100 );
    Global_Sizer.Add( Status_Sizer );
-   Global_Sizer.Add( Config_SectionBar );
-   Global_Sizer.Add( Config_Control );
 
    w.SetSizer( Global_Sizer );
 
-   Config_Control.Hide();
-
    w.EnsureLayoutUpdated();
    w.AdjustToContents();
-   w.SetFixedWidth();
-   w.SetFixedHeight();
+   w.SetScaledMinSize( 640, 560 );
 
    //
 
