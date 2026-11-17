@@ -469,6 +469,8 @@ class MotorClaude:
             p = Path(m.rstrip(".,;:)"))
             candidatas.append(p if p.is_dir() else p.parent)
         for p in candidatas:
+            if not p.is_dir():          # sin la carpeta, tampoco la de encima (sería demasiado amplia)
+                continue
             for d in (p, p.parent):
                 if len(d.anchor) and d != Path(d.anchor) and d.is_dir():
                     self.carpetas.add(str(d.resolve()))
