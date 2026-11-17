@@ -61,6 +61,10 @@ var PPR_DIR = File.homeDirectory + "/.piastropilot";
 // Rutas de la guía que usan algunas funciones para cargar dependencias; el servidor las manda en cada petición.
 var PIASTROPILOT_GUIA = File.homeDirectory + "/astro-agente-repo/guia";
 var GUIA_HERRAMIENTAS = PIASTROPILOT_GUIA + "/herramientas";
+// Carpeta de las miniaturas de las comparaciones (pxPrevia). El Lite y el módulo con modelos locales ponen la suya; por el
+// MCP (Claude en el módulo) no había ninguna y gradienteCandidatos y compañía no hacían previas (17 nov 2026).
+var PIASTROPILOT_PREVIAS = (typeof PIASTROPILOT_PREVIAS === "string" && PIASTROPILOT_PREVIAS) ? PIASTROPILOT_PREVIAS : PPR_DIR + "/previas";
+if (!File.directoryExists(PIASTROPILOT_PREVIAS)) File.createDirectory(PIASTROPILOT_PREVIAS, true);
 
 function pprEscribir(ruta, texto) {
    var tmp = ruta + ".tmp";
