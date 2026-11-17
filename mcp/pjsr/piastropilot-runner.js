@@ -129,7 +129,31 @@ function pprRect(im, z) {
    return new Rect(x0, y0, x1, y1);
 }
 
+// Cuenta por canal los píxeles a 0 (≤ 0) y saturados (≥ 0,999) y da sus posiciones (las primeras n) y las del mínimo y
+// el máximo, en una sola pasada: sin esto el modelo localizaba un píxel a 0 partiendo la imagen en zonas (41 llamadas
+// a estadisticas en M31, 17 nov 2026).
+function pprExtremos(im, rc, canales, n) {
+   var w = rc.x1 - rc.x0, fila = new Float32Array(w);
+   for (var c = 0; c < im.numberOfChannels; ++c) {
+      var ceros = 0, altos = 0, pc = [], pa = [], mn = Infinity, mx = -Infinity, pmn = null, pmx = null;
+      for (var y = rc.y0; y < rc.y1; ++y) {
+         im.getSamples(fila, new Rect(rc.x0, y, rc.x1, y + 1), c);
+         for (var x = 0; x < w; ++x) {
+            var v = fila[x];
+            if (v <= 0) { ++ceros; if (pc.length < n) pc.push([rc.x0 + x, y]); }
+            else if (v >= 0.999) { ++altos; if (pa.length < n) pa.push([rc.x0 + x, y]); }
+            if (v < mn) { mn = v; pmn = [rc.x0 + x, y]; }
+            if (v > mx) { mx = v; pmx = [rc.x0 + x, y]; }
+         }
+      }
+      var k = canales[c];
+      k.ceros = ceros; k.ceros_pos = pc; k.saturados = altos; k.saturados_pos = pa;
+      k.minimo_pos = pmn; k.maximo_pos = pmx;
+   }
+}
+
 //   o.rect:   [x0, y0, x1, y1] mide sólo esa zona.
+//   o.extremos: true (o n) cuenta los píxeles a 0 y saturados por canal y da posiciones (las n primeras, 10 por defecto).
 //   o.bordes: ancho en px; mide franjas izquierda/derecha/arriba/abajo y el centro, y da la caída de cada borde
 //             respecto al centro (mediana del borde / mediana del centro − 1, por canal).
 function pprEstadisticas(id, o) {
@@ -143,6 +167,7 @@ function pprEstadisticas(id, o) {
    } else
       res.canales = pprMedirZona(im, null);
    res.lineal = res.canales.every(function (x) { return x.mediana < 0.05; });
+   if (o.extremos) pprExtremos(im, o.rect ? pprRect(im, o.rect) : new Rect(0, 0, W, H), res.canales, +o.extremos > 1 ? +o.extremos : 10);
    if (o.bordes) {
       var b = Math.max(1, Math.min(Math.round(+o.bordes), Math.floor(Math.min(W, H) / 4)));
       var zonas = {

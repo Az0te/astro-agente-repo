@@ -29,8 +29,8 @@
    "fichero": null,
    "nivel": "lectura",
    "timeout_s": 60,
-   "descripcion": "Mediana, MAD, media, mínimo y máximo por canal de una vista abierta (entera o de un rectángulo). Sirve para saber si está lineal (medianas < 0,05), comprobar el fondo o medir zonas concretas. Con bordes mide franjas de los cuatro bordes frente al centro (viñeteo, cuñas, zonas con menos subs).",
-   "resumen": "Mediana, MAD, media, mín. y máx. por canal (vista entera o rect). Con bordes: franjas de borde frente al centro.",
+   "descripcion": "Mediana, MAD, media, mínimo y máximo por canal de una vista abierta (entera o de un rectángulo). Sirve para saber si está lineal (medianas < 0,05), comprobar el fondo o medir zonas concretas. Con bordes mide franjas de los cuatro bordes frente al centro (viñeteo, cuñas, zonas con menos subs). Con extremos cuenta los píxeles a 0 y saturados y dice dónde están (no hace falta buscarlos por zonas).",
+   "resumen": "Mediana, MAD, media, mín. y máx. por canal (vista entera o rect). Con bordes: franjas de borde frente al centro. Con extremos: cuántos píxeles a 0 / saturados y dónde.",
    "params": {
     "type": "object",
     "properties": {
@@ -50,6 +50,10 @@
      "bordes": {
       "type": "number",
       "description": "Ancho en píxeles de las franjas de borde (p. ej. 200). Añade estadísticas de izquierda, derecha, arriba, abajo y centro, y la caída de cada borde respecto al centro."
+     },
+     "extremos": {
+      "type": "boolean",
+      "description": "Cuenta por canal los píxeles a 0 (ceros) y saturados (≥ 0,999) y da sus posiciones [x, y] (las 10 primeras) y las del mínimo y el máximo. Úsalo para saber cuántos píxeles están recortados y dónde: en UNA llamada, sin partir la imagen en zonas."
      }
     },
     "required": [
