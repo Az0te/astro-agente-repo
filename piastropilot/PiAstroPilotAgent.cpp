@@ -1146,7 +1146,13 @@ String PiAstroPilotPrompts::Free( const PiAstroPilotConfig& cfg, const PiAstroPi
    String s;
    s << u"[Contexto de PiAstroPilot: imagen activa en PixInsight: vista " << ViewText( viewId ) << u"." << AllViewsLine();
    if ( model.IsAgent() )
-      s << u" Puedes actuar sobre ella con las herramientas MCP de PiAstroPilot (mcp__piastropilot__*) si te lo pido.";
+      s << u" Puedes actuar sobre ella con las herramientas MCP de PiAstroPilot (mcp__piastropilot__*) si te lo pido."
+           // 17 nov 2026 (Rafael): sin estas dos reglas, Claude escribía «Quedan por hacer» sin enlaces y aplicaba o
+           // cerraba candidatos antes de que él eligiera.
+           u" Termina cada respuesta con una línea «Siguiente paso: <qué hacer>.» (el chat la convierte en un enlace que lo"
+           u" hace con un clic); si propones varios, ponlos en una lista bajo «Siguientes pasos:», uno por línea."
+           u" Cuando una comparación deja varias opciones, enséñamelas y espera a que elija: no apliques ni cierres"
+           u" ninguna antes (deja abiertas sus vistas).";
    else
       s << u" Si hay que medir o procesar, pide funciones de la guía en un único bloque ```json; nunca escribas código.";
    s << u"]";

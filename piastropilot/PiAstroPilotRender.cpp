@@ -1,4 +1,4 @@
-﻿// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // PiAstroPilot - Asistente de IA para PixInsight
 // ----------------------------------------------------------------------------
 // PiAstroPilotRender.cpp - Presentación del chat en HTML.
@@ -164,6 +164,30 @@ static String Inline( const String& raw )
    return InlineBase( raw );
 }
 
+// Rótulos tras los que una lista es de pasos a hacer: cada elemento se pinta como enlace (17 nov 2026, Rafael: Claude
+// escribía «Quedan por hacer» o «Siguientes pasos propuestos» con una lista y no había nada que pulsar).
+static bool IsStepsHeader( const String& t )
+{
+   String low = t.Lowercase();
+   static const char16_t* keys[] = { u"siguientes pasos", u"próximos pasos", u"pasos recomendados", u"pasos propuestos",
+                                     u"quedan por hacer", u"queda por hacer", u"pendientes", u"next steps", nullptr };
+   for ( int k = 0; keys[k] != nullptr; ++k )
+      if ( low.Contains( String( keys[k] ) ) )
+         return true;
+   return false;
+}
+
+static String StepItem( const String& text )
+{
+   String low = text.Lowercase();
+   if ( low.Contains( "siguiente paso" ) || low.Contains( "next step" ) )
+      return Inline( text );
+   size_type dot = text.Find( ". " );
+   String target = (dot != String::notFound) ? text.Left( dot + 1 ) : text, after = (dot != String::notFound) ? text.Substring( dot + 1 ) : String();
+   String a = StepAnchor( target, after );
+   return a.IsEmpty() ? Inline( text ) : a;
+}
+
 String PiAstroPilotRender::Markdown( const String& md )
 {
    StringList lines;
@@ -171,7 +195,7 @@ String PiAstroPilotRender::Markdown( const String& md )
    src.ReplaceString( "\r\n", "\n" );
    src.Break( lines, '\n' );
    String out, para;
-   bool inCode = false, inUl = false, inOl = false;
+   bool inCode = false, inUl = false, inOl = false, stepList = false;
    auto flushPara = [&]()
    {
       if ( !para.IsEmpty() ) { out << "<p>" << para << "</p>"; para.Clear(); }
@@ -236,6 +260,7 @@ String PiAstroPilotRender::Markdown( const String& md )
          while ( level < int( t.Length() ) && t[level] == '#' ) ++level;
          level = Range( level, 1, 4 );
          String hl = String().Format( "%d", level + 1 ); out << "<h" << hl << ">" << Inline( t.Substring( level ).Trimmed() ) << "</h" << hl << ">";
+         stepList = IsStepsHeader( t );
          continue;
       }
       if ( t == "---" || t == "***" )
@@ -249,7 +274,7 @@ String PiAstroPilotRender::Markdown( const String& md )
          flushPara();
          if ( inOl ) { out << "</ol>"; inOl = false; }
          if ( !inUl ) { out << "<ul>"; inUl = true; }
-         out << "<li>" << Inline( t.Substring( 2 ).Trimmed() ) << "</li>";
+         out << "<li>" << (stepList ? StepItem( t.Substring( 2 ).Trimmed() ) : Inline( t.Substring( 2 ).Trimmed() )) << "</li>";
          continue;
       }
       {
@@ -260,7 +285,7 @@ String PiAstroPilotRender::Markdown( const String& md )
             flushPara();
             if ( inUl ) { out << "</ul>"; inUl = false; }
             if ( !inOl ) { out << "<ol>"; inOl = true; }
-            out << "<li>" << Inline( t.Substring( d + 2 ).Trimmed() ) << "</li>";
+            out << "<li>" << (stepList ? StepItem( t.Substring( d + 2 ).Trimmed() ) : Inline( t.Substring( d + 2 ).Trimmed() )) << "</li>";
             continue;
          }
       }
@@ -279,6 +304,7 @@ String PiAstroPilotRender::Markdown( const String& md )
       closeLists();
       if ( !para.IsEmpty() ) para << "<br>";
       para << Inline( t );
+      stepList = IsStepsHeader( t );
    }
    if ( inCode ) out << "</code></pre>";
    flushPara(); closeLists();

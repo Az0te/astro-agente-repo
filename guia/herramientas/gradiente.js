@@ -897,15 +897,24 @@ function gradienteCandidatos(viewId, o) {
   // Se cierran los candidatos no recomendados y sus modelos (con la segunda pasada son ~20 vistas y los Qwen gastaban
   // 30–40 llamadas en cerrarlas una a una, M31 13 nov 2026). Sus medidas y miniaturas quedan en el resultado; para
   // aplicar otro, repetir con { dejarCandidatos: true }.
+  // 17 nov 2026 (Rafael): cerrarlo todo menos el recomendado no le dejaba elegir. Quedan abiertos también los mejores
+  // alternativos (por defecto 3: no se comen el objeto, modelo limpio, ordenados por gradiente que dejan) con su modelo,
+  // para compararlos en PixInsight; el resto se cierra (con 17 candidatos de 6000×4000 la memoria no da para todos).
+  var nAlt = isFinite(o.alternativas) ? Math.max(0, Math.round(o.alternativas)) : 3;
+  var finalistas = r.candidatos.filter(function (c) { return c.vista !== r.recomendado && c.metricas && eat(c) <= 3 && absCorr(c) < 0.3; })
+                    .sort(function (a, b) { return resid(a) - resid(b); }).slice(0, nAlt).map(function (c) { return c.vista; });
+  if (finalistas.length) r.alternativas_abiertas = finalistas;
   if (!o.dejarCandidatos && r.recomendado) {
     var cerrados = 0;
     r.candidatos.forEach(function (c) {
-      if (c.vista === r.recomendado) return;
+      if (c.vista === r.recomendado || finalistas.indexOf(c.vista) >= 0) return;
       [c.vista, c.modelo].forEach(function (id) { if (!id) return; var w = ImageWindow.windowById(id); if (!w.isNull) { w.forceClose(); ++cerrados; } });
     });
     (r.intermedias || []).forEach(function (id) { var w = ImageWindow.windowById(id); if (!w.isNull) { w.forceClose(); ++cerrados; } });
-    if (cerrados) r.nota_vistas = "Cerradas " + cerrados + " vistas de los demás candidatos y auxiliares; queda abierto el recomendado (" +
-                                  r.recomendado + ") y su modelo. Para aplicar otro candidato: gradienteCandidatos(vista, { dejarCandidatos: true }).";
+    if (cerrados) r.nota_vistas = "Cerradas " + cerrados + " vistas de los demás candidatos y auxiliares; quedan abiertos el recomendado (" +
+                                  r.recomendado + ")" + (finalistas.length ? " y las mejores alternativas (" + finalistas.join(", ") + ")" : "") +
+                                  ", con sus modelos. Es el usuario quien elige: no cierres ninguna hasta que lo haga. " +
+                                  "Para otro candidato ya cerrado: gradienteCandidatos(vista, { dejarCandidatos: true }).";
   }
   grPrevios.push(r);
   if (grPrevios.length > 1 && !o.noCompactar) grPrevios.forEach(function (g) { grCompactar(g, o); });
