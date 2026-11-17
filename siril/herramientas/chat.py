@@ -52,14 +52,11 @@ APIS = {
         "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "clave": "GEMINI_API_KEY",
         "modelo": "gemini-3.8-flash", "vision": True, "limite": 50000, "web": "https://aistudio.google.com/apikey"},
     "OpenRouter (API)": {"url": "https://openrouter.ai/api/v1/chat/completions", "clave": "OPENROUTER_API_KEY",
-                         "modelo": "deepseek/deepseek-chat-v3-0324:free", "vision": False, "limite": 50000,
+                         "modelo": "meta-llama/llama-3.3-70b-instruct:free", "vision": False, "limite": 50000,
                          "web": "https://openrouter.ai/keys"},
     "Groq (API)": {"url": "https://api.groq.com/openai/v1/chat/completions", "clave": "GROQ_API_KEY",
                    "modelo": "llama-3.3-70b-versatile", "vision": False, "limite": 24000,
                    "web": "https://console.groq.com/keys"},
-    "DeepSeek (API, de pago)": {"url": "https://api.deepseek.com/chat/completions", "clave": "DEEPSEEK_API_KEY",
-                                "modelo": "deepseek-chat", "vision": False, "limite": 50000,
-                                "web": "https://platform.deepseek.com/api_keys"},
 }
 MAX_IMAGENES = 6                                        # previas por resultado que se mandan a un modelo con visión
 MAX_RESULTADO = 6000                                    # caracteres de cada resultado que vuelven al modelo local
@@ -461,7 +458,7 @@ def _olvidar_imagenes(mensajes, guardar=2):
 
 class MotorLocal:
     """Ollama con herramientas: el bucle de llamadas lo hace este script, contra el puente. Con 'api' (una entrada de
-    APIS), lo mismo contra una API compatible con OpenAI con clave (Gemini, OpenRouter, Groq, DeepSeek)."""
+    APIS), lo mismo contra una API compatible con OpenAI con clave (Gemini, OpenRouter, Groq)."""
 
     def __init__(self, modelo, api=None):
         self.api = api
