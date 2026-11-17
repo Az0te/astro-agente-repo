@@ -324,6 +324,7 @@ bool PiAstroPilotInterface::Launch( const MetaProcess& P, const ProcessImplement
       PiAstroPilotUtil::CleanTemp( m_cfg.TempDir() );   // previas y scripts temporales de sesiones anteriores
       GUI = new GUIData( *this );
       m_chat = &GUI->Chat_Panel;
+      m_chat->Welcome( m_cfg.guideDir );
       SetWindowTitle( "PiAstroPilot" );
       UpdateModelList();
       UpdateControls();

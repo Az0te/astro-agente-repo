@@ -342,19 +342,81 @@ void PiAstroPilotChatDialog::AppendInfo( const String& text, const std::vector<s
    RefreshHistory();
 }
 
+// El mismo texto que el de PiAstroPilot Lite (Rafael, 9 nov 2026), con el nombre del módulo.
+static String WelcomeText( const String& guideDir )
+{
+   if ( PiAstroPilotEnglish() )
+      return String( u"**PiAstroPilot** is an artificial intelligence assistant specialised in astrophotography that works "
+             u"inside PixInsight.\n\n"
+             u"My goal is to guide you and run concrete steps of the processing guide, both in the **linear phase** "
+             u"(calibration, alignment, corrections) and in the **non-linear** one (stretching, colour, sharpening, export).\n\n"
+             u"### What exactly do I do?\n\n"
+             u"- **I analyse:** I identify the object (SIMBAD/Wikipedia), check headers, measure statistics and detect "
+             u"problems (edges, gradient, noise).\n"
+             u"- **I run:** I can launch the guide's functions (WBPP, BXT, SPCC, StarXTerminator, method comparisons, etc.), "
+             u"always working on copies and measuring results before and after. I never write code: I only ask for guide functions.\n"
+             u"- **I recommend:** I propose the next logical step according to the guide, comparing methods when possible "
+             u"(e.g. GraXpert vs. MGC for the gradient) and showing you the metrics.\n\n"
+             u"### How do you use it?\n\n"
+             u"- You tell me which image you have (or simply «the image on screen») and which object it is.\n"
+             u"- I answer with information, an analysis or the guide functions I want to run.\n"
+             u"- I always work on copies: I do not modify your original views unless you explicitly ask.\n"
+             u"- The guide functions I ask for run on their own (box «Run without asking») and I explain the result.\n"
+             u"- If you ask for several steps or the full processing, I chain them without asking: after each result I run "
+             u"the next one in the guide's order, and I only stop when it is done, when something needs your decision, or "
+             u"if you press «Cancel». «go on» continues where I stopped.\n"
+             u"- The «Next step» links run that step with one click.\n\n"
+             u"Guide: `" ) + guideDir + u"`";
+   return String( u"**PiAstroPilot** es un asistente de inteligencia artificial especializado en astrofotografía que funciona "
+          u"dentro de PixInsight.\n\n"
+          u"Mi objetivo es guiarte y ejecutar pasos concretos de la guía de procesado, tanto en la **fase lineal** "
+          u"(calibración, alineación, correcciones) como en la **no lineal** (estirado, color, nitidez, exportación).\n\n"
+          u"### ¿Qué hago exactamente?\n\n"
+          u"- **Analizo:** identifico el objeto (SIMBAD/Wikipedia), reviso cabeceras, mido estadísticas y detecto "
+          u"problemas (bordes, gradiente, ruido).\n"
+          u"- **Ejecuto:** puedo lanzar las funciones de la guía (WBPP, BXT, SPCC, StarXTerminator, comparaciones de métodos, etc.), "
+          u"siempre trabajando sobre copias y midiendo resultados antes y después. Nunca escribo código: sólo pido funciones de la guía.\n"
+          u"- **Recomiendo:** te propongo el siguiente paso lógico según la guía, comparando métodos cuando sea posible "
+          u"(ej. GraXpert vs. MGC para gradiente) y mostrándote las métricas.\n\n"
+          u"### ¿Cómo se usa?\n\n"
+          u"- Tú me dices qué imagen tienes (o simplemente «la imagen en pantalla») y qué objeto es.\n"
+          u"- Yo te respondo con información, análisis o las funciones de la guía que quiero ejecutar.\n"
+          u"- Siempre trabajo sobre copias: no modifico tus vistas originales sin que lo pidas explícitamente.\n"
+          u"- Las funciones de la guía que pido se ejecutan solas (casilla «Ejecutar sin preguntar») y te explico el resultado.\n"
+          u"- Si me pides varios pasos o el procesado completo, los encadeno sin preguntar: tras cada resultado hago el "
+          u"siguiente en el orden de la guía y sólo paro al terminar, si algo necesita tu decisión o si pulsas «Cancelar». "
+          u"«sigue» continúa donde me paré.\n"
+          u"- Los enlaces «Siguiente paso» hacen ese paso con un clic.\n\n"
+          u"Guía: `" ) + guideDir + u"`";
+}
+
+void PiAstroPilotChatDialog::Welcome( const String& guideDir )
+{
+   m_guideDir = guideDir;
+   // Como respuesta del asistente (se pinta en Markdown), pero sin voz ni llamadas.
+   Push( m_entries, PiAstroPilotChatEntry::Assistant, u"PiAstroPilot", WelcomeText( guideDir ) );
+   RefreshHistory();
+}
+
 void PiAstroPilotChatDialog::ClearView()
 {
    m_entries.clear();
    if ( ThePiAstroPilotInterface != nullptr )
       ThePiAstroPilotInterface->CleanTempFiles();
-   RefreshHistory();
+   if ( !m_guideDir.IsEmpty() )
+      Welcome( m_guideDir );
+   else
+      RefreshHistory();
 }
 
 void PiAstroPilotChatDialog::ClearConversation()
 {
    m_entries.clear();
    m_lastCalls.Clear();
-   RefreshHistory();
+   if ( !m_guideDir.IsEmpty() )
+      Welcome( m_guideDir );
+   else
+      RefreshHistory();
    Refresh();
 }
 

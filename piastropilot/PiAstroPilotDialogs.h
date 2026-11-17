@@ -59,6 +59,9 @@ public:
    void AppendInfo( const String& text );
    void AppendInfo( const String& text, const std::vector<std::pair<String, String>>& images );
 
+   // Mensaje de inicio (el de PiAstroPilot Lite): al abrir y tras Limpiar / Nueva conversación.
+   void Welcome( const String& guideDir );
+
    // Vacía la ventana; el modelo conserva el contexto de la conversación.
    void ClearView();
 
@@ -96,6 +99,7 @@ private:
    GUIData* GUI = nullptr;
 
    String m_context;
+   String m_guideDir;   // para el mensaje de inicio
    std::vector<PiAstroPilotChatEntry> m_entries;
    String m_lastCalls;
    bool   m_busy = false;
