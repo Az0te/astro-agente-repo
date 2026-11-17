@@ -12,7 +12,8 @@
 //      El XISF no se gira. Desde PixInsight 1.9.6 FastRotation también conserva la astrometría (comprobado).
 // Opciones: carpeta (obligatoria; se crea si no existe: saveAs a una carpeta inexistente abre un diálogo modal que
 // bloquea PixInsight), nombre (por defecto el id de la vista), girar180 (false), formatos (["xisf", "tif", "jpg"]),
-// sobrescribir (false: si el fichero existe, añade _2, _3...).
+// sobrescribir (false: si el fichero existe, añade _2, _3...), calidad (JPG 1–100; por defecto la de PixInsight) o
+// jpgMB (tamaño del JPG en MB: busca la calidad que se acerca sin pasarse). girar vale igual que girar180.
 
 function exUnique(path, sobre) {
   if (sobre || !File.exists(path)) return path;
@@ -63,15 +64,39 @@ function exGamut(antes, despues) {
   return { recortados_antes_pct: +a.toFixed(4), recortados_srgb_pct: +d.toFixed(4), recortados_por_conversion_pct: +Math.max(0, d - a).toFixed(4) };
 }
 
-function exSave(win, path) {
-  if (!win.saveAs(path, false, false, false, false)) throw new Error("No se pudo guardar " + path);
+function exSave(win, path, hints) {
+  if (!win.saveAs(path, false, false, false, false, hints || "")) throw new Error("No se pudo guardar " + path);
   var kb = 0; try { kb = Math.round(new FileInfo(path).size / 1024); } catch (e) { }
   return { fichero: path, kB: kb };
+}
+
+// JPG con calidad fija (o.calidad, 1–100) o con el tamaño pedido (o.jpgMB): busca la calidad por bisección entre 70 y
+// 100 guardando y midiendo (17 nov 2026: Rafael pidió un JPG de 6 MB y salía de 1,7 con la calidad por defecto).
+function exSaveJpg(win, path, o) {
+  if (o.jpgMB > 0) {
+    var objetivo = o.jpgMB * 1024, lo = 70, hi = 100, mejor = 70;
+    while (lo <= hi) {
+      var q = (lo + hi) >> 1;
+      if (exSave(win, path, "quality " + q).kB <= objetivo) { mejor = q; lo = q + 1; } else hi = q - 1;
+    }
+    var r = exSave(win, path, "quality " + mejor);   // el fichero queda con la calidad elegida
+    r.calidad = mejor;
+    mejor = r;
+    mejor.objetivo_MB = o.jpgMB;
+    if (mejor.calidad >= 100 && mejor.kB < 0.9 * objetivo)
+      mejor.aviso = "Con calidad 100 el JPG ocupa " + (mejor.kB / 1024).toFixed(1) + " MB: no llega a " + o.jpgMB + " MB (la imagen no da para más).";
+    return mejor;
+  }
+  var cal = o.calidad > 0 ? Math.min(100, Math.round(o.calidad)) : 0, r2 = exSave(win, path, cal ? "quality " + cal : "");
+  if (cal) r2.calidad = cal;
+  return r2;
 }
 
 function exportarFinal(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
+  // La descripción del manifiesto decía «girar» y el código sólo miraba girar180: el giro se perdía sin aviso (17 nov 2026).
+  if (o.girar !== undefined && o.girar180 === undefined) o.girar180 = !!o.girar;
   var v = View.viewById(viewId);
   if (!v || v.isNull) throw new Error("No existe la vista " + viewId);
   if (!o.carpeta) throw new Error("Falta la carpeta de salida (opción carpeta)");
@@ -108,7 +133,7 @@ function exportarFinal(viewId, o) {
       out.push(exSave(w16, exUnique(dir + "/" + nombre + ".tif", o.sobrescribir)));
       w16.forceClose();
     }
-    if (fmts.indexOf("jpg") >= 0) out.push(exSave(w, exUnique(dir + "/" + nombre + ".jpg", o.sobrescribir)));
+    if (fmts.indexOf("jpg") >= 0) out.push(exSaveJpg(w, exUnique(dir + "/" + nombre + ".jpg", o.sobrescribir), o));
     w.forceClose();
   }
   var noCumple = [];

@@ -1506,7 +1506,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "{ carpeta (obligatoria), nombre, girar: false (giro 180°), formatos: [\"xisf\",\"tif\",\"jpg\"], sobrescribir: false }"
+      "description": "{ carpeta (obligatoria), nombre, girar180: false (giro 180° del TIFF y el JPG; también vale girar), formatos: [\"xisf\",\"tif\",\"jpg\"], sobrescribir: false, calidad: 1–100 (calidad del JPG), jpgMB: tamaño del JPG en MB (busca la calidad que lo da, p. ej. 6) }"
      }
     },
     "required": [
