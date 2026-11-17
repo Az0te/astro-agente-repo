@@ -43,9 +43,14 @@ MAX_RONDAS = 30
 # Pensadas para quien no tiene gráfica ni suscripción (17 nov 2026). La clave se lee de la variable de entorno (o del
 # registro de Windows, por si se creó con el chat ya abierto); el modelo se cambia con <CLAVE sin _API_KEY>_MODELO.
 APIS = {
-    "Gemini (API, nivel gratuito)": {"url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                                     "clave": "GEMINI_API_KEY", "modelo": "gemini-2.5-flash", "vision": True,
-                                     "limite": 50000, "web": "https://aistudio.google.com/apikey"},
+    # 18 nov 2026, nivel gratuito: gemini-3.5-flash-lite responde en ~5 s; gemini-3.8-flash (y flash-latest) tardaban
+    # 2,5–3 min por petición con 20k tokens de entrada (cola del servidor, 503 «high demand»).
+    "Gemini Flash-Lite (API gratis, rápido)": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "clave": "GEMINI_API_KEY",
+        "modelo": "gemini-3.5-flash-lite", "vision": True, "limite": 50000, "web": "https://aistudio.google.com/apikey"},
+    "Gemini Flash (API gratis, más lento)": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "clave": "GEMINI_API_KEY",
+        "modelo": "gemini-3.8-flash", "vision": True, "limite": 50000, "web": "https://aistudio.google.com/apikey"},
     "OpenRouter (API)": {"url": "https://openrouter.ai/api/v1/chat/completions", "clave": "OPENROUTER_API_KEY",
                          "modelo": "deepseek/deepseek-chat-v3-0324:free", "vision": False, "limite": 50000,
                          "web": "https://openrouter.ai/keys"},
@@ -292,8 +297,14 @@ def _compactar(mensajes, guardar_ultimos=2, limite=LIMITE_TOKENS_LOCAL):
         if not mensajes[i].get("_corto"):
             mensajes[i]["content"] = _resumir(mensajes[i]["content"])
             mensajes[i]["_corto"] = True
+    def largo(c):
+        # Las previas (base64) cuentan como una imagen (~300 tokens), no por sus caracteres.
+        if isinstance(c, list):
+            return sum(len(p.get("text", "")) if p.get("type") == "text" else 1050 for p in c if isinstance(p, dict))
+        return len(str(c or ""))
+
     def tokens():
-        return sum(len(str(m.get("content", ""))) + len(json.dumps(m.get("tool_calls", ""))) for m in mensajes) / 3.5
+        return sum(largo(m.get("content", "")) + len(json.dumps(m.get("tool_calls", ""))) for m in mensajes) / 3.5
     if tokens() > limite:
         for i in herramientas[:-1]:
             mensajes[i]["content"] = _resumir(mensajes[i]["content"], 150)
@@ -343,7 +354,8 @@ def clave_api(variable):
 
 
 def modelo_api(api):
-    return os.environ.get(api["clave"].replace("_API_KEY", "_MODELO"), "").strip() or api["modelo"]
+    return (os.environ.get(api["clave"].replace("_API_KEY", "_MODELO"), "").strip() or api.get("_modelo_vivo")
+            or api["modelo"])
 
 
 def _espera_429(e, intento):
@@ -383,6 +395,15 @@ def pedir_api(api, modelo, mensajes, herramientas, emitir):
                 e._cuerpo = e.read().decode("utf-8", "replace")
             except Exception:
                 e._cuerpo = ""
+            # Modelo retirado (18 nov 2026: «gemini-2.5-flash is no longer available… use models/gemini-3.8-flash»):
+            # se pasa al que propone la propia API, una vez, y se avisa.
+            nuevo = re.search(r"use (?:models/)?([\w.\-]+) ", e._cuerpo) if e.code == 404 else None
+            if nuevo and nuevo.group(1) != cuerpo["model"] and intento < 5:
+                emitir({"tipo": "aviso", "texto": f"El modelo {cuerpo['model']} ya no está disponible: uso {nuevo.group(1)}, "
+                                                  "el que propone la API."})
+                cuerpo["model"] = api["_modelo_vivo"] = nuevo.group(1)
+                datos = json.dumps(cuerpo).encode("utf-8")
+                continue
             if e.code in (429, 500, 502, 503, 504) and intento < 5:
                 s = _espera_429(e, intento)
                 emitir({"tipo": "aviso", "texto": f"La API respondió {e.code} ({'límite de uso' if e.code == 429 else 'ocupada'}): "
@@ -397,10 +418,21 @@ def pedir_api(api, modelo, mensajes, herramientas, emitir):
     u = r.get("usage") or {}
     out = {"role": "assistant", "content": m.get("content") or ""}
     if m.get("tool_calls"):
-        out["tool_calls"] = [{"id": t.get("id") or f"llamada_{i}", "type": "function",
-                              "function": {"name": (t.get("function") or {}).get("name", ""),
-                                           "arguments": (t.get("function") or {}).get("arguments") or "{}"}}
-                             for i, t in enumerate(m["tool_calls"])]
+        # Las llamadas vuelven tal cual (sólo se completa lo que falte): Gemini 3 pone en extra_content la
+        # «thought_signature» de cada llamada y responde 400 si no se le devuelve (18 nov 2026).
+        out["tool_calls"] = []
+        for i, t in enumerate(m["tool_calls"]):
+            t = dict(t)
+            t.setdefault("id", f"llamada_{i}")
+            t["id"] = t["id"] or f"llamada_{i}"
+            t["type"] = "function"
+            fn = dict(t.get("function") or {})
+            fn.setdefault("name", "")
+            fn["arguments"] = fn.get("arguments") or "{}"
+            t["function"] = fn
+            out["tool_calls"].append(t)
+    if m.get("extra_content"):
+        out["extra_content"] = m["extra_content"]
     return out, int(u.get("prompt_tokens") or 0), int(u.get("completion_tokens") or 0)
 
 
@@ -465,6 +497,7 @@ class MotorLocal:
             if self.api:
                 _olvidar_imagenes(self.mensajes)
                 _compactar(self.mensajes, limite=self.api["limite"])
+                self.modelo = self.api.get("_modelo_vivo") or self.modelo
                 m, ti, to = pedir_api(self.api, self.modelo, [{k: v for k, v in x.items() if not k.startswith("_")}
                                                               for x in self.mensajes], herr, emitir)
                 tok_in += ti
@@ -528,7 +561,7 @@ class MotorLocal:
                         m = dict(m, content="(tomado del razonamiento)\n\n" + final)
                     else:
                         emitir({"tipo": "aviso", "texto": "El modelo no respondió (turno vacío)."})
-            self.mensajes.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls")})
+            self.mensajes.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls", "extra_content")})
             if m.get("content") and (not llamadas or m["content"].strip()):
                 emitir({"tipo": "texto", "texto": m["content"]})
             if not llamadas:
