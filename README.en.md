@@ -31,7 +31,7 @@ Alain Escaffre's original project is an **autonomous** pipeline designed for mac
 This is what most people will use: it needs no Node.js, MCP server or building.
 
 1. Download the repository (**Code > Download ZIP** on GitHub) and unzip it, for example in `C:\Users\<your_user>\astro-agente-repo`.
-2. Have a model: [Ollama](https://ollama.com) with a model pulled (local and free, e.g. `ollama pull qwen3:32b`), or Claude Code / Codex installed and signed in.
+2. Have a model: [Ollama](https://ollama.com) with a model pulled (local and free, e.g. `ollama pull qwen3:32b`), Claude Code / Codex installed and signed in, or a free Gemini key (no GPU or subscription needed, less reliable). See [Which AI to use and how to set it up](#which-ai-to-use-and-how-to-set-it-up).
 3. In PixInsight 1.9.6 or later: **Script > Feature Scripts… > Add**, choose the `piastropilot\script` folder and press **Done**.
 4. Open your image and launch **Script > PiAstroPilot > PiAstroPilotLite**.
 5. In **Settings > Language** choose **English** (window and model replies; applied at once and remembered).
@@ -41,13 +41,58 @@ Details, options and common problems in [`piastropilot/script/README.en.md`](pia
 
 ## SirilAstroPilot
 
-The same assistant for **Siril** (`siril/`). It is a bridge written from scratch with sirilpy, with no PixInsight code, plus a chat inside Siril. It works with a local Ollama model (e.g. Qwen) or with Claude. It follows the same common guide, with the Siril how-to in Annex I. The tools come from a whitelist and compare candidates at every step, from stacking to export.
+The same assistant for **Siril** (`siril/`). It is a bridge written from scratch with sirilpy, with no PixInsight code, plus a chat inside Siril. It works with a local Ollama model (e.g. Qwen), with Claude or with free APIs with a key (Gemini, OpenRouter, Groq; less reliable). It follows the same common guide, with the Siril how-to in Annex I. The tools come from a whitelist and compare candidates at every step, from stacking to export.
 
 1. Requirements: Siril 1.4.x (with Python and sirilpy).
 2. In Siril, Preferences > Scripts: add the `siril/puente` folder.
 3. Launch **Scripts > SirilAstroPilot**: it starts the bridge and opens the chat.
 
 Details and MCP setup (Claude Code, Codex) in [`siril/README.md`](siril/README.md) (Spanish).
+
+## Which AI to use and how to set it up
+
+Every part (Lite, the module, the Siril and SASpro chats) follows the same guide with the model you choose.
+
+| AI | Cost | What you need | Where it works | Reliability with the guide |
+|---|---|---|---|---|
+| **Claude Code** (Anthropic) | subscription or paid API | Claude Code installed and signed in | everywhere; processes on its own through MCP | the best (the guide's reference) |
+| **Codex** (OpenAI) | ChatGPT subscription or API | `npm install -g @openai/codex` and `codex login` | Lite, module, Siril/SASpro through MCP | good |
+| **Local with Ollama** (e.g. Qwen) | free | a GPU with enough VRAM (about 16–24 GB for a 27–32B Qwen) | everywhere | good with the large models; nothing leaves your PC |
+| **Gemini** (Google, API) | **free** with daily limits | a Google AI Studio key | Siril and SASpro chats, Lite and module | **lower**: for trying it out |
+| **OpenRouter / Groq** (API) | free tier with limits | a key from their site | Siril and SASpro chats; templates in the module | **lower**; not tested in depth |
+
+> **Free APIs are not as reliable as a local AI or the paid ones.** They let you try the assistant without a GPU or a subscription, but they choose worse and skip rules. In the 18 Nov 2026 test (IC 1396, Siril, "Hasta el final"), Gemini Flash-Lite did the whole linear part almost as in the reference processing, but in the non-linear part it left the nebula lavender, the stars almost gone and no contrast, and it made up timings in its report. Use them with **«Elegir yo»** (choose myself) ticked and check every step. Also, on free tiers the provider may use what you send (measurements and thumbnails of your images) to improve its models.
+
+### Claude Code
+
+1. Install [Claude Code](https://claude.com/claude-code) and sign in (Pro/Max subscription or API key).
+2. **Lite**: *Model* tab > provider *Claude Code (CLI)*. **Module**: model *Claude*. **Siril/SASpro chats**: model *Claude (CLI)*.
+
+### Codex
+
+1. `npm install -g @openai/codex`, then `codex login`.
+2. **Lite**: provider *Codex (CLI)*. **Module**: model *Codex*. In Siril and SASpro it is used from Codex with the MCP (see `siril/README.md` and `sas/README.md`).
+
+### Local with Ollama
+
+1. Install [Ollama](https://ollama.com) and pull a model, e.g. `ollama pull qwen3:32b`.
+2. **Lite**: provider *Ollama* and *Read Ollama models*. **Module**: model *Qwen 3.8 (local)* or «+» > *Ollama*. **Siril/SASpro chats**: your Ollama models show up in the list.
+
+### Gemini (free, with a key)
+
+1. Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) with your Google account, no card needed. **Do not share it or paste it into chats.**
+2. **Siril and SASpro chats**: choose *Gemini Flash-Lite (API gratis, rápido)* and press **Key…** to paste it. It is stored only on your PC, as the user environment variable `GEMINI_API_KEY`.
+3. **Lite**: provider *Gemini (API, gratis con clave)* and paste the key in *Settings > Clave de Gemini*. If left empty, it uses `GEMINI_API_KEY`.
+4. **Module** (build 115 or later): model *Gemini Flash-Lite (API gratis)*. It reads `GEMINI_API_KEY`. Like the local model, it proposes the calls for you to review.
+5. **Flash-Lite** answers in seconds. **Flash** reasons somewhat better, but on the free tier it can take minutes per answer. If Google retires a model, the chats switch on their own to the one the API suggests.
+
+To create the variable by hand: Start > "environment variables" > *Edit environment variables for your account* > **New**, with the name `GEMINI_API_KEY` and your key as the value.
+
+### OpenRouter and Groq (free, with a key)
+
+1. Get the key at [openrouter.ai/keys](https://openrouter.ai/keys) or [console.groq.com/keys](https://console.groq.com/keys).
+2. **Siril and SASpro chats**: choose *OpenRouter (API)* or *Groq (API)* and press **Key…**. It is stored in `OPENROUTER_API_KEY` or `GROQ_API_KEY`. **Module**: «+» > the matching template.
+3. Change the model with the `OPENROUTER_MODELO` or `GROQ_MODELO` variable, and for Gemini with `GEMINI_MODELO`. These models do not see the previews: they work from the measurements only.
 
 ## PixInsight vs Siril comparison
 

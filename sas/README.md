@@ -20,6 +20,13 @@ Mientras corre una herramienta larga (GraXpert, Cosmic Clarity, StarNet), la int
 
 Relanzar el script detiene el puente anterior y arranca uno nuevo. Si cambia algún fichero de `herramientas/`, el puente lo recarga solo entre dos trabajos.
 
+**Chat dentro de SASpro** (`herramientas/chat.py`, igual que el de Siril). Puedes elegir entre:
+- un modelo local de Ollama;
+- **Claude (CLI)**;
+- una API con clave: **Gemini Flash-Lite / Flash** (gratis), **OpenRouter** o **Groq**.
+
+Con una API aparece el botón **Clave…** para pegar la clave, que se guarda sólo en el PC como variable de usuario. Las APIs gratuitas son **menos fiables** que la IA local o las de pago: sirven para probar, mejor con *Elegir yo* marcado. Más en [Qué IA usar](../README.md#qué-ia-usar-y-cómo-configurarla).
+
 ## Herramientas (0.1.0)
 
 SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herramientas llevan `vista` (nombre, título de la ventana o uid). Sin `vista` se usa la activa. Coordenadas como en pantalla (0,0 arriba a la izquierda) y valores de píxel en 0–1, igual que en PixInsight y Siril.

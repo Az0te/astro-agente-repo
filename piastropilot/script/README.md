@@ -12,6 +12,7 @@ PiAstroPilot Lite es la forma más sencilla de usar el asistente: un **script** 
   - **Ollama** (local, gratis, sin internet): [ollama.com](https://ollama.com) con un modelo descargado, por ejemplo `ollama pull qwen3:32b`. PiAstroPilot Lite lo busca en `http://localhost:11434`.
   - **Claude Code** (de pago, el que mejor resultado da): [instalado](https://docs.anthropic.com/es/docs/claude-code) y con sesión iniciada (`claude` en una terminal).
   - **Codex** (OpenAI): `npm install -g @openai/codex` y `codex login`.
+  - **Gemini** (Google, gratis con clave, sin gráfica ni suscripción): clave de [aistudio.google.com/apikey](https://aistudio.google.com/apikey) en *Ajustes > Clave de Gemini* (o en la variable `GEMINI_API_KEY`) y proveedor *Gemini (API, gratis con clave)*. **Menos fiable** que la IA local o las de pago: sirve para probar; revisa cada paso. Más en [Qué IA usar](../../README.md#qué-ia-usar-y-cómo-configurarla).
 - Para la astrometría (`resolverAstrometria`): un índice de Gaia configurado en las preferencias del proceso Gaia.
 - Opcionales, pero la guía los usa mucho: BlurXTerminator, NoiseXTerminator, StarXTerminator y GraXpert (cada uno con su licencia).
 
@@ -27,7 +28,7 @@ No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio 
 
 1. Abre tu imagen en PixInsight.
 2. Lanza **Script > PiAstroPilot > PiAstroPilotLite** (o **Script > Execute Script File…** y elige `piastropilot/script/PiAstroPilotLite.js`).
-3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code o Codex) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola), y elige el **Idioma** (español o inglés).
+3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code, Codex o Gemini) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola), y elige el **Idioma** (español o inglés).
 4. En **Prompt** escribe lo que quieres, por ejemplo «hazme un análisis de la imagen». Las funciones de la guía que pide el modelo se ejecutan solas (se comprueban antes contra el manifiesto) y el modelo te explica el resultado; si fallan, le pide la corrección (hasta 3 veces). Las líneas «Siguiente paso» del chat son enlaces: púlsalos para hacer ese paso.
 
 ## Qué hace

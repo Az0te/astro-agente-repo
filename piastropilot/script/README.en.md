@@ -12,6 +12,7 @@ PiAstroPilot Lite is the easiest way to use the assistant: a PixInsight **script
   - **Ollama** (local, free, no internet): [ollama.com](https://ollama.com) with a model pulled, for example `ollama pull qwen3:32b`. PiAstroPilot Lite looks for it at `http://localhost:11434`.
   - **Claude Code** (paid, gives the best results): [installed](https://docs.anthropic.com/en/docs/claude-code) and signed in (`claude` in a terminal).
   - **Codex** (OpenAI): `npm install -g @openai/codex` and `codex login`.
+  - **Gemini** (Google, free with a key, no GPU or subscription): key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) in *Settings > Clave de Gemini* (or in the `GEMINI_API_KEY` variable) and provider *Gemini (API, gratis con clave)*. **Less reliable** than a local AI or the paid ones: fine for trying it out; check every step. More in [Which AI to use](../../README.en.md#which-ai-to-use-and-how-to-set-it-up).
 - For astrometry (`resolverAstrometria`): a Gaia index configured in the Gaia process preferences.
 - Optional, but the guide uses them a lot: BlurXTerminator, NoiseXTerminator, StarXTerminator and GraXpert (each with its own licence).
 
@@ -28,7 +29,7 @@ No Node.js or MCP server is needed: the script loads the guide inside PixInsight
 1. Open your image in PixInsight.
 2. Launch **Script > PiAstroPilot > PiAstroPilotLite** (or **Script > Execute Script File…** and choose `piastropilot/script/PiAstroPilotLite.js`).
 3. In **Settings > Language** choose **English**: the window switches at once and the model answers in English. The setting is remembered.
-4. In the **Model** tab choose the provider (Ollama, Claude Code or Codex) and the model. In **Settings** check the Ollama URL, the `claude`/`codex` paths and the guide folder (detected automatically).
+4. In the **Model** tab choose the provider (Ollama, Claude Code, Codex or Gemini) and the model. In **Settings** check the Ollama URL, the `claude`/`codex` paths and the guide folder (detected automatically).
 5. In **Prompt** type what you want, for example «analyse the image». The guide functions the model asks for run on their own (checked first against the manifest) and the model explains the result; if they fail, it is asked for a fix (up to 3 times). The «Next step» lines in the chat are links: click them to do that step.
 
 ## What it does

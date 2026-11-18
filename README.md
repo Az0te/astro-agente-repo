@@ -1,12 +1,12 @@
 # Agente de astrofotografía para PixInsight (Windows)
 
-> **English: full README in [README.en.md](README.en.md).** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The first bridge (a file watcher plus MCP server, retired in November 2026) was derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT); the current bridge is the `piastropilot` MCP server (`mcp/`), which runs the guide's functions in PixInsight through IPC. **Easiest start: [PiAstroPilot Lite](piastropilot/script/README.en.md)**, a plain PixInsight script (no build, no signing) that chats with Ollama, Claude Code or Codex and runs the guide's functions; its window and replies can be switched to English in Settings > Language. Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
+> **English: full README in [README.en.md](README.en.md).** A Windows-ready bridge that lets an AI assistant (Claude, via MCP) drive PixInsight for deep-sky processing, plus a detailed processing guide in Spanish (the assistant answers in the language you write in, English included; OSC + dual-band, HDR with short exposures, star halos, blue bloat, Hα/OIII + RGB, narrowband palettes, objective quality checks). The first bridge (a file watcher plus MCP server, retired in November 2026) was derived from [pixinsight-mcp](https://github.com/aescaffre/pixinsight-mcp) by Alain Escaffre (MIT); the current bridge is the `piastropilot` MCP server (`mcp/`), which runs the guide's functions in PixInsight through IPC. **Easiest start: [PiAstroPilot Lite](piastropilot/script/README.en.md)**, a plain PixInsight script (no build, no signing) that chats with Ollama, Claude Code, Codex or Gemini (free API key) and runs the guide's functions; its window and replies can be switched to English in Settings > Language. Independent project, not affiliated with Pleiades Astrophoto or Anthropic.
 
 Este proyecto permite que un asistente de IA (Claude, a través del protocolo MCP) controle PixInsight para procesar astrofotografías de cielo profundo, **trabajando contigo**: tú decides y supervisas, la IA ejecuta, mide y propone.
 
 Incluye estas partes:
 
-- **[PiAstroPilot Lite](piastropilot/script/README.md)** (`piastropilot/script/PiAstroPilotLite.js`): **la forma más sencilla de empezar**. Es un script de PixInsight, sin compilar ni firmar nada: chat con el asistente (Ollama local, Claude Code o Codex), funciones de la guía ya cargadas, comparación de métodos, información del objeto desde internet y voz. Ver [Empezar con PiAstroPilot Lite](#empezar-con-piastropilot-lite).
+- **[PiAstroPilot Lite](piastropilot/script/README.md)** (`piastropilot/script/PiAstroPilotLite.js`): **la forma más sencilla de empezar**. Es un script de PixInsight, sin compilar ni firmar nada: chat con el asistente (Ollama local, Claude Code, Codex o Gemini con clave gratuita), funciones de la guía ya cargadas, comparación de métodos, información del objeto desde internet y voz. Ver [Empezar con PiAstroPilot Lite](#empezar-con-piastropilot-lite).
 - **[PiAstroPilot](piastropilot/README.md)** (`piastropilot/`): módulo nativo de PixInsight que acopla un asistente de IA al panel lateral sin bloquear PixInsight. Tiene un botón por paso de la guía, chat con tablas y vistas previas, y funciona con Claude Code, Codex o un modelo local (Ollama). Va con la guía de este repositorio; por ahora hay que compilarlo y firmarlo con claves de desarrollador propias.
 - **Servidor MCP piastropilot** (`mcp/`): el puente entre la IA y PixInsight. Ofrece las funciones de la guía como herramientas y las ejecuta en la instancia de PixInsight que tienes abierta (IPC `PixInsight.exe -x=`), sin carpeta vigilada ni `eval`. Detalles en [`mcp/README.md`](mcp/README.md).
 - **[SirilAstroPilot](siril/README.md)** (`siril/`): lo mismo para **Siril**, con la misma guía. Ver [SirilAstroPilot](#sirilastropilot).
@@ -31,7 +31,7 @@ El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para
 Es lo que usará la mayoría: no necesita Node.js, servidor MCP ni compilar nada.
 
 1. Descarga el repositorio (**Code > Download ZIP** en GitHub) y descomprímelo, por ejemplo en `C:\Users\<tu_usuario>\astro-agente-repo`.
-2. Ten un modelo: [Ollama](https://ollama.com) con un modelo descargado (local y gratis, p. ej. `ollama pull qwen3:32b`), o Claude Code / Codex instalados y con sesión iniciada.
+2. Ten un modelo: [Ollama](https://ollama.com) con un modelo descargado (local y gratis, p. ej. `ollama pull qwen3:32b`), Claude Code / Codex instalados y con sesión iniciada, o una clave gratuita de Gemini (sin gráfica ni suscripción, menos fiable). Ver [Qué IA usar y cómo configurarla](#qué-ia-usar-y-cómo-configurarla).
 3. En PixInsight 1.9.6 o superior: **Script > Feature Scripts… > Add**, elige la carpeta `piastropilot\script` y pulsa **Done**.
 4. Abre tu imagen y lanza **Script > PiAstroPilot > PiAstroPilotLite**. Elige el modelo en la pestaña **Modelo** y escribe en **Prompt**, por ejemplo «hazme un análisis de la imagen».
 5. Opcional: en **Ajustes > Idioma** elige español o inglés (ventana y respuestas del modelo; se aplica al momento).
@@ -40,13 +40,58 @@ Detalles, opciones y problemas frecuentes en [`piastropilot/script/README.md`](p
 
 ## SirilAstroPilot
 
-El mismo asistente para **Siril** (`siril/`). Es un puente escrito desde cero con sirilpy, sin código de PixInsight, más un chat dentro de Siril. Funciona con un modelo local de Ollama (p. ej. Qwen) o con Claude. Sigue la misma guía común, con el cómo de Siril en el Anexo I. Las herramientas son de una lista blanca y comparan candidatos en cada paso, del apilado a la exportación.
+El mismo asistente para **Siril** (`siril/`). Es un puente escrito desde cero con sirilpy, sin código de PixInsight, más un chat dentro de Siril. Funciona con un modelo local de Ollama (p. ej. Qwen), con Claude o con APIs gratuitas con clave (Gemini, OpenRouter, Groq; menos fiables). Sigue la misma guía común, con el cómo de Siril en el Anexo I. Las herramientas son de una lista blanca y comparan candidatos en cada paso, del apilado a la exportación.
 
 1. Requisitos: Siril 1.4.x (con Python y sirilpy).
 2. En Siril, Preferencias > Scripts: añade la carpeta `siril/puente`.
 3. Lanza **Scripts > SirilAstroPilot**: arranca el puente y abre el chat.
 
 Detalles e instalación del MCP (Claude Code, Codex) en [`siril/README.md`](siril/README.md).
+
+## Qué IA usar y cómo configurarla
+
+Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía con el modelo que elijas.
+
+| IA | Coste | Qué necesitas | Dónde funciona | Fiabilidad con la guía |
+|---|---|---|---|---|
+| **Claude Code** (Anthropic) | suscripción o API de pago | Claude Code instalado y con sesión | todas; procesa solo con MCP | la mejor (referencia de la guía) |
+| **Codex** (OpenAI) | suscripción de ChatGPT o API | `npm install -g @openai/codex` y `codex login` | Lite, módulo, Siril/SASpro por MCP | buena |
+| **Local con Ollama** (p. ej. Qwen) | gratis | una gráfica con VRAM suficiente (unos 16–24 GB para Qwen de 27–32B) | todas | buena con los modelos grandes; sin enviar nada fuera del PC |
+| **Gemini** (Google, API) | **gratis** con límites diarios | una clave de Google AI Studio | chats de Siril y SASpro, Lite y módulo | **menor**: para probar |
+| **OpenRouter / Groq** (API) | nivel gratuito con límites | una clave de su web | chats de Siril y SASpro; plantillas en el módulo | **menor**; sin probar a fondo |
+
+> **Las APIs gratuitas no son tan fiables como la IA local o las de pago.** Sirven para probar el asistente sin gráfica ni suscripción, pero eligen peor y se saltan reglas. En la prueba del 18 nov 2026 (IC 1396, Siril, «Hasta el final»), Gemini Flash-Lite hizo de principio a fin la parte lineal casi como en el procesado de referencia, pero en la no lineal dejó la nebulosa con un tono lavanda, las estrellas casi apagadas y sin contraste, e inventó tiempos en el informe. Úsalas con **«Elegir yo»** marcado y revisa cada paso. Además, en el nivel gratuito el proveedor puede usar lo que se envía (las medidas y las miniaturas de tus imágenes) para mejorar sus modelos.
+
+### Claude Code
+
+1. Instala [Claude Code](https://claude.com/claude-code) e inicia sesión (suscripción Pro/Max o clave de API).
+2. **Lite**: pestaña *Modelo* > proveedor *Claude Code (CLI)*. **Módulo**: modelo *Claude*. **Chats de Siril/SASpro**: modelo *Claude (CLI)*.
+
+### Codex
+
+1. `npm install -g @openai/codex` y después `codex login`.
+2. **Lite**: proveedor *Codex (CLI)*. **Módulo**: modelo *Codex*. En Siril y SASpro se usa desde Codex con el MCP (ver `siril/README.md` y `sas/README.md`).
+
+### Local con Ollama
+
+1. Instala [Ollama](https://ollama.com) y descarga un modelo, por ejemplo `ollama pull qwen3:32b`.
+2. **Lite**: proveedor *Ollama* y *Leer modelos de Ollama*. **Módulo**: modelo *Qwen 3.8 (local)* o «+» > *Ollama*. **Chats de Siril/SASpro**: tus modelos de Ollama salen solos en la lista.
+
+### Gemini (gratis, con clave)
+
+1. Saca una clave gratis en [aistudio.google.com/apikey](https://aistudio.google.com/apikey), con tu cuenta de Google y sin tarjeta. **No la compartas ni la pegues en chats.**
+2. **Chats de Siril y SASpro**: elige *Gemini Flash-Lite (API gratis, rápido)* y pulsa **Clave…** para pegarla. Se guarda solo en tu PC, como variable de entorno de usuario `GEMINI_API_KEY`.
+3. **Lite**: proveedor *Gemini (API, gratis con clave)* y pega la clave en *Ajustes > Clave de Gemini*. Si la dejas vacía, usa `GEMINI_API_KEY`.
+4. **Módulo** (build 115 o posterior): modelo *Gemini Flash-Lite (API gratis)*. Lee `GEMINI_API_KEY`. Como el modelo local, propone las llamadas para que las revises.
+5. **Flash-Lite** responde en segundos. **Flash** razona algo mejor, pero en el nivel gratuito puede tardar minutos por respuesta. Si Google retira un modelo, los chats cambian solos al que indique la API.
+
+Para crear la variable a mano: Inicio > «variables de entorno» > *Editar las variables de entorno de esta cuenta* > **Nueva**, con el nombre `GEMINI_API_KEY` y tu clave como valor.
+
+### OpenRouter y Groq (gratis, con clave)
+
+1. Saca la clave en [openrouter.ai/keys](https://openrouter.ai/keys) o en [console.groq.com/keys](https://console.groq.com/keys).
+2. **Chats de Siril y SASpro**: elige *OpenRouter (API)* o *Groq (API)* y pulsa **Clave…**. Se guarda en `OPENROUTER_API_KEY` o `GROQ_API_KEY`. **Módulo**: «+» > la plantilla correspondiente.
+3. El modelo se cambia con la variable `OPENROUTER_MODELO` o `GROQ_MODELO`, y para Gemini con `GEMINI_MODELO`. Estos modelos no ven las previas: trabajan solo con las medidas.
 
 ## Comparativa PixInsight frente a Siril
 
