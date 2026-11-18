@@ -37,6 +37,7 @@ MINIS = DATOS / "chat"
 PUERTO = int(os.environ.get("SIRILASTROPILOT_PUERTO", "48731"))
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 MODELO_LOCAL = "qwen38-32k"
+LOCAL = "IA local (Ollama)"
 CLAUDE = "Claude (CLI)"
 CODEX = "Codex (CLI)"
 MAX_RONDAS = 30
@@ -1245,15 +1246,28 @@ class Ventana(QMainWindow):
 
         arriba = QHBoxLayout()
         self.l_modelo = QLabel()
+        # 18 nov 2026 (Rafael): «IA local» en la lista y, al elegirla, otra lista con los modelos de Ollama.
         self.modelo = QComboBox()
-        locales = sorted(modelos_ollama(), key=lambda m: (not m.startswith(MODELO_LOCAL), m))
-        self.modelo.addItems((locales + [CLAUDE] if locales else [CLAUDE, MODELO_LOCAL]) + [CODEX] + list(APIS))
+        self.modelo.addItems([LOCAL, CLAUDE, CODEX] + list(APIS))
         for i, (n, a) in enumerate(APIS.items()):
             self.modelo.setItemData(self.modelo.findText(n), f"{modelo_api(a)} · clave en {a['clave']} ({a['web']})",
                                     Qt.ItemDataRole.ToolTipRole)
-        if self.ajustes.get("modelo") and self.modelo.findText(self.ajustes["modelo"]) >= 0:
-            self.modelo.setCurrentText(self.ajustes["modelo"])
+        self.modelo_local = QComboBox()
+        locales = sorted(modelos_ollama(), key=lambda m: (not m.startswith(MODELO_LOCAL), m))
+        self.modelo_local.addItems(locales or [MODELO_LOCAL])
+        guardado = self.ajustes.get("modelo")
+        if guardado and self.modelo.findText(guardado) < 0:          # ajuste antiguo: el nombre del modelo de Ollama
+            if guardado in locales:
+                self.ajustes["modelo_local"] = guardado
+            guardado = LOCAL if guardado in locales else None
+        if guardado and self.modelo.findText(guardado) >= 0:
+            self.modelo.setCurrentText(guardado)
+        ml = self.ajustes.get("modelo_local")
+        if ml and self.modelo_local.findText(ml) >= 0:
+            self.modelo_local.setCurrentText(ml)
+        self.modelo_local.setVisible(self.modelo.currentText() == LOCAL)
         self.modelo.currentTextChanged.connect(self.cambio_modelo)
+        self.modelo_local.currentTextChanged.connect(self.cambio_local)
         self.b_clave = QPushButton()
         self.b_clave.clicked.connect(self.pedir_clave)
         self.b_clave.setVisible(self.modelo.currentText() in APIS)
@@ -1281,7 +1295,7 @@ class Ventana(QMainWindow):
         self.c_final = QCheckBox()
         self.c_final.setChecked(bool(self.ajustes.get("hasta_final")))
         self.c_final.toggled.connect(lambda v: self.guardar(hasta_final=bool(v)))
-        for w in (self.l_modelo, self.modelo, self.b_clave, self.internet, self.c_elegir, self.c_final):
+        for w in (self.l_modelo, self.modelo, self.modelo_local, self.b_clave, self.internet, self.c_elegir, self.c_final):
             arriba.addWidget(w)
         arriba.addStretch(1)
         for w in (self.l_idioma, self.idioma, self.c_abrir, self.b_informe, self.b_limpiar):
@@ -1438,7 +1452,26 @@ class Ventana(QMainWindow):
             self.poner(f'<span class="err">{html.escape(str(e))}</span>')
         self.b_clave.setText(self.T("clave") + (" ✓" if clave_api(api["clave"]) else ""))
 
+    def cambio_local(self, nombre):
+        self.guardar(modelo_local=nombre)
+        self.limpiar()
+
+    def nombre_modelo(self):
+        n = self.modelo.currentText()
+        return f"{n} · {self.modelo_local.currentText()}" if n == LOCAL else n
+
     def cambio_modelo(self, nombre):
+        if nombre == LOCAL:                     # Ollama puede haberse abierto después: se vuelve a leer la lista
+            actual = self.modelo_local.currentText()
+            locales = sorted(modelos_ollama(), key=lambda m: (not m.startswith(MODELO_LOCAL), m))
+            if locales:
+                self.modelo_local.blockSignals(True)
+                self.modelo_local.clear()
+                self.modelo_local.addItems(locales)
+                if self.modelo_local.findText(actual) >= 0:
+                    self.modelo_local.setCurrentText(actual)
+                self.modelo_local.blockSignals(False)
+        self.modelo_local.setVisible(nombre == LOCAL)
         self.b_clave.setVisible(nombre in APIS)
         if nombre in APIS:
             self.b_clave.setText(self.T("clave") + (" ✓" if clave_api(APIS[nombre]["clave"]) else ""))
@@ -1489,11 +1522,12 @@ class Ventana(QMainWindow):
 
     # --- acciones
     def motor_actual(self):
-        nombre = self.modelo.currentText()
+        nombre = self.nombre_modelo()
         if self.motor is None or getattr(self.motor, "_nombre", None) != nombre:
-            self.motor = (MotorClaude() if nombre == CLAUDE else MotorCodex() if nombre == CODEX
-                          else MotorLocal(nombre, api=APIS[nombre]) if nombre in APIS
-                          else MotorLocal(nombre))
+            sel = self.modelo.currentText()
+            self.motor = (MotorClaude() if sel == CLAUDE else MotorCodex() if sel == CODEX
+                          else MotorLocal(sel, api=APIS[sel]) if sel in APIS
+                          else MotorLocal(self.modelo_local.currentText()))
             self.motor._nombre = nombre
         return self.motor
 
@@ -1617,7 +1651,7 @@ class Ventana(QMainWindow):
                 dest, n = carpeta / f"{base}_{n}.html", n + 1
             tot = self.total
             cab = (f"<h2>SirilAstroPilot — {html.escape(objeto)}</h2><p style='color:#666'>{time.strftime('%Y-%m-%d %H:%M')} · "
-                   f"{html.escape(self.modelo.currentText())} · {self.T('total', e=_n(tot['e']), s=_n(tot['s']), c=(f' · {tot[chr(99)]:.4f} $' if tot['hay_coste'] else ''))}</p><hr>")
+                   f"{html.escape(self.nombre_modelo())} · {self.T('total', e=_n(tot['e']), s=_n(tot['s']), c=(f' · {tot[chr(99)]:.4f} $' if tot['hay_coste'] else ''))}</p><hr>")
             h = h.replace("<body", "<body", 1)
             h = re.sub(r"(<body[^>]*>)", r"\1" + cab.replace("\\", "\\\\"), h, count=1)
             dest.write_text(h, encoding="utf-8")
