@@ -24,8 +24,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QFont, QKeySequence, QPalette, QShortcut, QTextCursor
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QHBoxLayout, QLabel, QMainWindow, QPlainTextEdit,
-                             QPushButton, QTextBrowser, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+                             QMainWindow, QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
 
 AQUI = Path(__file__).resolve().parent                  # sas/herramientas
 SAS = AQUI.parent                                       # sas/
@@ -338,16 +338,55 @@ def _texto_del_razonamiento(pensado, maximo=2500):
 
 
 def clave_api(variable):
-    """Clave de la variable de entorno; si no está (el chat se abrió antes de crearla), la del registro de Windows."""
+    """Clave de la variable de entorno; si no está (el chat se abrió antes de crearla), la del registro de Windows o,
+    fuera de Windows, la que guardó el botón «Clave…» en ~/.<programa>/claves.json."""
     v = os.environ.get(variable, "").strip()
-    if v or os.name != "nt":
+    if v:
         return v
+    if os.name == "nt":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
+                return str(winreg.QueryValueEx(k, variable)[0]).strip()
+        except OSError:
+            return ""
     try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
-            return str(winreg.QueryValueEx(k, variable)[0]).strip()
-    except OSError:
+        return str(json.loads((DATOS / "claves.json").read_text(encoding="utf-8")).get(variable, "")).strip()
+    except (OSError, ValueError):
         return ""
+
+
+def guardar_clave(variable, valor):
+    """Botón «Clave…»: en Windows, variable de entorno del usuario (registro); fuera, ~/.<programa>/claves.json (0600).
+    También en el entorno de este proceso, para usarla ya."""
+    valor = valor.strip()
+    if os.name == "nt":
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as k:
+            if valor:
+                winreg.SetValueEx(k, variable, 0, winreg.REG_SZ, valor)
+            else:
+                try:
+                    winreg.DeleteValue(k, variable)
+                except OSError:
+                    pass
+    else:
+        f = DATOS / "claves.json"
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            d = {}
+        if valor:
+            d[variable] = valor
+        else:
+            d.pop(variable, None)
+        DATOS.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(d), encoding="utf-8")
+        os.chmod(f, 0o600)
+    if valor:
+        os.environ[variable] = valor
+    else:
+        os.environ.pop(variable, None)
 
 
 def modelo_api(api):
@@ -376,7 +415,8 @@ def pedir_api(api, modelo, mensajes, herramientas, emitir):
     """Una petición chat/completions. Devuelve (mensaje con role/content/tool_calls, tokens de entrada, de salida)."""
     clave = clave_api(api["clave"])
     if not clave:
-        raise RuntimeError(f"Falta la clave: crea la variable de entorno {api['clave']} con tu clave ({api['web']}).")
+        raise RuntimeError(f"Falta la clave: pulsa «Clave…» junto al modelo y pégala (se saca en {api['web']}), "
+                           f"o crea la variable de entorno {api['clave']}.")
     cuerpo = {"model": modelo, "messages": mensajes, "tools": herramientas}
     datos = json.dumps(cuerpo).encode("utf-8")
     for intento in range(6):
@@ -772,6 +812,11 @@ TEXTOS = {
     "es": {
         "titulo": "SetiAstroPilot — chat", "modelo": "Modelo:", "internet": "Internet", "idioma": "Idioma:",
         "internet_tip": "Deja consultar SIMBAD, Wikipedia y páginas web (documentarObjeto, simbad, wikipedia, leerWeb), con cualquier modelo. Sin marcar, esas herramientas se niegan.",
+        "clave": "Clave…", "clave_tip": "Clave de la API elegida (Gemini, OpenRouter, Groq). Se guarda sólo en este PC.",
+        "clave_tit": "Clave de la API",
+        "clave_txt": "Pega tu clave ({web}).\nSe guarda sólo en este PC, en la variable de usuario {v}.{ya}",
+        "clave_ya": "\nYa hay una guardada: deja el campo vacío y Aceptar para borrarla.",
+        "clave_ok": "Clave guardada en {v}.", "clave_borrada": "Clave {v} borrada.",
         "limpiar": "Limpiar", "enviar": "Enviar", "detener": "Detener", "voz": "🎤 Dictar",
         "voz_tip": "Dictado de Windows (Win+H): habla y el texto aparece en la caja. Vuelve a pulsar o calla para terminar.",
         "placeholder": "Escribe o dicta… (Ctrl+Intro para enviar)", "tu": "Tú",
@@ -795,6 +840,11 @@ TEXTOS = {
     "en": {
         "titulo": "SetiAstroPilot — chat", "modelo": "Model:", "internet": "Internet", "idioma": "Language:",
         "internet_tip": "Lets any model query SIMBAD, Wikipedia and web pages (documentarObjeto, simbad, wikipedia, leerWeb). Unchecked, those tools refuse.",
+        "clave": "Key…", "clave_tip": "Key for the selected API (Gemini, OpenRouter, Groq). Stored only on this PC.",
+        "clave_tit": "API key",
+        "clave_txt": "Paste your key ({web}).\nIt is stored only on this PC, in the user variable {v}.{ya}",
+        "clave_ya": "\nOne is already stored: leave the field empty and press OK to delete it.",
+        "clave_ok": "Key saved in {v}.", "clave_borrada": "Key {v} deleted.",
         "limpiar": "Clear", "enviar": "Send", "detener": "Stop", "voz": "🎤 Dictate",
         "voz_tip": "Windows dictation (Win+H): speak and the text appears in the box. Press again or stop talking to finish.",
         "placeholder": "Type or dictate… (Ctrl+Enter to send)", "tu": "You",
@@ -1066,6 +1116,9 @@ class Ventana(QMainWindow):
         if self.ajustes.get("modelo") and self.modelo.findText(self.ajustes["modelo"]) >= 0:
             self.modelo.setCurrentText(self.ajustes["modelo"])
         self.modelo.currentTextChanged.connect(self.cambio_modelo)
+        self.b_clave = QPushButton()
+        self.b_clave.clicked.connect(self.pedir_clave)
+        self.b_clave.setVisible(self.modelo.currentText() in APIS)
         self.internet = QCheckBox()
         self.internet.setChecked(bool(self.ajustes.get("internet")))
         self.internet.toggled.connect(self.cambio_internet)
@@ -1091,7 +1144,7 @@ class Ventana(QMainWindow):
         self.c_final.setChecked(bool(self.ajustes.get("hasta_final")))
         self.c_final.toggled.connect(lambda v: self.guardar(hasta_final=bool(v)))
         # Dos filas: en una sola, con los textos en español, la barra no cabía en 760 px y se cortaba por la derecha.
-        for w in (self.l_modelo, self.modelo, self.internet, self.c_elegir, self.c_final):
+        for w in (self.l_modelo, self.modelo, self.b_clave, self.internet, self.c_elegir, self.c_final):
             arriba.addWidget(w)
         arriba.addStretch(1)
         arriba2 = QHBoxLayout()
@@ -1180,6 +1233,9 @@ class Ventana(QMainWindow):
         self.setWindowTitle(self.T("titulo"))
         self.l_modelo.setText(self.T("modelo"))
         self.internet.setText(self.T("internet"))
+        api = APIS.get(self.modelo.currentText())
+        self.b_clave.setText(self.T("clave") + (" ✓" if api and clave_api(api["clave"]) else ""))
+        self.b_clave.setToolTip(self.T("clave_tip"))
         self.internet.setToolTip(self.T("internet_tip"))
         self.l_idioma.setText(self.T("idioma"))
         self.b_limpiar.setText(self.T("limpiar"))
@@ -1231,7 +1287,29 @@ class Ventana(QMainWindow):
         if self.motor and not self.ocupado:     # las herramientas y el prompt cambian: conversación nueva
             self.limpiar()
 
+    def pedir_clave(self):
+        """Clave de la API elegida, escrita por el usuario (se guarda sólo en este PC, ver guardar_clave)."""
+        api = APIS.get(self.modelo.currentText())
+        if not api:
+            return
+        hay = bool(clave_api(api["clave"]))
+        texto, ok = QInputDialog.getText(self, self.T("clave_tit"),
+                                         self.T("clave_txt", v=api["clave"], web=api["web"],
+                                                ya=self.T("clave_ya") if hay else ""),
+                                         QLineEdit.EchoMode.Password)
+        if not ok or (not texto.strip() and not hay):
+            return
+        try:
+            guardar_clave(api["clave"], texto)
+            self.poner(f'<div class="pie">{html.escape(self.T("clave_ok" if texto.strip() else "clave_borrada", v=api["clave"]))}</div>')
+        except OSError as e:
+            self.poner(f'<span class="err">{html.escape(str(e))}</span>')
+        self.b_clave.setText(self.T("clave") + (" ✓" if clave_api(api["clave"]) else ""))
+
     def cambio_modelo(self, nombre):
+        self.b_clave.setVisible(nombre in APIS)
+        if nombre in APIS:
+            self.b_clave.setText(self.T("clave") + (" ✓" if clave_api(APIS[nombre]["clave"]) else ""))
         self.guardar(modelo=nombre)
         self.limpiar()
 
