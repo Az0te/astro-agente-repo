@@ -234,7 +234,12 @@ function plRutaCodexPorDefecto() {
 }
 
 function PLAjustes() {
-   this.proveedor = "ollama";             // ollama | claude | codex
+   this.proveedor = "ollama";             // ollama | claude | codex | gemini
+   // Gemini por su API compatible con OpenAI (18 nov 2026), para quien no tiene gráfica ni suscripción. Flash-Lite
+   // respondía en ~5 s en el nivel gratuito; Flash tardaba 2,5–3 min por petición. La clave se guarda en los ajustes
+   // de PixInsight de este PC; vacía = la variable de entorno GEMINI_API_KEY (la misma de los chats de Siril y SASpro).
+   this.modeloGemini = "gemini-3.5-flash-lite";
+   this.claveGemini = "";
    // 64k con OLLAMA_KV_CACHE_TYPE=q8_0: medido el 13 nov 2026 en la RX 7900 XTX, cabe en VRAM
    // (16,6 GB frente a 16,3 GB) y genera casi igual de rápido; con 32k los prompts largos se recortaban.
    this.modeloOllama = "qwen38-64k";
@@ -267,7 +272,8 @@ function PLAjustes() {
                   claudeInferior: DataType_UCString, claudeSuperior: DataType_UCString, codexInferior: DataType_UCString,
                   codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean,
                   voz: DataType_Boolean, vozVelocidad: DataType_Int32, dictadoAntiguo: DataType_Boolean,
-                  carpetaInformes: DataType_UCString, idioma: DataType_UCString };
+                  carpetaInformes: DataType_UCString, idioma: DataType_UCString,
+                  modeloGemini: DataType_UCString, claveGemini: DataType_UCString };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -287,12 +293,14 @@ function PLAjustes() {
    };
 
    this.modelo = function () {
-      return this.proveedor == "claude" ? this.modeloClaude : this.proveedor == "codex" ? this.modeloCodex : this.modeloOllama;
+      return this.proveedor == "claude" ? this.modeloClaude : this.proveedor == "codex" ? this.modeloCodex :
+             this.proveedor == "gemini" ? this.modeloGemini : this.modeloOllama;
    };
 
    this.ponerModelo = function (m) {
       if (this.proveedor == "claude") this.modeloClaude = m;
       else if (this.proveedor == "codex") this.modeloCodex = m;
+      else if (this.proveedor == "gemini") this.modeloGemini = m || "gemini-3.5-flash-lite";
       else this.modeloOllama = m;
    };
 
@@ -384,6 +392,7 @@ function plPesosBase(guia) {
 // Modelo que se pasa a la CLI y por qué. paso = clave del paso ("" = prompt libre).
 function plElegirModelo(aj, paso) {
    if (aj.proveedor == "ollama") return { modelo: aj.modeloOllama, porque: "" };
+   if (aj.proveedor == "gemini") return { modelo: aj.modeloGemini, porque: "" };
    var elegido = aj.modelo();
    if (elegido != PL_AUTO) return { modelo: elegido, porque: elegido ? "elegido a mano" : "modelo por defecto de la CLI" };
    var bajo = aj.proveedor == "claude" ? aj.claudeInferior : aj.codexInferior;
@@ -711,7 +720,9 @@ function plPromptSistema(aj) {
    "mire algo, pide previa (con opciones.rect para un recorte al 100 %) y dile que mire la miniatura; nunca le mandes a abrir " +
    "una carpeta, un JPG ni una vista.\n" +
    (aj.proveedor == "claude" ? "- Tú también puedes VER las previas: lee el .jpg con la herramienta Read (ruta completa del resultado) " +
-   "antes de opinar sobre manchas, color, halos o estrellas, y di lo que ves; no digas que no puedes ver imágenes.\n" : "") +
+   "antes de opinar sobre manchas, color, halos o estrellas, y di lo que ves; no digas que no puedes ver imágenes.\n" :
+    aj.proveedor == "gemini" ? "- Tú también puedes VER las previas: las de cada resultado te llegan como imágenes junto al resultado. " +
+   "Míralas antes de opinar sobre manchas, color, halos o estrellas, y di lo que ves; no digas que no puedes ver imágenes.\n" : "") +
    "- Color: guarda siempre la versión neutra; si el usuario quiere más de un solo color, saturarTono; derivaColor {vista, opciones: " +
    "{referencia}} mide si el tono del objeto ha girado entre dos pasos (> 10° = deriva).\n\n" +
    (aj.internet ?
@@ -756,7 +767,7 @@ function plHiloRed(job) {
    var t = new NetworkTransfer;
    t.setURL(job.url);
    t.setConnectionTimeout(job.conexion || 10);
-   if (job.cuerpo) t.setCustomHTTPHeaders(["Content-Type: application/json"]);
+   if (job.cuerpo) t.setCustomHTTPHeaders(["Content-Type: application/json"].concat(job.cabeceras || []));
    t.onDownloadDataAvailable = function (d) { recibido.add(d); return !Thread.current.isAborted; };
    t.onTransferProgress = function () { return !Thread.current.isAborted; };
    var ok = job.cuerpo ? t.post(job.cuerpo) : t.download();
@@ -929,6 +940,89 @@ function plCodexChat(aj, sistema, mensajes, estado, modelo) {
    return { texto: File.exists(fu) ? File.readTextFile(fu).trim() : log.trim(), uso: uso };
 }
 
+// --- Gemini (API compatible con OpenAI). Lite no usa llamadas a herramientas de la API: como con Ollama, el modelo
+// escribe sus llamadas en el bloque ```json y el script las ejecuta. Las previas .jpg que nombran los resultados van
+// como imágenes (Gemini ve), sólo las del último mensaje.
+var PL_URL_GEMINI = "https:/" + "/generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+var PL_GEMINI_IMAGENES = 6;
+var PL_CLAVE_ENTORNO = null;
+
+// Clave: la de Ajustes; si está vacía, la variable de entorno del usuario GEMINI_API_KEY (registro de Windows; así
+// vale la que se creó con PixInsight ya abierto). No se escribe en ningún fichero.
+function plClaveGemini(aj) {
+   var c = String(aj.claveGemini || "").trim();
+   if (c.length) return c;
+   if (PL_CLAVE_ENTORNO !== null) return PL_CLAVE_ENTORNO;
+   PL_CLAVE_ENTORNO = "";
+   if (!plEsWindows()) return "";
+   try {
+      var P = new ExternalProcess, out = "", t0 = Date.now();
+      P.onStandardOutputDataAvailable = function () { out += String(this.stdout); };
+      P.start("reg", ["query", "HKCU\\Environment", "/v", "GEMINI_API_KEY"]);
+      while ((P.isStarting || P.isRunning) && Date.now() - t0 < 5000) { plEventos(); plDormir(20); }
+      var m = /GEMINI_API_KEY\s+REG_(?:EXPAND_)?SZ\s+(\S+)/.exec(out);
+      if (m) PL_CLAVE_ENTORNO = m[1];
+   } catch (e) {}
+   return PL_CLAVE_ENTORNO;
+}
+
+function plImagenesDe(texto) {
+   var out = [], re = /([A-Za-z]:)?[\/\\][^"'\s<>|*?]*?\.jpe?g/gi, m;
+   while ((m = re.exec(String(texto))) !== null && out.length < PL_GEMINI_IMAGENES) {
+      var p = m[0].replace(/\\\\/g, "/").replace(/\\/g, "/");
+      if (out.indexOf(p) < 0 && File.exists(p)) out.push(p);
+   }
+   return out;
+}
+
+function plGeminiChat(aj, sistema, mensajes, estado, modelo) {
+   var clave = plClaveGemini(aj);
+   if (!clave.length)
+      throw new Error("Falta la clave de Gemini: sácala gratis en https:/" + "/aistudio.google.com/apikey y pégala en Ajustes " +
+                      "(«Clave de Gemini»), o crea la variable de entorno GEMINI_API_KEY.");
+   var conv = [{ role: "system", content: sistema }].concat(mensajes.map(function (m) { return { role: m.role, content: m.content }; }));
+   var ult = conv[conv.length - 1];
+   if (ult.role == "user") {
+      var imgs = plImagenesDe(ult.content), partes = [{ type: "text", text: ult.content }];
+      imgs.forEach(function (p) {
+         try { partes.push({ type: "image_url", image_url: { url: "data:image/jpeg;base64," + File.readFile(p).toBase64() } }); }
+         catch (e) {}
+      });
+      if (partes.length > 1) conv[conv.length - 1] = { role: "user", content: partes };
+   }
+   var cuerpo = { model: modelo || aj.modeloGemini, messages: conv, temperature: aj.temperatura };
+   var uso = { entrada: 0, salida: 0, cache: 0, coste: 0 };
+   for (var intento = 0; ; ++intento) {
+      var r = plHttp({ url: PL_URL_GEMINI, cuerpo: plJsonAscii(cuerpo), conexion: 15, cabeceras: ["Authorization: Bearer " + clave] }, estado, 900);
+      if (r.ok && r.codigo == 200) break;
+      if (estado && estado.cancelado) throw new Error("cancelado");
+      var txt = String(r.texto || "");
+      // Modelo retirado: la API dice cuál usar («…use models/gemini-3.8-flash…»).
+      var nuevo = r.codigo == 404 ? /use (?:models\/)?([\w.\-]+) /.exec(txt) : null;
+      if (nuevo && nuevo[1] != cuerpo.model && intento < 5) {
+         console.warningln("PiAstroPilot: el modelo " + cuerpo.model + " ya no está disponible; uso " + nuevo[1] + ".");
+         cuerpo.model = nuevo[1]; aj.modeloGemini = nuevo[1];
+         continue;
+      }
+      if ((r.codigo == 429 || r.codigo >= 500 || r.codigo == 0) && intento < 5) {
+         var md = /"retryDelay":\s*"(\d+(?:\.\d+)?)s"/.exec(txt), s = md ? Math.min(120, parseFloat(md[1]) + 1) : Math.min(120, 10 * Math.pow(2, intento));
+         console.warningln("PiAstroPilot: Gemini respondió " + (r.codigo || r.error) + "; espero " + Math.round(s) + " s y reintento (" + (intento + 1) + " de 5).");
+         var t0 = Date.now();
+         while (Date.now() - t0 < s * 1000) { plEventos(); plDormir(100); if (estado && estado.cancelado) throw new Error("cancelado"); }
+         continue;
+      }
+      throw new Error("Gemini: " + (r.error || "HTTP " + r.codigo) + (txt ? " " + plRecortar(txt, 500) : ""));
+   }
+   var j = JSON.parse(r.texto);
+   if (j.error) throw new Error("Gemini: " + JSON.stringify(j.error).substring(0, 500));
+   var u = j.usage || {};
+   uso.entrada = u.prompt_tokens || 0; uso.salida = u.completion_tokens || 0;
+   var msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+   var texto = String(msg.content || "").trim();
+   if (!texto.length) console.warningln("PiAstroPilot: Gemini no respondió (turno vacío).");
+   return { texto: texto, uso: uso };
+}
+
 // Los últimos mensajes que caben en el presupuesto (siempre al menos el último).
 // Presupuesto de historial según el modelo (13 nov 2026): 24 000 caracteres se quedaban cortos en un preprocesado
 // (una tabla de seleccionarSubs llenaba casi todo). Claude/Codex tienen contexto de sobra; con Ollama depende del
@@ -984,6 +1078,7 @@ function plPreguntar(aj, mensajes, estado, paso) {
    }
    if (aj.proveedor == "claude") t = plClaudeChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "codex") t = plCodexChat(aj, sistema, m, estado, e.modelo);
+   else if (aj.proveedor == "gemini") t = plGeminiChat(aj, sistema, m, estado, e.modelo);
    else t = plOllamaChat(aj, sistema, m, estado);
    return { texto: t.texto, uso: t.uso, modelo: e.modelo, porque: e.porque };
 }
@@ -1768,7 +1863,8 @@ function plConstruirDialogo(aj) {
 
    // --- Pestaña Modelo ---
    var pModelo = new Control(this);
-   var PROV = [["ollama", "Ollama (local, HTTP)"], ["claude", "Claude Code (CLI)"], ["codex", "Codex (CLI)"]];
+   var PROV = [["ollama", "Ollama (local, HTTP)"], ["claude", "Claude Code (CLI)"], ["codex", "Codex (CLI)"],
+               ["gemini", "Gemini (API, gratis con clave)"]];
    this.cProv = new ComboBox(pModelo);
    PROV.forEach(function (p) { self.cProv.addItem(p[1]); });
    this.cProv.currentItem = Math.max(0, PROV.map(function (p) { return p[0]; }).indexOf(aj.proveedor));
@@ -1869,6 +1965,9 @@ function plConstruirDialogo(aj) {
    this.eTemp = fila("Temperatura:", String(aj.temperatura).replace(".", ","), "0 = determinista. Sólo para Ollama.");
    this.eClaude = fila("Ejecutable claude:", aj.rutaClaude);
    this.eCodex = fila("Ejecutable codex:", aj.rutaCodex);
+   this.eGemini = fila("Clave de Gemini:", aj.claveGemini, "Clave gratuita de https:/" + "/aistudio.google.com/apikey. Se guarda en los " +
+                       "ajustes de PixInsight de este PC. Vacía = la variable de entorno GEMINI_API_KEY.");
+   this.eGemini.passwordMode = true;
    this.eGuia = fila("Carpeta de la guía:", aj.guia, "Carpeta guia/ del repositorio (con herramientas/ y manifiesto.json).");
    this.eInformes = fila("Carpeta de dossieres:", aj.carpetaInformes, "Donde se guardan el dossier PDF y el informe .md de la conversación.");
    this.cIdioma = new ComboBox(pAj);
@@ -1935,6 +2034,7 @@ function plConstruirDialogo(aj) {
       if (isFinite(t)) aj.temperatura = Math.max(0, Math.min(2, t));
       aj.rutaClaude = this.eClaude.text.trim() || "claude";
       aj.rutaCodex = this.eCodex.text.trim() || "codex";
+      aj.claveGemini = this.eGemini.text.trim();
       var g = this.eGuia.text.trim().replace(/\\/g, "/").replace(/[\/]+$/, "");
       if (g) aj.guia = g;
       var ci = this.eInformes.text.trim().replace(/\\/g, "/").replace(/[\/]+$/, "");
@@ -1955,6 +2055,7 @@ function plConstruirDialogo(aj) {
    this.actualizarEleccion = function () {
       var e = plElegirModelo(aj, this.pasoActual());
       this.eleccionLbl.text = plT(aj.proveedor == "ollama" ? "Ollama · " + aj.modeloOllama + "  (los pesos N no se aplican)" :
+         aj.proveedor == "gemini" ? "Gemini · " + aj.modeloGemini + "  (los pesos N no se aplican)" :
          "Modelo: " + (e.modelo || "(por defecto de la CLI)") + (e.porque ? "  —  " + e.porque : ""));
    };
 
@@ -1964,7 +2065,7 @@ function plConstruirDialogo(aj) {
       var cod = aj.proveedor == "codex";
       bajo = cod ? aj.codexInferior : aj.claudeInferior; alto = cod ? aj.codexSuperior : aj.claudeSuperior;
       this.eInf.text = bajo; this.eSup.text = alto;
-      var activos = aj.proveedor != "ollama";
+      var activos = aj.proveedor == "claude" || aj.proveedor == "codex";
       this.eInf.enabled = this.eSup.enabled = activos;
       this.gPesos.visible = activos;   // con Ollama no se aplican: se oculta la tabla
       this.tPesos.clear();
@@ -1999,6 +2100,11 @@ function plConstruirDialogo(aj) {
          this.leerAjustes(); aj.ponerModelo(actual);
          try { lista = plOllamaModelos(aj); this.notaModelo.text = plT(lista.length + " modelos en Ollama."); }
          catch (e) { this.notaModelo.text = plT(String(e.message || e)); if (avisar) this.estadoLbl.text = plT(this.notaModelo.text); }
+      } else if (aj.proveedor == "gemini") {
+         lista = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+         this.notaModelo.text = plT("Gemini por su API, gratis con una clave de aistudio.google.com/apikey (pestaña Ajustes). " +
+                                "Flash-Lite es rápido (unos segundos por respuesta); Flash razona mejor pero en el nivel gratuito " +
+                                "puede tardar minutos. En el nivel gratuito, Google puede usar lo que se envía (números y previas).");
       } else if (aj.proveedor == "claude") {
          lista = [PL_AUTO, "", "sonnet", "opus", "haiku"];
          this.notaModelo.text = plT("«" + PL_AUTO + "» = elige inferior o superior según el paso (tabla de abajo). " +
@@ -2475,7 +2581,7 @@ function plPrueba(salida, cli) {
             out.pesos = { filas: d.tPesos.numberOfChildren, fuente: d.fuentePesos.text, eleccionClaude: d.eleccionLbl.text };
             out.pesos.visibleClaude = d.gPesos.visible;
             aj.modeloClaude = mod;
-            var ip = ["ollama", "claude", "codex"].indexOf(prov);
+            var ip = ["ollama", "claude", "codex", "gemini"].indexOf(prov);
             d.cProv.currentItem = ip; d.cProv.onItemSelected(ip);
             out.pesos.visibleTrasVolver = d.gPesos.visible;
             out.pesos.eleccionOllama = d.eleccionLbl.text;
@@ -2572,6 +2678,25 @@ function plPrueba(salida, cli) {
    });
    if (cli) paso("cliChat_" + cli, function () {
       var a = new PLAjustes(); a.cargar(); a.proveedor = cli;
+      if (cli == "gemini") {
+         // Gemini: una pregunta de texto y otra con una previa (que la describa), con el modelo por defecto.
+         var dir = plCarpeta(PL_TMP), jpg = dir + "/prueba_gemini.jpg";
+         var w = new ImageWindow(256, 256, 3, 32, true, true, "prueba_gemini");
+         w.mainView.beginProcess();
+         w.mainView.image.fill(0);
+         w.mainView.image.selectedChannel = 0;
+         w.mainView.image.fill(1);                       // canal rojo lleno: la imagen es roja
+         w.mainView.image.resetChannelSelection();
+         w.mainView.endProcess();
+         w.saveAs(jpg, false, false, false, false);
+         w.forceClose();
+         var r1 = plPreguntar(a, [{ role: "user", content: "Responde solo: OK" }], { cancelado: false }, "");
+         var r2 = plPreguntar(a, [{ role: "user", content: "Resultado de tus llamadas:\nprevia: {\"fichero\": \"" + jpg +
+                                    "\"}\n¿De qué color es esa previa? Responde con una sola palabra en español." }],
+                              { cancelado: false }, "");
+         return { modelo: r1.modelo, texto: plRecortar(r1.texto, 200), uso: plUsoTexto(r1.uso),
+                  color: plRecortar(r2.texto, 200), usoImagen: plUsoTexto(r2.uso), imagenes: plImagenesDe(r2.texto + " " + jpg) };
+      }
       a.ponerModelo(PL_AUTO);
       // Pesos N sin llamar a la CLI: prompt libre, un paso > N, uno <= N, y un ajuste del usuario que lo cambia.
       var casos = {
@@ -2599,7 +2724,7 @@ function plPrueba(salida, cli) {
 // exportado, manda «sigue hasta el final» (cada una cuenta como una intervención). No guarda ajustes: los del usuario
 // quedan como estaban. Deja en <carpeta>: pasada.json (tiempo, tokens, coste, pasos, fallos), registro.txt e informe .md.
 //   PixInsight.exe -n --automation-mode --no-focus-stealing
-//      -r=<Lite>,--pasada,<ollama|claude|codex>,<modelo>,<carpeta>,<peticion.txt> --force-exit
+//      -r=<Lite>,--pasada,<ollama|claude|codex|gemini>,<modelo>,<carpeta>,<peticion.txt> --force-exit
 var PL_MAX_SIGUE = 6;
 function plPasada(proveedor, modelo, carpeta, ficheroPeticion, maxSigue) {
    // maxSigue: «sigue» automáticos como mucho (por defecto PL_MAX_SIGUE; 0 en una comparación por etapas, donde la
@@ -2681,7 +2806,7 @@ function plMain() {
    }
    if (args.length && String(args[0]) == "--prueba") {
       plPrueba(args.length > 1 && String(args[1]) ? String(args[1]) : plCarpeta(PL_TMP) + "/prueba.json",
-               args.length > 2 ? String(args[2]) : null);   // tercer argumento opcional: claude | codex
+               args.length > 2 ? String(args[2]) : null);   // tercer argumento opcional: claude | codex | gemini
       return;
    }
    var aj = new PLAjustes();
