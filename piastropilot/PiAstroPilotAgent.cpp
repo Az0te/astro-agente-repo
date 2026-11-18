@@ -8,6 +8,7 @@
 #include "PiAstroPilotI18n.h"
 #include "PiAstroPilotJson.h"
 
+#include <pcl/ExternalProcess.h>
 #include <pcl/File.h>
 #include <pcl/ImageWindow.h>
 #include <pcl/Settings.h>
@@ -61,7 +62,41 @@ String PiAstroPilotUtil::EnvVar( const String& name )
       return String();
    IsoString n = name.ToUTF8();
    const char* v = ::getenv( n.c_str() );
-   return (v != nullptr) ? String::UTF8ToUTF16( v ) : String();
+   if ( v != nullptr && *v != '\0' )
+      return String::UTF8ToUTF16( v );
+#ifdef __PCL_WINDOWS
+   // Variable creada con PixInsight ya abierto (p. ej. la clave de Gemini, 18 nov 2026): no está en el entorno del
+   // proceso, pero sí en el registro del usuario. Se lee con «reg query» (sin windows.h en este fichero).
+   try
+   {
+      ExternalProcess p;
+      p.Start( "reg", StringList() << "query" << "HKCU\\Environment" << "/v" << name );
+      if ( p.WaitForFinished( 5000 ) && p.ExitCode() == 0 )
+      {
+         ByteArray so = p.StandardOutput();
+         String out = String::UTF8ToUTF16( reinterpret_cast<const char*>( so.Begin() ), 0, so.Length() );
+         StringList lines;
+         out.Break( lines, '\n', true );
+         for ( String l : lines )
+         {
+            l.Trim();
+            if ( !l.StartsWithIC( name ) )
+               continue;
+            size_type t = l.Find( "REG_" );
+            if ( t == String::notFound )
+               continue;
+            size_type sp = l.Find( ' ', t );
+            if ( sp == String::notFound )
+               continue;
+            return l.Substring( sp ).Trimmed();
+         }
+      }
+   }
+   catch ( ... )
+   {
+   }
+#endif
+   return String();
 }
 
 String PiAstroPilotUtil::NewUUID()
@@ -137,7 +172,7 @@ bool PiAstroPilotModel::IsCloud() const
 
 static std::vector<PiAstroPilotModel> BuiltinModels()
 {
-   std::vector<PiAstroPilotModel> m( 3 );
+   std::vector<PiAstroPilotModel> m( 4 );
 
    m[0].name = "Claude";
    m[0].type = "claude";
@@ -157,6 +192,16 @@ static std::vector<PiAstroPilotModel> BuiltinModels()
    m[2].endpoint = "http://localhost:11434/v1/chat/completions";
    m[2].model = "qwen38-32k";
    m[2].builtin = true;
+
+   // Gemini por su API compatible con OpenAI (18 nov 2026), para quien no tiene gráfica ni suscripción: clave gratuita de
+   // aistudio.google.com en GEMINI_API_KEY. Flash-Lite respondía en ~5 s en el nivel gratuito (Flash, 2,5–3 min por
+   // petición). Ve la imagen del último mensaje. Como los modelos locales, propone las llamadas.
+   m[3].name = "Gemini Flash-Lite (API gratis)";
+   m[3].type = "openai";
+   m[3].endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+   m[3].model = "gemini-3.5-flash-lite";
+   m[3].keyEnv = "GEMINI_API_KEY";
+   m[3].builtin = true;
 
    return m;
 }
@@ -319,6 +364,15 @@ void PiAstroPilotConfig::Load()
 
    currentModel = 0;
    Settings::Read( "CurrentModel", currentModel );
+   // Los modelos propios van detrás de los incorporados: si se añade uno incorporado (Gemini, build 115), el índice
+   // guardado de un modelo propio se desplaza para seguir apuntando al mismo.
+   {
+      int nBuiltinsBefore = 3;
+      Settings::Read( "BuiltinModels", nBuiltinsBefore );
+      int nBuiltins = int( BuiltinModels().size() );
+      if ( currentModel >= nBuiltinsBefore && nBuiltinsBefore != nBuiltins )
+         currentModel += nBuiltins - nBuiltinsBefore;
+   }
    if ( currentModel < 0 || currentModel >= int( models.size() ) )
       currentModel = 0;
 
@@ -445,6 +499,7 @@ void PiAstroPilotConfig::Save() const
          custom << m.name << '\t' << m.type << '\t' << m.endpoint << '\t' << m.model << '\t' << m.keyEnv << '\n';
    Settings::Write( "Models", custom );
    Settings::Write( "CurrentModel", currentModel );
+   Settings::Write( "BuiltinModels", int( BuiltinModels().size() ) );
    Settings::Write( "GuideDir", guideDir );
    Settings::Write( "WorkDir", workDir );
    Settings::Write( "ClaudePath", claudePath );

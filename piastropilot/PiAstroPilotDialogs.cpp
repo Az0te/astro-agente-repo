@@ -636,6 +636,13 @@ static const ModelPreset s_presets[] =
    { u"Ollama (localhost:11434)",  "Qwen (Ollama)",       "http://localhost:11434/v1/chat/completions", "qwen38-32k",         "" },
    { u"LM Studio (localhost:1234)","Modelo LM Studio",    "http://localhost:1234/v1/chat/completions",  "",                   "" },
    { u"OpenAI (ChatGPT)",          "ChatGPT",             "https://api.openai.com/v1/chat/completions", "gpt-5",              "OPENAI_API_KEY" },
+   { u"Gemini Flash (API gratis, más lento)", "Gemini Flash (API gratis)",
+     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-3.8-flash", "GEMINI_API_KEY" },
+   { u"Gemini Flash-Lite (API gratis)", "Gemini Flash-Lite (API gratis)",
+     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-3.5-flash-lite", "GEMINI_API_KEY" },
+   { u"OpenRouter (modelos gratuitos)", "OpenRouter",  "https://openrouter.ai/api/v1/chat/completions",
+     "meta-llama/llama-3.3-70b-instruct:free", "OPENROUTER_API_KEY" },
+   { u"Groq",                      "Groq",                "https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", "GROQ_API_KEY" },
    { u"Personalizado",             "",                    "",                                            "",                   "" },
 };
 
