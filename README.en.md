@@ -96,6 +96,8 @@ To create the variable by hand: Start > "environment variables" > *Edit environm
 
 ## PixInsight vs Siril comparison
 
+**Video:** [processing test in PixInsight and Siril with the assistant](https://www.youtube.com/watch?v=qDlfi9weV1U) (YouTube, in Spanish).
+
 [Comparison dossier (PDF in Spanish, M31 and IC 1396)](comparativas/dossier_PI_vs_Siril_M31_IC1396.pdf). Same masters, same brief, measured with the same code:
 
 - **M31** (galaxy, four runs: PixInsight and Siril, each with Claude Opus and with Qwen). PixInsight with Opus wins: arms better separated from the sky, a core with structure and more stars. Siril lacked a core step and a multiscale stretch; both have since been added.
