@@ -10,6 +10,7 @@ Incluye estas partes:
 - **[PiAstroPilot](piastropilot/README.md)** (`piastropilot/`): módulo nativo de PixInsight que acopla un asistente de IA al panel lateral sin bloquear PixInsight. Tiene un botón por paso de la guía, chat con tablas y vistas previas, y funciona con Claude Code, Codex o un modelo local (Ollama). Va con la guía de este repositorio; por ahora hay que compilarlo y firmarlo con claves de desarrollador propias.
 - **Servidor MCP piastropilot** (`mcp/`): el puente entre la IA y PixInsight. Ofrece las funciones de la guía como herramientas y las ejecuta en la instancia de PixInsight que tienes abierta (IPC `PixInsight.exe -x=`), sin carpeta vigilada ni `eval`. Detalles en [`mcp/README.md`](mcp/README.md).
 - **[SirilAstroPilot](siril/README.md)** (`siril/`): lo mismo para **Siril**, con la misma guía. Ver [SirilAstroPilot](#sirilastropilot).
+- **[SetiAstroPilot](sas/README.md)** (`sas/`): lo mismo para **Seti Astro Suite Pro (SASpro)**, con la misma guía. Ver [SetiAstroPilot](#setiastropilot).
 - **Guía de procesado** (`guia/`): un manual detallado, en español, que Claude carga como *skill*. El asistente responde en el idioma en que se le pregunte (inglés o cualquier otro), aunque la guía esté en español. Está ordenada como el flujo de trabajo: 17 pasos de la fase lineal, 11 de la no lineal y anexos (equivalentes de scripts, controles de calidad, anti-patrones, flujos por tipo de objeto, glosario); cada paso es un fichero con el porqué, los parámetros, la función de la guía que lo hace y el control para comprobarlo. Es la parte principal: recoge técnicas, trampas, valores de partida y controles de calidad aprendidos en sesiones reales de procesado.
 
 ## Principio
@@ -92,6 +93,16 @@ Para crear la variable a mano: Inicio > «variables de entorno» > *Editar las v
 1. Saca la clave en [openrouter.ai/keys](https://openrouter.ai/keys) o en [console.groq.com/keys](https://console.groq.com/keys).
 2. **Chats de Siril y SASpro**: elige *OpenRouter (API)* o *Groq (API)* y pulsa **Clave…**. Se guarda en `OPENROUTER_API_KEY` o `GROQ_API_KEY`. **Módulo**: «+» > la plantilla correspondiente.
 3. El modelo se cambia con la variable `OPENROUTER_MODELO` o `GROQ_MODELO`, y para Gemini con `GEMINI_MODELO`. Estos modelos no ven las previas: trabajan solo con las medidas.
+
+## SetiAstroPilot
+
+El mismo asistente para **Seti Astro Suite Pro (SASpro)** (`sas/`). El puente corre dentro de SASpro, que ejecuta los scripts de usuario en su propio proceso, y lleva un chat igual que el de Siril: IA local, Claude, Codex o APIs con clave. Sigue la misma guía común, con herramientas de una lista blanca que comparan candidatos en cada paso. Probado de principio a fin en SASpro 1.24.2 con un master de M31.
+
+1. Requisitos: Seti Astro Suite Pro reciente (con el menú Scripts) y Node.js 18 o superior si se usa por MCP desde Claude Code o Codex.
+2. En SASpro, **Scripts > Open Scripts Folder** (en Windows `%LOCALAPPDATA%\SASpro\scripts`): copia allí `sas/puente/SetiAstroPilot.py` y `sas/puente/SetiAstroPilot_Chat.py`. Si el repositorio no está en `~/astro-agente-repo`, define la variable `SETIASTROPILOT_REPO`.
+3. Recarga los scripts y lanza **Scripts > AstroPilot > SetiAstroPilot (chat)**: arranca el puente y abre el chat.
+
+Detalles, herramientas e instalación del MCP en [`sas/README.md`](sas/README.md).
 
 ## Comparativa PixInsight frente a Siril
 
