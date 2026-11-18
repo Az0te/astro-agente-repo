@@ -22,7 +22,7 @@ Relanzar el script detiene el puente anterior y arranca uno nuevo. Si cambia alg
 
 **Chat dentro de SASpro** (`herramientas/chat.py`, igual que el de Siril). Puedes elegir entre:
 - un modelo local de Ollama;
-- **Claude (CLI)**;
+- **Claude (CLI)** o **Codex (CLI)** (`codex exec` con el MCP setiastropilot; hace falta `npm install -g @openai/codex` y `codex login`);
 - una API con clave: **Gemini Flash-Lite / Flash** (gratis), **OpenRouter** o **Groq**.
 
 Con una API aparece el botón **Clave…** para pegar la clave, que se guarda sólo en el PC como variable de usuario. Las APIs gratuitas son **menos fiables** que la IA local o las de pago: sirven para probar, mejor con *Elegir yo* marcado. Más en [Qué IA usar](../README.md#qué-ia-usar-y-cómo-configurarla).

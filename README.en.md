@@ -56,7 +56,7 @@ Every part (Lite, the module, the Siril and SASpro chats) follows the same guide
 | AI | Cost | What you need | Where it works | Reliability with the guide |
 |---|---|---|---|---|
 | **Claude Code** (Anthropic) | subscription or paid API | Claude Code installed and signed in | everywhere; processes on its own through MCP | the best (the guide's reference) |
-| **Codex** (OpenAI) | ChatGPT subscription or API | `npm install -g @openai/codex` and `codex login` | Lite, module, Siril/SASpro through MCP | good |
+| **Codex** (OpenAI) | ChatGPT subscription or API | `npm install -g @openai/codex` and `codex login` | everywhere; processes on its own through MCP (in Lite it proposes the calls) | good |
 | **Local with Ollama** (e.g. Qwen) | free | a GPU with enough VRAM (about 16–24 GB for a 27–32B Qwen) | everywhere | good with the large models; nothing leaves your PC |
 | **Gemini** (Google, API) | **free** with daily limits | a Google AI Studio key | Siril and SASpro chats, Lite and module | **lower**: for trying it out |
 | **OpenRouter / Groq** (API) | free tier with limits | a key from their site | Siril and SASpro chats; templates in the module | **lower**; not tested in depth |
@@ -71,7 +71,7 @@ Every part (Lite, the module, the Siril and SASpro chats) follows the same guide
 ### Codex
 
 1. `npm install -g @openai/codex`, then `codex login`.
-2. **Lite**: provider *Codex (CLI)*. **Module**: model *Codex*. In Siril and SASpro it is used from Codex with the MCP (see `siril/README.md` and `sas/README.md`).
+2. **Lite**: provider *Codex (CLI)*. **Module**: model *Codex*. **Siril/SASpro chats**: model *Codex (CLI)*. It can also be used from a terminal with the MCP (see `siril/README.md` and `sas/README.md`).
 
 ### Local with Ollama
 

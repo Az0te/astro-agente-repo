@@ -39,6 +39,7 @@ PUERTO = int(os.environ.get("SETIASTROPILOT_PUERTO", "48733"))
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 MODELO_LOCAL = "qwen38-32k"
 CLAUDE = "Claude (CLI)"
+CODEX = "Codex (CLI)"
 MAX_RONDAS = 30
 # APIs compatibles con OpenAI (chat/completions) con clave: el bucle de herramientas es el mismo que con Ollama.
 # Pensadas para quien no tiene gráfica ni suscripción (17 nov 2026). La clave se lee de la variable de entorno (o del
@@ -821,6 +822,128 @@ class MotorClaude:
         emitir(fin)
 
 
+class MotorCodex(MotorClaude):
+    """Codex CLI de OpenAI (codex exec --json) con el MCP del programa, como en el módulo de PixInsight (18 nov 2026).
+    La conversación sigue con «codex exec resume <id>». Hereda de MotorClaude las carpetas de trabajo y detener."""
+
+    def _programa(self):
+        js = Path(os.environ.get("APPDATA", "")) / "npm" / "node_modules" / "@openai" / "codex" / "bin" / "codex.js"
+        if js.is_file() and shutil.which("node"):
+            return [shutil.which("node"), str(js)]          # codex.cmd de npm no se puede lanzar directamente
+        exe = shutil.which("codex")
+        if not exe:
+            raise RuntimeError("No encuentro Codex. Instálalo con «npm install -g @openai/codex» y haz «codex login».")
+        return [exe]
+
+    def turno(self, texto, internet, emitir, cancelado, idioma="es"):
+        servidor = Path(MCP_JS).stem.replace("-mcp", "")       # sirilastropilot / setiastropilot
+        datos = Path.home() / ("." + servidor)
+        carpetas = self.carpetas_de_trabajo(texto)
+        MINIS.mkdir(parents=True, exist_ok=True)
+        salida = MINIS / "codex_respuesta.txt"
+        try:
+            salida.unlink()
+        except OSError:
+            pass
+        mcp = Path(MCP_JS).as_posix()
+        conf = ["-c", f'mcp_servers.{servidor}.command="node"',
+                "-c", f'mcp_servers.{servidor}.args=["{mcp}"]',
+                "-c", f'mcp_servers.{servidor}.env={{{servidor.upper()}_COMPACTO="1"}}',
+                "-c", f"mcp_servers.{servidor}.startup_timeout_sec=30",
+                "-c", f"mcp_servers.{servidor}.tool_timeout_sec=900"]
+        if internet:
+            conf += ["-c", "tools.web_search=true"]
+        dirs = []
+        for c in [str(datos)] + carpetas:
+            dirs += ["--add-dir", c]
+        # Primer turno: el prompt de sistema va delante del mensaje (exec no tiene uno aparte); después, sólo el mensaje.
+        entrada = texto if self.sesion else prompt_sistema(self.funcs, internet, idioma) + "\n\n=== Petición del usuario ===\n" + texto
+        base = self._programa() + ["exec"]
+        comun = ["--json", "--skip-git-repo-check", "--full-auto", "-o", str(salida)]
+        if os.environ.get(servidor.upper() + "_CODEX_MODELO"):
+            comun += ["-m", os.environ[servidor.upper() + "_CODEX_MODELO"]]
+        t0 = time.time()
+        fin = {"tipo": "fin", "tokens_entrada": 0, "tokens_salida": 0, "coste": None}
+        for intento in range(2):
+            # Opciones antes de «resume <id>»; el prompt, por la entrada estándar («-»).
+            cmd = (base + comun + conf + (dirs if intento == 0 else []) + (["-C", str(REPO)] if not self.sesion else [])
+                   + (["resume", self.sesion] if self.sesion else []) + ["-"])
+            self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         text=True, encoding="utf-8", cwd=str(REPO),
+                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            cola_err = []
+
+            def vaciar_err(fh=self.proc.stderr):
+                for l in fh:
+                    cola_err.append(l)
+                    del cola_err[:-200]
+            threading.Thread(target=vaciar_err, daemon=True).start()
+            try:
+                self.proc.stdin.write(entrada)
+                self.proc.stdin.close()
+            except OSError:
+                pass
+            pendientes, hubo_evento = {}, False
+            for linea in self.proc.stdout:
+                if cancelado():
+                    self.detener()
+                    emitir({"tipo": "aviso", "clave": "detenido"})
+                    break
+                try:
+                    ev = json.loads(linea)
+                except ValueError:
+                    continue
+                hubo_evento = True
+                tipo, item = ev.get("type", ""), ev.get("item") or {}
+                if tipo == "thread.started" and ev.get("thread_id"):
+                    self.sesion = ev["thread_id"]
+                elif tipo == "item.started" and item.get("type") == "mcp_tool_call":
+                    pendientes[item.get("id")] = time.time()
+                    emitir({"tipo": "herramienta", "nombre": item.get("tool", "?"), "args": item.get("arguments") or {}})
+                elif tipo == "item.completed" and item.get("type") == "mcp_tool_call":
+                    nombre = item.get("tool", "?")
+                    t1 = pendientes.pop(item.get("id"), time.time())
+                    res = item.get("result") or {}
+                    cont = res.get("content") if isinstance(res, dict) else res
+                    if isinstance(cont, list):
+                        txt = "".join(c.get("text", "") for c in cont if isinstance(c, dict)) or json.dumps(cont, ensure_ascii=False)
+                    else:
+                        txt = str(cont if cont is not None else (item.get("error") or ""))
+                    error = bool(item.get("error")) or item.get("status") == "failed"
+                    gal = _galeria_de(txt)
+                    emitir({"tipo": "resultado", "nombre": nombre, "estado": "error" if error else "ok",
+                            "segundos": round(time.time() - t1, 1), "resumen": txt[:300], "jpgs": [] if gal else _jpgs(txt)})
+                    if gal:
+                        emitir({"tipo": "galeria", **gal})
+                    if nombre == "exportarFinal":
+                        emitir({"tipo": "exportado", "carpeta": _carpeta_export(txt)})
+                elif tipo == "item.completed" and item.get("type") == "agent_message" and (item.get("text") or "").strip():
+                    emitir({"tipo": "texto", "texto": item["text"]})
+                elif tipo == "turn.completed":
+                    u = ev.get("usage") or {}
+                    fin["tokens_entrada"] += int(u.get("input_tokens", 0))
+                    fin["tokens_salida"] += int(u.get("output_tokens", 0))
+                elif tipo in ("turn.failed", "error"):
+                    msg = ev.get("message") or (ev.get("error") or {}).get("message") or json.dumps(ev, ensure_ascii=False)
+                    emitir({"tipo": "error", "texto": "Codex: " + str(msg)[:500]})
+            self.proc.wait()
+            err = "".join(cola_err)
+            # Versiones de Codex sin --add-dir: se repite sin esas carpetas (podrá trabajar, pero no escribir fuera).
+            if intento == 0 and not hubo_evento and "--add-dir" in err:
+                emitir({"tipo": "aviso", "texto": "Esta versión de Codex no admite --add-dir: sigo sin permiso de escritura "
+                                                  "en la carpeta de la imagen."})
+                continue
+            break
+        if not cancelado() and self.proc.returncode not in (0, None):
+            err = "".join(cola_err)[-500:]
+            if "login" in err.lower() or "auth" in err.lower():
+                err += " (¿has hecho «codex login»?)"
+            emitir({"tipo": "error", "texto": f"Codex terminó con código {self.proc.returncode}. "
+                                              + (err if err.strip() else "Sin mensaje de error.")})
+        fin["segundos"] = round(time.time() - t0, 1)
+        emitir(fin)
+
+
 # --- Textos de la interfaz (es / en) ------------------------------------------------------------------------
 
 TEXTOS = {
@@ -1124,7 +1247,7 @@ class Ventana(QMainWindow):
         self.l_modelo = QLabel()
         self.modelo = QComboBox()
         locales = sorted(modelos_ollama(), key=lambda m: (not m.startswith(MODELO_LOCAL), m))
-        self.modelo.addItems((locales + [CLAUDE] if locales else [CLAUDE, MODELO_LOCAL]) + list(APIS))
+        self.modelo.addItems((locales + [CLAUDE] if locales else [CLAUDE, MODELO_LOCAL]) + [CODEX] + list(APIS))
         for i, (n, a) in enumerate(APIS.items()):
             self.modelo.setItemData(self.modelo.findText(n), f"{modelo_api(a)} · clave en {a['clave']} ({a['web']})",
                                     Qt.ItemDataRole.ToolTipRole)
@@ -1374,7 +1497,8 @@ class Ventana(QMainWindow):
     def motor_actual(self):
         nombre = self.modelo.currentText()
         if self.motor is None or getattr(self.motor, "_nombre", None) != nombre:
-            self.motor = (MotorClaude() if nombre == CLAUDE else MotorLocal(nombre, api=APIS[nombre]) if nombre in APIS
+            self.motor = (MotorClaude() if nombre == CLAUDE else MotorCodex() if nombre == CODEX
+                          else MotorLocal(nombre, api=APIS[nombre]) if nombre in APIS
                           else MotorLocal(nombre))
             self.motor._nombre = nombre
         return self.motor
