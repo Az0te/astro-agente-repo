@@ -780,7 +780,7 @@ def _exigir_alineado(siril, info, sin_alinear=False):
     actual = str(info.get("fichero") or "")
     if not actual or H._es_alineado(actual):
         return None
-    yo = H.MASTERS_ABIERTOS.get(H._clave(actual), os.path.normpath(actual))
+    yo = H.master_de(actual) or os.path.normpath(actual)   # una versión guardada cuenta como su master
     otros = sorted({v for v in H.MASTERS_ABIERTOS.values() if H._clave(v) != H._clave(yo) and Path(v).is_file()})
     if not otros:
         return None

@@ -420,6 +420,15 @@ def ruta_legible(p):
 # Clave: _clave(ruta); valor: ruta original. Al recargar el puente o el módulo se vacía. Los ficheros con «_alin» (salida de alinearMasters) no cuentan.
 MASTERS_ABIERTOS = globals().get("MASTERS_ABIERTOS", {})
 GUARDADOS = globals().get("GUARDADOS", set())   # versiones guardadas en esta sesión: al reabrirlas no son otro master
+# Versión guardada -> master del que sale (18 nov 2026, pasada de Gemini en IC 1396: el recorte guardado del master
+# se tomaba por un segundo master «de otro tamaño» y el gradiente pedía alinearlos).
+DERIVADAS = globals().get("DERIVADAS", {})
+
+
+def master_de(ruta):
+    """Master del que sale una ruta (ella misma si es un master abierto); None si no se sabe."""
+    k = _clave(ruta)
+    return MASTERS_ABIERTOS.get(k) or DERIVADAS.get(k)
 
 
 def _clave(ruta):
@@ -486,6 +495,9 @@ def guardarImagen(siril, fichero, sobrescribir=False):
     if not hechos:
         raise RuntimeError(f"Siril no ha escrito {base}{ext}.")
     GUARDADOS.update(_clave(h) for h in hechos)
+    origen = master_de(previo) if previo else None
+    if origen:
+        DERIVADAS.update({_clave(h): origen for h in hechos})
     if previo and Path(previo).stem.lower() != Path(hechos[0]).stem.lower():
         try:                                    # procedencia: la versión guardada sale de la que estaba cargada
             import multicapa

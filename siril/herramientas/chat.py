@@ -147,6 +147,10 @@ def reglas_modo(idioma="es"):
          "paso, cada uno en su línea, con este formato exacto: [texto corto](accion:petición completa que el usuario te "
          "mandaría), p. ej. [Corregir el gradiente](accion:corrige el gradiente comparando candidatos). Al pulsarlo, el "
          "usuario te manda esa petición; no ejecutes nada por adelantado. Enlaces web normales: [texto](https://...)."]
+    # 18 nov 2026 (pasada de Gemini Flash-Lite en IC 1396): tiempos inventados en el informe, sensor pasado a
+    # calibrarColor y estrellas recombinadas con gamma 1,3 (casi desaparecían).
+    r.append("ESTRELLAS: en recombinarEstrellas no subas gamma por encima de 1 (gamma > 1 encoge y apaga las estrellas) "
+             "salvo que el usuario pida estrellas más pequeñas; mira el aporte_estrellas_pct y la previa antes de darlo por bueno.")
     if a.get("elegir_yo"):
         r.append("ELEGIR YO (activado): tras una comparativa (…Candidatos) NO apliques el ganador. Resume la tabla, di cuál "
                  "recomiendas y por qué, y espera: la ventana enseña la galería de candidatos con «Elegir este». Aplica sólo "
@@ -159,7 +163,9 @@ def reglas_modo(idioma="es"):
                  "master). Si un no_cumple o un aviso ya dice el arreglo de la guía (otra herramienta, volver a un paso), "
                  "hazlo sin preguntar. Párate SÓLO si hay un error que no sabes resolver, un arreglo de la guía que ya falló "
                  "dos veces, o una decisión que necesita al usuario (tipo de objeto dudoso, paleta). Al terminar: informe con una tabla por paso (paso, método elegido, métricas clave, "
-                 "tiempo), una previa final y los ficheros exportados (exportarFinal).")
+                 "tiempo), una previa final y los ficheros exportados (exportarFinal). En esa tabla, el tiempo de cada paso es la "
+                 "«duración» que trae su resultado (súmalas si hubo varias llamadas): no lo estimes; y sólo filas de "
+                 "pasos hechos con una herramienta (lo que no hiciste, dilo aparte).")
     return "\n".join(r)
 
 
@@ -252,6 +258,9 @@ def _galeria_de(txt):
 
 def _resumir(txt, n=450):
     """Versión corta de un resultado para el historial del modelo local (compactación)."""
+    m = re.match(r"(\[duración: [^\]]*\]\n)", txt or "")
+    if m:                                       # se conserva la duración (el informe la usa) y se resume el resto
+        return m.group(1) + _resumir(txt[m.end():], n)
     o = _objeto(txt)
     if not o:
         return txt[:n]
@@ -623,6 +632,11 @@ class MotorLocal:
                         args = json.loads(args)
                     except ValueError:
                         args = {}
+                if nombre == "calibrarColor" and isinstance(args, dict) and args.get("sensor") and not any(
+                        "sensor" in str(x.get("content", "")).lower() for x in self.mensajes if x.get("role") == "user"):
+                    # La guía: el sensor sale del perfil o de la cabecera; sólo se pasa si el usuario lo dice.
+                    args = {k: v for k, v in args.items() if k != "sensor"}
+                    emitir({"tipo": "aviso", "texto": "Quito «sensor» de calibrarColor: sale del perfil o de la cabecera."})
                 emitir({"tipo": "herramienta", "nombre": nombre, "args": args})
                 t1 = time.time()
                 try:
@@ -641,7 +655,8 @@ class MotorLocal:
                 if nombre == "exportarFinal":
                     emitir({"tipo": "exportado", "carpeta": _carpeta_export(txt)})
                     exportado = exportado or res.get("estado") == "ok"
-                contenido = txt[:MAX_RESULTADO] + ("…" if len(txt) > MAX_RESULTADO else "")
+                contenido = (f"[duración: {time.time() - t1:.1f} s]\n" + txt[:MAX_RESULTADO]
+                             + ("…" if len(txt) > MAX_RESULTADO else ""))
                 if self.api:
                     self.mensajes.append({"role": "tool", "tool_call_id": ll.get("id"), "name": nombre, "content": contenido})
                     if self.api.get("vision") and res.get("estado") == "ok":
