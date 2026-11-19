@@ -51,6 +51,28 @@ body:
     validations:
       required: true
   - type: textarea
+    id: metricas
+    attributes:
+      label: "Métricas de la sesión / Session metrics"
+      description: |
+        Pega el bloque JSON «astropilot-metricas/1» del informe: en el Lite, el bloque ```json de «Métricas de la sesión» del informe .md; en Siril o SASpro, «Datos para comparar (JSON)» del informe HTML. No lleva rutas ni datos personales.
+        Paste the "astropilot-metricas/1" JSON block from the report: in the Lite, the ```json block under "Métricas de la sesión" in the .md report; in Siril or SASpro, "Datos para comparar (JSON)" in the HTML report. It contains no paths or personal data.
+      render: json
+  - type: textarea
+    id: sesion
+    attributes:
+      label: "Sesión anonimizada (opcional) / Anonymised session (optional)"
+      description: |
+        Con modelos locales (Ollama) se guarda junto al informe un fichero «…_sesion_anonima». No lleva el prompt de sistema ni las previas, y las carpetas de usuario van cambiadas por <USUARIO>. Revísalo y, si quieres, adjúntalo aquí o pega un enlace.
+        With local models (Ollama) a "…_sesion_anonima" file is saved next to the report. It has no system prompt or previews, and user folders are replaced with <USUARIO>. Check it and, if you want, attach it here or paste a link.
+  - type: checkboxes
+    id: permiso
+    attributes:
+      label: "Uso de la sesión / Use of the session"
+      options:
+        - label: "Permito usar la sesión anonimizada para entrenar modelos locales del proyecto / I allow the anonymised session to be used to train the project's local models"
+          required: false
+  - type: textarea
     id: registro
     attributes:
       label: "Registro (si algo falló) / Log (if something failed)"

@@ -23,6 +23,8 @@ Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y
 
 **Ficheros grandes:** no los adjuntes a la *issue*. Súbelos a Google Drive, OneDrive, Dropbox o WeTransfer y pega el enlace. Un recorte de 1000 × 1000 px en XISF o FITS suele bastar; si puedes, indica cuánto tiempo estará disponible el enlace.
 
+**Métricas y sesión:** el informe del Lite (.md o dossier) y el de Siril o SASpro llevan una tabla de métricas de la sesión y un bloque JSON (`astropilot-metricas/1`): modelo, versión de la guía, llamadas correctas, errores, correcciones, tiempos y tokens. Pega ese bloque en la *issue*: es lo que permite comparar envíos con datos y no solo a ojo. No lleva rutas ni datos personales. Con modelos locales se guarda además, junto al informe, un fichero `…_sesion_anonima` con la conversación completa, sin el prompt de sistema ni las previas y con las carpetas de usuario cambiadas. Nada se envía solo: revísalo y adjúntalo únicamente si quieres, y di en la plantilla si podemos usarlo para entrenar modelos locales.
+
 **Datos privados:** las cabeceras FITS/XISF pueden llevar tus coordenadas, el nombre del observatorio o rutas de tu PC. Revísalas antes de compartir. Comparte solo datos tuyos o que tengas permiso para compartir, y di bajo qué condiciones pueden usarse (por ejemplo, solo para probar la guía, o también como imagen de ejemplo en la documentación).
 
 ## Reglas para cambios en la guía
@@ -80,6 +82,8 @@ Thanks for wanting to help. This project (the processing guide, the MCP bridge a
 Issues can be written in English or Spanish.
 
 **Large files:** do not attach them to the issue. Upload them to Google Drive, OneDrive, Dropbox or WeTransfer and paste the link. A 1000 × 1000 px XISF or FITS crop is usually enough; if you can, say how long the link will stay up.
+
+**Metrics and session:** the Lite report (.md or dossier) and the Siril or SASpro report include a session metrics table and a JSON block (`astropilot-metricas/1`): model, guide version, correct calls, errors, corrections, timing and tokens. Paste that block into the issue: it lets us compare submissions with data, not just by eye. It contains no paths or personal data. With local models a `…_sesion_anonima` file with the full conversation is also saved next to the report, without the system prompt or previews and with user folders replaced. Nothing is sent automatically: check it and attach it only if you want, and say in the template whether we may use it to train local models.
 
 **Private data:** FITS/XISF headers may contain your coordinates, observatory name or local paths. Check them before sharing. Only share your own data or data you are allowed to share, and say how it may be used (only to test the guide, or also as an example image in the docs).
 
