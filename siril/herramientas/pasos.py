@@ -2529,7 +2529,7 @@ def _saturar_propio(p, k, fondo=None):
 
 
 def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5,
-                         propia=(1.0, 1.5, 2.0, 2.5)):
+                         propia=(1.0, 1.5, 2.0, 2.5), sat_max=0.80):
     """Paso 5 no lineal: compara satu de Siril a varias cantidades; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
     if info["canales"] != 3:
@@ -2611,6 +2611,10 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     finally:
         _restaurar(siril, crudo)
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    # Techo de saturación del objeto (IC 405, 19 nov 2026): «la mayor que cumple» llevó a +1 (sat 0,87) y el rojo salió
+    # pasado; las referencias de Rafael quedan en 0,45–0,65 medidas en el JPG y Opus eligió +0,75 (≈ 0,80 aquí).
+    if any((x["metricas"]["sat_objeto"] or 0) <= sat_max for x in ok):
+        ok = [x for x in ok if (x["metricas"]["sat_objeto"] or 0) <= sat_max]
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
         mm = mejor["metricas"]

@@ -727,6 +727,11 @@ def combinarCandidatos(siril, ha, oiii=None, intensidades=(0.5, 1.0), con_oiii=T
             r["errores"].append(f"{nombre}: {e}")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]
           and x["metricas"]["nebulosa_halfa_ganada_pct"] + x["metricas"]["nebulosa_oiii_ganada_pct"] >= 5]
+    # Por encima de ×1 se exagera el Hα frente a lo que dicen las estrellas: en IC 405 (19 nov 2026) Qwen eligió
+    # ×1,5, la mayor ganancia, y el rojo salió R/G 6 frente a 1,8–2,5 de las referencias. Se recomienda hasta ×1.
+    fuerza = {x['id']: a for x, (_, a, _b) in zip(r["candidatos"], variantes)}
+    if any(fuerza.get(x["id"], 0) <= 1.0 for x in ok):
+        ok = [x for x in ok if fuerza.get(x["id"], 0) <= 1.0]
     if not ok and r["candidatos"] and not any(x["no_cumple"] for x in r["candidatos"]):
         r["recomendado"] = None
         r["motivo"] = ("Ninguna combinación aporta (< 5 % de nebulosa ganada): la banda estrecha no tiene más señal que el RGB "

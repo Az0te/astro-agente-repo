@@ -1910,7 +1910,7 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
 
 
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5), proteger_cielo=True,
-                         dominante_max=5.0, ceros_max=0.5, satchroma=(0.25, 0.5)):
+                         dominante_max=5.0, ceros_max=0.5, satchroma=(0.25, 0.5), sat_max=0.80):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades y con SatChroma de SASpro (croma
     Lab, ganancia uniforme 1 + k); mide saturación del objeto y del cielo, dominante del cielo y recortes nuevos, y
     recomienda la mayor que cumple. La vista no cambia."""
@@ -1958,6 +1958,10 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
             fal.append("el cielo gana más color que el objeto")
         x["no_cumple"] = fal
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    # Techo de saturación del objeto (IC 405, 19 nov 2026): «la mayor que cumple» llevó a +1 (sat 0,87) y el rojo salió
+    # pasado; las referencias de Rafael quedan en 0,45–0,65 medidas en el JPG y Opus eligió +0,75 (≈ 0,80 aquí).
+    if any((x["metricas"]["sat_objeto"] or 0) <= sat_max for x in ok):
+        ok = [x for x in ok if (x["metricas"]["sat_objeto"] or 0) <= sat_max]
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
         mm = mejor["metricas"]
