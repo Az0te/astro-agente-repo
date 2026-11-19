@@ -207,7 +207,7 @@ def prompt_sistema(funcs, internet, idioma="es"):
         "neutraliza solo al estirar. PERO en una nebulosa de emisión con mucha más banda estrecha que RGB (horas de dual band "
         "frente a minutos de RGB) NO inyectes: ruta de PALETA. Cada capa sigue sola (gradiente → separarEstrellas → ruido → "
         "estirado) y después paletasCandidatos con TODAS las rayas (ha, oiii, sii, hb: Natural usa las cuatro); el RGB sólo "
-        "da las estrellas (color, separarEstrellas, estrellas estiradas y recombinarEstrellas sobre la paleta). Antes de cada paso de la RGB, comprueba qué imagen está cargada (imagen_cargada / "
+        "da las estrellas (color, separarEstrellas, estrellas estiradas y recombinarEstrellas sobre la paleta). Excepción: si el objeto tiene REFLEXIÓN (polvo azul junto a estrellas brillantes que sólo da el RGB: IC 405, M20, M78, NGC 1977…) NO es ruta de paleta aunque haya más banda estrecha: RGB calibrado de color + inyección de Hα (y OIII) con combinar; una paleta pierde el azul de reflexión y lo vuelve dorado o verde (IC 405, 19 nov 2026). Antes de cada paso de la RGB, comprueba qué imagen está cargada (imagen_cargada / "
         "fichero del último resultado); si no es la RGB, ábrela con abrirImagen. En galaxias, tras estirar: nucleoCandidatos "
         "(comprimir el bulbo) ANTES de contraste y saturación. fondoCandidatos (cielo oscuro y neutro, 0,05–0,08: con 0,10–0,13 la "
         "imagen queda gris y plana) va justo después de montar la paleta o de estirar la starless, ANTES de contraste y "

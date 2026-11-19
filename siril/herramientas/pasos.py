@@ -430,6 +430,29 @@ def _distancia_grados(a1, d1, a2, d2):
     return float(np.degrees(np.arccos(np.clip(c, -1, 1))))
 
 
+def _wcs(siril):
+    """Astrometría de la imagen cargada: {"wcs": bool, "escala": "/px o None}. Siril sólo pone PLTSOLVD cuando resuelve
+    él: un master con WCS válida en la cabecera (de otro programa) daba pltsolvd falso y SPCC se negaba (IC 405 de
+    SetiAstro, 19 nov 2026). Se prueba también convirtiendo dos píxeles a coordenadas."""
+    k = None
+    try:
+        k = siril.get_image_keywords()
+    except Exception:
+        pass
+    out = {"wcs": bool(getattr(k, "pltsolvd", False)) if k else False, "escala": None}
+    try:
+        info = H._info(siril)
+        cx, cy = info["ancho"] / 2.0, info["alto"] / 2.0
+        a = siril.pix2radec(cx, cy)
+        b = siril.pix2radec(cx + 100.0, cy)
+        if a and b:
+            out["wcs"] = True
+            out["escala"] = _r(_distancia_grados(a[0], a[1], b[0], b[1]) * 3600.0 / 100.0, 4)
+    except Exception:
+        pass
+    return out
+
+
 def resolverAstrometria(siril, forzar=False, focal=None, pixel=None, centro=None, catalogo=None, astrometrynet=False,
                         reducir=False):
     """Plate solve con platesolve de Siril (no cambia los píxeles salvo que la imagen esté al revés)."""
@@ -481,6 +504,23 @@ def resolverAstrometria(siril, forzar=False, focal=None, pixel=None, centro=None
             args.append(c)
     if ar_cab is not None and not any(a and a[0].isdigit() for a in args):
         args.append(f"{ar_cab:.5f},{de_cab:+.5f}")
+    # La escala de una WCS que ya trae la imagen manda sobre focal × píxel de la cabecera. IC 405 de SetiAstro (19 nov
+    # 2026): FOCALLEN 507 mm y 3,76 µm dan 1,53"/px, pero la WCS (y PixInsight) dicen 2,01"/px; platesolve buscaba a
+    # una escala equivocada y no resolvía nunca.
+    w0 = _wcs(siril)
+    if w0["wcs"] and not forzar:
+        return {"resuelta": True, "ya_tenia": True, "escala_arcsec_px": w0["escala"],
+                "nota": "La imagen ya trae astrometría válida (WCS de la cabecera): no hace falta resolver. Sigue con el color."}
+    aviso_escala = None
+    px_uso = float(pixel) if pixel else px_cab
+    if not focal and w0["escala"]:
+        if not px_uso:                 # sin píxel en la cabecera Siril toma el de Preferencias (que no vemos): para la
+            px_uso = pixel = 3.76      # escala sólo cuenta focal/píxel, así que se pasan los dos
+        f_wcs = 206.265 * px_uso / w0["escala"]
+        if not fo_cab or abs(f_wcs - fo_cab) / f_wcs > 0.10:
+            focal = round(f_wcs, 1)
+            aviso_escala = (f"Focal de la cabecera {fo_cab:g} mm no cuadra con la escala de la WCS ({w0['escala']}\"/px): "
+                            f"se usa {focal} mm.")
     if focal:
         args.append(f"-focal={float(focal)}")
     if pixel:
@@ -503,7 +543,7 @@ def resolverAstrometria(siril, forzar=False, focal=None, pixel=None, centro=None
     except Exception as e:
         ok, err = False, str(e)
     k = siril.get_image_keywords()
-    r = {"resuelta": bool(getattr(k, "pltsolvd", False)), "segundos": _r(time.perf_counter() - t0, 1),
+    r = {"resuelta": ok and (bool(getattr(k, "pltsolvd", False)) or _wcs(siril)["wcs"]), "segundos": _r(time.perf_counter() - t0, 1),
          "comando": " ".join(["platesolve", *args])}
     if k:
         r.update(ar=_r(k.ra, 5) if k.ra is not None else None, dec=_r(k.dec, 5) if k.dec is not None else None,
@@ -511,6 +551,8 @@ def resolverAstrometria(siril, forzar=False, focal=None, pixel=None, centro=None
     r["registro"] = [l for l in _log_nuevo(siril, antes) if "[SirilAstroPilot]" not in l][-12:]
     if aviso_centro:
         r["aviso"] = aviso_centro
+    if aviso_escala:
+        r["aviso_escala"] = aviso_escala
     if not ok:
         r["error"] = err
     if not r["resuelta"] and any("remote catalogue" in l or "libcurl" in l for l in r["registro"]):
@@ -1253,7 +1295,7 @@ def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=No
     if info["canales"] != 3:
         raise RuntimeError("SPCC necesita una imagen en color (3 canales).")
     k = siril.get_image_keywords()
-    if not getattr(k, "pltsolvd", False):
+    if not _wcs(siril)["wcs"]:
         raise RuntimeError("La imagen no tiene astrometría: resolverAstrometria primero (Paso 8).")
     p = H._pixeles(siril, info)
     if not _lineal(p):
@@ -2518,7 +2560,8 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     r = {"antes": m0, "candidatos": [], "errores": []}
     if m0["dominante_cielo_pct"] >= dominante_max:
         r["aviso"] = (f"El cielo ya tiene una dominante del {m0['dominante_cielo_pct']} % antes de saturar: saturar la amplifica. "
-                      "Corrígela antes (fase lineal o neutralizar el fondo).")
+                      "Corrígela antes con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y vuelve a saturar; tras una paleta "
+                      "la dominante del cielo es normal y fondoCandidatos la quita (IC 405, 19 nov 2026: sin ese paso no se saturó).")
     n = 0
     # Además de satu, la saturación propia de SetiAstroPilot (conserva la luminancia y no satura el cielo: peso de 0 en
     # el cielo a 1 en cielo + 0,1). En IC 1396 satu llegaba a 0,34 de saturación del objeto antes de teñir el cielo;
@@ -2677,6 +2720,11 @@ def _cobertura_ruido(x, b=16, umbral=1.25, pct=98.0, max_bloques=40):
     """Cobertura por el RUIDO, en lineal y antes del gradiente (igual que medidas.cobertura_ruido de SetiAstroPilot):
     con menos subs el ruido sube; por borde, píxeles con ruido local > umbral × el del centro."""
     x = np.asarray(x, dtype=np.float32)
+    # Binado 2×2 antes de medir: el remuestreo del alineado (bilineal o Lanczos con un giro) suaviza el ruido de píxel
+    # distinto en cada zona del campo, y el ruido a escala de 1 px cambiaba del ×1,56 arriba al ×0,87 abajo en un
+    # master alineado sin franjas (IC 405, 19 nov 2026). Binado, la cobertura sale como en el master sin alinear.
+    x = x[:x.shape[0] // 2 * 2, :x.shape[1] // 2 * 2].reshape(x.shape[0] // 2, 2, x.shape[1] // 2, 2).mean(axis=(1, 3))
+    b2, b = b, max(1, b // 2)
     hp = x - _caja(x, 1)
     h, w = hp.shape
     hb, wb = h // b, w // b
@@ -2688,7 +2736,12 @@ def _cobertura_ruido(x, b=16, umbral=1.25, pct=98.0, max_bloques=40):
     for lado, a in vistas.items():
         alto = a[:, :max_bloques] > umbral
         corr = np.where(alto.all(axis=1), max_bloques, np.argmin(alto, axis=1))
-        out[lado] = int(np.percentile(corr, pct)) * b
+        # Filas con ruido alto en todo el tramo (640 px) son señal, no cobertura: nebulosa brillante o el halo de una
+        # estrella que llega al borde (ruido de la propia señal). IC 405 (19 nov 2026): un 2–3 % de filas así daba 640 px
+        # por lado (el tope) y el recorte salía <70 %; sin ellas, 96/176/192/128 px, como se ve en el perfil de ruido.
+        llenas = corr >= max_bloques
+        uso = corr[~llenas] if llenas.mean() < 0.5 else corr
+        out[lado] = int(np.percentile(uso, pct)) * b2
     return out
 
 

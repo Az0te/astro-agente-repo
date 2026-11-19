@@ -545,6 +545,11 @@ def cobertura_ruido(x, b=16, umbral=1.25, pct=98.0, max_bloques=40):
     (percentil 'pct' de las filas/columnas). IC 1396 (16 nov 2026): el S2O3 tenía 96–128 px a la derecha y 80 abajo con
     más ruido; el gradiente se ajustaba mal ahí y la esquina salía cian. Igual que _cobertura_ruido de Siril."""
     x = np.asarray(x, dtype=np.float32)
+    # Binado 2×2 antes de medir: el remuestreo del alineado (bilineal o Lanczos con un giro) suaviza el ruido de píxel
+    # distinto en cada zona del campo, y el ruido a escala de 1 px cambiaba del ×1,56 arriba al ×0,87 abajo en un
+    # master alineado sin franjas (IC 405, 19 nov 2026). Binado, la cobertura sale como en el master sin alinear.
+    x = x[:x.shape[0] // 2 * 2, :x.shape[1] // 2 * 2].reshape(x.shape[0] // 2, 2, x.shape[1] // 2, 2).mean(axis=(1, 3))
+    b2, b = b, max(1, b // 2)
     hp = x - _caja(x, 1)
     h, w = hp.shape
     hb, wb = h // b, w // b
@@ -556,7 +561,12 @@ def cobertura_ruido(x, b=16, umbral=1.25, pct=98.0, max_bloques=40):
     for lado, a in vistas.items():
         alto = a[:, :max_bloques] > umbral
         corr = np.where(alto.all(axis=1), max_bloques, np.argmin(alto, axis=1))
-        out[lado] = int(np.percentile(corr, pct)) * b
+        # Filas con ruido alto en todo el tramo (640 px) son señal, no cobertura: nebulosa brillante o el halo de una
+        # estrella que llega al borde (ruido de la propia señal). IC 405 (19 nov 2026): un 2–3 % de filas así daba 640 px
+        # por lado (el tope) y el recorte salía <70 %; sin ellas, 96/176/192/128 px, como se ve en el perfil de ruido.
+        llenas = corr >= max_bloques
+        uso = corr[~llenas] if llenas.mean() < 0.5 else corr
+        out[lado] = int(np.percentile(uso, pct)) * b2
     return out
 
 

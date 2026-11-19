@@ -139,6 +139,11 @@ def imagen(siril):
     i = _info(siril)
     k = siril.get_image_keywords()
     i["astrometria"] = bool(getattr(k, "pltsolvd", False)) if k else False
+    if not i["astrometria"]:                      # WCS de la cabecera de otro programa (Siril no pone PLTSOLVD)
+        try:
+            i["astrometria"] = bool(siril.pix2radec(i["ancho"] / 2.0, i["alto"] / 2.0))
+        except Exception:
+            pass
     i["historial"] = (siril.get_image_history() or [])[-10:]
     return i
 

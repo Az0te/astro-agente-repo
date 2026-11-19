@@ -21,7 +21,7 @@
 4. El Hα de un dual band OSC sale de la desmezcla (Paso 7 lineal) con el continuo restado (Paso 16 lineal). Alternativa: la inyección en tres partes de aescaffre (R condicional + realce de luminancia + capa de detalle) con máscara de nebulosa derivada del Hα (clipLow 0,04, blur 8; fuerza ~0,65, umbral 0,3).
 5. Blancos y azules de reflexión, nebulosidad de fondo en Hα y compresión de altas luces: Anexo E. Curvas y saturación: Paso 5. NXT tras los realces: Paso 6.
 6. Ajustar el nivel del fondo al final con una curva K (el valor objetivo está en el perfil).
-7. El OIII de un dual band en una nebulosa sin OIII sólo aporta continuo de reflexión y ruido: medirlo y descartarlo si no añade señal (NOVA descarta la paleta bicolor si Hα/OIII > 20). Una nebulosa de reflexión captada con dual band no pasa por una paleta: su color es continuo de banda ancha (RGB).
+7. El OIII de un dual band en una nebulosa sin OIII sólo aporta continuo de reflexión y ruido: medirlo y descartarlo si no añade señal (NOVA descarta la paleta bicolor si Hα/OIII > 20). Una nebulosa de reflexión captada con dual band no pasa por una paleta: su color es continuo de banda ancha (RGB). Lo mismo una nebulosa de **emisión y reflexión** (IC 405, M20, M78): Hα inyectado en el RGB, no paleta, aunque la banda estrecha tenga más horas; la paleta pierde el azul de reflexión (IC 405, 19 nov 2026).
 
 **Paleta: cuándo y cómo se elige**
 

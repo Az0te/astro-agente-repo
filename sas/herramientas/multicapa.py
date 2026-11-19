@@ -277,6 +277,23 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
     if wref is None:
         r["aviso"] = ("Sin astrometría válida: los alineados se guardan sin WCS. Resuelve la referencia alineada "
                       "(resolverAstrometria) antes del color por estrellas o de documentarObjeto.")
+    # Las vistas de los masters SIN alinear se cierran (si no tienen cambios): con ellas abiertas, un modelo local siguió
+    # con el uid del RGB original y la capa de estrellas salió de otro tamaño que la starless (IC 405, 19 nov 2026).
+    entradas = {str(f.resolve()).lower() for f in fs}
+    cerradas = []
+    for d in list(H._docs(ctx)):
+        try:
+            fp = H._meta(d).get("file_path")
+            if fp and str(Path(fp).resolve()).lower() in entradas and not (H._n_deshacer(d) or 0):
+                nombre = H._nombre(d)
+                H.cerrarVista(ctx, nombre)
+                cerradas.append(nombre)
+        except Exception:
+            pass
+    if cerradas:
+        r["cerradas_sin_alinear"] = cerradas
+        r["nota"] += (" Cerradas las vistas de los masters sin alinear (" + ", ".join(cerradas) + "): sus uids ya no "
+                      "valen; usa sólo las de los *_alin (o *_rec tras revisarRecorte).")
     return r
 
 
@@ -328,6 +345,8 @@ def desmezclarDualBand(ctx, vista=None, carpeta=None, filtro=None, quitar_patron
         raise RuntimeError("desmezclarDualBand necesita el master dual band en color (3 canales).")
     if not M.lineal(p[:, ::8, ::8]):
         raise RuntimeError("El dual band parece estirado: se separa en lineal (Paso 7, antes del gradiente y del color).")
+    if recorte_revisado(_fuente(ctx, d)) is False:
+        raise RuntimeError("Este dual band viene de masters alineados sin revisarRecorte: haz antes revisarRecorte(ficheros de los alineados) y desmezcla el *_rec. Si separas antes, las capas quedan con las franjas de borde y hay que recortarlas a mano igual que el RGB (IC 405, 19 nov 2026).")
     rayas = _rayas_del_filtro(d, filtro)
     if rayas is None:
         capas = (("Ha", p[0].astype(np.float32)), ("OIII", (0.5 * (p[1] + p[2])).astype(np.float32)))

@@ -1969,7 +1969,9 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
         r["motivo"] = "Ninguna cumple (ver no_cumple): no satures más o corrige antes la dominante del cielo."
     r["antes"] = m0
     if m0["dominante_cielo_pct"] >= dominante_max:
-        r["aviso"] = f"El cielo ya tiene una dominante del {m0['dominante_cielo_pct']} %: saturar la amplifica."
+        r["aviso"] = (f"El cielo ya tiene una dominante del {m0['dominante_cielo_pct']} %: saturar la amplifica. Corrígela "
+                      "antes con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y vuelve a saturar; tras una paleta la "
+                      "dominante del cielo es normal y fondoCandidatos la quita (IC 405, 19 nov 2026: sin ese paso no se saturó).")
     return _galeria(r, p)
 
 

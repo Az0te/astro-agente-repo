@@ -195,6 +195,10 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=No
         except Exception:
             previa = None
         siril.cmd("load", H._arg_cmd(H._ruta(fichero, "fichero")))
+    if fichero and recorte_revisado(str(H._ruta(fichero, "fichero"))) is False:
+        if previa:
+            siril.cmd("load", H._arg_cmd(Path(previa)))
+        raise RuntimeError("Este dual band viene de masters alineados sin revisarRecorte: haz antes revisarRecorte(ficheros de los alineados) y desmezcla el *_rec.fit. Si separas antes, las capas quedan con las franjas de borde y hay que recortarlas a mano igual que el RGB (IC 405, 19 nov 2026).")
     info = H._info(siril)
     if info["canales"] != 3:
         raise RuntimeError("desmezclarDualBand necesita el master dual band en color (3 canales).")
