@@ -845,7 +845,7 @@ function plOllamaChat(aj, sistema, mensajes, estado) {
       ultimoPensado = pensado;
       if (texto.length || !pensado.length) {
          if (!texto.length) console.warningln("PiAstroPilot: el modelo no respondió (turno vacío).");
-         return { texto: texto, uso: uso };
+         return { texto: texto, uso: uso, pensado: pensado, empujones: empujones };
       }
       if (empujones < PL_MAX_EMPUJONES) {
          empujones++;
@@ -857,7 +857,7 @@ function plOllamaChat(aj, sistema, mensajes, estado) {
       }
       var final = plTextoDelRazonamiento(pensado);
       if (!final.length) console.warningln("PiAstroPilot: el modelo no respondió (turno vacío).");
-      return { texto: final.length ? "(tomado del razonamiento)\n\n" + final : "", uso: uso };
+      return { texto: final.length ? "(tomado del razonamiento)\n\n" + final : "", uso: uso, pensado: pensado, empujones: empujones };
    }
 }
 
@@ -1079,7 +1079,11 @@ function plPreguntar(aj, mensajes, estado, paso) {
    if (aj.proveedor == "claude") t = plClaudeChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "codex") t = plCodexChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "gemini") t = plGeminiChat(aj, sistema, m, estado, e.modelo);
-   else t = plOllamaChat(aj, sistema, m, estado);
+   else {
+      var tR = Date.now();
+      t = plOllamaChat(aj, sistema, m, estado);
+      plRegPeticion(aj, sistema, m, t, (Date.now() - tR) / 1000);
+   }
    return { texto: t.texto, uso: t.uso, modelo: e.modelo, porque: e.porque };
 }
 
@@ -1091,6 +1095,131 @@ function plUsoTexto(u) {
            plMiles(u.entrada) + " → " + plMiles(u.salida) + " tokens" + (u.cache ? " (caché " + plMiles(u.cache) + ")" : "");
    if (u.coste) s += " · " + u.coste.toFixed(3).replace(".", ",") + " $";
    return s;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Registro de sesiones del modelo local (Ollama) para un futuro ajuste fino (Rafael, 19 nov 2026)
+// Sólo Ollama y sólo en este PC: Claude, Codex y Gemini no se registran y nada se sube a ningún sitio.
+// Carpeta: ASTROPILOT_SESIONES o ~/.astropilot/sesiones; aquí, pixinsight-lite/<AAAAMMDD_HHMMSS>_<modelo>/:
+//   sesion.jsonl   una línea por suceso: inicio, petición (mensajes tal como se mandaron + respuesta) y ejecución
+//   previas/       JPG que devolvieron las llamadas
+// El prompt de sistema va aparte, una vez por versión: pixinsight-lite/_sistemas/<huella>.txt.
+// Límite de 50 GB en total: pasado el 90 % avisa; pasado el límite deja de copiar previas. ASTROPILOT_REGISTRO=0 lo apaga.
+// ---------------------------------------------------------------------------------------------------------------
+
+var PL_REG = null;   // sesión abierta; «Nueva conversación» la cierra
+var PL_REG_LIMITE_GB = 50;
+
+function plEntorno(n) { try { return String(getEnvironmentVariable(n) || ""); } catch (e) { return ""; } }
+
+function plRegBase() {
+   var b = plEntorno("ASTROPILOT_SESIONES");
+   return (b || File.homeDirectory + "/.astropilot/sesiones").replace(/\\/g, "/");
+}
+
+// Huella de 16 hex (dos FNV-1a de 32 bits): sólo para no repetir el prompt de sistema en cada línea.
+function plHuella(t) {
+   var a = 0x811c9dc5, b = 0x01000193 ^ 0x5bd1e995;
+   for (var i = 0; i < t.length; ++i) {
+      var c = t.charCodeAt(i);
+      a = Math.imul(a ^ c, 0x01000193) >>> 0;
+      b = Math.imul(b ^ c, 0x01000193 + 2) >>> 0;
+   }
+   return ("0000000" + a.toString(16)).slice(-8) + ("0000000" + b.toString(16)).slice(-8);
+}
+
+function plCommitRepo(repo) {
+   try {
+      var cab = String(File.readTextFile(repo + "/.git/HEAD")).trim();
+      if (cab.indexOf("ref:") != 0) return cab.substring(0, 12);
+      var ref = cab.substring(4).trim();
+      if (File.exists(repo + "/.git/" + ref)) return String(File.readTextFile(repo + "/.git/" + ref)).trim().substring(0, 12);
+      var lineas = String(File.readTextFile(repo + "/.git/packed-refs")).split(/\r?\n/);
+      for (var i = 0; i < lineas.length; ++i)
+         if (lineas[i].indexOf(" " + ref) > 0) return lineas[i].split(" ")[0].substring(0, 12);
+   } catch (e) {}
+   return "";
+}
+
+function plTamanoCarpeta(d) {
+   var total = 0;
+   try {
+      if (!File.directoryExists(d)) return 0;
+      searchDirectory(d + "/" + "*", true).forEach(function (f) { try { total += new FileInfo(f).size; } catch (e) {} });
+   } catch (e) {}
+   return total;
+}
+
+function plRegLinea(o) {
+   if (!PL_REG) return;
+   try {
+      var f = new File();
+      f.openOrCreate(PL_REG.dir + "/sesion.jsonl");
+      f.seekEnd();
+      f.outText(plJsonAscii(o) + "\n");
+      f.close();
+   } catch (e) { console.warningln("[PiAstroPilotLite] registro de sesión: " + (e.message || e)); }
+}
+
+function plRegActivo(aj) { return aj.proveedor == "ollama" && plEntorno("ASTROPILOT_REGISTRO") != "0"; }
+
+function plRegAbrir(aj) {
+   if (PL_REG) return PL_REG;
+   var prog = plRegBase() + "/pixinsight-lite", d = new Date();
+   var sello = d.getFullYear() + plDosDig(d.getMonth() + 1) + plDosDig(d.getDate()) + "_" +
+               plDosDig(d.getHours()) + plDosDig(d.getMinutes()) + plDosDig(d.getSeconds());
+   var dir = prog + "/" + sello + "_" + String(aj.modeloOllama || "modelo").replace(/[^A-Za-z0-9._-]+/g, "_").substring(0, 40);
+   plCarpeta(dir);
+   var usado = plTamanoCarpeta(plRegBase()), limite = PL_REG_LIMITE_GB * 1073741824;
+   PL_REG = { dir: dir, prog: prog, n: 0, previas: usado <= limite, sistemas: {} };
+   if (usado > 0.9 * limite)
+      console.warningln("[PiAstroPilotLite] registro de sesiones: " + (usado / 1073741824).toFixed(1) + " GB de " +
+                        PL_REG_LIMITE_GB + " GB" + (PL_REG.previas ? "" : "; esta sesión va sin previas") + " (" + plRegBase() + ").");
+   plRegLinea({ tipo: "inicio", formato: "astropilot-lite/1", programa: "pixinsight-lite", version: PL_VERSION,
+                modelo: aj.modeloOllama, temperatura: aj.temperatura, pensar: !!aj.pensar, internet: !!aj.internet,
+                idioma: aj.idioma || "es", commit: plCommitRepo(plPadre(aj.guia)), hora: d.toISOString(),
+                nota: null, usar: null, comentario: "" });
+   return PL_REG;
+}
+
+function plRegCerrar() { PL_REG = null; }
+
+// Una petición al modelo: los mensajes exactamente como se mandaron (con el historial ya recortado) y la respuesta.
+function plRegPeticion(aj, sistema, mensajes, t, segundos) {
+   if (!plRegActivo(aj)) return;
+   try {
+      var R = plRegAbrir(aj), h = plHuella(sistema);
+      if (!R.sistemas[h]) {
+         var fs = plCarpeta(R.prog + "/_sistemas") + "/" + h + ".txt";
+         if (!File.exists(fs)) File.writeTextFile(fs, sistema);
+         R.sistemas[h] = true;
+      }
+      ++R.n;
+      plRegLinea({ tipo: "peticion", n: R.n, sistema: "_sistemas/" + h + ".txt", modelo: aj.modeloOllama,
+                   mensajes: mensajes, respuesta: t.texto, razonamiento: t.pensado || "", empujones: t.empujones || 0,
+                   uso: t.uso || null, segundos: segundos, hora: new Date().toISOString() });
+   } catch (e) { console.warningln("[PiAstroPilotLite] registro de sesión: " + (e.message || e)); }
+}
+
+// La ejecución de las llamadas de la última respuesta: el texto que vuelve al modelo y copia de las previas JPG.
+function plRegEjecucion(llamadas, r) {
+   if (!PL_REG) return;
+   try {
+      var copiadas = [];
+      if (PL_REG.previas) {
+         var vistas = {}, re = /"([^"]+?\.jpe?g)"/gi, m;
+         var txt = String(r.texto).replace(/\\\\/g, "\\");
+         while ((m = re.exec(txt)) !== null) {
+            var origen = m[1].replace(/\\/g, "/");
+            if (vistas[origen] || !File.exists(origen)) continue;
+            vistas[origen] = true;
+            var nombre = ("000" + PL_REG.n).slice(-4) + "_" + File.extractName(origen).replace(/[^A-Za-z0-9._-]+/g, "_") + ".jpg";
+            try { File.copyFile(plCarpeta(PL_REG.dir + "/previas") + "/" + nombre, origen); copiadas.push("previas/" + nombre); } catch (e) {}
+         }
+      }
+      plRegLinea({ tipo: "ejecucion", n: PL_REG.n, llamadas: llamadas, ok: !!r.ok, resultado: r.texto,
+                   segundos: r.segundos || 0, previas: copiadas, hora: new Date().toISOString() });
+   } catch (e) { console.warningln("[PiAstroPilotLite] registro de sesión: " + (e.message || e)); }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1783,6 +1912,7 @@ function plConstruirDialogo(aj) {
    this.bLimpiar.text = "Nueva conversación";
    this.bLimpiar.onClick = function () {
       self.mensajes = []; self.registro = ""; self.entradas = []; self.pideAprobados = false; self.soloApilado = false; plBorrarTemporales();
+      plRegCerrar();   // la siguiente petición a Ollama abre otra sesión en el registro
       self.bienvenida(); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0;
       self.usoSesion = null; self.actualizarUso();
@@ -2372,6 +2502,7 @@ function plConstruirDialogo(aj) {
             "de seleccionarSubs. Ejecuta antes seleccionarSubs sobre las carpetas LIGHT y repite lanzarWBPP con lights = su " +
             "lista_aprobados (el fichero .txt que devuelve)." }
         : plEjecutarLlamadas(aj, s);
+      plRegEjecucion(s, r);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
       if (this.serie && r.ok && /"exportarFinal"/.test(s)) {   // exportado: fin del procesado
          this.serie = false;

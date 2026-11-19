@@ -33,6 +33,13 @@ GUIA = Path(os.environ.get("SIRILASTROPILOT_GUIA", REPO / "guia"))
 MANIFIESTO = SIRIL / "herramientas" / "manifiesto.json"
 MCP_JS = SIRIL / "mcp" / "dist" / "sirilastropilot-mcp.mjs"
 DATOS = Path.home() / ".sirilastropilot"
+try:                                                    # registro de sesiones locales (ajuste fino, 19 nov 2026)
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("astropilot_registro_sesion", AQUI / "registro_sesion.py")
+    registro_sesion = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(registro_sesion)
+except Exception:                                       # sin el módulo el chat funciona igual, sin registrar
+    registro_sesion = None
 MINIS = DATOS / "chat"
 PUERTO = int(os.environ.get("SIRILASTROPILOT_PUERTO", "48731"))
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
@@ -517,9 +524,11 @@ class MotorLocal:
         self.mensajes = []
         self.funcs = manifiesto()
         self.timeouts = {f["nombre"]: int(f.get("timeout_s", 120)) for f in self.funcs}
+        self.reg = None                          # registro de la sesión (sólo Ollama; se crea en el primer turno)
 
     def limpiar(self):
         self.mensajes = []
+        self.reg = None                          # Limpiar empieza otra sesión en el registro
 
     def turno(self, texto, internet, emitir, cancelado, idioma="es"):
         sistema = {"role": "system", "content": prompt_sistema(self.funcs, internet, idioma)}
@@ -528,6 +537,17 @@ class MotorLocal:
         else:
             self.mensajes.append(sistema)
         self.mensajes.append({"role": "user", "content": texto})
+        reg = None
+        if not self.api and registro_sesion and registro_sesion.activo():
+            try:
+                if self.reg is None:
+                    self.reg = registro_sesion.RegistroSesion(DATOS.name.lstrip("."), self.modelo, REPO, idioma, emitir)
+                self.reg.sistema(sistema["content"])
+                self.reg.usuario(texto)
+                reg = self.reg
+            except Exception as e:               # el registro nunca para el chat
+                emitir({"tipo": "aviso", "texto": f"Registro de sesión desactivado: {type(e).__name__}: {e}"})
+                self.reg = None
         rondas = 150 if leer_ajustes().get("hasta_final") else MAX_RONDAS
         tok_in = tok_out = 0
         empujones, sin_pensar, ultimo_pensado = 0, False, ""
@@ -561,6 +581,8 @@ class MotorLocal:
                     emitir({"tipo": "aviso", "texto": "El modelo no respondió (turno vacío)."})
             else:
                 estimado = _compactar(self.mensajes, limite=limite_historial(herr))
+                if reg:
+                    reg.herramientas(herr)
                 cuerpo = {"model": self.modelo, "messages": [{k: v for k, v in m.items() if not k.startswith("_")}
                                                             for m in self.mensajes], "tools": herr,
                           "stream": False, "options": {"num_ctx": 32768}}
@@ -602,6 +624,9 @@ class MotorLocal:
                         emitir({"tipo": "aviso", "texto": f"El modelo dejó el turno vacío (todo en el razonamiento): "
                                                           f"empujón {racha} de {MAX_EMPUJONES}."})
                         self.mensajes.append({"role": "user", "content": EMPUJON})
+                        if reg:
+                            reg.asistente(m)
+                            reg.usuario(EMPUJON, "empujon")
                         sin_pensar = True
                         continue
                     final = _texto_del_razonamiento(pensado)
@@ -610,6 +635,8 @@ class MotorLocal:
                     else:
                         emitir({"tipo": "aviso", "texto": "El modelo no respondió (turno vacío)."})
             self.mensajes.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls", "extra_content")})
+            if reg:
+                reg.asistente(m)
             if m.get("content") and (not llamadas or m["content"].strip()):
                 emitir({"tipo": "texto", "texto": m["content"]})
             if not llamadas:
@@ -619,12 +646,15 @@ class MotorLocal:
                     seguir += 1
                     emitir({"tipo": "aviso", "texto": f"Cerró el turno sin llamar a nada y sin exportar: sigue {seguir} de {MAX_SEGUIR}."})
                     self.mensajes.append({"role": "user", "content": SEGUIR})
+                    if reg:
+                        reg.usuario(SEGUIR, "seguir")
+                        reg.guardar()
                     sin_pensar = True
                     continue
                 break
             racha, seguir = 0, 0
             imagenes, i_asistente = [], len(self.mensajes) - 1
-            for ll in llamadas:
+            for i_ll, ll in enumerate(llamadas):
                 if cancelado():                  # Detener corta entre una herramienta y la siguiente
                     break
                 fn = ll.get("function", {})
@@ -666,6 +696,10 @@ class MotorLocal:
                                      if p not in imagenes]
                 else:
                     self.mensajes.append({"role": "tool", "tool_name": nombre, "content": contenido})
+                    if reg:
+                        reg.resultado(i_ll, nombre, contenido, res.get("estado"), txt, round(time.time() - t1, 1))
+            if reg:
+                reg.guardar()                    # tras cada ronda: si el chat se cae, la sesión queda guardada
             if self.api:
                 # Toda llamada necesita su respuesta (si no, la API rechaza la petición siguiente): las que Detener dejó
                 # sin hacer se contestan como canceladas. Las previas van después, en un mensaje de usuario aparte.
@@ -679,6 +713,9 @@ class MotorLocal:
                                           imagenes)
                     if mi:
                         self.mensajes.append(mi)
+        if reg:
+            reg.sumar(tokens_entrada=tok_in, tokens_salida=tok_out, segundos=time.time() - t0)
+            reg.guardar(hasta_final=hasta_final or None)
         emitir({"tipo": "fin", "tokens_entrada": tok_in, "tokens_salida": tok_out, "coste": 0.0,
                 "segundos": round(time.time() - t0, 1),
                 "contexto": _compactar(self.mensajes, limite=self.api["limite"] if self.api else LIMITE_TOKENS_LOCAL),
