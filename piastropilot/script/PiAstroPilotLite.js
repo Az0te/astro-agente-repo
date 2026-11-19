@@ -2994,7 +2994,7 @@ function plPrueba(salida, cli) {
 // Pasada automática para comparar modelos (13 nov 2026): el mismo diálogo y el mismo bucle que usa el usuario, sin
 // usuario. Manda la petición (leída de un fichero, por las comas) y, cada vez que la serie de pasos para sin haber
 // exportado, manda «sigue hasta el final» (cada una cuenta como una intervención). No guarda ajustes: los del usuario
-// quedan como estaban. Deja en <carpeta>: pasada.json (tiempo, tokens, coste, pasos, fallos), registro.txt e informe .md.
+// quedan como estaban. Deja en <carpeta>: pasada.json (tiempo, tokens, coste, pasos, fallos), registro.txt, informe .md y dossier PDF.
 //   PixInsight.exe -n --automation-mode --no-focus-stealing
 //      -r=<Lite>,--pasada,<ollama|claude|codex|gemini>,<modelo>,<carpeta>,<peticion.txt> --force-exit
 var PL_MAX_SIGUE = 6;
@@ -3052,10 +3052,27 @@ function plPasada(proveedor, modelo, carpeta, ficheroPeticion, maxSigue) {
          }
          out.informe = d.crearInforme();
       } catch (e) { out.error = String(e && e.message ? e.message : e); }
-      out.fin = new Date().toISOString();
-      guardar(d);
-      console.noteln("[PiAstroPilotLite pasada] resultados en " + fJson);
-      d.ok();
+      // Dossier PDF también en las pasadas (Rafael, 19 nov 2026: métricas y dossier para comparar modelos). saveAsPDF
+      // escribe el fichero un poco después: se cierra al terminar el PDF o, como mucho, a los 60 s.
+      var cerrado = false;
+      function cerrar() {
+         if (cerrado) return;
+         cerrado = true;
+         if (out.dossier) out.dossierExiste = File.exists(out.dossier);
+         out.fin = new Date().toISOString();
+         guardar(d);
+         console.noteln("[PiAstroPilotLite pasada] resultados en " + fJson);
+         d.ok();
+      }
+      var tPdf = new Timer; tPdf.interval = 60; tPdf.periodic = false;
+      tPdf.onTimeout = cerrar;
+      try {
+         d.crearDossier(function (fp) {
+            out.dossier = fp;
+            var t3 = new Timer; t3.interval = 3; t3.periodic = false; t3.onTimeout = cerrar; t3.start();
+         });
+         tPdf.start();
+      } catch (e) { out.errorDossier = String(e && e.message ? e.message : e); cerrar(); }
    };
    tm.start();
    d.execute();
