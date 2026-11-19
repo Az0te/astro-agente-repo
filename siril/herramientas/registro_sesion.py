@@ -211,19 +211,39 @@ class RegistroSesion:
 # Se alimentan de los eventos del chat, así que cuentan con todos los motores (Ollama, APIs, Claude, Codex). No llevan
 # rutas ni nada personal: van en el informe para comparar envíos de otros usuarios (formato astropilot-metricas/1).
 
+# Herramientas propias de los clientes (Claude Code, Codex): no son de la guía y no cuentan como llamadas, para que la
+# comparación entre modelos sea justa (Claude lee las previas con Read; Qwen y Gemini las reciben del chat).
+HERRAMIENTAS_CLIENTE = {"Read", "ToolSearch", "Bash", "Write", "Edit", "MultiEdit", "Glob", "Grep", "LS", "WebSearch",
+                        "WebFetch", "TodoWrite", "Task", "Agent", "NotebookEdit", "shell", "apply_patch", "read_file"}
+
+
+def nombre_guia(nombre):
+    """'mcp__sirilastropilot__abrirImagen' o 'sirilastropilot.abrirImagen' → 'abrirImagen'; None si es del cliente."""
+    n = re.sub(r"^mcp__[^_]+(?:_[^_]+)*?__", "", nombre or "")
+    n = n.split(".")[-1] if "." in n and not n.startswith(".") else n
+    return None if n in HERRAMIENTAS_CLIENTE else n
+
+
 class Metricas:
     def __init__(self):
         self.inicio = time.time()
         self.d = {"turnos": 0, "llamadas": 0, "llamadas_ok": 0, "errores": 0, "repetidas_tras_error": 0,
                   "empujones": 0, "seguir": 0, "vacias": 0, "mal_formadas": 0, "detenidas": 0,
                   "segundos_modelo_y_herramientas": 0.0, "segundos_herramientas": 0.0,
-                  "tokens_entrada": 0, "tokens_salida": 0, "exportado": False}
+                  "tokens_entrada": 0, "tokens_salida": 0, "coste_usd": 0.0, "llamadas_cliente": 0, "exportado": False}
         self.por_funcion = {}
         self._ultima = None              # (nombre, args) de la última llamada
         self._ultima_error = None        # (nombre, args) de la última que falló
 
     def evento(self, ev):
         t, d = ev.get("tipo"), self.d
+        if t in ("herramienta", "resultado"):
+            n = nombre_guia(ev.get("nombre", ""))
+            if n is None:
+                if t == "herramienta":
+                    d["llamadas_cliente"] += 1
+                return
+            ev = dict(ev, nombre=n)
         if t == "herramienta":
             clave = (ev.get("nombre", ""), json.dumps(ev.get("args") or {}, sort_keys=True, ensure_ascii=False))
             d["llamadas"] += 1
@@ -261,6 +281,7 @@ class Metricas:
             d["segundos_modelo_y_herramientas"] += float(ev.get("segundos") or 0)
             d["tokens_entrada"] += int(ev.get("tokens_entrada") or 0)
             d["tokens_salida"] += int(ev.get("tokens_salida") or 0)
+            d["coste_usd"] = round(d["coste_usd"] + float(ev.get("coste") or 0), 4)
 
     def datos(self, programa, modelo, repo):
         d = dict(self.d)
@@ -271,6 +292,7 @@ class Metricas:
                   "llamadas_ok_pct": pct(d["llamadas_ok"], d["llamadas"]),
                   "segundos_modelo_y_herramientas": round(d["segundos_modelo_y_herramientas"]),
                   "segundos_herramientas": round(d["segundos_herramientas"]),
+                  "puntuacion_usuario": None,      # nota a ojo (1-10) que pone quien compara
                   "por_funcion": self.por_funcion})
         return d
 
@@ -285,7 +307,9 @@ class Metricas:
                  ("Errores · repetidas tras error", f"{d['errores']} · {d['repetidas_tras_error']}"),
                  ("Empujones · «sigue» · vacías · mal formadas", f"{d['empujones']} · {d['seguir']} · {d['vacias']} · {d['mal_formadas']}"),
                  ("Tiempo en herramientas", f"{d['segundos_herramientas']} s de {d['segundos_modelo_y_herramientas']} s"),
-                 ("Tokens (entrada → salida)", f"{d['tokens_entrada']} → {d['tokens_salida']}"),
+                 ("Tokens (entrada → salida) · coste", f"{d['tokens_entrada']} → {d['tokens_salida']}"
+                  + (f" · {d['coste_usd']:.4f} $" if d["coste_usd"] else " · 0 $")),
+                 ("Llamadas a herramientas del cliente (no cuentan)", d["llamadas_cliente"]),
                  ("Exportado", "sí" if d["exportado"] else "no")]
         tabla = "".join(f"<tr><th align='left'>{_h.escape(a)}</th><td>{b if isinstance(b, str) and '%' in b else _h.escape(str(b))}</td></tr>"
                         for a, b in filas)

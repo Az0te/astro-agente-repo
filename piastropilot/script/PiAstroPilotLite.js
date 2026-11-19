@@ -1295,6 +1295,8 @@ function plMetricasDatos(M, aj, uso) {
       bloqueadas: M.bloqueadas, repetidas: M.repetidas, correcciones: M.correcciones, paros: M.paros,
       segundos_modelo: Math.round(M.segundosModelo), segundos_herramientas: Math.round(M.segundosHerramientas),
       tokens_entrada: uso ? uso.entrada || 0 : 0, tokens_salida: uso ? uso.salida || 0 : 0,
+      coste_usd: uso ? Math.round(10000 * (uso.coste || 0)) / 10000 : 0,
+      puntuacion_usuario: null,   // nota a ojo (1-10) que pone quien compara; las métricas no la sustituyen
       por_funcion: M.porFuncion
    };
 }
@@ -1312,7 +1314,8 @@ function plMetricasMd(M, aj, uso) {
              "| Llamadas correctas | " + v(d.llamadas_ok_pct) + " % de " + d.llamadas + " |",
              "| Errores: formato · parámetros · ejecución | " + d.errores_formato + " · " + d.errores_validacion + " · " + d.errores_ejecucion + " |",
              "| Repetidas · bloqueadas · correcciones · PARO | " + d.repetidas + " · " + d.bloqueadas + " · " + d.correcciones + " · " + d.paros + " |",
-             "| Tokens (entrada → salida) | " + plMiles(d.tokens_entrada) + " → " + plMiles(d.tokens_salida) + " |", "",
+             "| Tokens (entrada → salida) · coste | " + plMiles(d.tokens_entrada) + " → " + plMiles(d.tokens_salida) +
+             " · " + String(d.coste_usd).replace(".", ",") + " $ |", "",
              "Para comparar envíos se lee este bloque:", "", "```json", JSON.stringify(d, null, 1), "```", ""];
    return md;
 }
