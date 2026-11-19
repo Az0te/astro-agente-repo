@@ -1084,7 +1084,7 @@ function plPreguntar(aj, mensajes, estado, paso) {
       t = plOllamaChat(aj, sistema, m, estado);
       plRegPeticion(aj, sistema, m, t, (Date.now() - tR) / 1000);
    }
-   return { texto: t.texto, uso: t.uso, modelo: e.modelo, porque: e.porque };
+   return { texto: t.texto, uso: t.uso, modelo: e.modelo, porque: e.porque, empujones: t.empujones || 0 };
 }
 
 // «12.345 → 678 tokens (caché 9.000) · 0,021 $»
@@ -1220,6 +1220,128 @@ function plRegEjecucion(llamadas, r) {
       plRegLinea({ tipo: "ejecucion", n: PL_REG.n, llamadas: llamadas, ok: !!r.ok, resultado: r.texto,
                    segundos: r.segundos || 0, previas: copiadas, hora: new Date().toISOString() });
    } catch (e) { console.warningln("[PiAstroPilotLite] registro de sesión: " + (e.message || e)); }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Métricas objetivas de la sesión (Rafael, 19 nov 2026): van al informe y al dossier para comparar envíos de otros
+// usuarios (modelo, equipo, guía) con datos y no sólo a ojo. Cuentan con TODOS los proveedores. No llevan rutas ni
+// nada personal. El bloque ```json del informe es el que se lee de forma automática (formato astropilot-metricas/1).
+// ---------------------------------------------------------------------------------------------------------------
+
+function plMetricasNuevas() {
+   return { inicio: Date.now(), peticiones: 0, fallosModelo: 0, vacias: 0, empujones: 0, segundosModelo: 0,
+            lotes: 0, lotesValidos: 0, llamadas: 0, llamadasOk: 0, errFormato: 0, errValidacion: 0, errEjecucion: 0,
+            bloqueadas: 0, repetidas: 0, correcciones: 0, paros: 0, segundosHerramientas: 0, porFuncion: {} };
+}
+
+function plMetricasPeticion(M, texto, empujones, segundos) {
+   if (!M) return;
+   ++M.peticiones;
+   if (!String(texto || "").trim()) ++M.vacias;
+   M.empujones += empujones || 0;
+   M.segundosModelo += segundos || 0;
+}
+
+// Un lote = el bloque ```json de una respuesta. Formato y validación fallan antes de ejecutar nada; la ejecución puede
+// fallar en una llamada después de hacer las anteriores.
+function plMetricasEjecucion(M, s, r) {
+   if (!M) return;
+   ++M.lotes;
+   M.segundosHerramientas += r.segundos || 0;
+   var nombres = [], re = /"funcion"\s*:\s*"([^"]+)"/g, m;
+   while ((m = re.exec(String(s))) !== null) nombres.push(m[1]);
+   var t = String(r.texto || "");
+   nombres.forEach(function (n) { var f = M.porFuncion[n] || (M.porFuncion[n] = { pedidas: 0, ok: 0, error: 0 }); ++f.pedidas; });
+   M.llamadas += nombres.length;
+   if (r.ok) {
+      ++M.lotesValidos; M.llamadasOk += nombres.length;
+      nombres.forEach(function (n) { ++M.porFuncion[n].ok; });
+      return;
+   }
+   if (/^No ejecuto /.test(t)) { ++M.bloqueadas; return; }
+   if (/^ERROR: el bloque/.test(t)) { ++M.errFormato; return; }
+   var mv = /^ERROR en la llamada (\d+):/.exec(t);
+   if (mv) {
+      ++M.errValidacion;
+      var nv = nombres[parseInt(mv[1], 10) - 1];
+      if (nv && M.porFuncion[nv]) ++M.porFuncion[nv].error;
+      return;
+   }
+   ++M.lotesValidos;   // pasó formato y validación; falló al ejecutar
+   ++M.errEjecucion;
+   var mf = /ERROR en ([A-Za-z0-9_]+):/.exec(t);
+   nombres.forEach(function (n, i) {
+      if (mf && n == mf[1] && !M.porFuncion[n]._contado) { ++M.porFuncion[n].error; M.porFuncion[n]._contado = true; }
+      else if (!mf || nombres.indexOf(mf[1]) > i) { ++M.porFuncion[n].ok; ++M.llamadasOk; }
+   });
+   Object.keys(M.porFuncion).forEach(function (k) { delete M.porFuncion[k]._contado; });
+}
+
+function plPct(a, b) { return b ? Math.round(1000 * a / b) / 10 : null; }
+
+function plMetricasDatos(M, aj, uso) {
+   var di = plDatosImagen(), pi = "";
+   try { pi = CoreApplication.versionMajor + "." + CoreApplication.versionMinor + "." + CoreApplication.versionRelease; } catch (e) {}
+   return {
+      formato: "astropilot-metricas/1", programa: "pixinsight-lite", version: PL_VERSION, pixinsight: pi,
+      commit_guia: plCommitRepo(plPadre(aj.guia)), proveedor: aj.proveedor, modelo: aj.modelo() || "",
+      temperatura: aj.proveedor == "ollama" ? aj.temperatura : null, pensar: aj.proveedor == "ollama" ? !!aj.pensar : null,
+      objeto: di.objeto || "", fecha: plSello().replace("_", " "),
+      minutos: Math.round((Date.now() - M.inicio) / 6000) / 10,
+      peticiones: M.peticiones, fallos_modelo: M.fallosModelo, respuestas_vacias: M.vacias, empujones: M.empujones,
+      lotes: M.lotes, lotes_validos_pct: plPct(M.lotesValidos, M.lotes),
+      llamadas: M.llamadas, llamadas_ok_pct: plPct(M.llamadasOk, M.llamadas),
+      errores_formato: M.errFormato, errores_validacion: M.errValidacion, errores_ejecucion: M.errEjecucion,
+      bloqueadas: M.bloqueadas, repetidas: M.repetidas, correcciones: M.correcciones, paros: M.paros,
+      segundos_modelo: Math.round(M.segundosModelo), segundos_herramientas: Math.round(M.segundosHerramientas),
+      tokens_entrada: uso ? uso.entrada || 0 : 0, tokens_salida: uso ? uso.salida || 0 : 0,
+      por_funcion: M.porFuncion
+   };
+}
+
+function plMetricasMd(M, aj, uso) {
+   if (!M) return [];
+   var d = plMetricasDatos(M, aj, uso), v = function (x) { return x === null || x === undefined ? "—" : String(x); };
+   var md = ["## Métricas de la sesión (datos objetivos)", "",
+             "| Medida | Valor |", "| --- | --- |",
+             "| Modelo | " + d.proveedor + " · " + (d.modelo || "por defecto") + " |",
+             "| Guía (commit) · Lite · PixInsight | " + v(d.commit_guia) + " · " + d.version + " · " + v(d.pixinsight) + " |",
+             "| Duración | " + d.minutos + " min (modelo " + d.segundos_modelo + " s, herramientas " + d.segundos_herramientas + " s) |",
+             "| Peticiones al modelo | " + d.peticiones + " (vacías " + d.respuestas_vacias + ", empujones " + d.empujones + ", fallos " + d.fallos_modelo + ") |",
+             "| Lotes de llamadas válidos | " + v(d.lotes_validos_pct) + " % de " + d.lotes + " |",
+             "| Llamadas correctas | " + v(d.llamadas_ok_pct) + " % de " + d.llamadas + " |",
+             "| Errores: formato · parámetros · ejecución | " + d.errores_formato + " · " + d.errores_validacion + " · " + d.errores_ejecucion + " |",
+             "| Repetidas · bloqueadas · correcciones · PARO | " + d.repetidas + " · " + d.bloqueadas + " · " + d.correcciones + " · " + d.paros + " |",
+             "| Tokens (entrada → salida) | " + plMiles(d.tokens_entrada) + " → " + plMiles(d.tokens_salida) + " |", "",
+             "Para comparar envíos se lee este bloque:", "", "```json", JSON.stringify(d, null, 1), "```", ""];
+   return md;
+}
+
+function plMetricasHtml(M, aj, uso) {
+   if (!M || !M.peticiones) return "";
+   var d = plMetricasDatos(M, aj, uso), v = function (x) { return x === null || x === undefined ? "—" : plEsc(String(x)); };
+   var filas = [["Duración", d.minutos + " min"], ["Peticiones al modelo", d.peticiones + " (vacías " + d.respuestas_vacias + ", empujones " + d.empujones + ")"],
+                ["Lotes de llamadas válidos", v(d.lotes_validos_pct) + " % de " + d.lotes], ["Llamadas correctas", v(d.llamadas_ok_pct) + " % de " + d.llamadas],
+                ["Errores formato · parámetros · ejecución", d.errores_formato + " · " + d.errores_validacion + " · " + d.errores_ejecucion],
+                ["Repetidas · correcciones · PARO", d.repetidas + " · " + d.correcciones + " · " + d.paros],
+                ["Guía (commit)", v(d.commit_guia)]];
+   return "<h3>Métricas de la sesión</h3><table class=\"kv\">" + filas.map(function (f) {
+      return "<tr><th>" + plEsc(f[0]) + "</th><td>" + f[1] + "</td></tr>"; }).join("") + "</table>";
+}
+
+// Copia anonimizada de la sesión registrada (sólo Ollama): sin el prompt de sistema (puede llevar el perfil del usuario),
+// sin previas y con las carpetas de usuario cambiadas por <USUARIO>. El usuario decide si la envía.
+function plRegExportarAnonima(destino) {
+   if (!PL_REG || !File.exists(PL_REG.dir + "/sesion.jsonl")) return null;
+   try {
+      var t = String(File.readTextFile(PL_REG.dir + "/sesion.jsonl"));
+      t = t.replace(/([A-Za-z]:(?:\\|\/)+(?:Users|Usuarios|Documents and Settings)(?:\\|\/)+)[^\\\/"]+/gi, "$1<USUARIO>")
+           .replace(/(\/(?:Users|home)\/)[^\/"]+/g, "$1<USUARIO>");
+      var h = String(File.homeDirectory || "");
+      if (h.length > 3) t = t.split(h).join("<HOME>").split(h.replace(/[\/]/g, "\\\\")).join("<HOME>");
+      File.writeTextFile(destino, t);
+      return destino;
+   } catch (e) { console.warningln("[PiAstroPilotLite] exportar sesión: " + (e.message || e)); return null; }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1728,7 +1850,7 @@ function plFuncionesUsadas(entradas, guia) {
    return usadas;
 }
 
-function plInformeMd(entradas, aj, uso) {
+function plInformeMd(entradas, aj, uso, metricas, sesionAnonima) {
    var di = plDatosImagen(), usadas = plFuncionesUsadas(entradas, aj.guia), errores = [], md = [];
    var ok = entradas.filter(function (e) { return e.tipo == "info" && /^Resultado/.test(e.titulo); }).length;
    for (var i = 0; i < entradas.length; ++i) if (entradas[i].tipo == "err" && /^Error al ejecutar/.test(entradas[i].titulo)) {
@@ -1739,8 +1861,12 @@ function plInformeMd(entradas, aj, uso) {
    md.push("# Informe de procesado — PiAstroPilot Lite", "",
            "- Fecha: " + plSello().replace("_", " "), "- Objeto (OBJECT): " + (di.objeto || "—") + " · vista: " + (di.vista || "—"),
            "- Modelo: " + aj.proveedor + " · " + (aj.modelo() || "por defecto"), "- Llamadas correctas: " + ok + " · con error: " + errores.length,
-           "- Tokens: " + (uso ? plUsoTexto(uso.entrada || uso.salida ? uso : { total: uso.total, coste: uso.coste }) : "—"), "",
-           "## Funciones de la guía usadas", "");
+           "- Tokens: " + (uso ? plUsoTexto(uso.entrada || uso.salida ? uso : { total: uso.total, coste: uso.coste }) : "—"), "");
+   md = md.concat(plMetricasMd(metricas, aj, uso));
+   if (sesionAnonima)
+      md.push("Sesión completa anonimizada (sin prompt, sin previas, carpetas de usuario cambiadas): `" + File.extractName(sesionAnonima) +
+              File.extractExtension(sesionAnonima) + "`. Envíala solo si quieres; sirve para depurar la guía y, con tu permiso, para entrenar modelos locales.", "");
+   md.push("## Funciones de la guía usadas", "");
    var ks = Object.keys(usadas);
    md.push(ks.length ? ks.map(function (k) { return "- `" + k + "` ×" + usadas[k]; }).join("\n") : "(ninguna)", "");
    md.push("## Errores (para mejorar la guía)", "");
@@ -1882,6 +2008,7 @@ function plConstruirDialogo(aj) {
    this.pendiente = null;        // llamadas de la última respuesta, sin ejecutar
    this.ultimoError = null;
    this.correcciones = 0;
+   this.metricas = plMetricasNuevas();   // métricas objetivas de la conversación (informe y dossier)
    this.estado = null;            // { cancelado } mientras se espera al modelo
 
    this.windowTitle = "PiAstroPilot Lite " + PL_VERSION;
@@ -1916,6 +2043,7 @@ function plConstruirDialogo(aj) {
       self.bienvenida(); self.ponerPendiente(null);
       self.ultimoError = null; self.correcciones = 0;
       self.usoSesion = null; self.actualizarUso();
+      self.metricas = plMetricasNuevas();
    };
    this.bVaciar = new PushButton(pPrompt);
    this.bVaciar.text = "Limpiar";
@@ -2270,7 +2398,11 @@ function plConstruirDialogo(aj) {
    this.crearInforme = function () {
       if (!this.conversacion().length) { this.estadoLbl.text = plT("No hay conversación que guardar."); return null; }
       var f = this.baseInforme() + ".md";
-      try { File.writeTextFile(f, plInformeMd(this.conversacion(), aj, this.usoSesion)); this.estadoLbl.text = plT("Informe guardado: " + f); return f; }
+      try {
+         var fa = plRegExportarAnonima(this.baseInforme() + "_sesion_anonima.jsonl");
+         File.writeTextFile(f, plInformeMd(this.conversacion(), aj, this.usoSesion, this.metricas, fa));
+         this.estadoLbl.text = plT("Informe guardado: " + f); return f;
+      }
       catch (e) { this.estadoLbl.text = plT("No se pudo guardar el informe: " + (e.message || e)); return null; }
    };
    this.crearDossier = function (alTerminar) {
@@ -2279,7 +2411,7 @@ function plConstruirDialogo(aj) {
       var cab = "<div class=\"portada\"><h1>Dossier de procesado" + (di.objeto ? " — " + plEsc(di.objeto) : "") + "</h1>" +
                 "<p>" + plEsc(plSello().replace("_", " ")) + " · vista " + plEsc(di.vista || "—") + " · modelo " + plEsc(aj.proveedor + " " + (aj.modelo() || "")) +
                 (S && S.respuestas ? " · " + plEsc(plUsoTexto(S.entrada || S.salida ? S : { total: S.total, coste: S.coste })) : "") + "</p>" +
-                "<p>PiAstroPilot Lite " + PL_VERSION + " · guía " + plEsc(aj.guia) + "</p></div>";
+                "<p>PiAstroPilot Lite " + PL_VERSION + " · guía " + plEsc(aj.guia) + "</p>" + plMetricasHtml(this.metricas, aj, S) + "</div>";
       var html = plPagina(this.conversacion(), { claro: true, cabecera: cab }), fh = base + ".html", fp = base + ".pdf";
       File.writeTextFile(fh, html);
       // Un visor aparte (oculto) carga la página desde fichero, para que salgan las miniaturas, y la guarda en PDF.
@@ -2391,6 +2523,7 @@ function plConstruirDialogo(aj) {
       var t0 = Date.now(), resp = null;
       try {
          resp = plPreguntar(aj, this.mensajes, this.estado, this.pasoEnviado || "");
+         plMetricasPeticion(this.metricas, resp.texto, resp.empujones, (Date.now() - t0) / 1000);
          var uso = resp.uso;
          resp = resp.texto;
          // Consumo: el de esta respuesta va en su título y el total de la conversación en la línea de abajo del chat.
@@ -2401,6 +2534,7 @@ function plConstruirDialogo(aj) {
             this.usoUltimo = uso;
          } else this.usoUltimo = null;
       } catch (e) {
+         if (this.metricas) ++this.metricas.fallosModelo;
          this.anotar("Error", String(e.message || e), "err");
       }
       var cancelado = this.estado.cancelado;
@@ -2423,6 +2557,7 @@ function plConstruirDialogo(aj) {
       if (s && this.scriptFallido && s.replace(/\s+/g, "") == this.scriptFallido.replace(/\s+/g, "")) {
          this.ponerPendiente(null);
          this.repetido = true;
+         if (this.metricas) ++this.metricas.repetidas;
          this.anotar("Aviso", "El modelo ha devuelto las mismas llamadas que ya fallaron; no las ejecuto.", "err");
          var quedan = this.correcciones < PL_MAX_CORRECCIONES;
          this.estadoLbl.text = plT(quedan ? "Llamadas repetidas. Pido otra corrección." : "Llamadas repetidas; revisa la petición.");
@@ -2433,6 +2568,7 @@ function plConstruirDialogo(aj) {
       if (cancelado) this.serie = false;
       if (interpretando && this.serie) {
          if (/(^|\n)\s*\**PARO:/i.test(resp) || !s) {
+            if (this.metricas && /(^|\n)\s*\**PARO:/i.test(resp)) ++this.metricas.paros;
             this.serie = false;
             this.anotar("Serie de pasos", "Terminada (" + (this.pasosSerie || 0) + " pasos): " +
                         (s ? "" : "el modelo ha parado; contesta a lo que pregunta y escribe «sigue» para continuar."));
@@ -2503,6 +2639,7 @@ function plConstruirDialogo(aj) {
             "lista_aprobados (el fichero .txt que devuelve)." }
         : plEjecutarLlamadas(aj, s);
       plRegEjecucion(s, r);
+      plMetricasEjecucion(this.metricas, s, r);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");
       if (this.serie && r.ok && /"exportarFinal"/.test(s)) {   // exportado: fin del procesado
          this.serie = false;
@@ -2570,6 +2707,7 @@ function plConstruirDialogo(aj) {
    this.pedirCorreccion = function () {
       if (!this.ultimoError || this.estado || this.correcciones >= PL_MAX_CORRECCIONES) return;
       ++this.correcciones;
+      if (this.metricas) ++this.metricas.correcciones;
       // Sustituye el par «ha fallado / entendido» (o «corrección / llamadas repetidas») por la petición de corrección.
       this.mensajes.pop(); this.mensajes.pop();
       var t = "Las llamadas han fallado con este error:\n" + this.ultimoError +

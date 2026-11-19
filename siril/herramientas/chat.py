@@ -1280,6 +1280,7 @@ class Ventana(QMainWindow):
         self.ultima_resp = []
         self.t_turno = 0
         self.total = {"e": 0, "s": 0, "c": 0.0, "hay_coste": False}
+        self.metricas = registro_sesion.Metricas() if registro_sesion else None   # informe: datos objetivos
 
         arriba = QHBoxLayout()
         self.l_modelo = QLabel()
@@ -1566,6 +1567,8 @@ class Ventana(QMainWindow):
                           else MotorLocal(sel, api=APIS[sel]) if sel in APIS
                           else MotorLocal(self.modelo_local.currentText()))
             self.motor._nombre = nombre
+            if registro_sesion:                  # otro modelo: métricas nuevas
+                self.metricas = registro_sesion.Metricas()
         return self.motor
 
     def enviar(self, texto=None):
@@ -1628,6 +1631,8 @@ class Ventana(QMainWindow):
             return
         if self.motor:
             self.motor.limpiar()
+        if registro_sesion:
+            self.metricas = registro_sesion.Metricas()
         self.chat.clear()
         self.poner(f'<div class="pie">{html.escape(self.T("nueva"))}</div>')
         self.poner_bienvenida()
@@ -1688,7 +1693,17 @@ class Ventana(QMainWindow):
                 dest, n = carpeta / f"{base}_{n}.html", n + 1
             tot = self.total
             cab = (f"<h2>SirilAstroPilot — {html.escape(objeto)}</h2><p style='color:#666'>{time.strftime('%Y-%m-%d %H:%M')} · "
-                   f"{html.escape(self.nombre_modelo())} · {self.T('total', e=_n(tot['e']), s=_n(tot['s']), c=(f' · {tot[chr(99)]:.4f} $' if tot['hay_coste'] else ''))}</p><hr>")
+                   f"{html.escape(self.nombre_modelo())} · {self.T('total', e=_n(tot['e']), s=_n(tot['s']), c=(f' · {tot[chr(99)]:.4f} $' if tot['hay_coste'] else ''))}</p>")
+            if self.metricas and self.metricas.d["llamadas"]:
+                cab += self.metricas.html(DATOS.name.lstrip("."), self.nombre_modelo(), REPO)
+            reg = getattr(self.motor, "reg", None)
+            if reg is not None and registro_sesion:
+                fa = registro_sesion.exportar_anonima(reg.dir / "sesion.json", dest.with_name(dest.stem + "_sesion_anonima.json"))
+                if fa:
+                    cab += ("<p style='color:#666'>Sesión completa anonimizada (sin prompt, sin previas, carpetas de usuario "
+                            f"cambiadas): {html.escape(Path(fa).name)}. Envíala solo si quieres; sirve para depurar la guía y, "
+                            "con tu permiso, para entrenar modelos locales.</p>")
+            cab += "<hr>"
             h = h.replace("<body", "<body", 1)
             h = re.sub(r"(<body[^>]*>)", r"\1" + cab.replace("\\", "\\\\"), h, count=1)
             dest.write_text(h, encoding="utf-8")
@@ -1736,6 +1751,11 @@ class Ventana(QMainWindow):
 
     def on_evento(self, ev):
         t = ev["tipo"]
+        if self.metricas:
+            try:
+                self.metricas.evento(ev)
+            except Exception:
+                pass
         if t == "estado":
             self.estado.setText(ev["texto"])
         elif t == "texto":

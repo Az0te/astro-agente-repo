@@ -205,3 +205,115 @@ class RegistroSesion:
             os.replace(tmp, self.dir / "sesion.json")
         except OSError:
             pass
+
+
+# --- Métricas objetivas de la sesión (para el informe; Rafael, 19 nov 2026) ----------------------------------------
+# Se alimentan de los eventos del chat, así que cuentan con todos los motores (Ollama, APIs, Claude, Codex). No llevan
+# rutas ni nada personal: van en el informe para comparar envíos de otros usuarios (formato astropilot-metricas/1).
+
+class Metricas:
+    def __init__(self):
+        self.inicio = time.time()
+        self.d = {"turnos": 0, "llamadas": 0, "llamadas_ok": 0, "errores": 0, "repetidas_tras_error": 0,
+                  "empujones": 0, "seguir": 0, "vacias": 0, "mal_formadas": 0, "detenidas": 0,
+                  "segundos_modelo_y_herramientas": 0.0, "segundos_herramientas": 0.0,
+                  "tokens_entrada": 0, "tokens_salida": 0, "exportado": False}
+        self.por_funcion = {}
+        self._ultima = None              # (nombre, args) de la última llamada
+        self._ultima_error = None        # (nombre, args) de la última que falló
+
+    def evento(self, ev):
+        t, d = ev.get("tipo"), self.d
+        if t == "herramienta":
+            clave = (ev.get("nombre", ""), json.dumps(ev.get("args") or {}, sort_keys=True, ensure_ascii=False))
+            d["llamadas"] += 1
+            if self._ultima_error == clave:
+                d["repetidas_tras_error"] += 1
+            self._ultima = clave
+            self.por_funcion.setdefault(clave[0], {"pedidas": 0, "ok": 0, "error": 0})["pedidas"] += 1
+        elif t == "resultado":
+            f = self.por_funcion.setdefault(ev.get("nombre", ""), {"pedidas": 0, "ok": 0, "error": 0})
+            d["segundos_herramientas"] += float(ev.get("segundos") or 0)
+            if ev.get("estado") == "ok":
+                d["llamadas_ok"] += 1
+                f["ok"] += 1
+                self._ultima_error = None
+                if ev.get("nombre") == "exportarFinal":
+                    d["exportado"] = True
+            else:
+                d["errores"] += 1
+                f["error"] += 1
+                self._ultima_error = self._ultima
+        elif t == "aviso":
+            txt = (ev.get("texto") or "").lower()
+            if "empujón" in txt:
+                d["empujones"] += 1
+            elif "sigue " in txt and "sin exportar" in txt:
+                d["seguir"] += 1
+            elif "no respondió" in txt:
+                d["vacias"] += 1
+            elif "mal formada" in txt:
+                d["mal_formadas"] += 1
+            elif ev.get("clave") == "detenido":
+                d["detenidas"] += 1
+        elif t == "fin":
+            d["turnos"] += 1
+            d["segundos_modelo_y_herramientas"] += float(ev.get("segundos") or 0)
+            d["tokens_entrada"] += int(ev.get("tokens_entrada") or 0)
+            d["tokens_salida"] += int(ev.get("tokens_salida") or 0)
+
+    def datos(self, programa, modelo, repo):
+        d = dict(self.d)
+        pct = lambda a, b: round(100.0 * a / b, 1) if b else None
+        d.update({"formato": "astropilot-metricas/1", "programa": programa, "modelo": modelo,
+                  "commit_guia": commit_de(repo), "fecha": time.strftime("%Y-%m-%d %H:%M"),
+                  "minutos": round((time.time() - self.inicio) / 60, 1),
+                  "llamadas_ok_pct": pct(d["llamadas_ok"], d["llamadas"]),
+                  "segundos_modelo_y_herramientas": round(d["segundos_modelo_y_herramientas"]),
+                  "segundos_herramientas": round(d["segundos_herramientas"]),
+                  "por_funcion": self.por_funcion})
+        return d
+
+    def html(self, programa, modelo, repo):
+        """Tabla para el informe + el bloque JSON que se lee de forma automática."""
+        import html as _h
+        d = self.datos(programa, modelo, repo)
+        v = lambda x: "—" if x is None else _h.escape(str(x))
+        filas = [("Modelo", modelo), ("Guía (commit)", d["commit_guia"] or "—"), ("Duración", f"{d['minutos']} min"),
+                 ("Turnos", d["turnos"]),
+                 ("Llamadas correctas", f"{v(d['llamadas_ok_pct'])} % de {d['llamadas']}"),
+                 ("Errores · repetidas tras error", f"{d['errores']} · {d['repetidas_tras_error']}"),
+                 ("Empujones · «sigue» · vacías · mal formadas", f"{d['empujones']} · {d['seguir']} · {d['vacias']} · {d['mal_formadas']}"),
+                 ("Tiempo en herramientas", f"{d['segundos_herramientas']} s de {d['segundos_modelo_y_herramientas']} s"),
+                 ("Tokens (entrada → salida)", f"{d['tokens_entrada']} → {d['tokens_salida']}"),
+                 ("Exportado", "sí" if d["exportado"] else "no")]
+        tabla = "".join(f"<tr><th align='left'>{_h.escape(a)}</th><td>{b if isinstance(b, str) and '%' in b else _h.escape(str(b))}</td></tr>"
+                        for a, b in filas)
+        return (f"<h3>Métricas de la sesión (datos objetivos)</h3><table border='1' cellpadding='3' "
+                f"style='border-collapse:collapse'>{tabla}</table>"
+                f"<details><summary>Datos para comparar (JSON)</summary><pre id='astropilot-metricas'>"
+                f"{_h.escape(json.dumps(d, ensure_ascii=False, indent=1))}</pre></details>")
+
+
+def exportar_anonima(sesion_json, destino):
+    """Copia de la sesión registrada para enviarla: sin prompt de sistema (puede llevar el perfil del usuario), sin
+    previas y con las carpetas de usuario cambiadas por <USUARIO>. El usuario decide si la manda."""
+    try:
+        datos = json.loads(Path(sesion_json).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    datos["messages"] = [{k: v for k, v in m.items() if k != "_previas"}
+                         for m in datos.get("messages", []) if m.get("role") != "system"]
+    txt = json.dumps(datos, ensure_ascii=False, indent=1)
+    txt = re.sub(r"([A-Za-z]:(?:\\\\|\\|/)+(?:Users|Usuarios|Documents and Settings)(?:\\\\|\\|/)+)[^\\/\"]+",
+                 lambda m: m.group(1) + "<USUARIO>", txt, flags=re.I)
+    txt = re.sub(r"(/(?:Users|home)/)[^/\"]+", lambda m: m.group(1) + "<USUARIO>", txt)
+    home = str(Path.home())
+    for forma in {home, home.replace("\\", "\\\\"), home.replace("\\", "/")}:
+        if len(forma) > 3:
+            txt = txt.replace(forma, "<HOME>")
+    try:
+        Path(destino).write_text(txt, encoding="utf-8")
+        return str(destino)
+    except OSError:
+        return None
