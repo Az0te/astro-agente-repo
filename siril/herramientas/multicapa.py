@@ -661,6 +661,15 @@ def combinarCandidatos(siril, ha, oiii=None, intensidades=(0.5, 1.0), con_oiii=T
     # ¿Es de verdad banda ancha contra banda estrecha? En la estrecha la nebulosa tiene mucho más contraste sobre las
     # estrellas (dual band 5 nm sobre RGB sin filtro: ×13,7). Si sale ≈ ×1, lo cargado es el propio dual band (11 nov
     # 2026: el modelo procesó el dual band creyendo que era el RGB y combinarlo consigo mismo no aportaba nada).
+    def _corr(a, b):
+        a, b = a[::8, ::8], b[::8, ::8]
+        a, b = (a - a.mean()) / max(float(a.std()), 1e-12), (b - b.mean()) / max(float(b.std()), 1e-12)
+        return float((a * b).mean())
+    c0, cv = _corr(p[0], Ha), _corr(p[0], Ha[::-1])
+    if cv > 0.3 and cv > 3 * max(c0, 0.0):
+        raise RuntimeError(f"El RGB cargado está volteado en vertical respecto a la capa Hα (correlación {_r(c0, 2)} directa, "
+                           f"{_r(cv, 2)} volteando): un platesolve sin -noflip lo dio la vuelta. Vuelve al RGB de antes de "
+                           "resolver (o voltéalo con comandoSiril mirrorx) y repite.")
     _, k_neb = _excesos(p[0], Ha, cielo_px, est_px, obj_px)
     fb, fn = _flujos_estrellas(p[0], Ha)
     if len(fb) >= 20 and k_neb:

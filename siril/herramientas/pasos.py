@@ -455,7 +455,7 @@ def _wcs(siril):
 
 def resolverAstrometria(siril, forzar=False, focal=None, pixel=None, centro=None, catalogo=None, astrometrynet=False,
                         reducir=False):
-    """Plate solve con platesolve de Siril (no cambia los píxeles salvo que la imagen esté al revés)."""
+    """Plate solve con platesolve de Siril. No cambia los píxeles (-noflip)."""
     H._hay_imagen(siril)
     # Píxel y focal: los de la cabecera mandan. 11 nov 2026: un modelo local pasó 2,35 µm para una cámara de 3,76 µm.
     try:
@@ -533,6 +533,10 @@ def resolverAstrometria(siril, forzar=False, focal=None, pixel=None, centro=None
         args.append("-localasnet")
     if reducir:
         args.append("-downscale")
+    # -noflip: sin él, Siril voltea en vertical la imagen resuelta si la ve «al revés» y deja de casar con las capas
+    # de banda estrecha ya separadas (IC 405, 19 nov 2026: RGB y Hα con correlación 0,00, 0,77 volteando; combinar
+    # se negó y Qwen acabó en una paleta HOO).
+    args.append("-noflip")
     if forzar:
         args.append("-force")
     antes = siril.get_siril_log() or ""
