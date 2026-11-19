@@ -2046,7 +2046,9 @@ def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0,
         # IC 1396 (14 nov 2026): la paleta salía de capas con estrellas y se recombinaron otra vez: estrellas dobles.
         return {"aplicado": False, "estrellas_en_vista_pct": _r(pct, 2),
                 "aviso": f"'{_nombre(d)}' ya tiene estrellas ({pct:.1f} % de píxeles de estrella; una starless da < 0,5 %): "
-                         "recombinar las duplicaría. forzar: true si de verdad quieres sumarlas."}
+                         "recombinar las duplicaría. No fuerces: la separación no funcionó (IC 405, 19 nov 2026: forzar dio "
+                         "estrellas dobles). Vuelve a la vista antes de separar y repite con separarEstrellas motor: starx; "
+                         "forzar: true sólo si sabes que esos picos no son estrellas."}
     Lb = M.lum(b)
     # ¿Estrellas lineales? p99,5 de la capa (en una capa de estrellas el ~90 % es 0 y la máscara por MAD no sirve).
     p995 = float(np.percentile(Lb.ravel()[::7], 99.5))
@@ -2440,13 +2442,15 @@ def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucio
     return r
 
 
-def separarEstrellas(ctx, vista=None, motor="starnet", lineal=None, unscreen=False):
+def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False):
     """L15: separa estrellas con StarNet o DarkStar (remove_stars), SyQon (syqon_starless) o StarXTerminator de RC Astro
     (motor starx). Crea la vista de estrellas aparte y deja la starless en la vista."""
     d = _doc(ctx, vista)
     if lineal is None:
         lineal = M.lineal(_p(d.image)[:, ::8, ::8])
     antes = {id(x) for x in _docs(ctx)}
+    if motor == "auto":                      # StarX si está RC Astro: StarNet en lineal dejó un 3,9 % de estrellas en la
+        motor = "starx" if _rc.hay("sxt") else "starnet"   # starless de IC 405 (19 nov 2026) y se recombinaron duplicadas
     if motor in ("starx", "sxt", "starxterminator"):
         t0 = time.perf_counter()
         sl, est = _rc.correr(_p(d.image), "sxt", unscreen=bool(unscreen))
@@ -2470,6 +2474,15 @@ def separarEstrellas(ctx, vista=None, motor="starnet", lineal=None, unscreen=Fal
     r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
     # SASpro deja activa la vista nueva de estrellas: sin esto, las llamadas siguientes sin 'vista' irían a ella.
     r["vista_activa"] = _reactivar(ctx, d)
+    try:
+        pct = _pct_estrellas(d)
+        r["estrellas_que_quedan_pct"] = _r(pct, 2)
+        if pct > 0.5:
+            r["aviso"] = (f"La starless conserva un {_r(pct, 1)} % de píxeles de estrella (una buena da < 0,5 %): deshacer y "
+                          "repetir con motor: starx" + (" o lineal: true" if not lineal else "") + ". No recombines "
+                          "sobre ella: duplicarías las estrellas.")
+    except Exception:
+        pass
     return r
 
 

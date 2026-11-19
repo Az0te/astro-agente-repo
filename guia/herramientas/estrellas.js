@@ -356,13 +356,25 @@ function estirarEstrellasCandidatos(viewId, o) {
   var variantes = o.variantes || [
     { etiqueta: "recomendada", tamano: 1, saturacion: 1 },
     { etiqueta: "estrellas +20 % de tamaño y +10 % de saturación", tamano: 1.2, saturacion: 1.1 },
-    { etiqueta: "estrellas +50 % de tamaño y +20 % de saturación", tamano: 1.5, saturacion: 1.2 }];
+    { etiqueta: "estrellas +50 % de tamaño y +20 % de saturación", tamano: 1.5, saturacion: 1.2 },
+    // Más discretas: el mismo arcsinh con k más bajo (sube menos las estrellas débiles). Campos densos de la Vía Láctea:
+    // con k 3000 la capa de IC 405 cubría el 11,7 % de los píxeles y las estrellas tapaban la nebulosa (19 nov 2026);
+    // la referencia de Opus usó k 1000.
+    { etiqueta: "estrellas más discretas (arcsinh k 1000)", k: 1000, saturacion: 1 },
+    { etiqueta: "estrellas muy discretas (arcsinh k 300)", k: 300, saturacion: 1 }];
   var cands = [], ref = null;
   for (var i = 0; i < variantes.length; ++i) {
     var vr = variantes[i], c = { etiqueta: vr.etiqueta || ("candidato " + (i + 1)), tamano_pedido: vr.tamano || 1, saturacion_pedida: vr.saturacion || 1 };
     try {
       var tmpId = stUnico(base + "_tmp"), tmp = new ImageWindow(sim.width, sim.height, 3, 32, true, true, tmpId);
-      tmp.mainView.beginProcess(); tmp.mainView.image.assign(estV.image); tmp.mainView.endProcess();
+      var estK = null;
+      if (vr.k && metodo !== "extraer") {   // variante con otro k: su propio estirado de la capa lineal
+        estK = estirarEstrellas(viewId, { nuevaVista: stUnico(base + "_k" + vr.k), k: vr.k, saturacion: satEst });
+        c.k = vr.k;
+      }
+      var fuente = estK ? View.viewById(estK.vista) : estV;
+      tmp.mainView.beginProcess(); tmp.mainView.image.assign(fuente.image); tmp.mainView.endProcess();
+      if (estK) fuente.window.forceClose();
       if (c.tamano_pedido > 1) { var ag = stAgrandar(tmp.mainView, c.tamano_pedido); c.alas_a = ag.a; if (ag.aviso) c.aviso = ag.aviso; }
       var po = {}; if (o.preparar) for (var kp in o.preparar) po[kp] = o.preparar[kp];
       po.nuevaVista = stUnico(base + (i + 1));
@@ -392,14 +404,27 @@ function estirarEstrellasCandidatos(viewId, o) {
     c.recomendado = i === 0; c.elegido = i === 0;
     cands.push(c);
   }
+  // Campo denso: si la recomendada cubre más del 8 % de los píxeles, se recomienda la más grande de las discretas que
+  // baje de ese 8 % (o la más discreta). IC 405: k 3000 11,7 %, k 1000 6,6 % (el de la referencia de Opus), k 300 3,4 %.
+  var iRec = 0;
+  if (cands[0] && cands[0].pix_estrella_pct > 8) {
+    var disc = cands.filter(function (c) { return c.k && !c.error; });
+    var bajo = disc.filter(function (c) { return c.pix_estrella_pct <= 8; });
+    var elegido = bajo.length ? bajo[0] : disc[disc.length - 1];
+    if (elegido) {
+      iRec = cands.indexOf(elegido);
+      cands.forEach(function (c, j) { c.recomendado = j === iRec; c.elegido = j === iRec; });
+      avisos.push("campo denso: la recomendada cubre el " + cands[0].pix_estrella_pct + " % de los píxeles; se recomienda '" + elegido.etiqueta + "' (" + elegido.pix_estrella_pct + " %)");
+    }
+  }
   if (o.cerrar !== false) estV.window.forceClose();
   var noCumple = (cands[0] && cands[0].no_cumple) ? cands[0].no_cumple.slice() : [];
   cands.forEach(function (c) { if (c.aporte_estrellas_pct !== undefined && c.aporte_estrellas_pct < 2)
     c.no_cumple = (c.no_cumple || []).concat(["aporte " + c.aporte_estrellas_pct + " % < 2 %: con esta capa la final saldrá casi sin estrellas"]); });
   return {
-    vista: cands[0] && cands[0].vista ? cands[0].vista : null, original: viewId,
+    vista: cands[iRec] && cands[iRec].vista ? cands[iRec].vista : null, original: viewId,
     estirado: { metodo: est.metodo, k: est.k, amount: est.amount, saturacion: est.saturacion, p90_estrellas: est.p90_estrellas },
-    candidatos: cands, recomendado: cands[0] ? cands[0].etiqueta : null, avisos: avisos, no_cumple: noCumple,
+    candidatos: cands, recomendado: cands[iRec] ? cands[iRec].etiqueta : null, avisos: avisos, no_cumple: noCumple,
     recorte_previa: rect, segundos: Math.round((Date.now() - t0) / 1000),
     siguiente: "El usuario elige uno; recombinar con él (Paso 9: recombinarEstrellas(starless, <vista elegida>)) y cerrar los otros con cerrarVista.",
     control: {
