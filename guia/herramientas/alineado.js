@@ -120,6 +120,68 @@ function bandaBorde(im, rect, maxD) {
   return res;
 }
 
+// Cobertura por el RUIDO (igual que revisarRecorte de Siril y SASpro): con menos subs el ruido sube (∝ 1/√N) aunque el
+// nivel no cambie, y bandaBorde (por nivel y MAD de líneas de 2 px) no lo ve. IC 405 (19 nov 2026): el SiO3 tenía
+// ~130–180 px abajo y a la derecha con más ruido; PixInsight no los quitó y salió una franja amarilla abajo.
+// Binado 2×2 (el remuestreo del registro suaviza el ruido de píxel distinto en cada zona), paso alto (x − media 3×3),
+// MAD en bloques de 8×8 binados (16 px) relativa a la del centro; por lado, bloques desde el borde con ruido > umbral ×
+// centro, percentil 98 de las filas sin contar las que tienen ruido alto en todo el tramo (señal: nebulosa o halo).
+function coberturaRuido(im, rect, umbral, maxBloques) {
+  umbral = umbral || 1.25; maxBloques = maxBloques || 40;
+  var r = rect || { x0: 0, y0: 0, x1: im.width, y1: im.height }, W = r.x1 - r.x0, H = r.y1 - r.y0;
+  var w2 = W >> 1, h2 = H >> 1, b = 8, res = { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
+  if (w2 < 4 * b * maxBloques / 2 || h2 < 4 * b * maxBloques / 2) return res;
+  var buf = new Float32Array(W * H), x2 = new Float32Array(w2 * h2), hp = new Float32Array(w2 * h2);
+  var hb = Math.floor(h2 / b), wb = Math.floor(w2 / b), m = new Float32Array(hb * wb), tmp = new Float32Array(b * b);
+  function mediana(a, n) {
+    var c = Array.prototype.slice.call(a, 0, n); c.sort(function (p, q) { return p - q; });
+    return n % 2 ? c[n >> 1] : 0.5 * (c[(n >> 1) - 1] + c[n >> 1]);
+  }
+  for (var ch = 0; ch < im.numberOfChannels; ++ch) {
+    im.getSamples(buf, new Rect(r.x0, r.y0, r.x1, r.y1), ch);
+    var i, j, y, x;
+    for (y = 0; y < h2; ++y) for (x = 0; x < w2; ++x) {
+      i = 2 * y * W + 2 * x;
+      x2[y * w2 + x] = 0.25 * (buf[i] + buf[i + 1] + buf[i + W] + buf[i + W + 1]);
+    }
+    for (y = 1; y < h2 - 1; ++y) for (x = 1; x < w2 - 1; ++x) {
+      var s9 = 0;
+      for (var dy = -1; dy <= 1; ++dy) for (var dx = -1; dx <= 1; ++dx) s9 += x2[(y + dy) * w2 + x + dx];
+      hp[y * w2 + x] = Math.abs(x2[y * w2 + x] - s9 / 9);
+    }
+    for (var by = 0; by < hb; ++by) for (var bx = 0; bx < wb; ++bx) {
+      var n = 0;
+      for (y = by * b; y < by * b + b; ++y) for (x = bx * b; x < bx * b + b; ++x) tmp[n++] = hp[y * w2 + x];
+      m[by * wb + bx] = mediana(tmp, n);
+    }
+    var cen = [];
+    for (by = Math.floor(hb / 4); by < Math.floor(3 * hb / 4); by += 2) for (bx = Math.floor(wb / 4); bx < Math.floor(3 * wb / 4); bx += 2) cen.push(m[by * wb + bx]);
+    var mc = Math.max(mediana(cen, cen.length), 1e-12);
+    // perfil de un lado: para cada fila (o columna) de bloques, cuántos bloques desde el borde superan el umbral
+    function lado(nFilas, valor) {
+      var corr = [], llenas = 0;
+      for (var f = 0; f < nFilas; ++f) {
+        var k = 0;
+        while (k < maxBloques && valor(f, k) / mc > umbral) ++k;
+        if (k >= maxBloques) ++llenas;
+        corr.push(k);
+      }
+      var uso = llenas < 0.5 * nFilas ? corr.filter(function (k) { return k < maxBloques; }) : corr;
+      if (!uso.length) return 0;
+      uso.sort(function (p, q) { return p - q; });
+      return uso[Math.min(uso.length - 1, Math.floor(0.98 * (uso.length - 1)))] * 2 * b;
+    }
+    var v = {
+      izquierda: lado(hb, function (f, k) { return m[f * wb + k]; }),
+      derecha: lado(hb, function (f, k) { return m[f * wb + wb - 1 - k]; }),
+      arriba: lado(wb, function (f, k) { return m[k * wb + f]; }),
+      abajo: lado(wb, function (f, k) { return m[(hb - 1 - k) * wb + f]; })
+    };
+    for (var kk in res) if (v[kk] > res[kk]) res[kk] = v[kk];
+  }
+  return res;
+}
+
 function alSearch(p, r) { return File.searchDirectory ? File.searchDirectory(p, r) : searchDirectory(p, r); }
 
 // Abre un fichero en PixInsight con un STF automático (sólo visual, no cambia los píxeles) y devuelve el id de la vista.
@@ -352,6 +414,12 @@ function alinearMasters(lista, o) {
         for (var kk in b2) if (b[kk] > b2[kk]) b2[kk] = b[kk];
       });
       if (pasada > 0) for (var k2 in b2) if (b2[k2] <= 8) b2[k2] = 0;   // segunda pasada: sólo franjas claras
+      if (pasada == 0) abiertos.forEach(function (w) {   // y la cobertura por el ruido (franjas con menos subs)
+        var cr = coberturaRuido(w.mainView.image, { x0: x0, y0: y0, x1: x1 + 1, y1: y1 + 1 });
+        for (var kc in b2) if (cr[kc] > b2[kc]) b2[kc] = cr[kc];
+        r.cobertura_ruido_px = r.cobertura_ruido_px || {};
+        for (var kd in cr) if (!r.cobertura_ruido_px[kd] || cr[kd] > r.cobertura_ruido_px[kd]) r.cobertura_ruido_px[kd] = cr[kd];
+      });
       y0 += b2.arriba; y1 -= b2.abajo; x0 += b2.izquierda; x1 -= b2.derecha;
       for (var k3 in franja) franja[k3] += b2[k3];
     }
