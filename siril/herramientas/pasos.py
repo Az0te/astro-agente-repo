@@ -2533,7 +2533,7 @@ def _saturar_propio(p, k, fondo=None):
 
 
 def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5,
-                         propia=(1.0, 1.5, 2.0, 2.5), sat_max=0.80):
+                         propia=(0.25, 0.5, 1.0, 1.5), sat_max=0.80):
     """Paso 5 no lineal: compara satu de Siril a varias cantidades; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
     if info["canales"] != 3:
@@ -2549,8 +2549,12 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
         s = _saturacion(q)
         rgb = _cielo_por_canal(q, cel)
         dom = 100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6)
-        return {"sat_objeto": _r(float(np.mean(s[z["obj_px"]])), 4) if z["obj_px"].any() else None,
-                "sat_cielo": _r(float(np.mean(s[z["cielo_px"]])), 4), "dominante_cielo_pct": _r(dom, 2), **_recortes(q)}
+        o = z["obj_px"]
+        rg = (float(np.median(q[0][o])) / max(float(np.median(q[1][o])), 1e-6)) if o.any() else None   # sin restar el cielo: el
+        # verde del objeto queda casi al nivel del cielo y la resta daba cocientes de miles
+        return {"sat_objeto": _r(float(np.mean(s[o])), 4) if o.any() else None,
+                "sat_cielo": _r(float(np.mean(s[z["cielo_px"]])), 4), "dominante_cielo_pct": _r(dom, 2),
+                "objeto_rg": _r(rg, 3) if rg is not None else None, **_recortes(q)}
 
     m0 = medir(p)
     # Recorte nuevo «de verdad»: píxeles que ahora tienen un canal ≥ 0,999 y antes estaban lejos (máx < 0,9) y no al lado
@@ -2599,6 +2603,10 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
                     fal.append(f"recorte alto nuevo fuera de lo ya brillante {m['recorte_nuevo_pct']} %")
                 if m["ceros_pct"] - m0["ceros_pct"] > ceros_max:   # 15 nov 2026: con 0,05 fallaba todo tras bajar el fondo (polvo negro a 0)
                     fal.append(f"canales a 0 nuevos {_r(m['ceros_pct'] - m0['ceros_pct'], 3)} % (colores fuera de rango)")
+                # satu no conserva el tono: en IC 405 v5 (20 nov 2026) «satu 0,25» llevó el R/G del objeto de 3,9 a 7,2 y
+                # la nebulosa salió roja pura. Más de ×1,35 en R/G = cambia el color, no sólo lo intensifica.
+                if m0.get("objeto_rg") and m.get("objeto_rg") and m["objeto_rg"] / m0["objeto_rg"] > 1.35:
+                    fal.append(f"cambia el tono del objeto: R/G ×{_r(m['objeto_rg'] / m0['objeto_rg'], 2)} (usa la saturación propia)")
                 if gan_obj is not None and gan_cielo > max(gan_obj, 5.0):
                     fal.append("el cielo gana más color que el objeto")
                 elif gan_cielo > 10.0:
