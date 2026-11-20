@@ -13,6 +13,7 @@ PiAstroPilot Lite es la forma más sencilla de usar el asistente: un **script** 
   - **Claude Code** (de pago, el que mejor resultado da): [instalado](https://docs.anthropic.com/es/docs/claude-code) y con sesión iniciada (`claude` en una terminal).
   - **Codex** (OpenAI): `npm install -g @openai/codex` y `codex login`.
   - **Gemini** (Google, gratis con clave, sin gráfica ni suscripción): clave de [aistudio.google.com/apikey](https://aistudio.google.com/apikey) en *Ajustes > Clave de Gemini* (o en la variable `GEMINI_API_KEY`) y proveedor *Gemini (API, gratis con clave)*. **Menos fiable** que la IA local o las de pago: sirve para probar; revisa cada paso. Más en [Qué IA usar](../../README.md#qué-ia-usar-y-cómo-configurarla).
+  - **RDNA-FAST** (local, para AMD RX 7900 y otras RDNA3/4): llama-server compilado con ROCm y proveedor *RDNA-FAST (local, llama-server)*. Ver [Motor local RDNA-FAST](#motor-local-rdna-fast-amd-rx-7900).
 - Para la astrometría (`resolverAstrometria`): un índice de Gaia configurado en las preferencias del proceso Gaia.
 - Opcionales, pero la guía los usa mucho: BlurXTerminator, NoiseXTerminator, StarXTerminator y GraXpert (cada uno con su licencia).
 
@@ -28,7 +29,7 @@ No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio 
 
 1. Abre tu imagen en PixInsight.
 2. Lanza **Script > PiAstroPilot > PiAstroPilotLite** (o **Script > Execute Script File…** y elige `piastropilot/script/PiAstroPilotLite.js`).
-3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code, Codex o Gemini) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola), y elige el **Idioma** (español o inglés).
+3. En la pestaña **Modelo** elige el proveedor (Ollama, Claude Code, Codex, Gemini o RDNA-FAST) y el modelo. En **Ajustes** revisa la URL de Ollama, las rutas de `claude`/`codex` y la carpeta de la guía (se detecta sola), y elige el **Idioma** (español o inglés).
 4. En **Prompt** escribe lo que quieres, por ejemplo «hazme un análisis de la imagen». Las funciones de la guía que pide el modelo se ejecutan solas (se comprueban antes contra el manifiesto) y el modelo te explica el resultado; si fallan, le pide la corrección (hasta 3 veces). Las líneas «Siguiente paso» del chat son enlaces: púlsalos para hacer ese paso.
 
 ## Qué hace
@@ -46,10 +47,47 @@ No hace falta Node.js ni el servidor MCP: el script carga la guía en el propio 
 
 Mientras espera al modelo la ventana no se congela y se puede cancelar. Es una ventana modal: mientras está abierta no se puede usar el resto de PixInsight (el módulo PiAstroPilot sí lo permite).
 
+## Motor local RDNA-FAST (AMD RX 7900)
+
+[RDNA-FAST](https://github.com/serrynaimo/RDNA-FAST) es un `llama-server` (llama.cpp) optimizado para gráficas AMD RDNA3 y RDNA4. Lee el prompt muchas veces más rápido que Ollama en estas tarjetas. El Lite lo usa por su API compatible con OpenAI (`http://127.0.0.1:1234/v1`, sin clave), con las mismas llamadas en el bloque ```json que con Ollama. Va sin razonamiento y ve las previas.
+
+**Requisitos (Windows):**
+- **ROCm 10.1 (TheRock):** el tarball `therock-dist-windows-gfx110X-all-10.1.0.tar.gz` para RDNA3, descomprimido en cualquier carpeta. No necesita instalador.
+- **Para compilar:** Visual Studio con cmake y ninja, y el Windows SDK (`rc.exe`). Sigue la compilación del README de RDNA-FAST con `-DGPU_TARGETS=gfx1100` (RX 7900).
+- **Si usas Visual Studio 2026 y falla en `intrin.h`** («`__host__ __device__` function cannot overload `__host__` function»): compila con el toolset MSVC 14.44, poniendo `VCToolsInstallDir=<VS>\VC\Tools\MSVC\14.44.<versión>\` antes de cmake. Empieza desde una carpeta de compilación vacía.
+
+**Modelo recomendado:**
+- [`Qwen3.8-27B-UD-IQ4_XS.gguf`](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF) de unsloth (14,4 GB). Trae la cabeza MTP para el borrador.
+- Para la visión, el [`mmproj-Qwen3.8-27B-BF16.gguf`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-GGUF).
+- En AMD conviene IQ4_XS antes que Q4_K_M: el Q4_K_M va por el camino lento y en 24 GB no cabe holgado.
+
+**Arranque de ejemplo** (cmd, desde la carpeta de `llama-server.exe`; 98k de contexto en 24 GB). Antes descarga el modelo de Ollama (`ollama stop <modelo>`): los dos no caben a la vez en la gráfica.
+
+```
+set "PATH=<carpeta de ROCm 10.1>\bin;%PATH%"
+set GGML_CUDA_NO_PINNED=1
+set ROCMFPX_DRAFT_VOCAB=24576
+llama-server -m <modelos>\Qwen3.8-27B-UD-IQ4_XS.gguf --mmproj <modelos>\mmproj-Qwen3.8-27B-BF16.gguf ^
+  -dev ROCm0 -ngl 999 -fa on --jinja -c 98304 -np 2 --kv-unified --kv-unified-reserve 12288 ^
+  -ctk q4_0 -ctv q4_0 -ctkd q4_0 -ctvd q4_0 -b 2048 -ub 2048 ^
+  --cache-ram 0 --cache-disk <carpeta de caché> --cache-disk-limit 16384 ^
+  --spec-type "draft-mtp,ngram-map-k4v" --spec-draft-n-max 4 --spec-draft-p-min 0.60 ^
+  --temp 0.2 --alias qwen/qwen3.8-27b --host 127.0.0.1 --port 1234
+```
+
+Después, en la pestaña **Modelo**, elige *RDNA-FAST (local, llama-server)*. Si dejas el modelo vacío, usa el que sirva el servidor.
+
+**Medido (RX 7900 XTX, 20 nov 2026)** en una pasada completa de IC 405 en PixInsight, con la misma petición, el mismo código y temp 0.2:
+- **RDNA-FAST con Qwen3.8 IQ4_XS:** 22 min, con 95 % de llamadas correctas.
+- **Ollama con qwen3.8 Q4_K_M a 64k:** 46 min, con 89 % de llamadas correctas.
+
+La calidad final fue parecida. Gran parte de la ganancia viene de que el prompt de sistema del Lite ya no cambia entre peticiones y el historial se recorta en bloque: el servidor reutiliza su caché (85 % del prompt por petición).
+
 ## Problemas frecuentes
 
 - **«No encuentro … guia»**: en Ajustes, pon la carpeta `guia` del repositorio.
 - **Ollama no responde**: abre Ollama (o `ollama serve`) y pulsa «Leer modelos de Ollama» en la pestaña Modelo.
+- **RDNA-FAST no responde**: arranca `llama-server` (ver [Motor local RDNA-FAST](#motor-local-rdna-fast-amd-rx-7900)) y comprueba que Ollama no tiene un modelo cargado en la gráfica.
 - **Astrometría: «No astrometric index file is available»**: configura el índice de Gaia en las preferencias del proceso Gaia.
 - **Errores**: copia lo que sale en la consola de PixInsight y ábrelo como [*issue*](https://github.com/Az0te/astro-agente-repo/issues/new/choose).
 

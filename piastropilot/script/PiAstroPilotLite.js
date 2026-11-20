@@ -45,6 +45,7 @@ var PL_MAX_SERIE = 60;   // tope de pasos seguidos en una serie («hasta el fina
 // Ojo: el preprocesador de PJSR toma la barra-asterisco y la doble barra como comentarios aunque estén dentro de
 // cadenas, regex o comentarios de línea. No escribirlas seguidas en este fichero (trocear las cadenas).
 var PL_URL_OLLAMA = "http:/" + "/localhost:11434";
+var PL_URL_RDNA = "http:/" + "/127.0.0.1:1234/v1";   // llama-server de RDNA-FAST (README del Lite)
 var PL_PRESUPUESTO_HISTORIAL = 24000;   // caracteres de conversación que se mandan al modelo (los últimos)
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -234,7 +235,12 @@ function plRutaCodexPorDefecto() {
 }
 
 function PLAjustes() {
-   this.proveedor = "ollama";             // ollama | claude | codex | gemini
+   this.proveedor = "ollama";             // ollama | claude | codex | gemini | rdna
+   // RDNA-FAST (20 nov 2026): llama-server de RDNA-FAST en este PC (RX 7900, ROCm 10.1) por su API compatible con
+   // OpenAI. Medido con Swift 1.5 IQ4_XS a 98k: prompts 7–15 veces más rápidos que Ollama, generación 1,4–1,7 veces.
+   // Modelo vacío = el que sirva el servidor (/v1/models).
+   this.urlRdna = PL_URL_RDNA;
+   this.modeloRdna = "";
    // Gemini por su API compatible con OpenAI (18 nov 2026), para quien no tiene gráfica ni suscripción. Flash-Lite
    // respondía en ~5 s en el nivel gratuito; Flash tardaba 2,5–3 min por petición. La clave se guarda en los ajustes
    // de PixInsight de este PC; vacía = la variable de entorno GEMINI_API_KEY (la misma de los chats de Siril y SASpro).
@@ -273,7 +279,8 @@ function PLAjustes() {
                   codexSuperior: DataType_UCString, ajustesPesos: DataType_UCString, internet: DataType_Boolean,
                   voz: DataType_Boolean, vozVelocidad: DataType_Int32, dictadoAntiguo: DataType_Boolean,
                   carpetaInformes: DataType_UCString, idioma: DataType_UCString,
-                  modeloGemini: DataType_UCString, claveGemini: DataType_UCString };
+                  modeloGemini: DataType_UCString, claveGemini: DataType_UCString,
+                  urlRdna: DataType_UCString, modeloRdna: DataType_UCString };
 
    this.cargar = function () {
       for (var k in CAMPOS) {
@@ -294,13 +301,14 @@ function PLAjustes() {
 
    this.modelo = function () {
       return this.proveedor == "claude" ? this.modeloClaude : this.proveedor == "codex" ? this.modeloCodex :
-             this.proveedor == "gemini" ? this.modeloGemini : this.modeloOllama;
+             this.proveedor == "gemini" ? this.modeloGemini : this.proveedor == "rdna" ? this.modeloRdna : this.modeloOllama;
    };
 
    this.ponerModelo = function (m) {
       if (this.proveedor == "claude") this.modeloClaude = m;
       else if (this.proveedor == "codex") this.modeloCodex = m;
       else if (this.proveedor == "gemini") this.modeloGemini = m || "gemini-3.5-flash-lite";
+      else if (this.proveedor == "rdna") this.modeloRdna = m;
       else this.modeloOllama = m;
    };
 
@@ -393,6 +401,7 @@ function plPesosBase(guia) {
 function plElegirModelo(aj, paso) {
    if (aj.proveedor == "ollama") return { modelo: aj.modeloOllama, porque: "" };
    if (aj.proveedor == "gemini") return { modelo: aj.modeloGemini, porque: "" };
+   if (aj.proveedor == "rdna") return { modelo: aj.modeloRdna, porque: "" };
    var elegido = aj.modelo();
    if (elegido != PL_AUTO) return { modelo: elegido, porque: elegido ? "elegido a mano" : "modelo por defecto de la CLI" };
    var bajo = aj.proveedor == "claude" ? aj.claudeInferior : aj.codexInferior;
@@ -721,7 +730,7 @@ function plPromptSistema(aj) {
    "una carpeta, un JPG ni una vista.\n" +
    (aj.proveedor == "claude" ? "- Tú también puedes VER las previas: lee el .jpg con la herramienta Read (ruta completa del resultado) " +
    "antes de opinar sobre manchas, color, halos o estrellas, y di lo que ves; no digas que no puedes ver imágenes.\n" :
-    aj.proveedor == "gemini" ? "- Tú también puedes VER las previas: las de cada resultado te llegan como imágenes junto al resultado. " +
+    aj.proveedor == "gemini" || aj.proveedor == "rdna" ? "- Tú también puedes VER las previas: las de cada resultado te llegan como imágenes junto al resultado. " +
    "Míralas antes de opinar sobre manchas, color, halos o estrellas, y di lo que ves; no digas que no puedes ver imágenes.\n" : "") +
    "- Color: guarda siempre la versión neutra; si el usuario quiere más de un solo color, saturarTono; derivaColor {vista, opciones: " +
    "{referencia}} mide si el tono del objeto ha girado entre dos pasos (> 10° = deriva).\n\n" +
@@ -754,7 +763,16 @@ function plPromptSistema(aj) {
    "0,10–0,13 la imagen queda gris y plana) va justo después de componer la paleta, ANTES de saturar: con el cielo teñido la " +
    "saturación se bloquea por la dominante.\n\n" +
    "Funciones disponibles (nombre {parámetros, * = obligatorio} [nivel]: descripción):\n" + plListaFunciones(aj.guia) + "\n\n" +
-   "Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas();
+   // Las vistas NO van aquí (20 nov 2026): el prompt de sistema tiene que ser igual byte a byte entre peticiones para que
+   // el servidor reutilice su caché (llama-server/Ollama). La lista va al final del último mensaje (plVistasAhora).
+   "Vistas abiertas: la lista «Vistas abiertas ahora en PixInsight» (id: tamaño, canales, mediana) va entre corchetes al " +
+   "final del último mensaje y es la única vigente; las de mensajes anteriores ya no valen.";
+}
+
+// Lista de vistas que se añade al final de la última petición (no se guarda en el historial).
+function plVistasAhora() {
+   return "\n\n[Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas() +
+          "\nIds exactos: " + plResumenVistas() + "]";
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1023,11 +1041,69 @@ function plGeminiChat(aj, sistema, mensajes, estado, modelo) {
    return { texto: texto, uso: uso };
 }
 
+// --- RDNA-FAST (llama-server de este PC, API compatible con OpenAI, sin clave). Igual que Gemini: el modelo escribe
+// sus llamadas en el bloque ```json y las previas .jpg del último mensaje van como imágenes (mmproj cargado). Sin
+// razonamiento, como con Ollama (enable_thinking: false). Con la GPU para él solo: Ollama tiene que estar sin modelo.
+// Script de arranque propio, si existe (opcional): el aviso lo nombra; si no, remite al README.
+var PL_RDNA_ARRANQUE = File.homeDirectory + "/RDNA-FAST/arrancar_temp02.cmd";
+
+function plRdnaAviso(aj, detalle) {
+   var arranque = File.exists(PL_RDNA_ARRANQUE) ? PL_RDNA_ARRANQUE.replace(/[\/]/g, "\\") :
+                  "llama-server de RDNA-FAST (README del Lite, «Motor local RDNA-FAST»)";
+   return "RDNA-FAST no responde en " + aj.urlRdna + (detalle ? " (" + detalle + ")" : "") + ". Arranca " + arranque +
+          " y descarga antes el modelo de Ollama (ollama stop <modelo>): los dos no caben a la vez en la gráfica.";
+}
+
+// Modelos que sirve el servidor (/v1/models); el primero es el que se usa si en Ajustes no hay ninguno.
+function plRdnaModelos(aj) {
+   var r = plHttp({ url: String(aj.urlRdna || PL_URL_RDNA).replace(/[\/]+$/, "") + "/models", conexion: 3 }, null, 6);
+   if (!r.ok || r.codigo != 200) throw new Error(plRdnaAviso(aj, r.error || (r.codigo ? "HTTP " + r.codigo : "")));
+   return ((JSON.parse(r.texto) || {}).data || []).map(function (m) { return m.id; });
+}
+
+function plRdnaChat(aj, sistema, mensajes, estado, modelo) {
+   var base = String(aj.urlRdna || PL_URL_RDNA).replace(/[\/]+$/, "");
+   if (!modelo) {
+      var ms = plRdnaModelos(aj);
+      if (!ms.length) throw new Error(plRdnaAviso(aj, "no sirve ningún modelo"));
+      modelo = aj.modeloRdna = ms[0];
+   }
+   var conv = [{ role: "system", content: sistema }].concat(mensajes.map(function (m) { return { role: m.role, content: m.content }; }));
+   var ult = conv[conv.length - 1];
+   if (ult.role == "user") {
+      var imgs = plImagenesDe(ult.content), partes = [{ type: "text", text: ult.content }];
+      imgs.forEach(function (p) {
+         try { partes.push({ type: "image_url", image_url: { url: "data:image/jpeg;base64," + File.readFile(p).toBase64() } }); }
+         catch (e) {}
+      });
+      if (partes.length > 1) conv[conv.length - 1] = { role: "user", content: partes };
+   }
+   var cuerpo = { model: modelo, messages: conv, temperature: aj.temperatura,
+                  chat_template_kwargs: { enable_thinking: false } };
+   var r = plHttp({ url: base + "/chat/completions", cuerpo: plJsonAscii(cuerpo), conexion: 5 }, estado, 1800);
+   if (estado && estado.cancelado) throw new Error("cancelado");
+   if (!r.ok || r.codigo != 200) {
+      if (!r.codigo) throw new Error(plRdnaAviso(aj, r.error));
+      throw new Error("RDNA-FAST: HTTP " + r.codigo + (r.texto ? " " + plRecortar(r.texto, 500) : ""));
+   }
+   var j = JSON.parse(r.texto);
+   if (j.error) throw new Error("RDNA-FAST: " + JSON.stringify(j.error).substring(0, 500));
+   var u = j.usage || {}, uso = { entrada: u.prompt_tokens || 0, salida: u.completion_tokens || 0,
+                                  cache: (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) || 0, coste: 0 };
+   var msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+   var texto = String(msg.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "")
+                                        .replace(/<think>[\s\S]*$/, "").trim();
+   if (!texto.length) console.warningln("PiAstroPilot: RDNA-FAST no respondió (turno vacío).");
+   return { texto: texto, uso: uso, pensado: String(msg.reasoning_content || "").trim() };
+}
+
 // Los últimos mensajes que caben en el presupuesto (siempre al menos el último).
 // Presupuesto de historial según el modelo (13 nov 2026): 24 000 caracteres se quedaban cortos en un preprocesado
 // (una tabla de seleccionarSubs llenaba casi todo). Claude/Codex tienen contexto de sobra; con Ollama depende del
 // num_ctx, que los modelos de Rafael llevan en el nombre (qwen38-64k, qwen38-32k).
 function plPresupuestoHistorial(aj) {
+   // RDNA-FAST: arranque recomendado con 98k de contexto (README); el prompt de sistema son ~10k tokens.
+   if (aj && aj.proveedor == "rdna") return 120000;
    if (!aj || aj.proveedor != "ollama") return 80000;
    var m = /(\d+)k\b/i.exec(String(aj.modeloOllama || "")), k = m ? parseInt(m[1], 10) : 0;
    return k >= 64 ? 60000 : PL_PRESUPUESTO_HISTORIAL;
@@ -1042,13 +1118,24 @@ function plRecortarViejo(m) {
             " caracteres]…\n" + c.substring(c.length - 2000) };
 }
 
+// Recorte en BLOQUE (20 nov 2026): antes se quitaba un poco del principio en cada petición y el prefijo cambiaba siempre,
+// así que el servidor (llama-server, Ollama) no podía reutilizar su caché y releía todo el historial. Ahora el punto de
+// corte se guarda en el propio array (mensajes._desde) y sólo se mueve cuando el historial se pasa del presupuesto: de una
+// vez, hasta dejarlo en el 60 %. plRecortarViejo no rompe la caché: un mensaje se compacta cuando deja de ser el último y
+// ya no cambia (sólo se relee desde él, al final del historial).
+var PL_RECORTE_BLOQUE = 0.6;
 function plRecortarHistorial(mensajes, presupuesto) {
-   var out = [], total = 0, tope = presupuesto || PL_PRESUPUESTO_HISTORIAL;
-   for (var i = mensajes.length - 1; i >= 0; --i) {
+   var tope = presupuesto || PL_PRESUPUESTO_HISTORIAL, desde = mensajes._desde || 0;
+   if (desde >= mensajes.length) desde = 0;   // historial vaciado o rehecho
+   var out = [], total = 0;
+   for (var i = desde; i < mensajes.length; ++i) {
       var mi = (i < mensajes.length - 1 && !plEsPeticion(mensajes[i])) ? plRecortarViejo(mensajes[i]) : mensajes[i];
+      out.push(mi);
       total += mi.content.length;
-      if (out.length && total > tope) break;
-      out.unshift(mi);
+   }
+   if (total > tope) {
+      while (out.length > 1 && total > tope * PL_RECORTE_BLOQUE) { total -= out[0].content.length; out.shift(); ++desde; }
+      try { mensajes._desde = desde; } catch (e) {}
    }
    while (out.length > 1 && out[0].role != "user") out.shift();
    // La última petición del usuario (no un resultado, una corrección ni «sigue») no se pierde nunca: con resultados
@@ -1073,12 +1160,16 @@ function plPreguntar(aj, mensajes, estado, paso) {
    // Recordatorio al final de la última petición (los modelos locales atienden más a lo último que leen); no se guarda.
    if (m.length && m[m.length - 1].role == "user") {
       m = m.slice();
-      m[m.length - 1] = { role: "user", content: m[m.length - 1].content +
-                          "\n\n[Vistas abiertas ahora, ids exactos: " + plResumenVistas() + "]" };
+      m[m.length - 1] = { role: "user", content: m[m.length - 1].content + plVistasAhora() };
    }
    if (aj.proveedor == "claude") t = plClaudeChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "codex") t = plCodexChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "gemini") t = plGeminiChat(aj, sistema, m, estado, e.modelo);
+   else if (aj.proveedor == "rdna") {
+      var tD = Date.now();
+      t = plRdnaChat(aj, sistema, m, estado, e.modelo);
+      plRegPeticion(aj, sistema, m, t, (Date.now() - tD) / 1000);
+   }
    else {
       var tR = Date.now();
       t = plOllamaChat(aj, sistema, m, estado);
@@ -1161,14 +1252,14 @@ function plRegLinea(o) {
    } catch (e) { console.warningln("[PiAstroPilotLite] registro de sesión: " + (e.message || e)); }
 }
 
-function plRegActivo(aj) { return aj.proveedor == "ollama" && plEntorno("ASTROPILOT_REGISTRO") != "0"; }
+function plRegActivo(aj) { return (aj.proveedor == "ollama" || aj.proveedor == "rdna") && plEntorno("ASTROPILOT_REGISTRO") != "0"; }
 
 function plRegAbrir(aj) {
    if (PL_REG) return PL_REG;
    var prog = plRegBase() + "/pixinsight-lite", d = new Date();
    var sello = d.getFullYear() + plDosDig(d.getMonth() + 1) + plDosDig(d.getDate()) + "_" +
                plDosDig(d.getHours()) + plDosDig(d.getMinutes()) + plDosDig(d.getSeconds());
-   var dir = prog + "/" + sello + "_" + String(aj.modeloOllama || "modelo").replace(/[^A-Za-z0-9._-]+/g, "_").substring(0, 40);
+   var dir = prog + "/" + sello + "_" + String(aj.modelo() || "modelo").replace(/[^A-Za-z0-9._-]+/g, "_").substring(0, 40);
    plCarpeta(dir);
    var usado = plTamanoCarpeta(plRegBase()), limite = PL_REG_LIMITE_GB * 1073741824;
    PL_REG = { dir: dir, prog: prog, n: 0, previas: usado <= limite, sistemas: {} };
@@ -1176,7 +1267,8 @@ function plRegAbrir(aj) {
       console.warningln("[PiAstroPilotLite] registro de sesiones: " + (usado / 1073741824).toFixed(1) + " GB de " +
                         PL_REG_LIMITE_GB + " GB" + (PL_REG.previas ? "" : "; esta sesión va sin previas") + " (" + plRegBase() + ").");
    plRegLinea({ tipo: "inicio", formato: "astropilot-lite/1", programa: "pixinsight-lite", version: PL_VERSION,
-                modelo: aj.modeloOllama, temperatura: aj.temperatura, pensar: !!aj.pensar, internet: !!aj.internet,
+                proveedor: aj.proveedor, modelo: aj.modelo(), temperatura: aj.temperatura,
+                pensar: aj.proveedor == "ollama" && !!aj.pensar, internet: !!aj.internet,
                 idioma: aj.idioma || "es", commit: plCommitRepo(plPadre(aj.guia)), hora: d.toISOString(),
                 nota: null, usar: null, comentario: "" });
    return PL_REG;
@@ -1195,7 +1287,7 @@ function plRegPeticion(aj, sistema, mensajes, t, segundos) {
          R.sistemas[h] = true;
       }
       ++R.n;
-      plRegLinea({ tipo: "peticion", n: R.n, sistema: "_sistemas/" + h + ".txt", modelo: aj.modeloOllama,
+      plRegLinea({ tipo: "peticion", n: R.n, sistema: "_sistemas/" + h + ".txt", modelo: aj.modelo(),
                    mensajes: mensajes, respuesta: t.texto, razonamiento: t.pensado || "", empujones: t.empujones || 0,
                    uso: t.uso || null, segundos: segundos, hora: new Date().toISOString() });
    } catch (e) { console.warningln("[PiAstroPilotLite] registro de sesión: " + (e.message || e)); }
@@ -1285,7 +1377,8 @@ function plMetricasDatos(M, aj, uso) {
    return {
       formato: "astropilot-metricas/1", programa: "pixinsight-lite", version: PL_VERSION, pixinsight: pi,
       commit_guia: plCommitRepo(plPadre(aj.guia)), proveedor: aj.proveedor, modelo: aj.modelo() || "",
-      temperatura: aj.proveedor == "ollama" ? aj.temperatura : null, pensar: aj.proveedor == "ollama" ? !!aj.pensar : null,
+      temperatura: aj.proveedor == "ollama" || aj.proveedor == "rdna" ? aj.temperatura : null,
+      pensar: aj.proveedor == "ollama" ? !!aj.pensar : aj.proveedor == "rdna" ? false : null,
       objeto: di.objeto || "", fecha: plSello().replace("_", " "),
       minutos: Math.round((Date.now() - M.inicio) / 6000) / 10,
       peticiones: M.peticiones, fallos_modelo: M.fallosModelo, respuestas_vacias: M.vacias, empujones: M.empujones,
@@ -2125,7 +2218,7 @@ function plConstruirDialogo(aj) {
    // --- Pestaña Modelo ---
    var pModelo = new Control(this);
    var PROV = [["ollama", "Ollama (local, HTTP)"], ["claude", "Claude Code (CLI)"], ["codex", "Codex (CLI)"],
-               ["gemini", "Gemini (API, gratis con clave)"]];
+               ["gemini", "Gemini (API, gratis con clave)"], ["rdna", "RDNA-FAST (local, llama-server)"]];
    this.cProv = new ComboBox(pModelo);
    PROV.forEach(function (p) { self.cProv.addItem(p[1]); });
    this.cProv.currentItem = Math.max(0, PROV.map(function (p) { return p[0]; }).indexOf(aj.proveedor));
@@ -2317,6 +2410,7 @@ function plConstruirDialogo(aj) {
       var e = plElegirModelo(aj, this.pasoActual());
       this.eleccionLbl.text = plT(aj.proveedor == "ollama" ? "Ollama · " + aj.modeloOllama + "  (los pesos N no se aplican)" :
          aj.proveedor == "gemini" ? "Gemini · " + aj.modeloGemini + "  (los pesos N no se aplican)" :
+         aj.proveedor == "rdna" ? "RDNA-FAST · " + (aj.modeloRdna || "el del servidor") + "  (los pesos N no se aplican)" :
          "Modelo: " + (e.modelo || "(por defecto de la CLI)") + (e.porque ? "  —  " + e.porque : ""));
    };
 
@@ -2361,6 +2455,12 @@ function plConstruirDialogo(aj) {
          this.leerAjustes(); aj.ponerModelo(actual);
          try { lista = plOllamaModelos(aj); this.notaModelo.text = plT(lista.length + " modelos en Ollama."); }
          catch (e) { this.notaModelo.text = plT(String(e.message || e)); if (avisar) this.estadoLbl.text = plT(this.notaModelo.text); }
+      } else if (aj.proveedor == "rdna") {
+         try {
+            lista = plRdnaModelos(aj);
+            this.notaModelo.text = plT("RDNA-FAST (llama-server en " + aj.urlRdna + "): " + (lista.join(", ") || "sin modelos") +
+                                   ". Vacío = el que sirva el servidor. Sin razonamiento; ve las previas.");
+         } catch (e) { this.notaModelo.text = plT(String(e.message || e)); if (avisar) this.estadoLbl.text = plT(this.notaModelo.text); }
       } else if (aj.proveedor == "gemini") {
          lista = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
          this.notaModelo.text = plT("Gemini por su API, gratis con una clave de aistudio.google.com/apikey (pestaña Ajustes). " +
@@ -2520,7 +2620,7 @@ function plConstruirDialogo(aj) {
       this.estado = { cancelado: false };
       this.ocupado(true);
       var e0 = plElegirModelo(aj, this.pasoEnviado || "");
-      var nombre = { ollama: "Ollama", claude: "Claude", codex: "Codex" }[aj.proveedor] +
+      var nombre = { ollama: "Ollama", claude: "Claude", codex: "Codex", gemini: "Gemini", rdna: "RDNA-FAST" }[aj.proveedor] +
                    " · " + (e0.modelo || "modelo por defecto") + (e0.porque ? " — " + e0.porque : "");
       this.estadoLbl.text = plT("Esperando a " + nombre + "…");
       var t0 = Date.now(), resp = null;
@@ -2853,7 +2953,7 @@ function plPrueba(salida, cli) {
             out.pesos = { filas: d.tPesos.numberOfChildren, fuente: d.fuentePesos.text, eleccionClaude: d.eleccionLbl.text };
             out.pesos.visibleClaude = d.gPesos.visible;
             aj.modeloClaude = mod;
-            var ip = ["ollama", "claude", "codex", "gemini"].indexOf(prov);
+            var ip = ["ollama", "claude", "codex", "gemini", "rdna"].indexOf(prov);
             d.cProv.currentItem = ip; d.cProv.onItemSelected(ip);
             out.pesos.visibleTrasVolver = d.gPesos.visible;
             out.pesos.eleccionOllama = d.eleccionLbl.text;
@@ -2919,7 +3019,7 @@ function plPrueba(salida, cli) {
       if (r.ok) throw new Error("simbad funcionó con internet desactivado");
       return r.texto.substring(0, 160);
    });
-   paso("prompt", function () { var s = plPromptSistema(aj); return { caracteres: s.length, inicioVentanas: s.substring(s.indexOf("Vistas abiertas ahora")) }; });
+   paso("prompt", function () { var s = plPromptSistema(aj); return { caracteres: s.length, inicioVentanas: plVistasAhora() }; });
    paso("ollamaModelos", function () { return plOllamaModelos(aj); });
    var respuesta = null;
    paso("ollamaChat", function () {
@@ -2996,7 +3096,7 @@ function plPrueba(salida, cli) {
 // exportado, manda «sigue hasta el final» (cada una cuenta como una intervención). No guarda ajustes: los del usuario
 // quedan como estaban. Deja en <carpeta>: pasada.json (tiempo, tokens, coste, pasos, fallos), registro.txt, informe .md y dossier PDF.
 //   PixInsight.exe -n --automation-mode --no-focus-stealing
-//      -r=<Lite>,--pasada,<ollama|claude|codex|gemini>,<modelo>,<carpeta>,<peticion.txt> --force-exit
+//      -r=<Lite>,--pasada,<ollama|claude|codex|gemini|rdna>,<modelo>,<carpeta>,<peticion.txt> --force-exit
 var PL_MAX_SIGUE = 6;
 function plPasada(proveedor, modelo, carpeta, ficheroPeticion, maxSigue) {
    // maxSigue: «sigue» automáticos como mucho (por defecto PL_MAX_SIGUE; 0 en una comparación por etapas, donde la

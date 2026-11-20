@@ -13,6 +13,7 @@ PiAstroPilot Lite is the easiest way to use the assistant: a PixInsight **script
   - **Claude Code** (paid, gives the best results): [installed](https://docs.anthropic.com/en/docs/claude-code) and signed in (`claude` in a terminal).
   - **Codex** (OpenAI): `npm install -g @openai/codex` and `codex login`.
   - **Gemini** (Google, free with a key, no GPU or subscription): key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) in *Settings > Clave de Gemini* (or in the `GEMINI_API_KEY` variable) and provider *Gemini (API, gratis con clave)*. **Less reliable** than a local AI or the paid ones: fine for trying it out; check every step. More in [Which AI to use](../../README.en.md#which-ai-to-use-and-how-to-set-it-up).
+  - **RDNA-FAST** (local, for AMD RX 7900 and other RDNA3/4 cards): a ROCm build of llama-server, provider *RDNA-FAST (local, llama-server)*. See [Local engine RDNA-FAST](#local-engine-rdna-fast-amd-rx-7900).
 - For astrometry (`resolverAstrometria`): a Gaia index configured in the Gaia process preferences.
 - Optional, but the guide uses them a lot: BlurXTerminator, NoiseXTerminator, StarXTerminator and GraXpert (each with its own licence).
 
@@ -29,7 +30,7 @@ No Node.js or MCP server is needed: the script loads the guide inside PixInsight
 1. Open your image in PixInsight.
 2. Launch **Script > PiAstroPilot > PiAstroPilotLite** (or **Script > Execute Script File…** and choose `piastropilot/script/PiAstroPilotLite.js`).
 3. In **Settings > Language** choose **English**: the window switches at once and the model answers in English. The setting is remembered.
-4. In the **Model** tab choose the provider (Ollama, Claude Code, Codex or Gemini) and the model. In **Settings** check the Ollama URL, the `claude`/`codex` paths and the guide folder (detected automatically).
+4. In the **Model** tab choose the provider (Ollama, Claude Code, Codex, Gemini or RDNA-FAST) and the model. In **Settings** check the Ollama URL, the `claude`/`codex` paths and the guide folder (detected automatically).
 5. In **Prompt** type what you want, for example «analyse the image». The guide functions the model asks for run on their own (checked first against the manifest) and the model explains the result; if they fail, it is asked for a fix (up to 3 times). The «Next step» lines in the chat are links: click them to do that step.
 
 ## What it does
@@ -48,6 +49,27 @@ No Node.js or MCP server is needed: the script loads the guide inside PixInsight
 The window does not freeze while waiting for the model, and the request can be cancelled. It is a modal window: while it is open the rest of PixInsight cannot be used (the PiAstroPilot module does allow it).
 
 The processing guide itself (`guia/`) is written in Spanish. In English mode the model translates what it takes from it; function names and result fields stay in Spanish.
+
+## Local engine RDNA-FAST (AMD RX 7900)
+
+[RDNA-FAST](https://github.com/serrynaimo/RDNA-FAST) is a `llama-server` (llama.cpp) tuned for AMD RDNA3 and RDNA4 cards. On these cards it reads prompts many times faster than Ollama. The Lite talks to it through its OpenAI-compatible API (`http://127.0.0.1:1234/v1`, no key). The calls go in the same ```json block as with Ollama, with no reasoning, and it sees the previews.
+
+**Requirements (Windows):**
+- **ROCm 10.1 (TheRock):** the `therock-dist-windows-gfx110X-all-10.1.0.tar.gz` tarball for RDNA3, unpacked anywhere. No installer needed.
+- **To build:** Visual Studio with cmake and ninja, and the Windows SDK (`rc.exe`). Follow the RDNA-FAST README build with `-DGPU_TARGETS=gfx1100` (RX 7900).
+- **If you use Visual Studio 2026 and the build fails in `intrin.h`:** use the MSVC 14.44 toolset by setting `VCToolsInstallDir=<VS>\VC\Tools\MSVC\14.44.<version>\` before cmake. Start from an empty build folder.
+
+**Recommended model:**
+- [`Qwen3.8-27B-UD-IQ4_XS.gguf`](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF) by unsloth (14.4 GB). It includes the MTP head for drafting.
+- For vision, [`mmproj-Qwen3.8-27B-BF16.gguf`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-GGUF).
+
+**Before starting it:** unload the Ollama model (`ollama stop <model>`). Both do not fit on the card at once. The start command is in the Spanish README (`README.md`, «Motor local RDNA-FAST»): port 1234, temp 0.2, 98k context in 24 GB.
+
+**Measured (RX 7900 XTX, 20 Nov 2026)** on a full IC 405 run in PixInsight, with the same request and code:
+- **RDNA-FAST with Qwen3.8 IQ4_XS:** 22 min, with 95 % correct calls.
+- **Ollama with qwen3.8 Q4_K_M at 64k:** 46 min, with 89 % correct calls.
+
+Final quality was similar. Part of the gain comes from the Lite's system prompt now staying identical between requests, so the server reuses its cache.
 
 ## Common problems
 
