@@ -3390,3 +3390,52 @@ LISTA_PASOS = {
     "quitarPatron2px": quitarPatron2px,
     "compararFinales": compararFinales,
 }
+
+
+# --- Guardas de la entrega (20 nov 2026, como en SASpro: una pasada exportó sin recombinar las estrellas separadas y tras
+# pedir fondoCandidatos sin aplicar ninguno). Envuelven las herramientas sin cambiarlas; viven mientras el puente está abierto.
+_ENTREGA = {"estrellas_sueltas": False, "fondo_pendiente": False}
+
+
+def _guarda(nombre, antes=None, despues=None):
+    import functools
+    f = LISTA_PASOS[nombre]
+
+    @functools.wraps(f)                          # el puente lee los parámetros con inspect.signature (sigue __wrapped__)
+    def g(siril, *a, **k):
+        if antes:
+            antes(k)
+        r = f(siril, *a, **k)
+        if despues:
+            despues(r, k)
+        return r
+    LISTA_PASOS[nombre] = g
+
+
+def _antes_exportar(k):
+    if _ENTREGA["estrellas_sueltas"] and not k.get("forzar"):
+        raise RuntimeError("Hay una capa de estrellas separada sin recombinar: estírala y únela a la starless con "
+                           "recombinarEstrellas antes de exportar; si no, el final sale sin estrellas. forzar: true sólo si el "
+                           "usuario pide una versión sin estrellas.")
+
+
+def _despues_exportar(r, k):
+    if _ENTREGA["fondo_pendiente"] and isinstance(r, dict):
+        r["aviso_fondo"] = ("Se comparó el fondo (fondoCandidatos) y no se aplicó ningún candidato: si el cielo no quedó como "
+                            "querías, aplica el recomendado (aplicarCandidato) y exporta de nuevo.")
+
+
+def _despues_aplicar(r, k):
+    cid = str(k.get("id", ""))
+    if cid.startswith("fondo"):
+        _ENTREGA["fondo_pendiente"] = False
+    elif cid.startswith("estrellas"):
+        _ENTREGA["estrellas_sueltas"] = True
+
+
+_guarda("separarEstrellas", despues=lambda r, k: _ENTREGA.update(estrellas_sueltas=True))
+_guarda("recombinarEstrellas", despues=lambda r, k: _ENTREGA.update(estrellas_sueltas=False)
+        if not (isinstance(r, dict) and r.get("aplicado") is False) else None)
+_guarda("fondoCandidatos", despues=lambda r, k: _ENTREGA.update(fondo_pendiente=True))
+_guarda("aplicarCandidato", despues=_despues_aplicar)
+_guarda("exportarFinal", antes=_antes_exportar, despues=_despues_exportar)

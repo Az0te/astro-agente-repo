@@ -1024,6 +1024,10 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     aviso = _aviso_sin_usar([_fuente(ctx, ha), _fuente(ctx, oiii), _fuente(ctx, sii), _fuente(ctx, hb)])
     if aviso:
         r["aviso_masters"] = aviso + " (El RGB de banda ancha puede entrar después, para las estrellas.)"
+    # 20 nov 2026: una pasada eligió paleta en una nebulosa de emisión con reflexión y perdió el azul real del RGB.
+    r["regla_guia"] = ("Paleta sólo si el usuario la pide o si no hay RGB útil. Si hay RGB que aporta color real (nebulosa de "
+                       "emisión con reflexión: polvo azul junto a estrellas brillantes, que sólo da el RGB), la guía pide "
+                       "inyectar la banda estrecha en el RGB calibrado con combinarCandidatos, no paleta.")
     return H._galeria(r, H._p(d.image), original=False)
 
 

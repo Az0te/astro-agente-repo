@@ -636,6 +636,22 @@ def _cabecera_para_guardar(m, forma=(0, 0)):
     return h
 
 
+# Guardas de la entrega (20 nov 2026: una pasada de SASpro exportó sin recombinar las estrellas que había separado, con
+# anillos donde estaban, y tras pedir fondoCandidatos sin aplicar ninguno). Viven mientras el puente está abierto.
+_ESTRELLAS = {}          # clave de la vista de estrellas -> {"nombre", "de", "recombinada"}
+_FONDO_PENDIENTE = {}    # {"vista": nombre} si se comparó el fondo y no se aplicó ningún candidato
+
+
+def _clave(d):
+    return getattr(d, "uid", None) or _nombre(d)
+
+
+def _anotar_estrellas(ctx, antes, d):
+    for x in _docs(ctx):
+        if id(x) not in antes:
+            _ESTRELLAS[_clave(x)] = {"nombre": _nombre(x), "de": _nombre(d), "recombinada": False}
+
+
 def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
     """Entrega: TIFF de 16 bits + JPG calidad 95 como <nombre>_final, sin sobrescribir (_2, _3…). Exige el cielo entre
     0,03 y 0,10 (fondo ajustado) salvo forzar."""
@@ -645,6 +661,13 @@ def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
     cielo = float(M.cielo(_p(d.image)[:, ::4, ::4])["cielo"])
     if not forzar and not 0.03 <= cielo <= 0.10:
         raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,03–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
+    abiertas = {_clave(x) for x in _docs(ctx)}
+    sueltas = [v["nombre"] for k, v in _ESTRELLAS.items() if k in abiertas and not v["recombinada"]]
+    if sueltas and not any(v["recombinada"] for v in _ESTRELLAS.values()) and not forzar:
+        raise RuntimeError(f"Hay capas de estrellas separadas sin recombinar ({', '.join(sueltas)}): estíralas "
+                           "(estirarEstrellas) y únelas a la starless con recombinarEstrellas antes de exportar; si no, el "
+                           "final sale sin estrellas (con huecos donde estaban). forzar: true sólo si el usuario pide una "
+                           "versión sin estrellas.")
     fich = _meta(d).get("file_path")
     c = _ruta(carpeta, "carpeta") if carpeta else (Path(fich).parent if fich else DATOS / "exportado")
     base = _seguro(nombre or Path(fich or _nombre(d)).stem) + "_final"
@@ -653,7 +676,11 @@ def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
     p = _p(d.image)
     c.mkdir(parents=True, exist_ok=True)
     _jpg(p, jpg, calidad=95)
-    return {"tif": r1["fichero"], "jpg": str(jpg), "vista": _nombre(d)}
+    r = {"tif": r1["fichero"], "jpg": str(jpg), "vista": _nombre(d)}
+    if _FONDO_PENDIENTE:
+        r["aviso"] = (f"Se comparó el fondo (fondoCandidatos) en '{_FONDO_PENDIENTE.get('vista')}' y no se aplicó ningún "
+                      "candidato: si el cielo no quedó como querías, aplica el recomendado (aplicarCandidato) y exporta de nuevo.")
+    return r
 
 
 # --- Herramientas: vista (deshacer, procesos de SASpro) ----------------------------------------------------
@@ -1894,6 +1921,8 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
         return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
                 "motivo": f"El cielo ya está en {_r(float(np.mean(s0)), 3)}, igual o por debajo de los niveles pedidos."}
     r = _comparar(ctx, d, "fondo", lista, medir)
+    _FONDO_PENDIENTE.clear()
+    _FONDO_PENDIENTE["vista"] = _nombre(d)
     for x in r["candidatos"]:
         m = x["metricas"]
         # ceros_pct cuenta también los que ya estaban a 0: Qwen lo leyó como recorte del candidato y no aplicó el
@@ -1920,6 +1949,7 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     else:
         r["motivo"] = "Todos recortan demasiado: deja el fondo como está o pide un nivel más alto."
     r["antes"] = {"cielo_rgb": [_r(x, 4) for x in s0]}
+    r["siguiente"] = "Aplica el recomendado con aplicarCandidato antes de seguir (comparar no cambia la imagen)."
     return _galeria(r, p, None)
 
 
@@ -2080,6 +2110,7 @@ def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0,
     f0, f1 = float(np.mean(M.cielo_por_canal(a, cel))), float(np.mean(M.cielo_por_canal(res, cel)))
     rec0, rec1 = M.recortes(a), M.recortes(res)
     d.apply_edit(_a_sas(res, d.image), metadata={}, step_name=f"SetiAstroPilot: recombinar estrellas ({metodo} ×{k:g})")
+    _ESTRELLAS.setdefault(_clave(e), {"nombre": _nombre(e), "de": None})["recombinada"] = True
     r = {"aplicado": True, "vista": _nombre(d), "estrellas": _nombre(e), "metodo": metodo, "factor": k,
          "aporte_estrellas_pct": _r(100.0 * float((M.lum(res) - M.lum(a)).mean()) / max(float(M.lum(res).mean()), 1e-9), 2),
          "fondo_antes": _r(f0, 5), "fondo_despues": _r(f1, 5), "recortes_antes": rec0, "recortes_despues": rec1,
@@ -2236,6 +2267,8 @@ def aplicarCandidato(ctx, id, vista=None):
                                "(comparación → aplicarCandidato → siguiente vista).")
         raise RuntimeError("La vista ha cambiado desde la comparación (otra imagen o ya se aplicó algo): repite la comparación.")
     d.apply_edit(a.astype(np.float32, copy=False), metadata={}, step_name=f"SetiAstroPilot: {datos.get('nombre', id)}")
+    if str(id).startswith("fondo_"):
+        _FONDO_PENDIENTE.clear()
     m = M.cielo(_p(d.image))
     return {"aplicado": str(id), "metodo": datos.get("nombre"), "proceso": datos.get("proceso"),
             "preset": datos.get("preset"), "vista": _nombre(d), "medidas": M.sin_privado(m),
@@ -2478,6 +2511,7 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False)
         nombre = f"{_nombre(d)}_estrellas"
         m["display_name"] = nombre
         ctx.open_new_document(_a_sas(est, d.image), metadata=m, name=nombre)
+        _anotar_estrellas(ctx, antes, d)
         r = {"proceso": "rc_sxt", "vista": _nombre(d), "segundos": _r(time.perf_counter() - t0, 1), "cambio": True,
              "estrellas": "pantalla (unscreen)" if unscreen else "original − sin estrellas"}
         r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
@@ -2490,6 +2524,7 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False)
     else:
         raise ValueError("motor: starnet, darkstar, syqon o starx.")
     r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
+    _anotar_estrellas(ctx, antes, d)
     # SASpro deja activa la vista nueva de estrellas: sin esto, las llamadas siguientes sin 'vista' irían a ella.
     r["vista_activa"] = _reactivar(ctx, d)
     try:
