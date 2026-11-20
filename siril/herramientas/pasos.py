@@ -2619,6 +2619,10 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     # pasado; las referencias de Rafael quedan en 0,45–0,65 medidas en el JPG y Opus eligió +0,75 (≈ 0,80 aquí).
     if any((x["metricas"]["sat_objeto"] or 0) <= sat_max for x in ok):
         ok = [x for x in ok if (x["metricas"]["sat_objeto"] or 0) <= sat_max]
+    # Y como mucho un 35 % más de saturación que antes: en IC 405 v4 (20 nov 2026) +1 quedaba en 0,78 (bajo el techo)
+    # pero subía un 46 % y, sumado al punto negro, el rojo salió R/G 4,6. Opus eligió +0,75 (+31 %).
+    if any((x["metricas"].get("ganancia_objeto_pct") or 0) <= 35 for x in ok):
+        ok = [x for x in ok if (x["metricas"].get("ganancia_objeto_pct") or 0) <= 35]
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
         mm = mejor["metricas"]
@@ -3288,6 +3292,12 @@ def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False):
     hecho_tmp = next((Path(str(tmp) + e) for e in (".fit", ".fits", ".fts") if Path(str(tmp) + e).exists()), None)
     if hecho_tmp is not None:
         siril.cmd("load", H._arg_cmd(hecho_tmp))
+    # Los datos ya están estirados (codificados para verse): se marcan como sRGB para que Siril no les aplique la curva
+    # sRGB al guardar. IC 405 (20 nov 2026): el cielo en 0,054 salía a 0,26 en el JPG (gris) por esa conversión.
+    try:
+        siril.cmd("icc_assign", "sRGB")
+    except Exception as e:
+        r["aviso_icc"] = f"icc_assign sRGB falló ({str(e)[:120]}): el JPG puede salir más claro que la imagen."
     siril.cmd("savetif", H._arg_cmd(raiz))
     siril.cmd("savejpg", H._arg_cmd(raiz), str(q))
     H._pila_sigue(siril)

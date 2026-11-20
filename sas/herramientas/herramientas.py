@@ -1903,7 +1903,7 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
                           if m["ceros_nuevos_pct"] > ceros_max else [])
         # Un punto negro muy distinto por canal (cielo teñido) cambia el color del OBJETO: IC 405 (20 nov 2026), bp
         # [0,03, 0,12, 0,15] con el cielo cian se comió el verde y el azul de la nebulosa y el rojo salió R/G ×1,5.
-        if abs(m["objeto_rg_x"] - 1) > 0.15:
+        if abs(m["objeto_rg_x"] - 1) > 0.10:   # 0,15 dejó pasar ×1,146 en la v4 y el rojo se fue con la saturación
             x["no_cumple"].append(f"cambia el color del objeto: R/G ×{m['objeto_rg_x']} (el cielo está teñido: corrige "
                                   "la dominante antes, en lineal, con calibrarColor o neutralizarFondo sobre el cielo)")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
@@ -1976,6 +1976,10 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     # pasado; las referencias de Rafael quedan en 0,45–0,65 medidas en el JPG y Opus eligió +0,75 (≈ 0,80 aquí).
     if any((x["metricas"]["sat_objeto"] or 0) <= sat_max for x in ok):
         ok = [x for x in ok if (x["metricas"]["sat_objeto"] or 0) <= sat_max]
+    # Y como mucho un 35 % más de saturación que antes: en IC 405 v4 (20 nov 2026) +1 quedaba en 0,78 (bajo el techo)
+    # pero subía un 46 % y, sumado al punto negro, el rojo salió R/G 4,6. Opus eligió +0,75 (+31 %).
+    if any((x["metricas"].get("ganancia_objeto_pct") or 0) <= 35 for x in ok):
+        ok = [x for x in ok if (x["metricas"].get("ganancia_objeto_pct") or 0) <= 35]
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
         mm = mejor["metricas"]
