@@ -1506,7 +1506,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "{ carpeta (obligatoria), nombre, girar180: false (giro 180° del TIFF y el JPG; también vale girar), formatos: [\"xisf\",\"tif\",\"jpg\"], sobrescribir: false, calidad: 1–100 (calidad del JPG), jpgMB: tamaño del JPG en MB (busca la calidad que lo da, p. ej. 6) }"
+      "description": "{ carpeta (obligatoria), nombre, girar180: false (giro 180° del TIFF y el JPG; también vale girar), formatos: [\"xisf\",\"tif\",\"jpg\"], sobrescribir: false, calidad: 1–100 (calidad del JPG), jpgMB: tamaño del JPG en MB (busca la calidad que lo da, p. ej. 6), forzar: false (exportar aunque el cielo no esté entre 0,03 y 0,10: sólo si el usuario quiere ese cielo) }"
      }
     },
     "required": [

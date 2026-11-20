@@ -49,6 +49,22 @@ function exChecks(view) {
            filas_negras_en_bordes: zeroRows, columnas_negras_en_bordes: zeroCols };
 }
 
+// Nivel del cielo de la imagen terminada: percentil 20 de las medianas de bloques de 64 px de la luminancia (media de
+// canales). Lo mismo que el «cielo» de las funciones de fondo de Siril y SASpro, sin necesitar una máscara.
+function exCielo(view) {
+  var im = view.image, W = im.width, H = im.height, B = 64, meds = [], nc = im.numberOfChannels;
+  var row = new Float32Array(B * B);
+  for (var y0 = 0; y0 + B <= H; y0 += B) for (var x0 = 0; x0 + B <= W; x0 += B) {
+    var acc = new Float32Array(B * B);
+    for (var c = 0; c < nc; ++c) { im.getSamples(row, new Rect(x0, y0, x0 + B, y0 + B), c); for (var i = 0; i < B * B; i += 4) acc[i] += row[i] / nc; }
+    var v = []; for (var j = 0; j < B * B; j += 4) v.push(acc[j]);
+    v.sort(function (a, b) { return a - b; }); meds.push(v[v.length >> 1]);
+  }
+  if (!meds.length) return null;
+  meds.sort(function (a, b) { return a - b; });
+  return meds[Math.floor(0.2 * (meds.length - 1))];
+}
+
 // Gamut (lámina «gamut»): valores pegados a 0 o a 1 en algún canal antes y después de convertir a sRGB. Si la conversión
 // recorta más del 0,05 % de los valores, hay colores fuera del gamut que el JPG/TIFF pierde.
 function exRecortados(view) {
@@ -104,6 +120,13 @@ function exportarFinal(viewId, o) {
   if (!File.directoryExists(dir)) File.createDirectory(dir, true);
   var nombre = o.nombre || viewId, fmts = o.formatos || ["xisf", "tif", "jpg"], out = [], t0 = Date.now(), gamut = null;
   var checks = exChecks(v);
+  // Fondo ajustado antes de entregar (IC 405, 20 nov 2026: Qwen exportó con el cielo gris en Siril y la nebulosa apagada
+  // en PixInsight por saltarse fondo y contraste). forzar: true sólo si el usuario quiere ese cielo.
+  var cielo = exCielo(v);
+  checks.cielo = cielo === null ? null : +cielo.toFixed(4);
+  if (!o.forzar && cielo !== null && (cielo < 0.03 || cielo > 0.10))
+    throw new Error("Cielo en " + cielo.toFixed(3) + " (fuera de 0,03–0,10): ajusta el fondo antes de exportar (fondo oscuro y neutro, " +
+                    "0,05–0,08, con fondoCandidatos) y repasa contraste y saturación. forzar: true sólo si el usuario quiere ese cielo.");
 
   if (fmts.indexOf("xisf") >= 0) {
     var wx = exCopy(v, "exXISF");

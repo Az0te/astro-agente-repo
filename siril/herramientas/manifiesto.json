@@ -1286,6 +1286,10 @@
    "params": {
     "type": "object",
     "properties": {
+     "forzar": {
+      "type": "boolean",
+      "description": "Exportar aunque el cielo no esté entre 0,03 y 0,10 (sólo si el usuario quiere ese cielo)."
+     },
      "carpeta": {
       "type": "string",
       "description": "Carpeta absoluta de destino."

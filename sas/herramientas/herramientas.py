@@ -636,11 +636,15 @@ def _cabecera_para_guardar(m, forma=(0, 0)):
     return h
 
 
-def exportarFinal(ctx, carpeta=None, nombre=None, vista=None):
-    """Entrega: TIFF de 16 bits + JPG calidad 95 como <nombre>_final, sin sobrescribir (_2, _3…)."""
+def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
+    """Entrega: TIFF de 16 bits + JPG calidad 95 como <nombre>_final, sin sobrescribir (_2, _3…). Exige el cielo entre
+    0,03 y 0,10 (fondo ajustado) salvo forzar."""
     d = _doc(ctx, vista)
     if M.lineal(_p(d.image)[:, ::8, ::8]):
         raise RuntimeError("La imagen parece lineal (mediana < 0,05): estírala antes de exportar.")
+    cielo = float(M.cielo(_p(d.image)[:, ::4, ::4])["cielo"])
+    if not forzar and not 0.03 <= cielo <= 0.10:
+        raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,03–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
     fich = _meta(d).get("file_path")
     c = _ruta(carpeta, "carpeta") if carpeta else (Path(fich).parent if fich else DATOS / "exportado")
     base = _seguro(nombre or Path(fich or _nombre(d)).stem) + "_final"

@@ -3258,9 +3258,15 @@ def _libre(carpeta, base):
         n += 1
 
 
-def exportarFinal(siril, carpeta, nombre=None, calidad=95):
-    """Paso 10 no lineal: TIFF 16 bits y JPG en 'carpeta' como <nombre>_final.tif/.jpg, sin sobrescribir."""
+def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False):
+    """Paso 10 no lineal: TIFF 16 bits y JPG en 'carpeta' como <nombre>_final.tif/.jpg, sin sobrescribir. Exige el cielo
+    entre 0,03 y 0,10 (fondo ajustado) salvo forzar."""
     info = H._info(siril)
+    p0 = H._pixeles(siril, info)
+    if not _lineal(p0):
+        cielo = float(_cielo(p0[:, ::4, ::4])["cielo"])
+        if not forzar and not 0.03 <= cielo <= 0.10:
+            raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,03–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
     dest = H._ruta(carpeta, "carpeta")
     base = str(nombre or Path(info["fichero"] or "imagen").stem)
     if not re.fullmatch(r"[\w .\-]+", base) or base.strip(". ") == "":
