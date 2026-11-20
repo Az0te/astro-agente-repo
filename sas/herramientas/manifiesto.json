@@ -1482,7 +1482,7 @@
    "nivel": "vista",
    "timeout_s": 1800,
    "paso": "lineal/15-starx.md",
-   "descripcion": "L15 estrellas: separa con StarNet o DarkStar (remove_stars), SyQon o StarXTerminator de RC Astro (motor starx, si está instalado: ver ping). La starless queda en la vista y las estrellas en una vista nueva (vistas_nuevas).",
+   "descripcion": "L15 estrellas: separa con StarXTerminator de RC Astro (por defecto, si está instalado: ver ping) o con StarNet, DarkStar o SyQon. No pases motor salvo que StarX falle: StarNet en lineal dejó estrellas en la starless de IC 405. La starless queda en la vista y las estrellas en una vista nueva (vistas_nuevas).",
    "params": {
     "type": "object",
     "properties": {
@@ -1493,11 +1493,13 @@
      "motor": {
       "type": "string",
       "enum": [
+       "auto",
+       "starx",
        "starnet",
        "darkstar",
-       "syqon",
-       "starx"
-      ]
+       "syqon"
+      ],
+      "description": "auto (por defecto): StarX si está RC Astro, si no StarNet."
      },
      "unscreen": {
       "type": "boolean",

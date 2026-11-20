@@ -1864,12 +1864,17 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
     m_obj = float(np.median(M.lum(p)[obj_px]))
 
+    def rg(q):                                   # color del objeto: R/G mediano en la zona del objeto
+        return float(np.median(q[0][obj_px])) / max(float(np.median(q[1][obj_px])), 1e-6) if q.shape[0] == 3 else 1.0
+    rg0 = rg(p)
+
     def medir(q):
         c = M.cielo(q)
         rgb = M.cielo_por_canal(q, cel) if q.shape[0] == 3 else [c["cielo"]]
         return {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
                 "objeto_mediana": _r(float(np.median(M.lum(q)[obj_px])), 4),
-                "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), **M.recortes(q)}
+                "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), "objeto_rg_x": _r(rg(q) / max(rg0, 1e-6), 3),
+                **M.recortes(q)}
 
     lista = []
     for t in sorted(cielos or [], reverse=True):
@@ -1892,6 +1897,11 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
         m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)
         x["no_cumple"] = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                           if m["ceros_nuevos_pct"] > ceros_max else [])
+        # Un punto negro muy distinto por canal (cielo teñido) cambia el color del OBJETO: IC 405 (20 nov 2026), bp
+        # [0,03, 0,12, 0,15] con el cielo cian se comió el verde y el azul de la nebulosa y el rojo salió R/G ×1,5.
+        if abs(m["objeto_rg_x"] - 1) > 0.15:
+            x["no_cumple"].append(f"cambia el color del objeto: R/G ×{m['objeto_rg_x']} (el cielo está teñido: corrige "
+                                  "la dominante antes, en lineal, con calibrarColor o neutralizarFondo sobre el cielo)")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
     if ok:
         # El más oscuro; a igual cielo, el que conserva los medios del objeto (+ medios).
