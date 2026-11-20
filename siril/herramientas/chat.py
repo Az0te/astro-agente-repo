@@ -67,6 +67,19 @@ APIS = {
                    "modelo": "llama-3.3-70b-versatile", "vision": False, "limite": 24000,
                    "web": "https://console.groq.com/keys"},
 }
+# RDNA-FAST (20 nov 2026): llama-server de este PC (AMD RX 7900, ROCm) por su API compatible con OpenAI, sin clave.
+# Modelo vacío = el que sirva el servidor (/v1/models); RDNA_FAST_MODELO lo fija. Sin razonamiento y temp 0.2, como el
+# Lite de PixInsight (IC 405 en PI: 22 min frente a 46 con Ollama). Arranque: README del Lite, «Motor local RDNA-FAST».
+RDNA = "RDNA-FAST (local, llama-server)"
+APIS[RDNA] = {"url": os.environ.get("RDNA_FAST_URL", "http://127.0.0.1:1234/v1").rstrip("/") + "/chat/completions",
+              "clave": "", "modelo": "", "vision": True, "limite": 70000, "local": True, "temperatura": 0.2,
+              "web": "https://github.com/serrynaimo/RDNA-FAST"}
+MAX_MALFORMADAS = 3                                     # llamadas mal formadas seguidas que se piden de nuevo
+MAL_FORMADA = ("Tu última respuesta tenía una llamada a herramienta mal formada (los argumentos no eran JSON válido, "
+               "probablemente cortados). Repite la llamada completa y bien formada, con argumentos cortos, o pasa al paso "
+               "siguiente.")
+MAX_FALLOS_HERRAMIENTA = 3                              # fallos seguidos de una herramienta antes de pedir que la deje
+RECORTE_BLOQUE = 0.6                                    # al desbordar, el historial se deja de una vez en el 60 % del límite
 MAX_IMAGENES = 6                                        # previas por resultado que se mandan a un modelo con visión
 MAX_RESULTADO = 6000                                    # caracteres de cada resultado que vuelven al modelo local
 MAX_EMPUJONES = 2                                       # turnos vacíos seguidos (todo en «thinking») que se reintentan
@@ -327,9 +340,12 @@ def _compactar(mensajes, guardar_ultimos=2, limite=LIMITE_TOKENS_LOCAL):
         for m in mensajes[1:-6]:
             if m.get("role") == "assistant" and len(m.get("content") or "") > 300:
                 m["content"] = m["content"][:300] + "…"
-    # Si aún no cabe, fuera los turnos más viejos (de dos en dos para no dejar un resultado sin su llamada).
+    # Si aún no cabe, fuera los turnos más viejos (de dos en dos para no dejar un resultado sin su llamada). En BLOQUE
+    # (20 nov 2026): hasta el 60 % del límite de una vez. Quitar dos en cada ronda cambiaba el principio del historial en
+    # cada petición y el servidor (Ollama, llama-server) no podía reutilizar su caché: releía todo.
     primera = next((i for i, m in enumerate(mensajes) if m.get("role") == "user"), 1)
-    while tokens() > limite and len(mensajes) > primera + 8:
+    tope = limite * RECORTE_BLOQUE if tokens() > limite else limite
+    while tokens() > tope and len(mensajes) > primera + 8:
         del mensajes[primera + 1:primera + 3]
         while len(mensajes) > primera + 1 and mensajes[primera + 1].get("role") == "tool":
             del mensajes[primera + 1]
@@ -409,8 +425,28 @@ def guardar_clave(variable, valor):
 
 
 def modelo_api(api):
-    return (os.environ.get(api["clave"].replace("_API_KEY", "_MODELO"), "").strip() or api.get("_modelo_vivo")
-            or api["modelo"])
+    var = api["clave"].replace("_API_KEY", "_MODELO") if api["clave"] else "RDNA_FAST_MODELO"
+    return os.environ.get(var, "").strip() or api.get("_modelo_vivo") or api["modelo"]
+
+
+def aviso_local(api, detalle=""):
+    base = api["url"].rsplit("/chat/", 1)[0]
+    return (f"RDNA-FAST no responde en {base}{' (' + detalle + ')' if detalle else ''}. Arranca llama-server de RDNA-FAST "
+            "(README del Lite de PixInsight, «Motor local RDNA-FAST») y descarga antes el modelo de Ollama "
+            "(ollama stop <modelo>): los dos no caben a la vez en la gráfica.")
+
+
+def modelo_servidor(api):
+    """Primer modelo que sirve un servidor local compatible con OpenAI (/v1/models)."""
+    try:
+        with urllib.request.urlopen(api["url"].rsplit("/chat/", 1)[0] + "/models", timeout=5) as f:
+            d = json.loads(f.read().decode("utf-8"))
+    except Exception as e:
+        raise RuntimeError(aviso_local(api, type(e).__name__)) from None
+    ids = [m.get("id") for m in d.get("data") or [] if isinstance(m, dict) and m.get("id")]
+    if not ids:
+        raise RuntimeError(aviso_local(api, "no sirve ningún modelo"))
+    return ids[0]
 
 
 def _espera_429(e, intento):
@@ -430,18 +466,31 @@ def _espera_429(e, intento):
     return min(120.0, 10.0 * 2 ** intento)
 
 
+class LlamadaMalFormada(RuntimeError):
+    """El servidor no pudo leer la llamada a herramienta que escribió el modelo (JSON de argumentos cortado)."""
+
+
 def pedir_api(api, modelo, mensajes, herramientas, emitir):
     """Una petición chat/completions. Devuelve (mensaje con role/content/tool_calls, tokens de entrada, de salida)."""
-    clave = clave_api(api["clave"])
-    if not clave:
+    local = bool(api.get("local"))
+    clave = "" if local else clave_api(api["clave"])
+    if not local and not clave:
         raise RuntimeError(f"Falta la clave: pulsa «Clave…» junto al modelo y pégala (se saca en {api['web']}), "
                            f"o crea la variable de entorno {api['clave']}.")
+    if local and not modelo:
+        modelo = api["_modelo_vivo"] = modelo_servidor(api)
     cuerpo = {"model": modelo, "messages": mensajes, "tools": herramientas}
+    if api.get("temperatura") is not None:
+        cuerpo["temperature"] = api["temperatura"]
+    if local:                                   # sin razonamiento, como con Ollama (think=false)
+        cuerpo["chat_template_kwargs"] = {"enable_thinking": False}
     datos = json.dumps(cuerpo).encode("utf-8")
+    cab = {"Content-Type": "application/json", "HTTP-Referer": "https://github.com/Az0te/astro-agente-repo",
+           "X-Title": "AstroPilot"}
+    if clave:
+        cab["Authorization"] = f"Bearer {clave}"
     for intento in range(6):
-        req = urllib.request.Request(api["url"], data=datos, headers={
-            "Content-Type": "application/json", "Authorization": f"Bearer {clave}",
-            "HTTP-Referer": "https://github.com/Az0te/astro-agente-repo", "X-Title": "AstroPilot"})
+        req = urllib.request.Request(api["url"], data=datos, headers=cab)
         try:
             with urllib.request.urlopen(req, timeout=900) as f:
                 r = json.loads(f.read().decode("utf-8"))
@@ -460,6 +509,10 @@ def pedir_api(api, modelo, mensajes, herramientas, emitir):
                 cuerpo["model"] = api["_modelo_vivo"] = nuevo.group(1)
                 datos = json.dumps(cuerpo).encode("utf-8")
                 continue
+            # 20 nov 2026 (IC 405 en SASpro con RDNA-FAST): llama-server responde 500 «Failed to parse tool call arguments
+            # as JSON» cuando el modelo corta los argumentos. Repetir la misma petición da lo mismo: se avisa al modelo.
+            if e.code in (400, 500) and re.search(r"tool call|arguments as JSON", e._cuerpo, re.I):
+                raise LlamadaMalFormada(e._cuerpo[:300]) from None
             if e.code in (429, 500, 502, 503, 504) and intento < 5:
                 s = _espera_429(e, intento)
                 emitir({"tipo": "aviso", "texto": f"La API respondió {e.code} ({'límite de uso' if e.code == 429 else 'ocupada'}): "
@@ -467,6 +520,10 @@ def pedir_api(api, modelo, mensajes, herramientas, emitir):
                 time.sleep(s)
                 continue
             raise RuntimeError(f"La API respondió {e.code}: {e._cuerpo[:600]}") from None
+        except urllib.error.URLError as e:
+            if local:
+                raise RuntimeError(aviso_local(api, str(e.reason))) from None
+            raise
     if r.get("error"):
         raise RuntimeError(f"La API devolvió un error: {json.dumps(r['error'], ensure_ascii=False)[:600]}")
     ch = (r.get("choices") or [{}])[0]
@@ -517,7 +574,7 @@ def _olvidar_imagenes(mensajes, guardar=2):
 
 class MotorLocal:
     """Ollama con herramientas: el bucle de llamadas lo hace este script, contra el puente. Con 'api' (una entrada de
-    APIS), lo mismo contra una API compatible con OpenAI con clave (Gemini, OpenRouter, Groq)."""
+    APIS), lo mismo contra una API compatible con OpenAI (Gemini, OpenRouter, Groq con clave; RDNA-FAST local sin ella)."""
 
     def __init__(self, modelo, api=None):
         self.api = api
@@ -526,10 +583,12 @@ class MotorLocal:
         self.funcs = manifiesto()
         self.timeouts = {f["nombre"]: int(f.get("timeout_s", 120)) for f in self.funcs}
         self.reg = None                          # registro de la sesión (sólo Ollama; se crea en el primer turno)
+        self.fallos = {}                         # fallos seguidos de cada herramienta (freno a los bucles)
 
     def limpiar(self):
         self.mensajes = []
         self.reg = None                          # Limpiar empieza otra sesión en el registro
+        self.fallos = {}
 
     def turno(self, texto, internet, emitir, cancelado, idioma="es"):
         sistema = {"role": "system", "content": prompt_sistema(self.funcs, internet, idioma)}
@@ -539,10 +598,15 @@ class MotorLocal:
             self.mensajes.append(sistema)
         self.mensajes.append({"role": "user", "content": texto})
         reg = None
-        if not self.api and registro_sesion and registro_sesion.activo():
+        local = bool(self.api and self.api.get("local"))
+        if local and not self.modelo:
+            self.modelo = self.api["_modelo_vivo"] = modelo_servidor(self.api)
+        if (not self.api or local) and registro_sesion and registro_sesion.activo():
             try:
                 if self.reg is None:
-                    self.reg = registro_sesion.RegistroSesion(DATOS.name.lstrip("."), self.modelo, REPO, idioma, emitir)
+                    self.reg = registro_sesion.RegistroSesion(DATOS.name.lstrip("."),
+                                                              f"RDNA-FAST · {self.modelo}" if local else self.modelo,
+                                                              REPO, idioma, emitir)
                 self.reg.sistema(sistema["content"])
                 self.reg.usuario(texto)
                 reg = self.reg
@@ -557,6 +621,7 @@ class MotorLocal:
         # reinician tras cada llamada) y, en HASTA EL FINAL, un cierre sin llamada y sin exportar se reanuda.
         hasta_final = bool(leer_ajustes().get("hasta_final"))
         racha, seguir, exportado = 0, 0, False
+        malformadas = 0
         t0 = time.time()
         for _ in range(rondas):
             if cancelado():
@@ -566,9 +631,21 @@ class MotorLocal:
             if self.api:
                 _olvidar_imagenes(self.mensajes)
                 _compactar(self.mensajes, limite=self.api["limite"])
+                if reg:
+                    reg.herramientas(herr)
                 self.modelo = self.api.get("_modelo_vivo") or self.modelo
-                m, ti, to = pedir_api(self.api, self.modelo, [{k: v for k, v in x.items() if not k.startswith("_")}
-                                                              for x in self.mensajes], herr, emitir)
+                try:
+                    m, ti, to = pedir_api(self.api, self.modelo, [{k: v for k, v in x.items() if not k.startswith("_")}
+                                                                  for x in self.mensajes], herr, emitir)
+                    malformadas = 0
+                except LlamadaMalFormada:
+                    malformadas += 1
+                    if malformadas > MAX_MALFORMADAS:
+                        raise
+                    emitir({"tipo": "aviso", "texto": f"El servidor no pudo leer la llamada del modelo (mal formada): se la "
+                                                      f"pido de nuevo ({malformadas} de {MAX_MALFORMADAS})."})
+                    self.mensajes.append({"role": "user", "content": MAL_FORMADA})
+                    continue
                 tok_in += ti
                 tok_out += to
                 llamadas = m.get("tool_calls") or []
@@ -673,6 +750,11 @@ class MotorLocal:
                 emitir({"tipo": "herramienta", "nombre": nombre, "args": args})
                 t1 = time.time()
                 try:
+                    # Freno (20 nov 2026, SASpro con RDNA-FAST: 203 resolverAstrometria fallidos cambiando la escala): tras
+                    # el aviso, una herramienta que sigue fallando ya no se ejecuta.
+                    if self.fallos.get(nombre, 0) >= MAX_FALLOS_HERRAMIENTA + 2:
+                        raise RuntimeError(f"{nombre} no se ejecuta: ha fallado {self.fallos[nombre]} veces seguidas en esta "
+                                           "tarea. Sigue con el paso siguiente sin ella o explica el bloqueo.")
                     if nombre == "ficha":
                         res = {"estado": "ok", "resultado": ficha(**args)}
                     else:
@@ -690,8 +772,17 @@ class MotorLocal:
                     exportado = exportado or res.get("estado") == "ok"
                 contenido = (f"[duración: {time.time() - t1:.1f} s]\n" + txt[:MAX_RESULTADO]
                              + ("…" if len(txt) > MAX_RESULTADO else ""))
+                self.fallos[nombre] = 0 if res.get("estado") == "ok" else self.fallos.get(nombre, 0) + 1
+                if self.fallos[nombre] >= MAX_FALLOS_HERRAMIENTA:
+                    contenido += (f"\nAVISO: {nombre} ha fallado {self.fallos[nombre]} veces seguidas, aunque cambiaras los "
+                                  "argumentos. No la vuelvas a llamar en esta tarea: sigue con el paso siguiente de la guía "
+                                  "sin ella, o explica el bloqueo.")
+                    emitir({"tipo": "aviso", "texto": f"{nombre} ha fallado {self.fallos[nombre]} veces seguidas: le pido "
+                                                      "al modelo que siga sin ella."})
                 if self.api:
                     self.mensajes.append({"role": "tool", "tool_call_id": ll.get("id"), "name": nombre, "content": contenido})
+                    if reg:
+                        reg.resultado(i_ll, nombre, contenido, res.get("estado"), txt, round(time.time() - t1, 1))
                     if self.api.get("vision") and res.get("estado") == "ok":
                         imagenes += [p for p in re.findall(r'"([^"]+?\.jpe?g)"', txt.replace("\\\\", "\\"))
                                      if p not in imagenes]
@@ -1289,7 +1380,9 @@ class Ventana(QMainWindow):
         self.modelo = QComboBox()
         self.modelo.addItems([LOCAL, CLAUDE, CODEX] + list(APIS))
         for i, (n, a) in enumerate(APIS.items()):
-            self.modelo.setItemData(self.modelo.findText(n), f"{modelo_api(a)} · clave en {a['clave']} ({a['web']})",
+            self.modelo.setItemData(self.modelo.findText(n),
+                                    f"llama-server local en {a['url'].rsplit('/chat/', 1)[0]}, sin clave ({a['web']})"
+                                    if a.get("local") else f"{modelo_api(a)} · clave en {a['clave']} ({a['web']})",
                                     Qt.ItemDataRole.ToolTipRole)
         self.modelo_local = QComboBox()
         locales = sorted(modelos_ollama(), key=lambda m: (not m.startswith(MODELO_LOCAL), m))
@@ -1309,7 +1402,7 @@ class Ventana(QMainWindow):
         self.modelo_local.currentTextChanged.connect(self.cambio_local)
         self.b_clave = QPushButton()
         self.b_clave.clicked.connect(self.pedir_clave)
-        self.b_clave.setVisible(self.modelo.currentText() in APIS)
+        self.b_clave.setVisible(self.modelo.currentText() in APIS and not APIS[self.modelo.currentText()].get("local"))
         self.internet = QCheckBox()
         self.internet.setChecked(bool(self.ajustes.get("internet")))
         self.internet.toggled.connect(self.cambio_internet)
@@ -1511,8 +1604,8 @@ class Ventana(QMainWindow):
                     self.modelo_local.setCurrentText(actual)
                 self.modelo_local.blockSignals(False)
         self.modelo_local.setVisible(nombre == LOCAL)
-        self.b_clave.setVisible(nombre in APIS)
-        if nombre in APIS:
+        self.b_clave.setVisible(nombre in APIS and not APIS[nombre].get("local"))
+        if nombre in APIS and not APIS[nombre].get("local"):
             self.b_clave.setText(self.T("clave") + (" ✓" if clave_api(APIS[nombre]["clave"]) else ""))
         self.guardar(modelo=nombre)
         self.limpiar()
