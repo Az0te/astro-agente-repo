@@ -895,6 +895,12 @@ static String JsonStringAfter( const String& json, const String& key )
    return json.Substring( p, q - p );
 }
 
+// Contexto de un modelo local: 98k con RDNA-FAST (llama-server en el puerto 1234, build 116); 32k con Ollama.
+static int LocalContextTokens( const PiAstroPilotModel& m )
+{
+   return (m.endpoint.Contains( u":1234/" ) || m.name.StartsWith( u"RDNA-FAST" )) ? 98304 : 32768;
+}
+
 // Modelos que aceptan imágenes: los de la nube (OpenAI) y Qwen 3.8, que en Ollama trae su codificador de imagen.
 static bool ModelSeesImages( const PiAstroPilotModel& m )
 {
@@ -1646,14 +1652,19 @@ bool PiAstroPilotInterface::StartHttp()
       }
    }
 
-   // Modelos locales (32k de contexto): se reservan 8.000 tokens para la
+   // Modelos locales (32k de contexto; RDNA-FAST, 98k): se reservan 8.000 tokens para la
    // respuesta y, si la conversación del Prompt no cabe en el resto, se
    // quitan los turnos más antiguos (se conservan el mensaje de sistema y el
    // último del usuario). Estimación: ~3,5 caracteres por token.
    const int localMaxTokens = 8000;
    if ( !model.IsCloud() )
    {
-      const size_type budgetChars = size_type( (32768 - localMaxTokens - 1000) * 3.5 );
+      const int contextTokens = LocalContextTokens( model );
+      const size_type budgetChars = size_type( (contextTokens - localMaxTokens - 1000) * 3.5 );
+      // Recorte en BLOQUE (build 116, 20 nov 2026): al pasarse se deja la conversación en el 60 % del presupuesto de una
+      // vez. Antes se quitaba lo justo en cada petición, el principio cambiaba siempre y el servidor (Ollama,
+      // llama-server) no podía reutilizar su caché: releía toda la conversación.
+      const size_type targetChars = size_type( budgetChars * 0.6 );
       auto totalChars = [this]()
       {
          size_type n = 0;
@@ -1679,7 +1690,7 @@ bool PiAstroPilotInterface::StartHttp()
          while ( keep + tail < m_history.size() )
          {
             size_type c = m_history[m_history.size() - 1 - tail].content.Length();
-            if ( fixedChars + tailChars + c > budgetChars )
+            if ( fixedChars + tailChars + c > targetChars )
                break;
             tailChars += c;
             ++tail;
@@ -2158,7 +2169,7 @@ void PiAstroPilotInterface::e_ProcessFinished( ExternalProcess& sender, int exit
       const JsonValue& u = res["usage"];
       if ( u["prompt_tokens"].type == JsonValue::Number )
       {
-         const int ctx = 32768, limite = 32768 - 8000 - 1000;   // mismo presupuesto que el recorte del historial
+         const int ctx = LocalContextTokens( m_job.model ), limite = ctx - 8000 - 1000;   // mismo presupuesto que el recorte del historial
          int usados = int( u["prompt_tokens"].n + u["completion_tokens"].n );
          contexto = String().Format( "%d / %d tokens (%d %%)", usados, ctx, int( 100.0*usados/ctx + 0.5 ) ) +
                     Tr( u". Hacia los " ) + String().Format( "%d", limite ) + Tr( u" se empiezan a recortar los mensajes más antiguos." );

@@ -172,7 +172,7 @@ bool PiAstroPilotModel::IsCloud() const
 
 static std::vector<PiAstroPilotModel> BuiltinModels()
 {
-   std::vector<PiAstroPilotModel> m( 4 );
+   std::vector<PiAstroPilotModel> m( 5 );
 
    m[0].name = "Claude";
    m[0].type = "claude";
@@ -202,6 +202,15 @@ static std::vector<PiAstroPilotModel> BuiltinModels()
    m[3].model = "gemini-3.5-flash-lite";
    m[3].keyEnv = "GEMINI_API_KEY";
    m[3].builtin = true;
+
+   // RDNA-FAST (build 116, 20 nov 2026): llama-server de este PC (AMD RX 7900, ROCm) por su API compatible con OpenAI,
+   // sin clave. Con Qwen3.8-27B IQ4_XS y 98k de contexto, IC 405 en el Lite tardó 22 min frente a 46 con Ollama. Arranque:
+   // README del Lite («Motor local RDNA-FAST»). Ve la imagen del último mensaje (mmproj), como Qwen en Ollama.
+   m[4].name = "RDNA-FAST (local, llama-server)";
+   m[4].type = "openai";
+   m[4].endpoint = "http://127.0.0.1:1234/v1/chat/completions";
+   m[4].model = "qwen/qwen3.8-27b";
+   m[4].builtin = true;
 
    return m;
 }
