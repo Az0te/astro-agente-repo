@@ -550,11 +550,15 @@
    "nivel": "lectura",
    "timeout_s": 1200,
    "paso": "lineal/09-correccion-gradiente.md",
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) (subsky de Siril con polinomio de grado 1 y 2 y con RBF, y GraXpert IA por su CLI si está instalado), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Si en la sesión se han abierto dos o más masters sin alinear, comprueba si ya vienen alineados (mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio); si no, se para y pide alinearMasters (Paso 5). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo.",
-   "resumen": "Paso 9: compara subsky polinomio/RBF y GraXpert IA, mide y recomienda; no cambia la imagen (aplicarCandidato).",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) (subsky de Siril con polinomio de grado 1 y 2 y con RBF, GraXpert IA por su CLI si está instalado, y SyQon DeepGradient por syqon-cli si SyQon Studio está instalado: necesita internet y tarda de 5 s a ~2 min; si no está o la casilla Internet está desmarcada va en omitidos), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Si en la sesión se han abierto dos o más masters sin alinear, comprueba si ya vienen alineados (mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio); si no, se para y pide alinearMasters (Paso 5). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo.",
+   "resumen": "Paso 9: compara subsky polinomio/RBF, GraXpert IA y SyQon DeepGradient, mide y recomienda; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
     "properties": {
+     "usar_syqon": {
+      "type": "boolean",
+      "description": "Probar SyQon DeepGradient (syqon-cli, necesita internet). Por defecto true si SyQon Studio está instalado."
+     },
      "polinomio": {
       "type": "array",
       "items": {
@@ -973,7 +977,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/06-noisex.md",
-   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril y NoiseX (si está instalado; GraXpert sólo si se pide) con no hacer nada. Lineal: denoise 0,5/0,7/1,0 y NoiseX 0,5, 0,3 ×2 y 0,5 ×2. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
+   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril, NoiseX (si está instalado; GraXpert sólo si se pide) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) con no hacer nada. Lineal: denoise 0,5/0,7/1,0, NoiseX 0,5, 0,3 ×2 y 0,5 ×2 y Prism. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
    "resumen": "Pasos 14 L / 6 NL: compara denoise 0,5/0,7/1,0/DA3D con nada (ruido y detalle); no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -984,6 +988,10 @@
        "type": "number"
       },
       "description": "Fuerzas del denoise de Siril, 0–1. Por defecto: lineal [0.5, 0.7, 1.0]; no lineal, más suave, [0.3, 0.5]."
+     },
+     "syqon": {
+      "type": "boolean",
+      "description": "Probar SyQon Prism Essential (syqon-cli). Por defecto true en lineal si SyQon Studio está instalado; en no lineal no se admite (va en omitidos)."
      },
      "da3d": {
       "type": "boolean",
@@ -1030,7 +1038,7 @@
    "nivel": "lectura",
    "timeout_s": 2400,
    "paso": "lineal/15-starx.md",
-   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y, solo si la imagen ya está ESTIRADA, también con SyQon Axiom Mini (syqon-cli; en lineal sale rota y va en omitidos), y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
    "resumen": "Paso 15: StarNet2 frente a StarX (restos, agujeros, objeto quitado); no cambia la imagen (aplicarCandidato devuelve la capa de estrellas).",
    "params": {
     "type": "object",
@@ -1041,10 +1049,11 @@
        "type": "string",
        "enum": [
         "starnet",
-        "starx"
+        "starx",
+        "syqon"
        ]
       },
-      "description": "Motores a comparar (por defecto los dos)."
+      "description": "Motores a comparar (por defecto starnet y starx, y syqon si la imagen está estirada y SyQon Studio instalado)."
      },
      "objeto_max": {
       "type": "number",

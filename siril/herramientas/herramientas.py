@@ -131,6 +131,13 @@ def ping(siril):
          "imagen_cargada": bool(siril.is_image_loaded()), "directorio": siril.get_siril_wd()}
     if r["imagen_cargada"]:
         r["imagen"] = _info(siril)
+    try:
+        import syqon
+        s = syqon.estado()
+        r["syqon"] = {"version": s.get("version"), "gratis": [m for m in syqon.GRATIS if m in s["modelos"]]} \
+            if s.get("disponible") else None
+    except Exception:
+        r["syqon"] = None
     return r
 
 

@@ -27,6 +27,7 @@ import numpy as np
 
 import herramientas as H
 import halo as _halo
+import syqon as _syqon
 
 TRABAJO = H.DATOS / "trabajo"
 CONFIG = H.DATOS / "config.json"
@@ -778,6 +779,30 @@ def _graxpert_denoise(siril, crudo, fuerza=0.5, timeout=1800):
     return _a_siril(np.clip(_de_siril(x), 0, 1), crudo.dtype).reshape(crudo.shape), " ".join(["GraXpert", *cmd[2:4], "denoising", "-strength", f"{float(fuerza):.2f}"])
 
 
+def _sin_internet():
+    return (H.DATOS / "sin-internet").exists()
+
+
+def _syqon_en(crudo, fn, **k):
+    """Lanza una variante de syqon.py (ruido, gradiente, estrellas, parallax) sobre 'crudo' y devuelve el dict de syqon con
+    los arrays ya en el tipo y el orden de Siril (salida, estrellas, gradiente)."""
+    out = fn(np.clip(_de_siril(crudo), 0, 1), **k)
+    for c in ("salida", "estrellas", "gradiente"):
+        if c in out:
+            x = out[c] if c != "gradiente" else out[c] - min(0.0, float(out[c].min()))
+            out[c] = _a_siril(np.clip(x, 0, 1), crudo.dtype).reshape(crudo.shape)
+    return out
+
+
+def _syqon_error(r, nombre, e):
+    """Errores de SyQon en los *Candidatos: con código 4 (licencia o modelo no disponible) el candidato se omite con su
+    motivo; lo demás va a errores. Nunca para el paso."""
+    if getattr(e, "codigo", None) == 4:
+        r.setdefault("omitidos", []).append(f"{nombre}: licencia o modelo no disponible en SyQon (código 4).")
+    else:
+        r["errores"].append(f"{nombre}: {e}")
+
+
 def _lum_fichero(siril, ruta, info):
     """Luminancia (alto, ancho) de un fichero, sin cambiar la imagen cargada."""
     return _leer_fichero(siril, H.ruta_legible(Path(ruta))[0], info).mean(axis=0)
@@ -861,9 +886,10 @@ def _exigir_alineado(siril, info, sin_alinear=False):
 
 
 def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True, muestras=20, tolerancia=1.0,
-                        ignorar_cunas=False, tipo=None, sin_alinear=False, halo=True, halo_opciones=None, diagnostico=True):
-    """Paso 9 lineal: compara subsky (polinomio y RBF), GraXpert IA y el polinomio fuera del halo (+ crominancia), mide y
-    recomienda. La imagen no cambia."""
+                        ignorar_cunas=False, tipo=None, sin_alinear=False, halo=True, halo_opciones=None, diagnostico=True,
+                        usar_syqon=True):
+    """Paso 9 lineal: compara subsky (polinomio y RBF), GraXpert IA, SyQon DeepGradient (si está instalado y hay internet)
+    y el polinomio fuera del halo (+ crominancia), mide y recomienda. La imagen no cambia."""
     info = H._info(siril)
     alineado = _exigir_alineado(siril, info, sin_alinear)
     crudo = _crudo(siril)
@@ -884,6 +910,13 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
                                                   f"-smooth={float(s)}"]) for s in (rbf or [])]
     if usar_graxpert:
         lista.append(("graxpert", "GraXpert IA", None))
+    if usar_syqon:
+        if not _syqon.hay("deep-gradient"):
+            r.setdefault("omitidos", []).append("SyQon DeepGradient: SyQon Studio no está instalado.")
+        elif _sin_internet():
+            r.setdefault("omitidos", []).append("SyQon DeepGradient: necesita internet y la casilla Internet está desmarcada.")
+        else:
+            lista.append(("syqon", "SyQon DeepGradient", None))
     n = 0
     try:
         for metodo, nombre, cmd in lista:
@@ -894,6 +927,13 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
                     siril.cmd(*cmd)
                     res = _crudo(siril)
                     texto = " ".join(cmd)
+                elif metodo == "syqon":
+                    try:
+                        sq = _syqon_en(crudo, _syqon.gradiente)
+                    except _syqon.ErrorSyQon as e:
+                        _syqon_error(r, nombre, e)
+                        continue
+                    res, texto = sq["salida"], sq["comando"] + " (necesita internet)"
                 else:
                     res, texto = _graxpert_ia(siril, info, crudo)
                 m = _medir_gradiente(base, _pantalla(res, info))
@@ -1618,9 +1658,10 @@ def _medir_starless(base, z, sl, est):
             "capa_estrellas_media": _r(float(_lum(est).mean()), 6) if est is not None else None}
 
 
-def estrellasCandidatos(siril, motores=("starnet", "starx"), objeto_max=2.0, tipo=None):
-    """Paso 15 lineal: quita las estrellas con StarNet y con StarX (los que estén instalados), mide y recomienda.
-    La imagen no cambia: aplicarCandidato(id) pone la starless elegida y devuelve su capa de estrellas."""
+def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None):
+    """Paso 15 lineal: quita las estrellas con StarNet y con StarX (los que estén instalados) y, sobre imagen ESTIRADA,
+    también con SyQon Axiom Mini; mide y recomienda. La imagen no cambia: aplicarCandidato(id) pone la starless elegida y
+    devuelve su capa de estrellas."""
     info = H._info(siril)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
@@ -1632,12 +1673,25 @@ def estrellasCandidatos(siril, motores=("starnet", "starx"), objeto_max=2.0, tip
     wd = _carpeta_capas(siril, info)
     base = Path(info["fichero"] or "imagen").stem
     r = {"lineal": lineal, "candidatos": [], "errores": []}
+    if motores is None:
+        motores = ("starnet", "starx") + (("syqon",) if not lineal and _syqon.hay("axiom-mini") else ())
+    if lineal and "syqon" in motores:
+        motores = tuple(m for m in motores if m != "syqon")
+        r.setdefault("omitidos", []).append("SyQon Axiom Mini: solo sobre imagen estirada (en lineal la starless sale plana "
+                                            "o con rejilla magenta). Separa después de estirar para compararlo.")
     n = 0
     for m in motores:
         n += 1
         t0 = time.perf_counter()
         try:
-            if m == "starnet":
+            if m == "syqon":
+                try:
+                    sq = _syqon_en(crudo, _syqon.estrellas)
+                except _syqon.ErrorSyQon as e:
+                    _syqon_error(r, "SyQon Axiom Mini", e)
+                    continue
+                sl, st, texto, nombre = sq["salida"], sq.get("estrellas"), sq["comando"], "SyQon Axiom Mini"
+            elif m == "starnet":
                 sl, st, texto = _separar_starnet2(siril, info, crudo, lineal, False)
                 nombre = "StarNet2"
             elif m == "starx":
@@ -1646,7 +1700,7 @@ def estrellasCandidatos(siril, motores=("starnet", "starx"), objeto_max=2.0, tip
                 st = next(iter(out.values())) if out else None
                 nombre = "StarX"
             else:
-                raise ValueError("motor desconocido (starnet, starx)")
+                raise ValueError("motor desconocido (starnet, starx, syqon)")
             if st is None:                                  # capa = original − starless
                 st = _a_siril(np.clip(_de_siril(crudo) - _de_siril(sl), 0, 1), crudo.dtype).reshape(crudo.shape)
             f_est = os.path.join(wd, f"starmask_{base}_{m}.fit")
@@ -2329,8 +2383,9 @@ def _recortes(p):
 # --- L14 / NL6: reducción de ruido ---------------------------------------------------------------------------
 
 def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=None, graxpert=None,
-                           perdida_limpia=2.0, tipo=None):     # tipo: se admite (el modelo lo pasa) y no cambia nada
-    """Paso 14 lineal / 6 no lineal: compara denoise de Siril a varias fuerzas (y DA3D) con 'nada'. No cambia la imagen."""
+                           perdida_limpia=2.0, tipo=None, syqon=None):   # tipo: se admite (el modelo lo pasa) y no cambia nada
+    """Paso 14 lineal / 6 no lineal: compara denoise de Siril a varias fuerzas (y DA3D), NoiseX, GraXpert y SyQon Prism
+    (solo lineal) con 'nada'. No cambia la imagen."""
     info = H._info(siril)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
@@ -2431,6 +2486,19 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
                 medir(res, f"GraXpert denoise {float(gf):g}", texto, t1, n)
             except Exception as e:
                 r["errores"].append(f"GraXpert denoise {gf}: {e}")
+        # SyQon Prism Essential (22 nov 2026): solo lineal (en no lineal syqon-cli da código 2). Por defecto si está.
+        if syqon is None:
+            syqon = lineal and _syqon.hay("prism-essential")
+        if syqon and not lineal:
+            r.setdefault("omitidos", []).append("SyQon Prism: solo admite imagen lineal.")
+        elif syqon:
+            n += 1
+            t1 = time.perf_counter()
+            try:
+                sq = _syqon_en(crudo, _syqon.ruido)
+                medir(sq["salida"], "SyQon Prism Essential", sq["comando"], t1, n)
+            except _syqon.ErrorSyQon as e:
+                _syqon_error(r, "SyQon Prism Essential", e)
         if da3d is None:
             # En IC 1396 (25 MP) el normal tardó 12 s y DA3D 268 s (~20×): por defecto solo si el normal es muy rápido.
             da3d = t_den < 5
