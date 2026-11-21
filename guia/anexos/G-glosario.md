@@ -8,6 +8,7 @@ Términos que la guía usa sin explicar. Las definiciones son de uso común en a
 |---|---|
 | **ABE / DBE** | Extracción de fondo automática / dinámica (PixInsight). DBE coloca muestras a mano; nunca sobre nebulosa. |
 | **Astrometría / WCS** | Solución que sitúa la imagen en el cielo (RA, Dec, escala, rotación). La necesitan SPCC, SPFC y MGC. |
+| **Cielo / mediana / fondo** | **cielo** = mediana de las celdas más oscuras de la imagen; **mediana** = la de toda la imagen; **fondo final** = el del Paso 5 no lineal; todo en escala 0–1 (0,10 = 10 % del rango). Cielo objetivo tras el estirado: 0,10 en nebulosas y cúmulos, 0,07 en galaxias. |
 | **Bayer / CFA / debayer** | Mosaico de filtros sobre el sensor (OSC) y su reconstrucción a color por interpolación (VNG en esta guía). |
 | **BXT** | BlurXTerminator (RC-Astro): deconvolución por IA. "Correct Only" corrige la óptica sin tocar lo no estelar. |
 | **CFA flat scaling** | Ajuste de WBPP que conserva la escala relativa de cada canal Bayer en los flats. |

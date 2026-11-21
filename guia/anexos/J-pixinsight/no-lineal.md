@@ -12,7 +12,7 @@ Ficha: [no-lineal/01-estirado.md](../../no-lineal/01-estirado.md)
 **Campos llenos de nebulosa.** Cuando más del 60 % de las celdas de 64 px tienen señal sobre el cielo, `estirarCapas` pone el punto de simetría del GHS en la **señal débil** (celdas entre los percentiles 60 y 85), no en el cielo. `r.simetria` dice cuál usó y el % de celdas con señal; `simetria: "debil" | "cielo"` lo fuerza. Con la simetría en el cielo, la nebulosa débil quedaba apagada. En una nebulosa de emisión con RGB + dual band (11 nov 2026, mismo cielo 0,10 y mismo límite de ruido) separó 6,6 ruidos frente a 5,7, y en el recorte de la comparación 8,5 frente a 7,0. En galaxias no se activa sola.
 
 
-**Centro quemado en una nebulosa** (nov 2026): `estirarStarless(raya, { cielo: 0.10, simetria: "debil", altoMax: 0.002 })` repite el GHS al fallo con la simetría en la señal débil, parando cuando más del 0,002 % de los píxeles pasa de 0,95 (por defecto 0,05 %). Mismo método en las tres rayas para no cambiar la paleta.
+**Centro quemado en una nebulosa** (nov 2026): `estirarStarless` con `{"cielo": 0.1, "simetria": "debil", "altoMax": 0.002}` sobre cada raya repite el GHS al fallo con la simetría en la señal débil, parando cuando más del 0,002 % de los píxeles pasa de 0,95 (por defecto 0,05 %). Mismo método en las tres rayas para no cambiar la paleta.
 
 **Comparar métodos** (`estirarCandidatos(starless, { cielo })`, mismo fichero): prueba sobre copias GHS al fallo (con la simetría en el cielo y en la señal débil, `ghs_debil`), MultiscaleAdaptiveStretch (sin su saturación, que va después) y ArcsinhStretch (factor por bisección y punto negro bajo el cielo del canal más bajo), y los lleva todos al mismo cielo para comparar en igualdad. Gana, entre los que no fallan (ruido del cielo, recortes, dominante), el que más separa la señal débil del fondo: `senal_debil_en_ruidos` = (p90 − cielo) / ruido del cielo. La tabla va en `comparados`; con `cerrar: false` se conservan todos para mirarlos. La capa de estrellas va en el Paso 8.
 
@@ -22,7 +22,7 @@ Ficha: [no-lineal/01-estirado.md](../../no-lineal/01-estirado.md)
 ]}
 ```
 
-Opciones: `metodos` ("ghs", "mas", "arcsinh"), `mas`.
+Opciones: `metodos` (por defecto los cuatro: `["ghs", "ghs_debil", "mas", "arcsinh"]`), `mas`, `ruidoMax`, `cerrar`.
 
 ```json
 {"llamadas": [
@@ -60,7 +60,15 @@ Ficha: [no-lineal/02-lrgb-paleta.md](../../no-lineal/02-lrgb-paleta.md)
 ```
 
 
-- Con la elegida: aplicar la misma fórmula con PixelMath a resolución completa. **En una llamada** (`herramientas/bandaestrecha.js`): `componerPaleta({ S, H, O }, { paleta: "SHO", estrellas })`. Devuelve la paleta **sin estrellas** (la `estrellas` sólo se anota para el final): después `colorCandidatos(paleta)` (o `saturarAlFallo`), `estirarEstrellasCandidatos(capa de estrellas RGB lineal, { starlessActual: paleta })` (nunca sobre la paleta: da error) y `recombinarEstrellas(paleta saturada, estrellas elegidas)`. Si G domina (la raya del verde, casi siempre Hα, manda) aplica SCNR Average Neutral 0,8 y da G/max(R,B) antes y después; `verde: 1` lo apura, `verde: false` lo deja. Paletas: SHO, HSO, OHS, HOS, SOH, OSH, HOO (Soft/Neutral/Hard), HOO_NOVA, FORAXX, FORAXX_BICOLOR, las siete familias Foraxx de AutoPalette Studio (FORAXX_SHO, _HOS, _OHS, _HOO, _HSO, _OSH, _SOH) y sus 42 variantes FORAXX_<familia>_<variante>, copiadas del script instalado (`paletasDisponibles()`); sin SII real las de S usan el SII sintético y salen marcadas pseudo. Antes, para cada raya desmezclada (mono): `separarEstrellas` y `estirarStarless(starless, { cielo: 0.10 })`; la RGB, con SPCC, da las estrellas (capa lineal de `separarEstrellas`, estirada en el Paso 8 con `estirarEstrellasCandidatos`). Si el usuario ya ha dicho la paleta, no hacen falta previas.
+- Con la elegida: aplicar la misma fórmula con PixelMath a resolución completa. **En una llamada** (`herramientas/bandaestrecha.js`): `componerPaleta`, con `capas` como OBJETO (`{"S": …, "H": …, "O": …}`, no lista):
+
+```json
+{"llamadas": [
+  {"funcion": "componerPaleta", "parametros": {"capas": {"S": "SII_st", "H": "Ha_st", "O": "OIII_st"}, "opciones": {"paleta": "SHO", "estrellas": "Stars_st"}}}
+]}
+```
+
+Devuelve la paleta **sin estrellas** (la `estrellas` sólo se anota para el final): después `colorCandidatos(paleta)` (o `saturarAlFallo`), `estirarEstrellasCandidatos(capa de estrellas RGB lineal, { starlessActual: paleta })` (nunca sobre la paleta: da error) y `recombinarEstrellas(paleta saturada, estrellas elegidas)`. Si G domina (la raya del verde, casi siempre Hα, manda) aplica SCNR Average Neutral 0,8 y da G/max(R,B) antes y después; `verde: 1` lo apura, `verde: false` lo deja. Paletas: SHO, HSO, OHS, HOS, SOH, OSH, HOO (Soft/Neutral/Hard), HOO_NOVA, FORAXX, FORAXX_BICOLOR, las siete familias Foraxx de AutoPalette Studio (FORAXX_SHO, _HOS, _OHS, _HOO, _HSO, _OSH, _SOH) y sus 42 variantes FORAXX_<familia>_<variante>, copiadas del script instalado (`paletasDisponibles()`); sin SII real las de S usan el SII sintético y salen marcadas pseudo. Antes, para cada raya desmezclada (mono): `separarEstrellas` y `estirarStarless(starless, { cielo: 0.10 })`; la RGB, con SPCC, da las estrellas (capa lineal de `separarEstrellas`, estirada en el Paso 8 con `estirarEstrellasCandidatos`). Si el usuario ya ha dicho la paleta, no hacen falta previas.
 
 <a id="no-lineal-03"></a>
 ### Fase no lineal · Paso 3: SCNR
@@ -151,7 +159,7 @@ Por defecto: capas 7, mezcla 0,6, mascaraDesde 0,35. Devuelve meseta antes y des
 ]}
 ```
 
-Opciones de `nucleoCandidatos`: `exponentes` ([0.6, 0.4]), `mascaraDesde`, `cerrar`. La tabla está en `comparados`.
+Opciones de `nucleoCandidatos`: `exponentes` (por defecto `[0.6]`; p. ej. `[0.6, 0.4]` para probar dos), `capas`, `mezcla`, `mascaraDesde`, `cerrar`. La tabla está en `comparados`.
 
 **Nombres de PixInsight.** Contraste local por ecualización adaptativa = LocalHistogramEqualization (LHE; `radius`, `amount`, `slopeLimit`); compresión multiescala = HDRMultiscaleTransform (HDRMT, con 'median transform' para campos ricos en estrellas); compresión por gradiente = GradientHDRCompression; realces del fondo débil y de estructuras oscuras = BackgroundEnhance y DarkStructureEnhance (DSE). La máscara de fondo para contraste local es `crearMascara(..., { tipo: "fondo_lhe" })`.
 
@@ -171,9 +179,21 @@ Para las curvas, `CurvesTransformation`: cada curva es una lista de pares `[x, y
 
 **Realces de los scripts BackgroundEnhance y DarkStructureEnhance** (`herramientas/realces.js`, también como herramientas del MCP; mismo resultado que los scripts)
 
-- *Cómo: `backgroundEnhance("SL_v2", { amount: 0.3 })` en una copia; subir `amount` (0,5 en el script) mientras sólo suba la nebulosidad; `maskAmount` (0,6) más alto protege más lo brillante. No usar si el fondo es sólo ruido o queda gradiente residual: lo amplifica.
+```json
+{"llamadas": [
+  {"funcion": "backgroundEnhance", "parametros": {"vista": "Starless_st", "opciones": {"amount": 0.3, "nuevaVista": "Starless_be"}}}
+]}
+```
 
-- *Cómo: primero `darkStructureEnhance("SL_v3", { keepMask: true })` y mirar la máscara: si sigue estructuras reales, vale; si es ruido moteado o rodea bordes brillantes (lo que pasó en una nebulosa de emisión y reflexión, ver abajo), deshacer y usar LHE con máscara. `median` 0,6–0,7 (0,5 no cambia nada; más alto oscurece más), `iterations` 1, `layers` 8 (6 para estructuras menores).
+- *Cómo (BackgroundEnhance): con `nuevaVista` en una copia (sin ella cambia la propia vista); subir `amount` (0,5 en el script) mientras sólo suba la nebulosidad; `maskAmount` (0,6) más alto protege más lo brillante. No usar si el fondo es sólo ruido o queda gradiente residual: lo amplifica.
+
+```json
+{"llamadas": [
+  {"funcion": "darkStructureEnhance", "parametros": {"vista": "Starless_st", "opciones": {"keepMask": true, "nuevaVista": "Starless_dse"}}}
+]}
+```
+
+- *Cómo (DarkStructureEnhance): primero con `keepMask` y mirar la máscara: si sigue estructuras reales, vale; si es ruido moteado o rodea bordes brillantes (lo que pasó en una nebulosa de emisión y reflexión, ver abajo), deshacer y usar LHE con máscara. `median` 0,6–0,7 (0,5 no cambia nada; más alto oscurece más), `iterations` 1, `layers` 8 (6 para estructuras menores).
 
 - **Comparar en una llamada** (`contrasteCandidatos("Starless_st")`, `herramientas/realces.js`): sobre copias, LHE radio 64 (pendiente 1,5, amount 0,35) y radio 128 (pendiente 2,0, amount 0,35), HDRMT de 6 capas sobre la luminosidad mezclado al 50 % y DarkStructureEnhance (median 0,7). Mide en todos el contraste local (rango p10–p90 en celdas de 64 px con señal), el ruido y el nivel del cielo y los píxeles quemados. Gana el que más sube el contraste sin subir el ruido del cielo más de un 25 % (`ruidoMax`), sin mover el cielo más de 0,03 ni quemar; si ninguno cumple, recomienda no tocar la imagen. En una nebulosa de emisión y reflexión sin calibrar (8 nov 2026) ganó LHE radio 64 (contraste ×1,15, ruido ×1,18); el radio 128 subía el ruido ×1,35 y HDRMT bajaba el cielo de 0,10 a 0,07. Las recetas de abajo valen como candidatos a mano (`lhe: [{ radius, slopeLimit, amount }]`).
 
@@ -220,7 +240,13 @@ Devuelve `candidatos` (vista, `tamano_x` y `saturacion_x` conseguidos frente a l
 ]}
 ```
 
-**`starStretch`** (Star Stretch de SetiAstro, mismo resultado que el script): `starStretch("Stars_v1", { amount: 2, saturation: 1, removeGreen: false })` sobre una copia, sólo si se pide. Alternativa: ArcsinhStretch.
+**`starStretch`** (Star Stretch de SetiAstro, mismo resultado que el script): sobre **la propia vista** de estrellas lineal (con historial, no hace copia), sólo si se pide. Alternativa: ArcsinhStretch.
+
+```json
+{"llamadas": [
+  {"funcion": "starStretch", "parametros": {"vista": "Stars", "opciones": {"amount": 2, "saturation": 1, "removeGreen": false}}}
+]}
+```
 
 **Preparación sola** (`prepararEstrellas`, la usa `estirarEstrellasCandidatos` en cada candidato): sobre una copia de la capa ya estirada hace la limpieza de residuos, el suelo (por defecto `suelo: "color"`: uno común sobre el máximo de R, G y B, que conserva el tono; `"canal"` = el suelo por canal anterior, que exagera el tono de las estrellas débiles en campos densos; `false` = sin suelo), la saturación (`saturacion: true` = la curva; un número s = `c' = L + s·(c − L)`; `false` = nada; antes de nov 2026 los números se ignoraban) y comprime las luces por encima de 0,80 hasta 0,97 (núcleos neutros, sin recorte brusco); opcionales `halosMagenta: true` y `atenuar: 0.35`. Devuelve las medidas antes y después y el control. El p90 depende del estirado de la capa.
 
@@ -261,7 +287,7 @@ Ficha: [no-lineal/09-recombinacion.md](../../no-lineal/09-recombinacion.md)
 Screen con k: `{"metodo": "screen", "k": 0.55}`. Devuelve el método, fondo, recorte, aporte de las estrellas (y en %), `no_cumple` y el control (medido y revisar a ojo).
 
 
-- **ScreenStars** (`realces.js`, herramienta MCP): `screenStarsCombine("Starless", "Stars", { newId: "Final" })` crea la imagen recombinada con screen (`method: "add"` para suma). Si la starless está estirada (mediana > 0,005), lleva las dos capas a casi lineal con una MTF, combina ahí y vuelve a estirar con la inversa (`reverseStretch: false` lo desactiva): las estrellas se integran mejor que con el screen directo. Es la opción por defecto; `method: "add"` sólo con capas lineales, y el PixelMath de abajo para dosificar las estrellas con fuerza `k`. Control: el fondo de la imagen recombinada nunca baja respecto a la starless.
+- **ScreenStars** (`realces.js`, herramienta MCP): `screenStarsCombine("Starless", "Stars", { newId: "Final" })` crea la imagen recombinada con screen (`method: "add"` para suma). Si la starless está estirada (mediana > 0,005), lleva las dos capas a casi lineal con una MTF, combina ahí y vuelve a estirar con la inversa (`reverseStretch: false` lo desactiva): las estrellas se integran mejor que con el screen directo. Es la opción por defecto; `method: "add"` sólo con capas lineales, y el PixelMath de arriba (screen con fuerza k) para dosificar las estrellas con fuerza `k`. Control: el fondo de la imagen recombinada nunca baja respecto a la starless.
 
 <a id="no-lineal-10"></a>
 ### Fase no lineal · Paso 10: Recorte y exportación

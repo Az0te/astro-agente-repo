@@ -43,7 +43,7 @@ Ficha: [lineal/01-analisis-del-objeto.md](../../lineal/01-analisis-del-objeto.md
 
 Ficha: [lineal/02-inventario.md](../../lineal/02-inventario.md)
 
-**En una llamada** (`herramientas/preproceso.js`): `inventario(carpeta del objeto, { darks, aliasFiltros })` lee sólo las cabeceras de todas las subcarpetas, en ~1 s para 1100 ficheros. Se salta `_proc`, `_rechazados` y las salidas de WBPP. Devuelve:
+**En una llamada** (`herramientas/preproceso.js`): `inventario` (`carpeta` del objeto; `opciones`: `darks`, `aliasFiltros`, `excluir`) lee sólo las cabeceras de todas las subcarpetas, en ~1 s para 1100 ficheros. Se salta `_proc`, `_rechazados` y las salidas de WBPP. Devuelve:
 - el equipo: cámara, OSC o mono, píxel, focal, escala y programa de captura;
 - un grupo de lights por noche, filtro, exposición, gain, offset, binning y telescopio, con horas, temperaturas, rotador y cuántos flats y darks compatibles tiene;
 - la calibración disponible y las horas por filtro y exposición.
@@ -80,11 +80,11 @@ Ficha: [lineal/04-preprocesado.md](../../lineal/04-preprocesado.md)
 
 **En una llamada (PixInsight 1.9.6+)** (`herramientas/preproceso.js`):
 
-1. `revisarCalibracion({ lights, flats, flatDarks, darks, bias })` lee las cabeceras sin abrir ventanas y mide unos pocos flats por canal Bayer. Avisa en `no_cumple` si falta el dark de la exposición de los lights, si los flats son de otro filtro o de otro telescopio (`TELESCOP`), si faltan darks de flats o bias, si un flat está saturado o si la temperatura varía más de 2 °C. Un flat por encima de 0,85 en un canal va a `revisar_a_ojo`. Los masters sin palabras clave se leen de sus propiedades XISF o del nombre ("Master Dark 300s -10C 100Ga 50Of").
-2. `lanzarWBPP({ lights, flats, flatDarks, darks, salida })` **sin `confirmar: true` no lanza nada**: devuelve el plan (noches, lights, flat de cada noche y filtro, darks, salida) con `esperando_confirmacion`. Se enseña al usuario y se para con «PARO:» hasta su visto bueno; sin parar sólo si pidió el procesado completo hasta el final. Con `confirmar: true` arranca WBPP en **otra instancia de PixInsight en modo automatización**, que se cierra sola al acabar. No bloquea la sesión. En `lights` se puede pasar `lista_aprobados` de `seleccionarSubs` (Paso 3). La salida tiene que ser una **ruta corta**: Windows no crea ficheros de más de 256 caracteres. El resto de ajustes (drizzle, normalización local, autocrop) son los últimos guardados en WBPP; se cambian con `parametros` (nombres de la ayuda de automatización, Alt+A en la ventana de WBPP).
+1. `revisarCalibracion` (todo dentro de `calibracion`: `lights`, `flats`, `flatDarks`, `darks`, `bias`, `aliasFiltros`) lee las cabeceras sin abrir ventanas y mide unos pocos flats por canal Bayer. Avisa en `no_cumple` si falta el dark de la exposición de los lights, si los flats son de otro filtro o de otro telescopio (`TELESCOP`), si faltan darks de flats o bias, si un flat está saturado o si la temperatura varía más de 2 °C. Un flat por encima de 0,85 en un canal va a `revisar_a_ojo`. Los masters sin palabras clave se leen de sus propiedades XISF o del nombre ("Master Dark 300s -10C 100Ga 50Of").
+2. `lanzarWBPP` (todo dentro de `wbpp`: `lights`, `flats`, `flatDarks`, `darks`, `salida`, `confirmar`…) **sin `confirmar: true` no lanza nada**: devuelve el plan (noches, lights, flat de cada noche y filtro, darks, salida) con `esperando_confirmacion`. Se enseña al usuario y se para con «PARO:» hasta su visto bueno; sin parar sólo si pidió el procesado completo hasta el final. Con `confirmar: true` arranca WBPP en **otra instancia de PixInsight en modo automatización**, que se cierra sola al acabar. No bloquea la sesión. En `lights` se puede pasar `lista_aprobados` de `seleccionarSubs` (Paso 3). La salida tiene que ser una **ruta corta**: Windows no crea ficheros de más de 256 caracteres. El resto de ajustes (drizzle, normalización local, autocrop) son los últimos guardados en WBPP; se cambian con `parametros` (nombres de la ayuda de automatización, Alt+A en la ventana de WBPP).
 3. `estadoWBPP(salida)`: repetir hasta `terminado: true`; entonces abre el master de lights (el recortado si lo hay) con un STF automático. Resume el log: pasos con éxitos y fallos, errores, avisos, ficheros fallidos, masters generados y qué master dark y flat usó cada grupo.
 
-**Varias noches con un flat por noche** (`sesiones`). WBPP en automatización empareja flats y lights por filtro y por palabras clave. Con cabeceras incompletas (DWARF: lights sin `IMAGETYP`, master flats sin `FILTER` ni `IMAGETYP`) no sabe qué flat va con cada noche. `lanzarWBPP({ sesiones: "auto", lights: <carpeta con una subcarpeta por noche>, flats, darks, salida, referencia, agrupar })` monta `<salida>/_entrada` con **enlaces duros** (no copia datos; la salida tiene que ir en el mismo disco que los subs) y pone en la ruta lo que falta en la cabecera: `LIGHT/NOCHE_N1-20260911/…` y `FLAT/NOCHE_N1-20260911/FILTER_Duo-Band/masterFlat….xisf`. WBPP lee el tipo y el filtro de la ruta cuando la cabecera no los trae, y la palabra clave `NOCHE` siempre: cada noche se calibra con su flat.
+**Varias noches con un flat por noche** (`sesiones`). WBPP en automatización empareja flats y lights por filtro y por palabras clave. Con cabeceras incompletas (DWARF: lights sin `IMAGETYP`, master flats sin `FILTER` ni `IMAGETYP`) no sabe qué flat va con cada noche. `lanzarWBPP` con `wbpp`: `{ sesiones: "auto", lights: <carpeta con una subcarpeta por noche>, flats, darks, salida, referencia, agrupar }` monta `<salida>/_entrada` con **enlaces duros** (no copia datos; la salida tiene que ir en el mismo disco que los subs) y pone en la ruta lo que falta en la cabecera: `LIGHT/NOCHE_N1-20260911/…` y `FLAT/NOCHE_N1-20260911/FILTER_Duo-Band/masterFlat….xisf`. WBPP lee el tipo y el filtro de la ruta cuando la cabecera no los trae, y la palabra clave `NOCHE` siempre: cada noche se calibra con su flat.
 
 - Con lights en más de una carpeta o con masters en FITS, `lanzarWBPP` pasa sola a `sesiones: "auto"`: sin ellas WBPP rechaza los masters FITS y calibraría sin flats. Con varios filtros por noche (mono), cada filtro lleva el flat de su noche.
 - `sesiones: "auto"`: una noche por carpeta de lights (o por `DATE-OBS` si están todos en una). Si la carpeta de la noche tiene `FLAT` al lado, se usa ese flat. Si no, de los de `flats` se usa el último de la misma noche o de una anterior, según `DATE-OBS` o la fecha del nombre. La noche cuenta desde las 12:00, así que una toma de la 01:00 es de la noche anterior. También se puede dar la lista `[{ lights, flats, darks, nombre }]`.
@@ -299,6 +299,17 @@ En MGC, si la nebulosa aparece en el modelo, subir la escala; si aparece en nega
 
 Ficha: [lineal/10-combinacion-rgb-nb.md](../../lineal/10-combinacion-rgb-nb.md)
 
+**Secuencia en PixInsight con RGB + Hα (y OIII) para inyectar** (la piden las herramientas: `medirContinuo` necesita las dos capas con estrellas; `restarContinuo` y `inyectarHa`, sin estrellas):
+
+1. Antes del Paso 11, si hay que juntar masters del mismo canal o R, G y B mono: `combinarMasters` con `"inyectar": false`.
+2. `bxtCorrectOnly` (11) y `calibrarColor` (12) de la RGB sola; `bxtCandidatos` → `bxtAplicar` (13) de la RGB y de cada raya.
+3. `medirContinuo` (16) con la raya y la RGB calibrada, las dos con estrellas.
+4. `separarEstrellas` (15) de la RGB y de cada raya, con su `ruidoCandidatos` / `reducirRuido`.
+5. `restarContinuo` (16) sobre las dos starless → `Ha_CS`.
+6. `inyectarHa` (10) con la starless de la RGB y `Ha_CS` (y `oiii`) → `checkpointLineal` (17).
+
+`combinarMasters` con RGB + Hα inyecta en el acto: no usarlo con la RGB sin calibrar; tras el Paso 16, `inyectarHa` directamente.
+
 **En una llamada, con todos los masters** (`herramientas/combinacion.js`): `combinarMasters(carpeta o lista, { tipo })` trabaja con 2 a 8 masters alineados (Paso 5); LRGB son 4.
 - Abre cada master y lo clasifica por su filtro (`FILTER` o el nombre): L, R, G, B, Hα, OIII, SII, Hβ o RGB (color). Si no reconoce un filtro, se le indica en `clases`.
 - Combina lo que toca en lineal:
@@ -313,7 +324,7 @@ Comprobado con una nebulosa dual band: con R, G y B mono los junta en `RGB_comb`
 **Las piezas, sobre vistas** (sobre copias):
 
 - `combinarMismoCanal(a, b, { nuevaVista })`: dos masters del mismo canal, alineados. LinearFit del segundo al primero y suma pesada por 1/σ² (ruido MRS); avisa si el ruido apenas baja (< 2 %) o si las estrellas empeoran más de un 10 %.
-- `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, oiii, alfaOIII, clipLow })`: RGB y Hα lineales, sin estrellas y alineados. LinearFit del Hα al R y máscara de nebulosa referida al cielo.
+- `inyectarHa(rgb, ha, { tipo: "nebulosa" | "galaxia", alfa, oiii, alfaOIII, clipLow })`: RGB calibrada y Hα lineales, sin estrellas, alineados y con el continuo ya restado (tras el Paso 16). LinearFit del Hα al R y máscara de nebulosa referida al cielo.
   - En nebulosas, `modo: "senal"` por defecto: suma la señal del Hα ajustada al R, y α 0,6 sube la nebulosa ≈ 60 %. El exceso sobre el R («suma») no aporta cuando la nebulosa llena el campo, porque el ajuste la iguala.
   - En galaxias, `modo: "suma"`. La fórmula clásica queda como `modo: "mezcla"`.
   - Con `oiii` (la vista OIII de `desmezclarDualBand`), el OIII entra en G y B a partes iguales (turquesa, como HOO), con su máscara.
@@ -508,7 +519,7 @@ OIII: canal 1 (G). Con el `k` que devuelva, en otra respuesta:
 ]}
 ```
 
-El ajuste lineal previo con R como referencia es LinearFit.
+El ajuste lineal previo con R como referencia es LinearFit. Orden: `medirContinuo` antes de `separarEstrellas` (Paso 15), `restarContinuo` después, y con `Ha_CS` la inyección (`inyectarHa`, [Paso 10](#lineal-10)).
 
 <a id="lineal-17"></a>
 ### Fase lineal · Paso 17: Checkpoint

@@ -1,6 +1,8 @@
 # Paso 16: Sustracción de continuo
 
-[← Índice](../SKILL.md) · Anterior: [Paso 15: Separación de estrellas y reducción de ruido de la capa sin estrellas](15-starx.md) · Siguiente: [Paso 17: Checkpoint](17-checkpoint.md)
+[← Índice](../SKILL.md) · Anterior: [Paso 15: Separación de estrellas y reducción de ruido de la capa sin estrellas](15-starx.md) · Siguiente: [Paso 10: inyección en la RGB](10-combinacion-rgb-nb.md) si la hay; si no, [Paso 17: Checkpoint](17-checkpoint.md)
+
+**Orden.** La medida de k se hace con la raya y la RGB calibrada **todavía con estrellas** (antes de separarlas en el Paso 15: k se mide en las estrellas); la resta, después, sobre las dos **sin estrellas**. Con el Hα sin continuo se hace la inyección del [Paso 10](10-combinacion-rgb-nb.md), que va aquí detrás. Si el Hα ya se inyectó en la RGB, este paso no aplica.
 
 **Por qué.** Un filtro de banda estrecha no mide sólo la raya: deja pasar continuo (estrellas, polvo, reflejo). Restar ese continuo con la banda ancha calibrada deja la **emisión** y evita que el Hα pinte de rojo el fondo y las estrellas. "Medir k de nuevo con cada combinación de cámaras y filtros: el k = 0,293 de una nebulosa de emisión y reflexión (dual band OSC vs RGB OSC) no vale para un Hα de la mono".
 

@@ -14,7 +14,7 @@ La guía no lanza scripts del menú de PixInsight. Lo que hacen los más habitua
 | PhotometricContinuumSubtraction | Fotometría de estrellas + PixelMath (Paso 16 lineal) |
 | AutoPalette Studio / Perfect Palette Picker / Foraxx | Fórmulas con PixelMath (Paso 2 no lineal) |
 | Statistical Stretch | MAS o GHS (Paso 1 no lineal) |
-| Star Stretch | `starStretch` (Paso 1 no lineal) |
+| Star Stretch | `starStretch` (Paso 8 no lineal, sobre la capa de estrellas lineal) |
 | ScreenStars | `screenStarsCombine` / `screenStarsExtract` (Pasos 8 y 9 no lineales) |
 | NB to RGB Star Combination | PixelMath (Paso 8 no lineal) |
 | Halo-B-Gon / Star Reduction / RepairStarCores / Repaired HSV Separation | Recetas de halos y relleno con ley de potencias (Paso 8 no lineal); HDR con tomas cortas |

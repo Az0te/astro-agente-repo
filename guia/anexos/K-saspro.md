@@ -21,7 +21,7 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 | L7 Dual band | `desmezclarDualBand` de cada dual band; `unirCapas` para las capas de la misma raya (OIII de HaO3 + SO3, SII de SHb + SO3) |
 | L8 Astrometría | `resolverAstrometria` (resolvedor de SASpro con su índice Gaia; ASTAP o astrometry.net si están configurados) |
 | L9 Gradiente | **`gradienteCandidatos`** (ABE polinomio 1 y 2, ABE con RBF, GraXpert IA) → `aplicarCandidato` |
-| L10 Combinación | **`combinarCandidatos`** → `aplicarCandidato`; `combinarRGB` (mono con rueda) |
+| L10 Combinación | `combinarRGB` (mono con rueda) en su sitio; la inyección, **`combinarCandidatos`** → `aplicarCandidato`, con la RGB ya calibrada (tras L12) y antes de separar estrellas: como en Siril, la herramienta mide el continuo en las estrellas y las deja fuera ([Anexo I](I-siril.md)) |
 | L12 Color | `neutralizarFondo` → `calibrarColor` (White Balance con las estrellas); devuelven el cielo por canal antes y después |
 | L15 Estrellas | `separarEstrellas` (StarNet, DarkStar o SyQon) |
 | NL1 Estirado | **`estirarCandidatos`** (estadístico, GHS y MTF propio) → `aplicarCandidato` |
@@ -43,7 +43,7 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 ## Lo que se sabe de SASpro 1.24.2 (13 nov 2026)
 
 - ABE normaliza el resultado (× 0,998): `gradienteCandidatos` lo descuenta (`escala_pct`).
-- El estirado estadístico a mediana 0,2–0,3 deja algunas imágenes casi negras: `estirarCandidatos` lo descarta y añade un MTF propio.
+- El estirado estadístico a mediana 0,2–0,3 (objetivo propio de SASpro, histórico: no el de la guía, cielo 0,10 / 0,07) deja algunas imágenes casi negras: `estirarCandidatos` lo descarta y añade un MTF propio.
 - WaveScale HDR sin ventana se cuelga: no se usa por defecto.
 - SFCC y Halo-B-Gon sólo tienen ventana: sin herramienta.
 

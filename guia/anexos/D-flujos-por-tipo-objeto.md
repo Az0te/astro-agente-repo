@@ -12,7 +12,7 @@ Material por tipo de objeto que no se ha convertido en paso porque **sustituye**
 
 Flujo que gustó en una nebulosa oscura (v2 + v5), en orden:
 
-1. Estirado adaptativo multiescala (fondo 0,17, agresividad 0,6, recuperación de contraste 0,5, fondo de referencia en cielo limpio) y curva que separa el polvo del fondo (0,167 → 0,165; 0,18 → 0,215; 0,20 → 0,27).
+1. Estirado adaptativo multiescala (fondo 0,17 en la receta original: histórico, no usar como objetivo; cielo 0,12 en nebulosas oscuras, Paso 1 no lineal; agresividad 0,6, recuperación de contraste 0,5, fondo de referencia en cielo limpio) y curva que separa el polvo del fondo (0,167 → 0,165; 0,18 → 0,215; 0,20 → 0,27).
 2. NXT con separación de color: croma 0,90, luminancia 0,40, detalle 0,25.
 3. Máscaras de gran escala, calculadas binando 8×, suavizando y ampliando de nuevo: polvo = luminancia entre el cielo y ~+0,03 (incluye cirros débiles, señal real); azul = `(B − (R+G)/2 > 0,010) × (L > cielo + 0,04)`, más una versión ancha (gauss σ 25 binado) para ampliar la zona de reflexión; fondo = inversa del polvo.
 4. Polvo: curva de brillo y saturación S 0,5 → 0,66.
@@ -27,7 +27,7 @@ Errores a no repetir en este tipo de objeto: "NXT 0,75 por igual a luminancia y 
 
 **Galaxias.** Cadena: "pretratamiento → fondo (DBE/ABE/GraXpert/MARS, por canal si hace falta) → BXT → SXT opcional (o ninguno en espirales grandes) → NXT por etapas → stretch progresivo por pasadas (GHS/MAS/Veralux/Statistical) → máscaras/HDR → colores y estrellas → acabado". Proteger bulbo (máscaras con gamma/HDR; tomas cortas si el núcleo satura), revelar brazos y halo sin subir ruido, HII en rosa/rojo y zonas viejas amarillas, polvo oscuro respetado. "SPCC con referencia 'Average Spiral Galaxy'. LRGB + Hα con inyección moderada (k bajo). Espiral: 3 zonas (núcleo proteger, brazos realzar, fondo+IFN levantar sombras con máscara invertida). De canto: el carril de polvo es el tema (máximo contraste a través del carril), sin IFN. Comprobar tras cada curva que la IFN sigue visible."
 
-Parámetros orientativos de aescaffre para galaxias: fondo 0,10; compresión multiescala 6–7 capas con máscara gamma 1,5; contraste local radio 64, amount 0,25 (de canto) a 0,35 (de cara), slopeLimit 1,3–1,5; LRGB lightness 0,35 (de canto) / 0,50 (de cara), saturación 0,70; ajuste lineal de L a la luminancia RGB antes de combinar; NXT final 0,30; SCNR 0,30–0,35; sin reducción de estrellas. Cúmulos de galaxias: fondo 0,08–0,10, NXT sólo tras estirar (0,25–0,35), LRGB lightness 0,45–0,55, "la diversidad de color entre galaxias es un rasgo".
+Parámetros orientativos de aescaffre para galaxias: fondo 0,10 (histórico, no usar como objetivo: en galaxias, cielo 0,07); compresión multiescala 6–7 capas con máscara gamma 1,5; contraste local radio 64, amount 0,25 (de canto) a 0,35 (de cara), slopeLimit 1,3–1,5; LRGB lightness 0,35 (de canto) / 0,50 (de cara), saturación 0,70; ajuste lineal de L a la luminancia RGB antes de combinar; NXT final 0,30; SCNR 0,30–0,35; sin reducción de estrellas. Cúmulos de galaxias: fondo 0,08–0,10, NXT sólo tras estirar (0,25–0,35), LRGB lightness 0,45–0,55, "la diversidad de color entre galaxias es un rasgo".
 
 **Galaxias de gran dinámica.** "Stretch global suave + máscara de protección del núcleo + stretch localizado de extensiones; composición HDR / compresión multiescala; contraste local o compresión ligeros para polvo; reducir estrellas ligeramente si hace falta."
 

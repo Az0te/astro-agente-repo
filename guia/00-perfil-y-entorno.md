@@ -15,7 +15,7 @@
 | Captura | Esquema (p. ej. RGB 120 s + RGB 30 s para estrellas y HDR); programa de captura y de preprocesado |
 | Rutas | Carpeta de masters; carpeta de cada versión (`<objeto>/<objeto>_v1/`, nunca sobrescribir) |
 | Programa | Con qué programa se procesa y su instalación si no es la de por defecto; módulos o programas externos instalados (GraXpert, RC-Astro, StarNet…); nombres de filtro y curva QE tal como los da la base del programa; ruta de la base de referencia de gradientes; carpeta `guia/` del repo en el PC. Lo propio de cada programa: [Anexo J](anexos/J-pixinsight.md#perfil) (PixInsight), [Anexo I](anexos/I-siril.md) (Siril), [Anexo K](anexos/K-saspro.md) (SASpro) |
-| Preferencias estéticas | Nivel de fondo final (p. ej. mediana ≈ 0,17, nunca negro puro); color; estrellas; ruido; referencias; entrega |
+| Preferencias estéticas | Nivel de fondo final (por defecto cielo 0,10 en nebulosas y cúmulos y 0,07 en galaxias, escala 0–1; nunca negro puro); color; estrellas; ruido; referencias; entrega |
 | Preferencias por objeto | Lo elegido en cada procesado (p. ej. "nebulosa de reflexión: prefirió la versión B, con más nebulosidad de fondo y Hα al rojo 1,40") |
 
 Regla: "Cuando el usuario exprese una preferencia nueva (elige una versión frente a otra, pide más o menos saturación…), propón añadirla al perfil."

@@ -2,7 +2,12 @@
 
 [← Índice](../SKILL.md) · Anterior: [Paso 9: Corrección de Gradiente](09-correccion-gradiente.md) · Siguiente: [Paso 11: BlurX correct only](11-bxt-correct-only.md)
 
-**Cuándo, aunque sea el Paso 10.** La combinación va **después** de calibrar el color de la RGB (Paso 12, sobre la RGB sola) y con las capas ya con su gradiente: Hα o OIII sumados antes de la calibración sesgan los factores de color y dejan el cielo teñido (azul o rojo) al estirar. Orden con dual band: alinear (5) → desmezclar (7) → gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB (12) → **combinar (10)** → deconvolución completa (13) → separar estrellas (15).
+**Cuándo se ejecuta: la inyección en la RGB va después del Paso 16, aunque se numere 10.** Hα u OIII sumados antes de la calibración sesgan los factores de color y dejan el cielo teñido (azul o rojo) al estirar, y la inyección pide la RGB y la raya **sin estrellas** y la raya **sin continuo**. Hay dos partes:
+
+1. **Juntar masters en su sitio** (tras el gradiente, antes del 11): dos masters del mismo canal (pesos 1/σ²) y R, G y B mono en una RGB. Nada de inyectar todavía.
+2. **Inyectar Hα/OIII en la RGB, tras el Paso 16.** Secuencia de llamadas con RGB + dual band: alinear (5) → desmezclar (7) → astrometría (8) → gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB sola (12) → deconvolución completa (13) de la RGB y de cada raya → medir k del continuo con la RGB y la raya **todavía con estrellas** (16, medida) → separar estrellas de la RGB y de cada raya, con su reducción de ruido (15) → restar el continuo a la raya sin estrellas (16, resta) → **inyectar (10)** sobre la starless de la RGB con el Hα sin continuo → checkpoint (17). La cadena de la raya (gradiente → deconvolución → separación de estrellas → ruido) ya incluye su deconvolución: la combinada no vuelve al 13.
+
+Cada programa da su secuencia exacta en su anexo. Con la **ruta de paleta** (abajo) no se inyecta: el Paso 10 sólo junta masters.
 
 **Por qué.** Combinar es decidir **qué canal aporta qué**: el color natural y las estrellas vienen de la banda ancha; el detalle y la emisión, de la banda estrecha. Hacerlo mal (Hα sin restar continuo, o mezclado antes de calibrar) produce el síntoma clásico: fondo rojo y regiones HII "pegadas" por diferencia de textura.
 
@@ -13,7 +18,7 @@
 
 **Inyectar o paleta.** La inyección en el RGB sirve cuando el RGB es el grueso de los datos (galaxias, nebulosas mixtas con buena banda ancha). En una **nebulosa de emisión con mucha más banda estrecha que RGB** (IC 1396: 20 h de dual band frente a 26 min de RGB) la nebulosa sale de las capas de banda estrecha como **paleta** (Natural, HOO, SHO, Foraxx, Paso 2 no lineal) y el RGB sólo aporta las estrellas: inyectada en un RGB corto quedó rojiza, apagada y sin el turquesa del OIII (SASpro con Qwen, 14 nov 2026). En ese caso no se combina aquí: cada capa sigue sola (gradiente, estrellas fuera, ruido, estirado) y el RGB pasa por su color y su separación de estrellas.
 
-**No aplica** con una sola OSC sin filtro (p. ej. galaxia grande), ni con sólo dual band: la paleta HOO/SHO se monta en el Paso 2 no lineal. Si no aplica, decirlo y pasar al Paso 11 sin pedir ninguna llamada.
+**No aplica** con una sola OSC sin filtro (p. ej. galaxia grande), ni con sólo dual band: la paleta HOO/SHO se monta en el Paso 2 no lineal. Si no aplica, decirlo y pasar al Paso 11 sin pedir ninguna llamada. Si sólo falta la inyección, pasar al 11 y volver aquí tras el 16.
 
 **Regla previa.** "Antes de procesar: alinear todos los stacks entre sí y recortar bordes negros a la misma dimensión" (flujo OSC5 de astro-photographie). Si los canales vienen de cámaras o noches distintas, **normalizar antes de combinar**: cada noche y cámara cambia fondo, transparencia y FWHM: normalización local o ajuste lineal antes de combinar, ponderar por calidad, flats por configuración, no mezclar filtros ni material incompatible en una integración.
 
@@ -36,7 +41,7 @@ Nunca mezclar subs de cámaras distintas en una integración: cada cámara y fil
 **Hα de la mono con RGB (lineal)**
 
 - Primero decidir **si el Hα aporta de verdad**: "no integrarlo es un resultado válido" (aescaffre). ¿Añade estructura real?, ¿al color, a la luminancia o a ambos?, ¿global o por regiones?, ¿su ruido y textura casan con los de la banda ancha?
-- Cadena del Hα: "Hα → Gradient → BXT → SXT → NXT". Después **ajuste lineal con R como referencia** y **sustracción de continuo con R** (de la RGB ya calibrada y sin estrellas) → Hα CS (Paso 16).
+- Cadena del Hα: "Hα → Gradient → BXT → SXT → NXT". Después **ajuste lineal con R como referencia** y **sustracción de continuo con R** (k medido con las dos capas aún con estrellas; resta sobre las dos sin estrellas, con la RGB ya calibrada) → Hα CS (Paso 16), y sólo entonces la inyección.
 - Rojo enriquecido: `R' = (1−α)·R + α·Hα`, **α ≈ 0,2–0,6** (galaxias bajo, nebulosas de emisión más alto; objetos mixtos con máscara). En los flujos de Bernhard es "Combine Ha with RGB" (lineal, RGB4A) o CombineRGBAndNarrowband (no lineal, RGB4B).
 - Valores de aescaffre (inyección condicional en R sobre starless, Hα estirado a mediana ~0,15): "galaxias fuerza 0,25 con límite de brillo 0,25 + luminancia 0,15; nebulosas de emisión 0,30–0,60".
 - Luminancia enriquecida: `L_Hα = L + k·Hα`, empezar con k = 0,1–0,3 y subir poco a poco; Bernhard mezcla L y Hα estirados ("Mix LHa") y luego Combine LRGB con la RHaGB.

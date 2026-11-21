@@ -1,6 +1,6 @@
 {
  "version": 1,
- "nota": "resumen: versión corta de la descripción para clientes con poco contexto (PIASTROPILOT_COMPACTO=1, modelos locales). Funciones de la guía que el MCP piastropilot ofrece como herramientas. El runner (mcp/pjsr/piastropilot-runner.js) solo ejecuta las que tiene en su lista blanca (LISTA); este fichero describe sus parámetros para el modelo. Niveles: lectura (no cambia nada), copias (crea vistas nuevas, no toca las de entrada), vista (cambia la vista indicada, con historial), disco (lee o escribe ficheros), libre (código arbitrario, apagado por defecto).",
+ "nota": "resumen: versión corta de la descripción para clientes con poco contexto (PIASTROPILOT_COMPACTO=1, modelos locales). Funciones de la guía que el MCP piastropilot ofrece como herramientas. El runner (mcp/pjsr/piastropilot-runner.js) solo ejecuta las que tiene en su lista blanca (LISTA); este fichero describe sus parámetros para el modelo. Niveles: lectura (no cambia nada), copias (crea vistas nuevas, no toca las de entrada), vista (cambia la vista indicada, con historial), disco (lee o escribe ficheros), libre (código arbitrario, apagado por defecto). La herramienta estado (trabajo, esperar_s), para recoger trabajos de más de ~45 s, no está aquí: la da el propio servidor (mcp/src/index.ts).",
  "funciones": [
   {
    "nombre": "ping",
@@ -190,7 +190,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { excluir: \"_rechazados\", aliasFiltros }"
+      "description": "Opcional. { darks: carpeta o lista de la biblioteca de darks (suele estar fuera de la del objeto), excluir: \"_rechazados\", aliasFiltros }"
      }
     },
     "required": [
@@ -211,7 +211,7 @@
     "properties": {
      "calibracion": {
       "type": "object",
-      "description": "{ lights, flats, flatDarks, darks: carpeta(s) o ficheros; aliasFiltros: { \"nombre en FITS\": \"filtro real\" } }"
+      "description": "{ lights, flats, flatDarks, darks, bias: carpeta(s) o ficheros; aliasFiltros: { \"nombre en FITS\": \"filtro real\" } }"
      }
     },
     "required": [
@@ -1025,7 +1025,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { cielo: 0.10, ruidoMax, ceroMax, altoMax, maxPasadas, nuevaVista }"
+      "description": "Opcional. { cielo: 0.10, ruidoMax, ceroMax, altoMax, maxPasadas, simetria: \"debil\" (punto de simetría del GHS en la señal débil; por defecto en el cielo), nuevaVista }"
      }
     },
     "required": [
@@ -1589,7 +1589,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { amount: 2 }"
+      "description": "Opcional. { amount: 2 (5 en el script; con muchas estrellas, 1–3), saturation: 1, removeGreen: false }"
      }
     },
     "required": [

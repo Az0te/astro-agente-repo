@@ -24,7 +24,9 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque d
 7. **Todo con las herramientas de la guía**, sin iconos, scripts ni menús del programa. Si una herramienta dice que falta un proceso o un programa externo, avisar, no sustituirlo.
 8. **El dossier cuenta lo que dice el historial**, no lo que se pretendía.
 
-**Orden lineal:** gradiente → deconvolución sólo de corrección → calibración de color → deconvolución completa → separación de estrellas → reducción de ruido principal sobre la capa sin estrellas en lineal (Paso 15). Nunca reducir ruido antes de la deconvolución. **Con banda estrecha o dual band** (Paso 10): cada capa por su gradiente y su deconvolución; la calibración de color se hace sobre la RGB **sola** y la combinación (inyectar Hα/OIII o paleta) va **después** del color, aunque su número de paso sea menor. Neutralizar el cielo, si hace falta, sobre la starless lineal (la misma que se estira).
+**Niveles:** **cielo** = mediana de las celdas más oscuras de la imagen; **mediana** = la de toda la imagen; **fondo final** = el del Paso 5 no lineal; todo en escala 0–1 (0,10 = 10 % del rango). Cielo objetivo tras estirar: 0,10 en nebulosas y cúmulos, 0,07 en galaxias.
+
+**Orden lineal:** gradiente → deconvolución sólo de corrección → calibración de color → deconvolución completa → separación de estrellas → reducción de ruido principal sobre la capa sin estrellas en lineal (Paso 15). Nunca reducir ruido antes de la deconvolución. **Con banda estrecha o dual band** (Paso 10): cada capa por su gradiente y su deconvolución; la calibración de color se hace sobre la RGB **sola**. Juntar masters del mismo canal o R, G y B mono va en su sitio (antes del 11); la **inyección de Hα/OIII en la RGB se ejecuta tras el Paso 16**: color de la RGB (12) → deconvolución completa (13) → k del continuo con estrellas (16) → separar estrellas de la RGB y de la raya (15) → restar el continuo (16) → inyectar (10) sobre la starless → checkpoint (17). La paleta se monta en no lineal (Paso 2). Neutralizar el cielo, si hace falta, sobre la starless lineal (la misma que se estira).
 
 ## Imágenes e ids
 
@@ -44,13 +46,13 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque d
 | L7 Canales | Desmezcla del dual band | ratios G/R y B/R, sobre-restas |
 | L8 Astrometría | Solución astrométrica | resuelta, escala, centro |
 | L9 Gradiente | **Candidatos** de modelo de fondo | `copia_objeto`, `objeto_quitado_pct`, `gradiente_restante` |
-| L10 Combinación | Qué canal aporta qué | ruido, dominante del cielo |
 | L11 Deconvolución de corrección | FWHM por canal | FWHM antes y después, ringing, astrometría |
 | L12 Color | Calibración fotométrica; neutralizar cielo | cielo por canal en sigmas, `dominante_cielo_pct` |
 | L13 Deconvolución completa | **Candidatos** de intensidad | FWHM, ringing, gusanos, detalle |
 | L14 Ruido suave | **Candidatos** de fuerza y método | `ruido_rel`, contraste débil, moteado de color |
 | L15 Estrellas y ruido | Separación; **candidatos** de ruido sobre la starless | reconstrucción, `ruido_rel`, moteado |
 | L16 Continuo | k de la sustracción de continuo | k, negativos, emisión conservada |
+| L10 Combinación (se ejecuta tras L16; juntar masters del mismo canal o R, G, B mono, antes de L11) | Qué canal aporta qué | ruido, dominante del cielo |
 | L17 Checkpoint | Estado lineal congelado | tabla del checkpoint, `no_cumple` |
 | NL1 Estirado | **Candidatos** al mismo cielo, sólo la starless (las estrellas siguen lineales hasta NL8) | `separacion`, `ruido_rel`, recortes, dominante, meseta del núcleo |
 | NL2 Paleta | Previas de paletas; el usuario elige | G/max(R,B), fondo teñido |
@@ -109,7 +111,7 @@ Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en e
 | Dar por buena una comparación con varios niveles idénticos | El parámetro no llega al proceso: probar dos valores extremos antes de elegir |
 | Datos de otra persona procesados con el equipo del perfil | El texto del autor y las cabeceras (Paso 1 lineal) |
 | Estrellas de una RGB con canales desequilibrados (pocos subs o FWHM distintos en un canal) | La RGB con canales equilibrados, aunque sea más corta (Paso 12 lineal) |
-| Dar por buena una recombinación porque el fondo no cambia | Mirar `aporte_estrellas_pct` (≥ 0,5 %); estrellas con el mismo estirado |
+| Dar por buena una recombinación porque el fondo no cambia | Mirar `aporte_estrellas_pct` (≥ 2 %, el `no_cumple` de la herramienta); estrellas con el mismo estirado |
 | Seguir con un `no_cumple` sin resolver o inventar otro umbral | Corregirlo en el paso que dice el mensaje; los umbrales son los de la herramienta |
 | Reducción de ruido o quitar verde para manchas de color grandes en no lineal | Venir de una lineal neutra y con una reducción de ruido lineal moderada; bajar saturación |
 | Dar por cierto lo de internet o nombrar el objeto por el nombre del fichero | Medidas de la imagen; OBJECT o astrometría; citar la fuente |
@@ -133,11 +135,13 @@ Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias
 
 **Modelo por paso** (rápido o potente, regla N): [Anexo H](anexos/H-modelo-por-paso.md), sólo si la plataforma ofrece varios modelos y no lo ha elegido ya.
 
-## Índice (cargar sólo el paso en curso; tokens aproximados)
+## Índice (cargar sólo el paso en curso; tokens aproximados, contados con tiktoken cl100k_base; «J» = su apartado del Anexo J)
 
-**Lineal:** [1 Análisis del objeto](lineal/01-analisis-del-objeto.md) ~600 · [2 Inventario](lineal/02-inventario.md) ~440 · [3 Selección de subs](lineal/03-blink-subframeselector.md) ~770 · [4 Preprocesado](lineal/04-preprocesado.md) ~980 · [5 Alineado y recorte](lineal/05-staralignment-crop.md) ~450 · [6 HDR](lineal/06-hdr-composition.md) ~910 · [7 Extracción de canales](lineal/07-extraccion-canales.md) ~1050 · [8 Astrometría](lineal/08-plate-solve.md) ~390 · [9 Gradiente](lineal/09-correccion-gradiente.md) ~650 · [10 Combinación RGB / NB](lineal/10-combinacion-rgb-nb.md) ~1020 · [11 Deconvolución de corrección](lineal/11-bxt-correct-only.md) ~400 · [12 Calibración de color](lineal/12-spcc.md) ~440 · [13 Deconvolución completa](lineal/13-bxt-completo.md) ~520 · [14 Ruido suave](lineal/14-noisex-suave.md) ~360 · [15 Estrellas y ruido de la starless](lineal/15-starx.md) ~950 · [16 Sustracción de continuo](lineal/16-linearfit-continuo.md) ~460 · [17 Checkpoint](lineal/17-checkpoint.md) ~480
+**Se lee siempre:** SKILL.md ~6110 · arranque del [Anexo J](anexos/J-pixinsight.md#arranque) ~2320. **Con 32k de contexto, no cargar más de una ficha y su apartado de J a la vez.** Cifras regeneradas con `pruebas/guia/indice_tokens.py`.
 
-**No lineal:** [1 Estirado](no-lineal/01-estirado.md) ~1220 · [2 LRGB / paleta](no-lineal/02-lrgb-paleta.md) ~1460 · [3 Quitar verde](no-lineal/03-scnr.md) ~340 · [4 Máscaras](no-lineal/04-mascaras.md) ~820 · [5 Realces](no-lineal/05-boost.md) ~1050 · [6 Ruido final](no-lineal/06-noisex.md) ~520 · [7 Nitidez](no-lineal/07-nitidez.md) ~290 · [8 Estrellas](no-lineal/08-estrellas.md) ~560 · [9 Recombinación](no-lineal/09-recombinacion.md) ~410 · [10 Recorte y exportación](no-lineal/10-recorte-exportacion.md) ~280 · [11 Dossier](no-lineal/11-dossier.md) ~410
+**Lineal:** [1 Análisis del objeto](lineal/01-analisis-del-objeto.md) ~1480 (J ~960) · [2 Inventario](lineal/02-inventario.md) ~840 (J ~410) · [3 Selección de subs](lineal/03-blink-subframeselector.md) ~1810 (J ~550) · [4 Preprocesado](lineal/04-preprocesado.md) ~1940 (J ~2280) · [5 Alineado y recorte](lineal/05-staralignment-crop.md) ~1500 (J ~1150) · [6 HDR](lineal/06-hdr-composition.md) ~2040 (J ~630) · [7 Extracción de canales](lineal/07-extraccion-canales.md) ~2520 (J ~510) · [8 Astrometría](lineal/08-plate-solve.md) ~850 (J ~500) · [9 Gradiente](lineal/09-correccion-gradiente.md) ~3870 (J ~2770) · [10 Combinación RGB / NB, la inyección tras el 16](lineal/10-combinacion-rgb-nb.md) ~3130 (J ~1430) · [11 Deconvolución de corrección](lineal/11-bxt-correct-only.md) ~800 (J ~490) · [12 Calibración de color](lineal/12-spcc.md) ~1830 (J ~1180) · [13 Deconvolución completa](lineal/13-bxt-completo.md) ~1370 (J ~560) · [14 Ruido suave](lineal/14-noisex-suave.md) ~1360 (J ~1280) · [15 Estrellas y ruido de la starless](lineal/15-starx.md) ~2330 (J ~800) · [16 Sustracción de continuo](lineal/16-linearfit-continuo.md) ~1100 (J ~640) · [17 Checkpoint](lineal/17-checkpoint.md) ~970 (J ~280)
+
+**No lineal:** [1 Estirado](no-lineal/01-estirado.md) ~3240 (J ~1650) · [2 LRGB / paleta](no-lineal/02-lrgb-paleta.md) ~3660 (J ~1210) · [3 Quitar verde](no-lineal/03-scnr.md) ~980 (J ~440) · [4 Máscaras](no-lineal/04-mascaras.md) ~2380 (J ~1290) · [5 Realces](no-lineal/05-boost.md) ~4390 (J ~2710) · [6 Ruido final](no-lineal/06-noisex.md) ~1580 (J ~320) · [7 Nitidez](no-lineal/07-nitidez.md) ~830 (J ~360) · [8 Estrellas](no-lineal/08-estrellas.md) ~2740 (J ~1640) · [9 Recombinación](no-lineal/09-recombinacion.md) ~850 (J ~540) · [10 Recorte y exportación](no-lineal/10-recorte-exportacion.md) ~960 (J ~570) · [11 Dossier](no-lineal/11-dossier.md) ~760 (J ~290)
 
 **Cómo en cada programa (bajo demanda):** las fichas dicen qué y con qué criterios, con nombres neutros; las herramientas, procesos y llamadas de PixInsight están en el [Anexo J](anexos/J-pixinsight.md) las de Siril en el [Anexo I](anexos/I-siril.md) y las de SASpro en el [Anexo K](anexos/K-saspro.md).
 

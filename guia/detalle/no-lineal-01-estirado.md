@@ -17,7 +17,7 @@ Material de apoyo de la ficha: el porqué, las fuentes y los ajustes que sólo h
 - SP = punto de máximo contraste; LP y HP protegen sombras y luces con una recta tangente.
 - GHS es reversible con las transformaciones hiperbólica, arcsinh, de medios tonos y potencia, **sólo en modo por canal (RGB/K) y sin recorte**; en modo color o con recorte, no. La inversa calcula otra transformación: no es deshacer.
 - **Usos de la inversa** (documentación de GHS): (1) recuperar estrellas que se han hinchado con un estirado excesivo, con una transformación inversa concentrada en las altas luces (SP/LP/HP alrededor de las estrellas) y después una pasada suave para devolver el brillo general; (2) si el separador de estrellas no reconoce estrellas brillantes estiradas con b alto: estirado moderado con b = 0 por canal, separar estrellas y aplicar la inversa para volver a lineal. Lo preferible sigue siendo separar en lineal (Paso 15 lineal).
-- Valores de partida (documentación): 1.ª pasada b 8–10, LP 0, HP 1, D hasta que el pico del histograma quede en ~0,20–0,25; siguientes, b 3–5, D pequeño, SP en la estructura objetivo, HP para estrellas y zonas brillantes, LP si el fondo se oscurece. Histograma en escala logarítmica para ver lo que ocupa pocos píxeles.
+- Valores de partida (documentación): 1.ª pasada b 8–10, LP 0, HP 1, D hasta que el pico del histograma quede en ~0,20–0,25 (valor de la documentación: histórico, no usar como objetivo; el de la guía es el cielo 0,10 / 0,07); siguientes, b 3–5, D pequeño, SP en la estructura objetivo, HP para estrellas y zonas brillantes, LP si el fondo se oscurece. Histograma en escala logarítmica para ver lo que ocupa pocos píxeles.
 - Modo color (mismo factor para los tres canales): conserva la saturación en el primer estirado RGB, pero puede pasar de 1; si salen núcleos de estrella quemados o colores alterados, probar el recorte por mezcla RGB.
 
 **GHS a mano (cualquier interfaz).** Sin visualización automática y con vista previa en tiempo real, ampliar el histograma y poner SP en el centro del pico o justo a su izquierda; b ≈ 8–8,5 y subir D hasta que el pico principal no pase de ~¼ de la altura del gráfico; aplicar. Segunda pasada: SP sobre la zona a realzar, b ≈ 1–1,5, D 0,5–1, equilibrando LP/HP.
@@ -26,7 +26,7 @@ Material de apoyo de la ficha: el porqué, las fuentes y los ajustes que sólo h
 
 - **SP por fórmula:** `SP = pico + k·FWHM_pico`, k 0,5–1,5. Útil si el pico es ancho o hay "colinas" en el histograma logarítmico; si no, SP = mediana.
 - **Histograma bifurcado:** focalización destructiva por exceso de b con D alto; **no** corregirlo moviendo SP.
-- **Convergencia:** mediana en el objetivo y caída monótona del log-histograma a la derecha del pico. El PDF fija 0,10–0,15 para todo; aquí eso es el objetivo de galaxia.
+- **Convergencia:** mediana en el objetivo y caída monótona del log-histograma a la derecha del pico. El PDF fija 0,10–0,15 para todo; en la guía el objetivo es el cielo: 0,10 en nebulosas y cúmulos, 0,07 en galaxias.
 - **Modo saturación** (b −1 a −3) para subir saturación sin hinchar estrellas. En modo color, vigilar el recorte de canales brillantes (no invertible).
 - **D:** los rangos del PDF (1,5–8) son de interfaz y logarítmicos: un 8 es muy agresivo. Mantener D 2–3 en la primera fase.
 

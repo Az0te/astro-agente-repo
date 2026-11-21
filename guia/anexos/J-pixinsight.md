@@ -4,7 +4,7 @@
 
 Bajo demanda: el **cómo** de cada paso con PixInsight (la guía en JavaScript de `herramientas/`, el MCP `piastropilot`, PiAstroPilot y PiAstroPilot Lite). Las fichas dicen **qué** hacer, **por qué** y con **qué criterios**, con nombres neutros; aquí están las funciones de la guía, los procesos de PixInsight, los valores de referencia a mano y los ejemplos de llamada. En Siril: [Anexo I](I-siril.md).
 
-Los ejemplos de llamada explican qué hace cada función: no se copian, se pide la función con sus parámetros. Los ids de vista (`MasterLight`, `Starless_st`…) son genéricos: usar siempre los ids reales de la lista de vistas.
+**Forma de las llamadas.** La forma que se pide es la de los bloques JSON: `{"funcion": "…", "parametros": {"vista": "…", "opciones": {…}}}` (en vez de `vista`, `starless`, `capas`, `masters`… según la función: los nombres exactos están en `herramientas/manifiesto.json`). Las llamadas escritas en la prosa como `funcion(vista, { … })` son **descriptivas** (abreviadas para leer): no se imitan; se pide la función con sus parámetros con nombre, como en los bloques JSON. Los ids de vista (`MasterLight`, `Starless_st`…) son genéricos: usar siempre los ids reales de la lista de vistas.
 
 <a id="arranque"></a>
 ## Arranque en PixInsight (leer con SKILL.md)

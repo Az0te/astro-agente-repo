@@ -7,7 +7,7 @@ Primer paso de la sesión no lineal: leer antes `estado.md` (Paso 17 lineal). Aq
 **Cielo objetivo** (estirado al fallo, el método por defecto): **0,10 en nebulosas y cúmulos; 0,07 en galaxias**.
 En una galaxia con mucho cielo alrededor, 0,10 deja el fondo gris: una galaxia grande OSC (7 nov 2026) quedó mucho mejor con cielo 0,07 y límite de ruido del cielo 0,12 (las estrellas, con el mismo estirado y saturación 1,3: ver el Paso 8). Es el nivel de las zonas más oscuras de la imagen (`cielo`), no la mediana: en una nebulosa que llena el campo la mediana sale sola por encima (nebulosa dual band: 0,14 con cielo 0,10). Con cielo 0,15 la nebulosa queda algo pasada (prueba de nov 2026), y en una nebulosa oscura el fondo sale gris, sin zonas oscuras: en nebulosas oscuras, cielo 0,12 (las pasadas siguientes suben el polvo sin mover el cielo). El perfil puede fijar otro.
 
-**Fondo objetivo** (sólo para el modo antiguo a mediana fija): nebulosa de emisión 0,15–0,25 · galaxia 0,10 · cúmulo de galaxias 0,08–0,10 · margen de altas luces 0,05.
+**Histórico, no usar como objetivo:** el modo antiguo a mediana fija (`modo: "fondo"`) llevaba la mediana a 0,15–0,25 en nebulosas de emisión, 0,10 en galaxias y 0,08–0,10 en cúmulos de galaxias. El objetivo es el **cielo** de arriba (0,10 / 0,07). Margen de altas luces: 0,05.
 
 **Método**
 
@@ -25,7 +25,7 @@ Un autoestirado sólo vale sobre una imagen lineal. Comparar métodos a resultad
 
 | Fase | D | B | SP | LP | HP | Efecto |
 |---|---|---|---|---|---|---|
-| 1. Levantar el pie | 2–3 | 10–15 | mediana (~0,001–0,003) | 0 | 0,95 | fondo ~0,15–0,23 |
+| 1. Levantar el pie | 2–3 | 10–15 | mediana (~0,001–0,003) | 0 | 0,95 | levanta el fondo (histórico: ~0,15–0,23; no usar como objetivo) |
 | 2. Tonos medios | 1,5–2 | 3–6 | nueva mediana | 0,02–0,05 | 0,90 | contraste en medios |
 | 3. Altas luces | 0,5–1 | −1 a 0 | nueva mediana | 0,05–0,08 | 0,85 | comprime luces |
 | 4 (opcional, núcleos) | 0,3–0,5 | −1,5 | 0,5–0,8 | 0,15 | 1 | núcleos |
@@ -53,7 +53,7 @@ Modo color conserva el tono; por canal puede desplazarlo. Histograma con dos cú
 
 **Nebulosas con un núcleo muy brillante** (30 Doradus, M42, η Carinae): medir también la meseta (`medirMeseta`), no sólo en galaxias. El GHS al fallo con la simetría en la señal débil gana en `separacion` pero lleva el p90 a ~0,75 y aplana el centro (Tarántula, nov 2026: meseta > 0,95 de 22 px de radio en la SHO). La compresión de núcleo de las galaxias (máscara de bulbo) no sirve para un centro de cientos de píxeles: la meseta pasó a 31 px. Lo que funcionó fue **el mismo GHS, parando antes en las luces** (límite de luces > 0,95 en 0,002 % en vez de 0,05 %): meseta de 2,5 px, centro con estructura. Con el adaptativo multiescala (MAS) la meseta bajó a 0,8 px, pero **cambió la paleta**: estira cada raya a su manera y, en la nebulosa, dejó el SII por debajo del Hα (p90 0,28 frente a 0,34; con GHS, 0,77 frente a 0,75), y la SHO pasó de dorada a azul; el usuario lo rechazó. Reglas: si el ganador deja una meseta > 3 px en una nebulosa, repetir **el mismo método** con un límite de luces más estricto; y en una paleta, todas las rayas con el mismo método y comparar sus medianas con la versión anterior antes de cambiar de estirado, porque la relación entre canales decide los colores aunque la fórmula de la paleta no cambie.
 
-**Estirado adaptativo multiescala.** Ajustes: fondo objetivo (0,15), agresividad (0,6–0,7), compresión de rango dinámico (0,40), recuperación de contraste (0,25 sutil, 0,5 moderado, 1 completo), separación de escalas (1024), saturación propia (desactivada en Hα o capas que se combinarán después) y una región de fondo (imprescindible si el objeto llena el campo). Orden de ajuste: región de fondo → fondo objetivo → agresividad → compresión → separación de escalas → recuperación de contraste → saturación. Más señal débil: subir un poco el fondo y bajar la agresividad. La compresión protege núcleos durante el estirado; no sustituye a la compresión multiescala del Paso 5.
+**Estirado adaptativo multiescala.** Ajustes: fondo objetivo (0,15 por defecto del proceso: histórico, no usar como objetivo; las herramientas lo llevan al cielo de arriba), agresividad (0,6–0,7), compresión de rango dinámico (0,40), recuperación de contraste (0,25 sutil, 0,5 moderado, 1 completo), separación de escalas (1024), saturación propia (desactivada en Hα o capas que se combinarán después) y una región de fondo (imprescindible si el objeto llena el campo). Orden de ajuste: región de fondo → fondo objetivo → agresividad → compresión → separación de escalas → recuperación de contraste → saturación. Más señal débil: subir un poco el fondo y bajar la agresividad. La compresión protege núcleos durante el estirado; no sustituye a la compresión multiescala del Paso 5.
 
 **Capa de estrellas:** se estira en el [Paso 8](08-estrellas.md) (mismo estirado que la starless en galaxias; arcsinh que conserva el color en el resto), con tres candidatos para elegir.
 

@@ -6,6 +6,7 @@
 
 **Reglas**
 
+- **Con banda estrecha que se va a inyectar en la RGB:** antes de separar, medir k del continuo con las dos capas aún con estrellas ([Paso 16](16-linearfit-continuo.md)); después separar la RGB y cada raya, restar el continuo y hacer la inyección ([Paso 10](10-combinacion-rgb-nb.md)).
 - En lineal, separación **por suma exacta** (sin "unscreen"): starless + estrellas = original. Generar siempre la capa de estrellas.
 - Overlap: 0,20 normal; 0,50 sólo con estrellas muy grandes, campos densos o costuras (×3 tiempo).
 - No aplicar una visualización automática a la capa de estrellas.
