@@ -356,7 +356,7 @@ GUARDA_PALETA = {"paletasCandidatos"}                  # herramientas cuya guard
 _PIDE_PALETA = re.compile(r"\b(paletas?|palettes?|hoo|sho|hso|foraxx|bicolor|tricolor)\b")
 
 
-_PIDE_FORZAR = re.compile(r"\b(forzar|fuerza\w*|fuerces?|force\w*|forzad[oa]s?|igualmente|aunque)\b")
+_PIDE_FORZAR = re.compile(r"\b(forzar|fuerza\w*|fuerces?|force\w*|forzad[oa]s?|igualmente)\b")
 
 
 def _textos_usuario(mensajes):
@@ -368,7 +368,7 @@ def _textos_usuario(mensajes):
 
 def pide_forzar(nombre, mensajes):
     """¿Ha pedido el usuario saltarse la guarda de 'nombre'? En paletasCandidatos basta con pedir una paleta; en el resto,
-    que diga forzar, fuérzalo, force, «exporta igualmente», «aunque…»."""
+    que diga forzar, fuérzalo, force o «exporta igualmente»."""
     if nombre in GUARDA_PALETA:
         return pide_paleta(mensajes)
     return any(_PIDE_FORZAR.search(t) for t in _textos_usuario(mensajes))
