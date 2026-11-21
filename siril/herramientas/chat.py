@@ -483,6 +483,15 @@ def modelo_servidor(api):
     return ids[0]
 
 
+def rdna_responde():
+    """¿Sirve llama-server de RDNA-FAST algún modelo ahora mismo? (sin esperar: localhost responde o rechaza al momento)"""
+    try:
+        with urllib.request.urlopen(APIS[RDNA]["url"].rsplit("/chat/", 1)[0] + "/models", timeout=1.5) as f:
+            return bool(json.loads(f.read().decode("utf-8")).get("data"))
+    except Exception:
+        return False
+
+
 def _espera_429(e, intento):
     """Segundos que pide el servidor (Retry-After o retryDelay de Gemini); si no dice nada, 10, 20, 40…"""
     try:
@@ -1453,6 +1462,11 @@ class Ventana(QMainWindow):
         ml = self.ajustes.get("modelo_local")
         if ml and self.modelo_local.findText(ml) >= 0:
             self.modelo_local.setCurrentText(ml)
+        # 21 nov 2026: con RDNA-FAST arrancado, el chat lo usa en lugar de Ollama: los dos no caben a la vez en la gráfica
+        # y RDNA-FAST va más rápido (IC 405 en Siril: 23 min y 3 errores frente a 32 y 12). Sólo si lo elegido es Ollama;
+        # no se guarda (la señal aún no está conectada), así que con el servidor parado vuelve Ollama.
+        if self.modelo.currentText() == LOCAL and rdna_responde():
+            self.modelo.setCurrentText(RDNA)
         self.modelo_local.setVisible(self.modelo.currentText() == LOCAL)
         self.modelo.currentTextChanged.connect(self.cambio_modelo)
         self.modelo_local.currentTextChanged.connect(self.cambio_local)

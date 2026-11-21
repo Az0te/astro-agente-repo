@@ -295,8 +295,23 @@ function PLAjustes() {
    };
 
    this.guardar = function () {
-      for (var k in CAMPOS)
-         Settings.write(PL_CLAVE + "/" + k, CAMPOS[k], k == "temperatura" ? String(this[k]) : this[k]);
+      for (var k in CAMPOS) {
+         var v = k == "temperatura" ? String(this[k]) : this[k];
+         if (k == "proveedor" && this.rdnaAuto && v == "rdna") v = "ollama";   // la elección automática no se guarda
+         Settings.write(PL_CLAVE + "/" + k, CAMPOS[k], v);
+      }
+   };
+
+   // 21 nov 2026: con RDNA-FAST arrancado (llama-server responde en urlRdna), el Lite lo usa en lugar de Ollama: los dos
+   // no caben a la vez en la gráfica y RDNA-FAST va el doble de rápido (IC 405: 22 min frente a 46). Sólo si el
+   // proveedor es Ollama; no se guarda, así que con el servidor parado vuelve Ollama. Elegirlo a mano en Ajustes sí se guarda.
+   this.rdnaAuto = false;
+   this.elegirLocal = function () {
+      if (this.proveedor != "ollama") return false;
+      try {
+         if (plRdnaModelos(this).length) { this.proveedor = "rdna"; this.rdnaAuto = true; }
+      } catch (e) {}                                    // no responde: Ollama, como siempre
+      return this.rdnaAuto;
    };
 
    this.modelo = function () {
@@ -2236,7 +2251,7 @@ function plConstruirDialogo(aj) {
    this.cPensar.onCheck = function (c) { aj.pensar = c; };
    this.notaModelo = new Label(pModelo);
    this.notaModelo.wordWrapping = true;
-   this.cProv.onItemSelected = function (i) { aj.proveedor = PROV[i][0]; self.rellenarModelos(false); };
+   this.cProv.onItemSelected = function (i) { aj.proveedor = PROV[i][0]; aj.rdnaAuto = false; self.rellenarModelos(false); };
 
    var fP = new HorizontalSizer; fP.spacing = 6;
    var l1 = new Label(pModelo); l1.text = "Proveedor:"; l1.setScaledMinWidth(90); l1.textAlignment = TextAlign_Right | TextAlign_VertCenter;
@@ -3200,6 +3215,7 @@ function plMain() {
    }
    var aj = new PLAjustes();
    aj.cargar();
+   if (aj.elegirLocal()) console.writeln("PiAstroPilot Lite: RDNA-FAST responde en " + aj.urlRdna + "; se usa en lugar de Ollama.");
    var d = new PLDialogo(aj);
    d.execute();
    aj.guardar();
