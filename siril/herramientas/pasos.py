@@ -3013,7 +3013,7 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
     """Paso 2 no lineal: compone paletas de banda estrecha desde capas ya estiradas (de la imagen dual band cargada:
     Hα = R, OIII = media de G y B; o de ficheros) y las compara. La imagen no cambia: aplicarCandidato(id)."""
     import multicapa as _mc                 # aquí: multicapa importa pasos (import circular a nivel de módulo)
-    _mc._negar_paleta(forzar)
+    _mc._negar_paleta(forzar, ha, oiii)
     info = H._info(siril)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
@@ -3399,6 +3399,33 @@ LISTA_PASOS = {
 # pedir fondoCandidatos sin aplicar ninguno). Envuelven las herramientas sin cambiarlas; viven mientras el puente está abierto.
 _ENTREGA = {"estrellas_sueltas": False, "fondo_pendiente": False}
 
+# --- Inyección obligatoria (21 nov 2026) ----------------------------------------------------------------------
+# Con masters de banda estrecha alineados junto a un RGB de banda ancha, la guía pide inyectar Hα/OIII en el RGB
+# (combinarCandidatos). Una pasada exportó el RGB solo tras la negativa de la paleta: exportarFinal lo impide salvo
+# forzar. _INYECCION se marca al aplicar un candidato de combinación (o de paleta, si el usuario la pidió).
+_INYECCION = {"hecha": False}
+_NB_FILTRO = re.compile(r"(ha|o3|oiii|s2|sii|hb|dual|duo|tri|quad|lex|lultimate|nbz|alp|enhance)", re.I)
+
+
+def _alineados_por_tipo():
+    """(banda ancha, banda estrecha) entre los masters alineados (procedencia.json, por el filtro del nombre)."""
+    try:
+        al = json.loads((Path.home() / ".sirilastropilot" / "trabajo" / "procedencia.json").read_text(encoding="utf-8")).get("alineados") or []
+    except Exception:
+        return [], []
+    ancha, estrecha = [], []
+    for a in al:
+        m = re.search(r"filter[-_]([a-z0-9]+)", str(a), re.I)
+        if m:
+            (estrecha if _NB_FILTRO.search(m.group(1)) else ancha).append(a)
+    return ancha, estrecha
+
+
+def _falta_inyeccion():
+    ancha, estrecha = _alineados_por_tipo()
+    return bool(ancha and estrecha and not _INYECCION["hecha"])
+
+
 
 def _guarda(nombre, antes=None, despues=None):
     import functools
@@ -3416,6 +3443,9 @@ def _guarda(nombre, antes=None, despues=None):
 
 
 def _antes_exportar(k):
+    if _falta_inyeccion() and not k.get("forzar"):
+        raise RuntimeError("Hay masters de banda estrecha alineados junto a un RGB de banda ancha y no se ha aplicado "
+                           "ninguna inyección: el final saldría sin la señal de Hα y OIII. Llama a combinarCandidatos(ha=<fichero de la capa Hα estirada>, oiii=<fichero de la capa OIII estirada>), con la RGB estirada cargada, aplica el recomendado (aplicarCandidato) y exporta después. forzar: true sólo si el usuario quiere el RGB solo.")
     if _ENTREGA["estrellas_sueltas"] and not k.get("forzar"):
         raise RuntimeError("Hay una capa de estrellas separada sin recombinar: estírala y únela a la starless con "
                            "recombinarEstrellas antes de exportar; si no, el final sale sin estrellas. forzar: true sólo si el "
@@ -3434,6 +3464,8 @@ def _despues_aplicar(r, k):
         _ENTREGA["fondo_pendiente"] = False
     elif cid.startswith("estrellas"):
         _ENTREGA["estrellas_sueltas"] = True
+    elif cid.startswith(("combinacion", "paleta")):
+        _INYECCION["hecha"] = True
 
 
 _guarda("separarEstrellas", despues=lambda r, k: _ENTREGA.update(estrellas_sueltas=True))

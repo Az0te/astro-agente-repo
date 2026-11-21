@@ -436,13 +436,17 @@ def _rgb_banda_ancha():
     return None
 
 
-def _negar_paleta(forzar):
+def _negar_paleta(forzar, ha=None, oiii=None, vista=None):
     rgb = _rgb_banda_ancha()
     if rgb and not forzar:
+        # 21 nov 2026: tras la negativa genérica el modelo rehízo las capas desde cero y exportó el RGB solo. Se le da
+        # la llamada exacta con los mismos ids que acaba de pasar.
+        llamada = "combinarCandidatos(ha='" + str(ha) + "', oiii='" + str(oiii) + "') con la RGB estirada cargada"
         raise RuntimeError(f"Hay un master RGB de banda ancha alineado ({rgb}): con RGB que aporta color real la guía pide "
-                           "inyectar la banda estrecha (Hα y OIII) en el RGB calibrado con combinarCandidatos, no componer "
-                           "una paleta (una paleta pierde el azul de reflexión y el color real). Sigue por combinarCandidatos "
-                           "sobre la RGB. forzar: true sólo si el usuario ha pedido una paleta.")
+                           "inyectar la banda estrecha en el RGB, no componer una paleta (pierde el azul de reflexión y el "
+                           "color real). Tus capas ya están listas: NO las rehagas (ni desmezclar, ni gradiente, ni ruido, ni "
+                           f"estirado otra vez). Llama ahora a {llamada} y después aplicarCandidato con el recomendado; "
+                           "luego estrellas, fondo y exportar. forzar: true sólo si el usuario ha pedido una paleta.")
 
 
 def _anotar_alineados(ficheros):

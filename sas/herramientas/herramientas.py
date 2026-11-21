@@ -636,6 +636,33 @@ def _cabecera_para_guardar(m, forma=(0, 0)):
     return h
 
 
+# --- Inyección obligatoria (21 nov 2026) ----------------------------------------------------------------------
+# Con masters de banda estrecha alineados junto a un RGB de banda ancha, la guía pide inyectar Hα/OIII en el RGB
+# (combinarCandidatos). Una pasada exportó el RGB solo tras la negativa de la paleta: exportarFinal lo impide salvo
+# forzar. _INYECCION se marca al aplicar un candidato de combinación (o de paleta, si el usuario la pidió).
+_INYECCION = {"hecha": False}
+_NB_FILTRO = re.compile(r"(ha|o3|oiii|s2|sii|hb|dual|duo|tri|quad|lex|lultimate|nbz|alp|enhance)", re.I)
+
+
+def _alineados_por_tipo():
+    """(banda ancha, banda estrecha) entre los masters alineados (procedencia.json, por el filtro del nombre)."""
+    try:
+        al = json.loads((Path.home() / ".setiastropilot" / "trabajo" / "procedencia.json").read_text(encoding="utf-8")).get("alineados") or []
+    except Exception:
+        return [], []
+    ancha, estrecha = [], []
+    for a in al:
+        m = re.search(r"filter[-_]([a-z0-9]+)", str(a), re.I)
+        if m:
+            (estrecha if _NB_FILTRO.search(m.group(1)) else ancha).append(a)
+    return ancha, estrecha
+
+
+def _falta_inyeccion():
+    ancha, estrecha = _alineados_por_tipo()
+    return bool(ancha and estrecha and not _INYECCION["hecha"])
+
+
 # Guardas de la entrega (20 nov 2026: una pasada de SASpro exportó sin recombinar las estrellas que había separado, con
 # anillos donde estaban, y tras pedir fondoCandidatos sin aplicar ninguno). Viven mientras el puente está abierto.
 _ESTRELLAS = {}          # clave de la vista de estrellas -> {"nombre", "de", "recombinada"}
@@ -668,6 +695,9 @@ def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
                            "(estirarEstrellas) y únelas a la starless con recombinarEstrellas antes de exportar; si no, el "
                            "final sale sin estrellas (con huecos donde estaban). forzar: true sólo si el usuario pide una "
                            "versión sin estrellas.")
+    if _falta_inyeccion() and not forzar:
+        raise RuntimeError("Hay masters de banda estrecha alineados junto a un RGB de banda ancha y no se ha aplicado "
+                           "ninguna inyección: el final saldría sin la señal de Hα y OIII. Llama a combinarCandidatos(ha=<capa Hα estirada>, oiii=<capa OIII estirada>, vista=<la RGB, ya estirada y con sus estrellas>), aplica el recomendado (aplicarCandidato) y exporta después. forzar: true sólo si el usuario quiere el RGB solo.")
     fich = _meta(d).get("file_path")
     c = _ruta(carpeta, "carpeta") if carpeta else (Path(fich).parent if fich else DATOS / "exportado")
     base = _seguro(nombre or Path(fich or _nombre(d)).stem) + "_final"
@@ -2269,6 +2299,8 @@ def aplicarCandidato(ctx, id, vista=None):
     d.apply_edit(a.astype(np.float32, copy=False), metadata={}, step_name=f"SetiAstroPilot: {datos.get('nombre', id)}")
     if str(id).startswith("fondo_"):
         _FONDO_PENDIENTE.clear()
+    if str(id).startswith(("combinacion_", "paleta_")):
+        _INYECCION["hecha"] = True
     m = M.cielo(_p(d.image))
     return {"aplicado": str(id), "metodo": datos.get("nombre"), "proceso": datos.get("proceso"),
             "preset": datos.get("preset"), "vista": _nombre(d), "medidas": M.sin_privado(m),
