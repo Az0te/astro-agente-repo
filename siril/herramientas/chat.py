@@ -221,7 +221,7 @@ def prompt_sistema(funcs, internet, idioma="es"):
         "frente a minutos de RGB) NO inyectes: ruta de PALETA. Cada capa sigue sola (gradiente → estrellasCandidatos, que compara "
         "StarNet y StarX y elige el de menos restos (con separarEstrellas, StarNet dejó halos cian en el OIII de IC 405) → ruido → "
         "estirado) y después paletasCandidatos con TODAS las rayas (ha, oiii, sii, hb: Natural usa las cuatro); el RGB sólo "
-        "da las estrellas (color, separarEstrellas, estrellas estiradas y recombinarEstrellas sobre la paleta). Excepción por TIPO de objeto: en una nebulosa de emisión con componente de reflexión (polvo azul junto a estrellas brillantes que sólo da el RGB), o siempre que el RGB aporte color real, NO es ruta de paleta aunque haya más banda estrecha: RGB calibrado de color + inyección de la banda estrecha con combinarCandidatos; una paleta pierde el azul de reflexión y lo vuelve dorado o verde. Paleta sólo si el usuario la pide o si no hay RGB útil. ENTREGA: si separaste estrellas, recombinarEstrellas (con las estrellas estiradas) es obligatorio antes de exportarFinal; tras fondoCandidatos aplica un candidato con aplicarCandidato (comparar no cambia la imagen). Antes de cada paso de la RGB, comprueba qué imagen está cargada (imagen_cargada / "
+        "da las estrellas (color, separarEstrellas, estrellas estiradas y recombinarEstrellas sobre la paleta). Excepción por TIPO de objeto: en una nebulosa de emisión con componente de reflexión (polvo azul junto a estrellas brillantes que sólo da el RGB), o siempre que el RGB aporte color real, NO es ruta de paleta aunque haya más banda estrecha: RGB calibrado de color + inyección de la banda estrecha con combinarCandidatos; una paleta pierde el azul de reflexión y lo vuelve dorado o verde. Paleta sólo si el usuario la pide o si no hay RGB útil (con un RGB alineado, paletasCandidatos se niega salvo forzar: true, que sólo pasas si el usuario pidió paleta). ENTREGA: si separaste estrellas, recombinarEstrellas (con las estrellas estiradas) es obligatorio antes de exportarFinal; tras fondoCandidatos aplica un candidato con aplicarCandidato (comparar no cambia la imagen). Antes de cada paso de la RGB, comprueba qué imagen está cargada (imagen_cargada / "
         "fichero del último resultado); si no es la RGB, ábrela con abrirImagen. En galaxias, tras estirar: nucleoCandidatos "
         "(comprimir el bulbo) ANTES de contraste y saturación. fondoCandidatos (cielo oscuro y neutro, 0,05–0,08: con 0,10–0,13 la "
         "imagen queda gris y plana) va justo después de montar la paleta o de estirar la starless, ANTES de contraste y "
@@ -350,6 +350,22 @@ def _compactar(mensajes, guardar_ultimos=2, limite=LIMITE_TOKENS_LOCAL):
         while len(mensajes) > primera + 1 and mensajes[primera + 1].get("role") == "tool":
             del mensajes[primera + 1]
     return int(tokens())
+
+
+GUARDA_PALETA = {"paletasCandidatos"}                  # herramientas cuya guarda sólo se salta si el usuario pide paleta
+_PIDE_PALETA = re.compile(r"\b(paletas?|palettes?|hoo|sho|hso|foraxx|bicolor|tricolor)\b")
+
+
+def pide_paleta(mensajes):
+    """¿Algún mensaje del usuario pide una paleta? Sin mayúsculas ni acentos; no cuenta los resultados de herramientas."""
+    import unicodedata
+    for m in mensajes:
+        if m.get("role") != "user" or not isinstance(m.get("content"), str):
+            continue
+        t = unicodedata.normalize("NFKD", m["content"]).encode("ascii", "ignore").decode().lower()
+        if _PIDE_PALETA.search(t):
+            return True
+    return False
 
 
 def _texto_del_razonamiento(pensado, maximo=2500):
@@ -747,6 +763,11 @@ class MotorLocal:
                     # La guía: el sensor sale del perfil o de la cabecera; sólo se pasa si el usuario lo dice.
                     args = {k: v for k, v in args.items() if k != "sensor"}
                     emitir({"tipo": "aviso", "texto": "Quito «sensor» de calibrarColor: sale del perfil o de la cabecera."})
+                if nombre in GUARDA_PALETA and isinstance(args, dict) and args.get("forzar") and not pide_paleta(self.mensajes):
+                    # 21 nov 2026 (IC 405 en SASpro con Qwen3.8): el modelo pasó forzar: true por su cuenta para saltarse la
+                    # guarda de paleta. «forzar» sólo vale si el usuario pidió una paleta.
+                    args = {k: v for k, v in args.items() if k != "forzar"}
+                    emitir({"tipo": "aviso", "texto": f"Quito «forzar» de {nombre}: el usuario no ha pedido una paleta."})
                 emitir({"tipo": "herramienta", "nombre": nombre, "args": args})
                 t1 = time.time()
                 try:

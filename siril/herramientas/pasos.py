@@ -3008,9 +3008,12 @@ def _tonos(p, m):
     return float(np.degrees(np.sqrt(-2 * np.log(max(rb, 1e-9)))))
 
 
-def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominante_max=5.0, verde_max=5.0, tipo=None, hb=None):
+def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominante_max=5.0, verde_max=5.0, tipo=None, hb=None,
+                      forzar=False):
     """Paso 2 no lineal: compone paletas de banda estrecha desde capas ya estiradas (de la imagen dual band cargada:
     Hα = R, OIII = media de G y B; o de ficheros) y las compara. La imagen no cambia: aplicarCandidato(id)."""
+    import multicapa as _mc                 # aquí: multicapa importa pasos (import circular a nivel de módulo)
+    _mc._negar_paleta(forzar)
     info = H._info(siril)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)

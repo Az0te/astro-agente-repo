@@ -529,6 +529,31 @@ def _estado():
         return {"alineados": [], "origen": {}}
 
 
+# Guarda inyección frente a paleta (20 nov 2026): con un master RGB de banda ancha alineado, la guía pide inyectar la banda
+# estrecha en el RGB (combinarCandidatos); dos pasadas eligieron paleta igualmente aunque el prompt lo decía. Se decide por
+# el filtro del nombre del master alineado (FILTER-NoFilter, L, RGB… frente a Ha, OIII, HaO3, SiO3, dual band…).
+_NB = __import__("re").compile(r"(ha|o3|oiii|s2|sii|hb|dual|duo|tri|quad|lex|lultimate|nbz|alp|enhance)", __import__("re").I)
+
+
+def _rgb_banda_ancha():
+    import re
+    for a in (_estado().get("alineados") or []):
+        m = re.search(r"filter[-_]([a-z0-9]+)", str(a), re.I)
+        f = m.group(1) if m else ""
+        if f and not _NB.search(f):
+            return a
+    return None
+
+
+def _negar_paleta(forzar):
+    rgb = _rgb_banda_ancha()
+    if rgb and not forzar:
+        raise RuntimeError(f"Hay un master RGB de banda ancha alineado ({rgb}): con RGB que aporta color real la guía pide "
+                           "inyectar la banda estrecha (Hα y OIII) en el RGB calibrado con combinarCandidatos, no componer "
+                           "una paleta (una paleta pierde el azul de reflexión y el color real). Sigue por combinarCandidatos "
+                           "sobre la RGB. forzar: true sólo si el usuario ha pedido una paleta.")
+
+
 def _guardar_estado(e):
     import json
     r = _estado_ruta()
@@ -923,10 +948,12 @@ def _tonos(p, m):
     return float(np.degrees(np.sqrt(-2 * np.log(max(rb, 1e-9)))))
 
 
-def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominante_max=5.0, verde_max=5.0, hb=None):
+def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominante_max=5.0, verde_max=5.0, hb=None,
+                      forzar=False):
     """NL2: compone paletas de banda estrecha con capas YA ESTIRADAS (vistas mono alineadas: ha, oiii y opcionales sii
     y hb) y las compara. La paleta se pone en 'vista' (RGB del mismo tamaño) o, si no se da o es mono, en una vista RGB
     nueva «paleta». La vista no cambia hasta aplicarCandidato(id)."""
+    _negar_paleta(forzar)
     dh = H._doc(ctx, ha)
     Ha = H._p(dh.image)
     Ha = Ha[0] if Ha.shape[0] == 1 else Ha.mean(axis=0)

@@ -883,6 +883,10 @@
    "params": {
     "type": "object",
     "properties": {
+     "forzar": {
+      "type": "boolean",
+      "description": "true sólo si el usuario pidió una paleta: con un master RGB de banda ancha alineado la herramienta se niega y manda a combinarCandidatos (inyección)."
+     },
      "ha": {
       "type": "string",
       "description": "Fichero de la capa Hα estirada (opcional)."
