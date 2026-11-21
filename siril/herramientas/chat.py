@@ -356,6 +356,24 @@ GUARDA_PALETA = {"paletasCandidatos"}                  # herramientas cuya guard
 _PIDE_PALETA = re.compile(r"\b(paletas?|palettes?|hoo|sho|hso|foraxx|bicolor|tricolor)\b")
 
 
+_PIDE_FORZAR = re.compile(r"\b(forzar|fuerza\w*|fuerces?|force\w*|forzad[oa]s?|igualmente|aunque)\b")
+
+
+def _textos_usuario(mensajes):
+    import unicodedata
+    for m in mensajes:
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            yield unicodedata.normalize("NFKD", m["content"]).encode("ascii", "ignore").decode().lower()
+
+
+def pide_forzar(nombre, mensajes):
+    """¿Ha pedido el usuario saltarse la guarda de 'nombre'? En paletasCandidatos basta con pedir una paleta; en el resto,
+    que diga forzar, fuérzalo, force, «exporta igualmente», «aunque…»."""
+    if nombre in GUARDA_PALETA:
+        return pide_paleta(mensajes)
+    return any(_PIDE_FORZAR.search(t) for t in _textos_usuario(mensajes))
+
+
 def pide_paleta(mensajes):
     """¿Algún mensaje del usuario pide una paleta? Sin mayúsculas ni acentos; no cuenta los resultados de herramientas."""
     import unicodedata
@@ -763,11 +781,12 @@ class MotorLocal:
                     # La guía: el sensor sale del perfil o de la cabecera; sólo se pasa si el usuario lo dice.
                     args = {k: v for k, v in args.items() if k != "sensor"}
                     emitir({"tipo": "aviso", "texto": "Quito «sensor» de calibrarColor: sale del perfil o de la cabecera."})
-                if nombre in GUARDA_PALETA and isinstance(args, dict) and args.get("forzar") and not pide_paleta(self.mensajes):
+                if isinstance(args, dict) and args.get("forzar") and not pide_forzar(nombre, self.mensajes):
                     # 21 nov 2026 (IC 405 en SASpro con Qwen3.8): el modelo pasó forzar: true por su cuenta para saltarse la
-                    # guarda de paleta. «forzar» sólo vale si el usuario pidió una paleta.
+                    # guarda de paleta y, en otra pasada, la del cielo de exportarFinal. «forzar» sólo vale si el usuario lo
+                    # pide (en paletasCandidatos, si pidió una paleta).
                     args = {k: v for k, v in args.items() if k != "forzar"}
-                    emitir({"tipo": "aviso", "texto": f"Quito «forzar» de {nombre}: el usuario no ha pedido una paleta."})
+                    emitir({"tipo": "aviso", "texto": f"Quito «forzar» de {nombre}: el usuario no lo ha pedido."})
                 emitir({"tipo": "herramienta", "nombre": nombre, "args": args})
                 t1 = time.time()
                 try:
