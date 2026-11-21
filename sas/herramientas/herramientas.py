@@ -24,6 +24,7 @@ import numpy as np
 import halo as _halo
 import cielo as _cielo
 import rc as _rc
+import syqon as _syqon
 import medidas as M
 from medidas import _r
 
@@ -322,8 +323,10 @@ def ping(ctx):
     e = _rc.estado()
     rc = {"version": e.get("version"), "productos": sorted(k for k, v in e["productos"].items() if v["valida"])} \
         if e.get("disponible") else None
+    s = _syqon.estado()
+    sq = {"version": s.get("version"), "gratis": [m for m in _syqon.GRATIS if m in s["modelos"]]} if s.get("disponible") else None
     return {"herramientas": VERSION, "saspro": v_sas, "vistas_abiertas": len(_docs(ctx)), "vista_activa": act,
-            "rc_astro": rc}
+            "rc_astro": rc, "syqon": sq}
 
 
 def vistas(ctx):
@@ -1143,7 +1146,10 @@ def _comparar(ctx, doc, grupo, lista, medir):
             r["candidatos"].append({"id": cid, "metodo": nombre, "proceso": proceso, "preset": preset, "metricas": m,
                                     "segundos": _r(time.perf_counter() - t0, 1)})
         except Exception as e:
-            r["errores"].append(f"{nombre}: {e}")
+            if getattr(e, "codigo", None) == 4:          # SyQon: licencia o modelo no disponible → se omite
+                r.setdefault("omitidos", []).append(f"{nombre}: licencia o modelo no disponible en SyQon (código 4).")
+            else:
+                r["errores"].append(f"{nombre}: {e}")
     return r
 
 
@@ -1172,9 +1178,10 @@ def _srgc_survey(p, survey):
 
 
 def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpert=True, muestras=120, tipo=None,
-                        halo=True, halo_opciones=None, diagnostico=True, srgc=None, srgc_survey=None, cadenas=True):
-    """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF), GraXpert IA, el polinomio fuera del halo
-    (+ crominancia), SRGC (si la vista tiene astrometría) y las cadenas con nuestro modelo del cielo con máscara o de
+                        halo=True, halo_opciones=None, diagnostico=True, srgc=None, srgc_survey=None, cadenas=True,
+                        usar_syqon=True):
+    """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF), GraXpert IA, SyQon DeepGradient (si está instalado y hay
+    internet), el polinomio fuera del halo (+ crominancia), SRGC (si la vista tiene astrometría) y las cadenas con nuestro modelo del cielo con máscara o de
     bordes; mide y recomienda. La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
@@ -1198,12 +1205,22 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
     # 16 nov 2026: en M31 no se lleva nada de galaxia; en IC 1396 es, con el polinomio 1, lo único que no aplana la nebulosa.
     # Plano en las celdas más oscuras (cielo.plano_oscuras): para nebulosas o polvo que llenan el campo.
     lista.append(("Polinomio celdas oscuras", "oscuras", {"frac": 0.25}, _cielo.plano_oscuras))
+    omitidos = []
+    if usar_syqon:
+        if not _syqon.hay("deep-gradient"):
+            omitidos.append("SyQon DeepGradient: SyQon Studio no está instalado.")
+        elif (DATOS / "sin-internet").exists():
+            omitidos.append("SyQon DeepGradient: necesita internet y la casilla Internet está desmarcada.")
+        else:
+            lista.append(("SyQon DeepGradient (necesita internet)", "syqon_gradiente", {}))
     usar_srgc = srgc if srgc is not None else _tiene_wcs(d)
     if usar_srgc:
         lista.append(("SRGC (referencia " + _srgc_survey(p, srgc_survey) + ", 500 muestras, exclusión 15 %)", "srgc",
                       {"survey": _srgc_survey(p, srgc_survey), "degree": 1, "work_long_side": 1024, "samples": 500,
                        "exclude": 15}))
     r = _comparar(ctx, d, "gradiente", lista, lambda q: M.medir_gradiente(base, q))
+    if omitidos:
+        r.setdefault("omitidos", []).extend(omitidos)
     if _HALO_CACHE:
         r["halo"] = next(iter(_HALO_CACHE.values()))[2]
         _HALO_CACHE.clear()
@@ -1315,7 +1332,11 @@ def _estirado_sas_directo(p, mediana=0.2, enlazado=True):
 LOCALES = {"estirado_mtf": _estirado_mtf, "estirado_sas_directo": _estirado_sas_directo,
            # RC Astro: el cálculo va en rc-astro sobre una copia, así que en las comparaciones no toca la vista
            "rc_bxt": lambda p, **op: _rc.correr(p, "bxt", **op),
-           "rc_nxt": lambda p, **op: _rc.correr(p, "nxt", **op)}
+           "rc_nxt": lambda p, **op: _rc.correr(p, "nxt", **op),
+           # SyQon Studio (syqon-cli, syqon.py): también sobre una copia (22 nov 2026)
+           "syqon_gradiente": lambda p, **op: _syqon.gradiente(p)["salida"],
+           "syqon_prism": lambda p, **op: _syqon.ruido(p)["salida"],
+           "syqon_parallax": lambda p, **op: _syqon.parallax(p, **op)["salida"]}
 
 
 def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True):
@@ -1388,9 +1409,9 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
     return _galeria(r, p)
 
 
-def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt=None, nxt_fuerzas=None):
-    """Pasos L14/NL6: Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator (RC Astro, si está) y GraXpert denoise
-    frente a no hacer nada: ruido del cielo y detalle que se pierde (< 10 %). La vista no cambia."""
+def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt=None, nxt_fuerzas=None, syqon=None):
+    """Pasos L14/NL6: Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator (RC Astro, si está), GraXpert denoise y
+    SyQon Prism Essential (solo lineal, si está) frente a no hacer nada: ruido del cielo y detalle que se pierde (< 10 %). La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     lineal = M.lineal(p[:, ::8, ::8])
@@ -1422,6 +1443,12 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
         lista += [(f"NoiseXTerminator {f:g}", "rc_nxt", {"denoise": float(f)}) for f in nxt_fuerzas]
     if usar_graxpert:
         lista.append(("GraXpert denoise 0,5", "graxpert", {"op": "denoise", "strength": 0.5}))
+    # SyQon Prism Essential (22 nov 2026): solo lineal (en no lineal syqon-cli da código 2).
+    if syqon is None:
+        syqon = lineal and _syqon.hay("prism-essential")
+    omitidos = ["SyQon Prism Essential: solo admite imagen lineal."] if syqon and not lineal else []
+    if syqon and lineal:
+        lista.append(("SyQon Prism Essential", "syqon_prism", {}))
 
     def medir(q):
         c = M.cielo(q)
@@ -1432,6 +1459,8 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
                 "detalle_perdido_pct": _r(perd, 1), "cielo": c["cielo"], **M.recortes(q)}
 
     r = _comparar(ctx, d, "ruido", lista, medir)
+    if omitidos:
+        r.setdefault("omitidos", []).extend(omitidos)
     # Recomendación (como en Siril): el que más ruido quita sin perder más del 2 % de detalle ni recortar; si ninguno,
     # el que menos detalle pierde entre los que bajan el ruido ≥ 20 % y pierden < 10 %. En no lineal no bajar de la mitad
     # del ruido (fondo plástico); en lineal, del 25 %.
@@ -2256,13 +2285,17 @@ BXT_RANGOS = {"nebulosa": {"stars": 0.30, "ns": (0.25, 0.45, 0.65)},
 
 
 def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, stars=None, halos=0.0,
-                            correct_only=True):
+                            correct_only=True, syqon=None, syqon_aplicacion=0.5):
     """L11/L13 deconvolución con BlurXTerminator (RC Astro, con su programa rc-astro), en lineal: solo corrección y
     una rejilla de nonstellar (rango por tipo de campo, como bxtCandidatos de PixInsight) frente a no hacer nada. Mide
     FWHM de las estrellas, anillos oscuros alrededor de las brillantes (ringing), «gusanos» (alta frecuencia del cielo
     frente a BXT con nonstellar 0) y contraste fino del objeto. Recomienda el nonstellar más alto sin ringing nuevo y
-    con gusanos ≤ 1,3. La vista no cambia (aplicarCandidato)."""
-    if not _rc.hay("bxt"):
+    con gusanos ≤ 1,3. Con SyQon instalado añade Parallax Nano (experimental: corrección + deblur mezclados con
+    syqon_aplicacion; se descarta si satura más píxeles que la original). La vista no cambia (aplicarCandidato)."""
+    if syqon is None:
+        syqon = _syqon.hay("parallax-nano")
+    hay_bxt = _rc.hay("bxt")
+    if not hay_bxt and not syqon:
         e = _rc.estado()
         raise RuntimeError("BlurXTerminator no está disponible: " + (
             "no encuentro rc-astro (RC Astro CLI)." if not e.get("exe") else "sin licencia válida en rc-astro."))
@@ -2292,15 +2325,19 @@ def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, s
         osc = 100.0 * float((L[anillo] < cie - 3 * max(rui, 1e-9)).mean()) if anillo.any() else None
         return {"fwhm_px": _r(fw, 2), "estrellas_medidas": nfw, "anillo_oscuro_pct": _r(osc, 2),
                 "hf_cielo": _r(hf(L, cpx), 7), "hf_objeto": _r(hf(L, obj), 7),
-                "ruido_vs_antes": _r(c["ruido"] / max(c0["ruido"], 1e-12), 3)}
+                "ruido_vs_antes": _r(c["ruido"] / max(c0["ruido"], 1e-12), 3), "saturados": _syqon.saturados(q)}
 
     lista = []
-    if correct_only:
-        lista.append(("BXT solo corrección", "rc_bxt", {"correct_only": True}))
     ref_preset = {"stars": st, "nonstellar": 0.0, "halos": float(halos)}
-    lista.append((f"BXT estrellas {st:g}, no estelar 0 (referencia)", "rc_bxt", ref_preset))
-    lista += [(f"BXT estrellas {st:g}, no estelar {ns:g}", "rc_bxt", {"stars": st, "nonstellar": ns, "halos": float(halos)})
-              for ns in ns_lista if ns > 0]
+    if hay_bxt:
+        if correct_only:
+            lista.append(("BXT solo corrección", "rc_bxt", {"correct_only": True}))
+        lista.append((f"BXT estrellas {st:g}, no estelar 0 (referencia)", "rc_bxt", ref_preset))
+        lista += [(f"BXT estrellas {st:g}, no estelar {ns:g}", "rc_bxt",
+                   {"stars": st, "nonstellar": ns, "halos": float(halos)}) for ns in ns_lista if ns > 0]
+    if syqon:
+        lista.append((f"SyQon Parallax Nano corrección + deblur, aplicación {float(syqon_aplicacion):g} (experimental)",
+                      "syqon_parallax", {"aplicacion": float(syqon_aplicacion), "deblur": True}))
     r = _comparar(ctx, d, "deconv", lista, medir)
     m0 = medir(p)
     r["antes"] = m0
@@ -2317,9 +2354,14 @@ def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, s
             fal.append(f"ringing: anillos oscuros alrededor de las estrellas ({m['anillo_oscuro_pct']} % del anillo)")
         if m0["fwhm_px"] and m["fwhm_px"] and m["fwhm_px"] > m0["fwhm_px"] * 1.02:
             fal.append("la FWHM no baja")
+        if x["proceso"] == "syqon_parallax" and m["saturados"] > m0["saturados"] + max(10, m0["saturados"] // 20):
+            fal.append(f"satura {m['saturados']} píxeles (la original {m0['saturados']}): Parallax recorta núcleos a 1,0 "
+                       "en lineal; experimental, descartado")
         x["no_cumple"] = fal
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
-    con_ns = [x for x in ok if not x["preset"].get("correct_only")]
+    con_ns = [x for x in ok if not x["preset"].get("correct_only") and x["proceso"] == "rc_bxt"]
+    if not con_ns:                       # sin BXT (o ningún BXT cumple): Parallax si cumple, antes que solo corrección
+        con_ns = [x for x in ok if x["proceso"] == "syqon_parallax"]
     mejor = (max(con_ns, key=lambda x: x["preset"].get("nonstellar", 0)) if con_ns else
              next((x for x in ok if x["preset"].get("correct_only")), None))
     if mejor:
@@ -2336,6 +2378,8 @@ def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, s
                     "gusanos, NoiseX los acentúa: bajar BXT, no subir el denoise. La vista NO ha cambiado: "
                     "aplicarCandidato(id).")
     r["rc_astro"] = {k: v for k, v in _rc.estado().items() if k in ("version", "exe")}
+    if syqon:
+        r["syqon"] = {k: v for k, v in _syqon.estado().items() if k in ("version", "exe")}
     return _galeria(r, p, "diferencia")
 
 
@@ -2599,6 +2643,27 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False)
     antes = {id(x) for x in _docs(ctx)}
     if motor == "auto":                      # StarX si está RC Astro: StarNet en lineal dejó un 3,9 % de estrellas en la
         motor = "starx" if _rc.hay("sxt") else "starnet"   # starless de IC 405 (19 nov 2026) y se recombinaron duplicadas
+    if motor in ("syqon_cli", "axiom"):
+        # SyQon Axiom Mini por syqon-cli (SyQon Studio, 22 nov 2026), no el syqon_starless interno de SASpro. Solo sobre
+        # imagen ESTIRADA: en lineal la starless salía plana (auto) o con rejilla magenta (identity).
+        if lineal:
+            raise RuntimeError("SyQon Axiom Mini (syqon_cli) solo funciona sobre imagen estirada: en lineal la starless sale "
+                               "plana o con rejilla magenta. Estira primero, o usa motor: starx / starnet en lineal.")
+        t0 = time.perf_counter()
+        sq = _syqon.estrellas(_p(d.image))
+        sl, est = sq["salida"], sq["estrellas"]
+        d.apply_edit(_a_sas(sl, d.image), metadata={}, step_name="SyQon Axiom Mini (sin estrellas)")
+        m = dict(_meta(d))
+        m.pop("file_path", None)
+        nombre = f"{_nombre(d)}_estrellas"
+        m["display_name"] = nombre
+        ctx.open_new_document(_a_sas(est, d.image), metadata=m, name=nombre)
+        _anotar_estrellas(ctx, antes, d)
+        r = {"proceso": "syqon_cli axiom-mini", "comando": sq["comando"], "vista": _nombre(d),
+             "segundos": _r(time.perf_counter() - t0, 1), "cambio": True, "estrellas": "capa de estrellas de SyQon"}
+        r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
+        r["vista_activa"] = _reactivar(ctx, d)
+        return r
     if motor in ("starx", "sxt", "starxterminator"):
         t0 = time.perf_counter()
         sl, est = _rc.correr(_p(d.image), "sxt", unscreen=bool(unscreen))
@@ -2619,7 +2684,7 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False)
     elif motor == "syqon":
         r = procesoSAS(ctx, "syqon_starless", {"starless_make_stars": True}, vista)
     else:
-        raise ValueError("motor: starnet, darkstar, syqon o starx.")
+        raise ValueError("motor: starnet, darkstar, syqon (el de SASpro), syqon_cli (SyQon Studio, solo estirada) o starx.")
     r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
     _anotar_estrellas(ctx, antes, d)
     # SASpro deja activa la vista nueva de estrellas: sin esto, las llamadas siguientes sin 'vista' irían a ella.
