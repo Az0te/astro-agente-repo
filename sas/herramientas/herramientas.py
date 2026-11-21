@@ -669,6 +669,66 @@ _ESTRELLAS = {}          # clave de la vista de estrellas -> {"nombre", "de", "r
 _FONDO_PENDIENTE = {}    # {"vista": nombre} si se comparó el fondo y no se aplicó ningún candidato
 
 
+# --- Aviso de color (21 nov 2026) -----------------------------------------------------------------------------
+# IC 405 en SASpro con RDNA-FAST (v7b): todo el procedimiento bien y el final con el rojo pasado (R/G 2,74; la v5, 1,88).
+# Sin umbral por objeto: la referencia es el R/G del objeto en el lineal recién calibrado (menos el cielo), y el final se
+# compara con ella. En las pasadas buenas de IC 405 el final quedó entre −15 % y +12 % del lineal; la v7b, +28 %, y la de
+# Siril con RDNA, +69 %. exportarFinal se niega una vez fuera de ±25 %; la segunda vez exporta con el aviso (sin bucles).
+_COLOR_REF = {}          # {"rg", "vista", "forma", "negado"}
+_COLOR_TOL = 0.25
+
+
+def _rg_objeto(p, restar_cielo):
+    """R/G mediano en la zona del objeto (sin estrellas); en el lineal, menos el cielo de cada canal. p ya reducida."""
+    if p.shape[0] != 3:
+        return None
+    z = M.zonas_objeto_cielo(p, 16)
+    o = z["obj_px"]
+    if o.sum() < 500:
+        return None
+    r, g = float(np.median(p[0][o])), float(np.median(p[1][o]))
+    if restar_cielo:
+        s = M.cielo_por_canal(p, z["medidas"]["_celdas"])
+        r, g = r - s[0], g - s[1]
+    return r / g if g > 1e-6 and r > 0 else None
+
+
+def _anotar_color_lineal(ctx, vista):
+    try:
+        d = _doc(ctx, vista)
+        p = _p(d.image)
+        q = p[:, ::4, ::4]
+        if M.lineal(q):
+            rg = _rg_objeto(q, True)
+            if rg:
+                _COLOR_REF.clear()
+                _COLOR_REF.update(rg=rg, vista=_nombre(d), forma=tuple(np.shape(p)[1:]), negado=False)
+    except Exception:
+        pass                                     # sin referencia no hay aviso; nunca tumba la calibración
+
+
+def _control_color(p, forzar):
+    """None si el color del objeto sigue al del lineal calibrado; si no, el texto del aviso (y la negativa, una vez)."""
+    ref = _COLOR_REF.get("rg")
+    if not ref or tuple(np.shape(p)[1:]) != _COLOR_REF.get("forma"):
+        return None
+    rg = _rg_objeto(p[:, ::4, ::4], False)
+    if rg is None:
+        return None
+    x = rg / ref
+    if abs(x - 1) <= _COLOR_TOL:
+        return None
+    texto = (f"el R/G del objeto es {rg:.2f} y en el lineal calibrado ('{_COLOR_REF.get('vista')}') era {ref:.2f} "
+             f"(×{x:.2f}, más de ±{int(_COLOR_TOL * 100)} %): ")
+    texto += ("el final está más rojo de lo que dan los datos. Revisa la combinación (un candidato de combinarCandidatos con "
+              "menos peso de Hα) o la saturación (saturacionCandidatos más suave)" if x > 1 else
+              "el final ha perdido el color del objeto. Revisa la combinación (más peso de Hα) o la saturación")
+    if not forzar and not _COLOR_REF.get("negado"):
+        _COLOR_REF["negado"] = True
+        raise RuntimeError("Aviso de color: " + texto + ", y exporta después.")
+    return "Aviso de color: " + texto + "."
+
+
 def _clave(d):
     return getattr(d, "uid", None) or _nombre(d)
 
@@ -698,6 +758,7 @@ def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
     if _falta_inyeccion() and not forzar:
         raise RuntimeError("Hay masters de banda estrecha alineados junto a un RGB de banda ancha y no se ha aplicado "
                            "ninguna inyección: el final saldría sin la señal de Hα y OIII. Llama a combinarCandidatos(ha=<capa Hα estirada>, oiii=<capa OIII estirada>, vista=<la RGB, ya estirada y con sus estrellas>), aplica el recomendado (aplicarCandidato) y exporta después. forzar: true sólo si el usuario quiere el RGB solo.")
+    aviso_color = _control_color(_p(d.image), forzar)
     fich = _meta(d).get("file_path")
     c = _ruta(carpeta, "carpeta") if carpeta else (Path(fich).parent if fich else DATOS / "exportado")
     base = _seguro(nombre or Path(fich or _nombre(d)).stem) + "_final"
@@ -710,6 +771,8 @@ def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
     if _FONDO_PENDIENTE:
         r["aviso"] = (f"Se comparó el fondo (fondoCandidatos) en '{_FONDO_PENDIENTE.get('vista')}' y no se aplicó ningún "
                       "candidato: si el cielo no quedó como querías, aplica el recomendado (aplicarCandidato) y exporta de nuevo.")
+    if aviso_color:
+        r["aviso_color"] = aviso_color
     return r
 
 
@@ -2394,7 +2457,9 @@ def neutralizarFondo(ctx, vista=None, rect=None):
 
 def calibrarColor(ctx, vista=None, modo="star", umbral=50.0):
     """L12 color: White Balance de SASpro (modo star: con las estrellas; auto; manual con ayudaProceso)."""
-    return _con_color(ctx, vista, "white_balance", {"mode": modo, "threshold": float(umbral)})
+    r = _con_color(ctx, vista, "white_balance", {"mode": modo, "threshold": float(umbral)})
+    _anotar_color_lineal(ctx, vista)             # referencia del aviso de color de exportarFinal
+    return r
 
 
 def _pct_estrellas(d):

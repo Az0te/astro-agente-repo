@@ -3427,12 +3427,78 @@ def _falta_inyeccion():
 
 
 
+# --- Aviso de color (21 nov 2026, como en SASpro) ---------------------------------------------------------------
+# IC 405 con RDNA-FAST: el final salió con R/G 4,67 cuando el lineal calibrado daba 2,77 (+69 %). Sin umbral por objeto:
+# la referencia es el R/G del objeto en el lineal recién calibrado (menos el cielo). En las pasadas buenas el final quedó
+# entre −15 % y +12 % del lineal. exportarFinal se niega una vez fuera de ±25 %; la segunda vez exporta con el aviso.
+_COLOR_REF = {}          # {"rg", "forma", "negado", "aviso"}
+_COLOR_TOL = 0.25
+_ACTUAL = {}             # el objeto siril de la llamada en curso (las guardas de antes sólo reciben los argumentos)
+
+
+def _rg_objeto(p, restar_cielo):
+    """R/G mediano en la zona del objeto (sin estrellas); en el lineal, menos el cielo de cada canal. p ya reducida."""
+    if p.shape[0] != 3:
+        return None
+    z = _zonas(p, 16)
+    o = z["obj_px"]
+    if o.sum() < 500:
+        return None
+    r, g = float(np.median(p[0][o])), float(np.median(p[1][o]))
+    if restar_cielo:
+        s = _cielo_por_canal(p, z["medidas"]["_celdas"])
+        r, g = r - s[0], g - s[1]
+    return r / g if g > 1e-6 and r > 0 else None
+
+
+def _anotar_color_lineal(r, k):
+    try:
+        p = H._pixeles(_ACTUAL["siril"])
+        q = p[:, ::4, ::4]
+        if _lineal(q):
+            rg = _rg_objeto(q, True)
+            if rg:
+                _COLOR_REF.clear()
+                _COLOR_REF.update(rg=rg, forma=tuple(p.shape[1:]), negado=False)
+    except Exception:
+        pass                                     # sin referencia no hay aviso; nunca tumba la calibración
+
+
+def _control_color(k):
+    _COLOR_REF.pop("aviso", None)
+    ref = _COLOR_REF.get("rg")
+    if not ref:
+        return
+    try:
+        p = H._pixeles(_ACTUAL["siril"])
+    except Exception:
+        return
+    if tuple(p.shape[1:]) != _COLOR_REF.get("forma") or _lineal(p[:, ::8, ::8]):
+        return
+    rg = _rg_objeto(p[:, ::4, ::4], False)
+    if rg is None:
+        return
+    x = rg / ref
+    if abs(x - 1) <= _COLOR_TOL:
+        return
+    texto = (f"el R/G del objeto es {rg:.2f} y en el lineal calibrado era {ref:.2f} (×{x:.2f}, más de "
+             f"±{int(_COLOR_TOL * 100)} %): ")
+    texto += ("el final está más rojo de lo que dan los datos. Revisa la combinación (un candidato de combinarCandidatos con "
+              "menos peso de Hα) o la saturación (saturacionCandidatos más suave)" if x > 1 else
+              "el final ha perdido el color del objeto. Revisa la combinación (más peso de Hα) o la saturación")
+    if not k.get("forzar") and not _COLOR_REF.get("negado"):
+        _COLOR_REF["negado"] = True
+        raise RuntimeError("Aviso de color: " + texto + ", y exporta después.")
+    _COLOR_REF["aviso"] = "Aviso de color: " + texto + "."
+
+
 def _guarda(nombre, antes=None, despues=None):
     import functools
     f = LISTA_PASOS[nombre]
 
     @functools.wraps(f)                          # el puente lee los parámetros con inspect.signature (sigue __wrapped__)
     def g(siril, *a, **k):
+        _ACTUAL["siril"] = siril
         if antes:
             antes(k)
         r = f(siril, *a, **k)
@@ -3450,9 +3516,12 @@ def _antes_exportar(k):
         raise RuntimeError("Hay una capa de estrellas separada sin recombinar: estírala y únela a la starless con "
                            "recombinarEstrellas antes de exportar; si no, el final sale sin estrellas. forzar: true sólo si el "
                            "usuario pide una versión sin estrellas.")
+    _control_color(k)
 
 
 def _despues_exportar(r, k):
+    if _COLOR_REF.get("aviso") and isinstance(r, dict):
+        r["aviso_color"] = _COLOR_REF.pop("aviso")
     if _ENTREGA["fondo_pendiente"] and isinstance(r, dict):
         r["aviso_fondo"] = ("Se comparó el fondo (fondoCandidatos) y no se aplicó ningún candidato: si el cielo no quedó como "
                             "querías, aplica el recomendado (aplicarCandidato) y exporta de nuevo.")
@@ -3474,3 +3543,5 @@ _guarda("recombinarEstrellas", despues=lambda r, k: _ENTREGA.update(estrellas_su
 _guarda("fondoCandidatos", despues=lambda r, k: _ENTREGA.update(fondo_pendiente=True))
 _guarda("aplicarCandidato", despues=_despues_aplicar)
 _guarda("exportarFinal", antes=_antes_exportar, despues=_despues_exportar)
+_guarda("calibrarColor", despues=_anotar_color_lineal)
+_guarda("equilibrarColor", despues=_anotar_color_lineal)
