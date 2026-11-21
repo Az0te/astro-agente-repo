@@ -618,11 +618,13 @@ class MotorLocal:
         self.timeouts = {f["nombre"]: int(f.get("timeout_s", 120)) for f in self.funcs}
         self.reg = None                          # registro de la sesión (sólo Ollama; se crea en el primer turno)
         self.fallos = {}                         # fallos seguidos de cada herramienta (freno a los bucles)
+        self.ultima_llamada, self.repes = None, 0  # llamadas idénticas seguidas (freno a las repeticiones)
 
     def limpiar(self):
         self.mensajes = []
         self.reg = None                          # Limpiar empieza otra sesión en el registro
         self.fallos = {}
+        self.ultima_llamada, self.repes = None, 0
 
     def turno(self, texto, internet, emitir, cancelado, idioma="es"):
         sistema = {"role": "system", "content": prompt_sistema(self.funcs, internet, idioma)}
@@ -788,10 +790,19 @@ class MotorLocal:
                     args = {k: v for k, v in args.items() if k != "forzar"}
                     emitir({"tipo": "aviso", "texto": f"Quito «forzar» de {nombre}: el usuario no lo ha pedido."})
                 emitir({"tipo": "herramienta", "nombre": nombre, "args": args})
+                # 21 nov 2026 (IC 405 en SASpro, RDNA-FAST): 18 gradienteCandidatos seguidos con los mismos argumentos
+                # («pruebo con más muestras» sin pasar ninguna opción). No fallaban, así que el freno de fallos no saltaba.
+                clave = (nombre, json.dumps(args, sort_keys=True, ensure_ascii=False, default=str))
+                self.repes = self.repes + 1 if clave == self.ultima_llamada else 1
+                self.ultima_llamada = clave
                 t1 = time.time()
                 try:
                     # Freno (20 nov 2026, SASpro con RDNA-FAST: 203 resolverAstrometria fallidos cambiando la escala): tras
                     # el aviso, una herramienta que sigue fallando ya no se ejecuta.
+                    if self.repes >= 3:
+                        raise RuntimeError(f"{nombre} no se ejecuta: es la {self.repes}.ª llamada seguida con exactamente "
+                                           "los mismos argumentos y daría el mismo resultado. Aplica el recomendado "
+                                           "(aplicarCandidato), cambia las opciones o pasa al paso siguiente.")
                     if self.fallos.get(nombre, 0) >= MAX_FALLOS_HERRAMIENTA + 2:
                         raise RuntimeError(f"{nombre} no se ejecuta: ha fallado {self.fallos[nombre]} veces seguidas en esta "
                                            "tarea. Sigue con el paso siguiente sin ella o explica el bloqueo.")
@@ -812,6 +823,11 @@ class MotorLocal:
                     exportado = exportado or res.get("estado") == "ok"
                 contenido = (f"[duración: {time.time() - t1:.1f} s]\n" + txt[:MAX_RESULTADO]
                              + ("…" if len(txt) > MAX_RESULTADO else ""))
+                if self.repes == 2:
+                    contenido += (f"\nAVISO: es la 2.ª llamada seguida a {nombre} con los mismos argumentos: el resultado es "
+                                  "el mismo. Aplica el recomendado (aplicarCandidato) o cambia las opciones; una 3.ª igual no "
+                                  "se ejecutará.")
+                    emitir({"tipo": "aviso", "texto": f"{nombre}: 2.ª llamada idéntica seguida; aviso al modelo."})
                 self.fallos[nombre] = 0 if res.get("estado") == "ok" else self.fallos.get(nombre, 0) + 1
                 if self.fallos[nombre] >= MAX_FALLOS_HERRAMIENTA:
                     contenido += (f"\nAVISO: {nombre} ha fallado {self.fallos[nombre]} veces seguidas, aunque cambiaras los "
