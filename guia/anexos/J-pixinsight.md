@@ -33,13 +33,13 @@ Bajo demanda: el **cómo** de cada paso con PixInsight (la guía en JavaScript d
 | L6 HDR | `componerHDR` |
 | L7 Canales | `desmezclarDualBand` |
 | L8 Astrometría | `resolverAstrometria` (repetir tras BXT o GraXpert si `hasAstrometricSolution` es falso) |
-| L9 Gradiente | **`gradienteCandidatos`** / `gradienteVarias` (GraXpert sample_free 10 y 8, GraXpert IA, GradientCorrection, MGC con astrometría, polinomio 1 y 2) |
+| L9 Gradiente | **`gradienteCandidatos`** / `gradienteVarias` (GraXpert sample_free 10 y 8, GraXpert IA, SyQon DeepGradient, GradientCorrection, MGC con astrometría, polinomio 1 y 2) |
 | L10 Combinación | `combinarMasters` (`combinarMismoCanal`, `inyectarHa`) |
 | L11 BXT Correct Only | `bxtCorrectOnly` |
 | L12 Color | `calibrarColor` (SPCC), `neutralizarCielo` |
-| L13 BXT completo | **`bxtCandidatos`** → `bxtAplicar` |
-| L14 NXT suave | **`ruidoCandidatos`** (NXT 3 niveles, MLDenoise, MultiscaleTGVDenoise) → `reducirRuido` |
-| L15 StarX y denoise | `separarEstrellas`; **`ruidoCandidatos`** → `reducirRuido` sobre la starless |
+| L13 BXT completo | **`bxtCandidatos`** → `bxtAplicar` (con SyQon Studio, SyQon Parallax como variante experimental) |
+| L14 NXT suave | **`ruidoCandidatos`** (NXT 3 niveles, MLDenoise, MultiscaleTGVDenoise, SyQon Prism) → `reducirRuido` |
+| L15 StarX y denoise | `separarEstrellas` (`motor: "syqon"` = SyQon Axiom Mini, solo estirada); **`ruidoCandidatos`** → `reducirRuido` sobre la starless |
 | L16 Continuo | `medirContinuo`, `restarContinuo` |
 | L17 Checkpoint | `checkpointLineal` |
 | NL1 Estirado | **`estirarCandidatos`** (GHS al fallo, MAS, Arcsinh) → `estirarCapas` (o `estirarStarless`); sólo la starless |

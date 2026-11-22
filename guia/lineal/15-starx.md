@@ -14,6 +14,7 @@
 - "SXT rinde peor con aberraciones fuertes, sobremuestreo (p. ej. drizzle 2x) y estirados extremos tipo GHS/arcsinh (RC-Astro); puede quitar núcleos de galaxias, núcleos de planetarias, comas de cometas y cruces de filamentos (proteger con máscara)."
 - "En galaxias espirales grandes SXT confunde regiones HII y nudos con estrellas: el estirado de estrellas amplifica esos residuos; usar screen, estirado moderado o no separar estrellas."
 - Donde haya varios motores (StarX, StarNet), compararlos: restos de estrellas, agujeros y objeto quitado. Orientación (astroimagetw): con focal larga suele rendir mejor StarX y además quita píxeles calientes; con focal corta y estrellas pequeñas, StarNet; StarX conserva mejor las galaxias pequeñas del fondo. Si en lineal sale una cuadrícula en el fondo, más solape (×2 de tiempo).
+- SyQon Axiom Mini (SyQon Studio) solo sirve sobre la imagen ya estirada: en lineal sale rota. Para compararlo, separar después de estirar ([Anexo L](../anexos/L-syqon.md)).
 - La capa de estrellas sirve después como **máscara de estrellas** (coge las grandes mejor que la detección de estructuras): guardarla ([Paso 4 no lineal](../no-lineal/04-mascaras.md)).
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-15); en Siril, [Anexo I](../anexos/I-siril.md).

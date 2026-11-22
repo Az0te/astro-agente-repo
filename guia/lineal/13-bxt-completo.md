@@ -35,6 +35,8 @@
 3. Plancha de recortes al 100 % con la misma visualización y CSV de métricas en `<versión>/tests/`; elegir la ganadora y anotarla en el dossier y en la tabla.
 4. Aplicar la ganadora a la imagen entera (si devuelve id de trabajo, esperar con la herramienta de estado).
 
+**SyQon Parallax Nano** (si está SyQon Studio) se enseña como variante experimental: en lineal recorta núcleos a 1,0 y se descarta si satura más que la original ([Anexo L](../anexos/L-syqon.md)).
+
 | Objeto | BXT CO | BXT stars / nonstellar | NXT denoise / detail / iter / separación | Notas |
 |---|---|---|---|---|
 | nebulosa de emisión y reflexión (previo) | no | ? / ? (halos 0,00) | 0,5–0,8 + 0,75 + 0,30 | sin rejilla |

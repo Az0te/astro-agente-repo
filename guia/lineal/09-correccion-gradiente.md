@@ -65,6 +65,8 @@ Entre los candidatos que no se comen el objeto y no dejan manchas visibles se re
 - **Modelo con base de referencia de banda ancha en capas de banda estrecha: no.** La referencia no se parece a la raya (correlación del ajuste 0,55–0,72 frente a 0,98 en banda ancha) y se lleva nebulosa. Si el ajuste a la referencia tiene correlación < 0,9, descartarlo.
 - **SRGC**: con la exclusión de muestras del 50 % por defecto estropeó el color de M31; con 500 muestras y exclusión del 15 % (como en el vídeo de su autor) no se lleva nada. Necesita astrometría e internet.
 
+**SyQon DeepGradient** (si está SyQon Studio) entra como un candidato más en las tres herramientas. Necesita internet; ver [Anexo L](../anexos/L-syqon.md).
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-09); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** Modelo liso y sin objeto; fondo no aplastado con la misma visualización antes y después; contraste objeto−cielo ≥ 90 % en polvo/IFN; la astrometría sigue al terminar. Anillo oscuro alrededor de un objeto extenso = se ha comido el halo: volver atrás y usar plano robusto o muestras manuales.
