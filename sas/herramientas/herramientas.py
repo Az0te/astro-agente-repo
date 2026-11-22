@@ -25,6 +25,7 @@ import halo as _halo
 import cielo as _cielo
 import rc as _rc
 import syqon as _syqon
+import hiperbolico as _hip
 import medidas as M
 from medidas import _r
 
@@ -1336,11 +1337,14 @@ LOCALES = {"estirado_mtf": _estirado_mtf, "estirado_sas_directo": _estirado_sas_
            # SyQon Studio (syqon-cli, syqon.py): también sobre una copia (22 nov 2026)
            "syqon_gradiente": lambda p, **op: _syqon.gradiente(p)["salida"],
            "syqon_prism": lambda p, **op: _syqon.ruido(p)["salida"],
-           "syqon_parallax": lambda p, **op: _syqon.parallax(p, **op)["salida"]}
+           "syqon_parallax": lambda p, **op: _syqon.parallax(p, **op)["salida"],
+           # Hiperbólico en luminancia que conserva el color (hiperbolico.py, 22 nov 2026)
+           "hiperbolico": lambda p, **op: _hip.estirar(p, **op)[0]}
 
 
-def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True):
-    """Paso NL1: estirado estadístico de SASpro (enlazado y por canal, varias medianas), GHS y un estirado MTF propio,
+def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True, hiperbolico=True):
+    """Paso NL1: estirado estadístico de SASpro (enlazado y por canal, varias medianas), GHS, un estirado MTF propio y el
+    hiperbólico en luminancia que conserva el color (cielo 0,10 y 0,12),
     medidos con los criterios de la ficha: cielo, ruido relativo, recortes en negro y en blanco. La vista no cambia.
     Un estirado estadístico que no llega a su mediana objetivo se descarta (en SASpro 1.24.2 algunas medianas dejan la
     imagen casi negra)."""
@@ -1367,6 +1371,10 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
         sp = float(c["cielo"])
         lista.append(("GHS (pivote en el cielo)", "ghs", {"alpha": 6.0, "beta": 1.5, "gamma": 1.0,
                                                           "pivot": min(max(sp, 0.0), 0.5), "lp": 0.0, "hp": 0.0}))
+    if hiperbolico:
+        for cl in (0.10, 0.12):
+            lista.append((f"hiperbólico en luminancia, color conservado (cielo {cl})", "hiperbolico",
+                          {"cielo": cl, "proteccion": 1.5, "color": 1.0}))
 
     def medir(q):
         m = M.cielo(q)

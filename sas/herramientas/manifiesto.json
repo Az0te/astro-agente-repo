@@ -835,8 +835,8 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/01-estirado.md",
-   "descripcion": "NL1 estirado: compara el estirado estadístico de SASpro (enlazado y por canal, a varias medianas), GHS con el pivote en el cielo y un estirado MTF propio (exacto, como las previas); mide cielo, ruido relativo, recortes a negro y a blanco y dominante del cielo, y recomienda. Descarta los que no llegan a su mediana objetivo (en SASpro 1.24.2 el estadístico a 0,2–0,3 deja algunas imágenes casi negras). La vista NO cambia (aplicarCandidato).",
-   "resumen": "NL1: compara estirado estadístico, GHS y MTF propio; no cambia la vista.",
+   "descripcion": "NL1 estirado: compara el estirado estadístico de SASpro (enlazado y por canal, a varias medianas), GHS con el pivote en el cielo, un estirado MTF propio (exacto, como las previas) y un hiperbólico en luminancia que conserva el color de cada píxel (cielo 0,10 y 0,12; necesita el color ya calibrado); mide cielo, ruido relativo, recortes a negro y a blanco y dominante del cielo, y recomienda. Descarta los que no llegan a su mediana objetivo (en SASpro 1.24.2 el estadístico a 0,2–0,3 deja algunas imágenes casi negras). La vista NO cambia (aplicarCandidato).",
+   "resumen": "NL1: compara estirado estadístico, GHS, MTF propio e hiperbólico; no cambia la vista.",
    "params": {
     "type": "object",
     "properties": {
@@ -858,6 +858,10 @@
      "propio": {
       "type": "boolean",
       "description": "Añadir el estirado MTF propio enlazado (por defecto true)."
+     },
+     "hiperbolico": {
+      "type": "boolean",
+      "description": "Probar el hiperbólico en luminancia que conserva el color (por defecto true)."
      }
     }
    }
