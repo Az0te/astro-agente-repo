@@ -59,10 +59,12 @@ function Preguntar($texto, [bool]$porDefecto = $true) {
 
 function Barras($p) { return ($p -replace '\\', '/') }
 
+# Copia antes de tocar: .antes-astropilot la primera vez; si ya hay una, otra con fecha (no se pisa ninguna).
 function Copia($f) {
-  if ((Test-Path -LiteralPath $f) -and -not (Test-Path -LiteralPath ($f + $SUFIJO))) {
-    Copy-Item -LiteralPath $f -Destination ($f + $SUFIJO)
-  }
+  if (-not (Test-Path -LiteralPath $f)) { return }
+  $c = $f + $SUFIJO
+  if (Test-Path -LiteralPath $c) { $c = $f + $SUFIJO + "-" + (Get-Date -Format "yyyyMMdd-HHmmss") }
+  Copy-Item -LiteralPath $f -Destination $c
 }
 
 function EscribirUtf8SinBom($f, $texto) {
@@ -416,10 +418,18 @@ function ConfigurarClaudeDesktop {
   foreach ($k in $servidores.Keys) { $srv[$k] = @{ command = "node"; args = @((Barras $servidores[$k])) } }
   $js = Join-Path $env:TEMP "astropilot_desktop.js"
   EscribirUtf8SinBom $js $JS_DESKTOP
-  if (-not $Simular) { Copia $cfg }
-  $env:AP_CFG = $cfg; $env:AP_SRV = ($srv | ConvertTo-Json -Depth 5 -Compress); $env:AP_SIMULAR = $(if ($Simular) { "1" } else { "0" })
+  $env:AP_CFG = $cfg; $env:AP_SRV = ($srv | ConvertTo-Json -Depth 5 -Compress)
+  # Primero en seco: solo se copia y se escribe si hay algo que cambiar.
+  $env:AP_SIMULAR = "1"
   $salida = & $node $js 2>&1
   $codigo = $LASTEXITCODE
+  $cambia = @($salida | Where-Object { "$_" -match '^(PUESTO|QUITADO|REPARADO)' }).Count -gt 0
+  if ($codigo -eq 0 -and $cambia -and -not $Simular) {
+    Copia $cfg
+    $env:AP_SIMULAR = "0"
+    $salida = & $node $js 2>&1
+    $codigo = $LASTEXITCODE
+  }
   Remove-Item -LiteralPath $js -ErrorAction SilentlyContinue
   if ($codigo -ne 0) {
     Aviso (T "Claude Desktop: $cfg no es un JSON válido y no sé repararlo; no lo toco. Añade los servidores a mano (mcp\README.md)." `
@@ -554,17 +564,23 @@ function ConfigurarSiril {
 }
 if ($sirilExe) { Titulo "Siril"; ConfigurarSiril }
 
+# Mismo contenido aunque cambien los saltos de línea (git en Windows deja CRLF; una copia anterior puede tener LF).
+function MismoTexto($a, $b) {
+  if (-not (Test-Path -LiteralPath $a) -or -not (Test-Path -LiteralPath $b)) { return $false }
+  return (([System.IO.File]::ReadAllText($a) -replace "`r`n", "`n") -ceq ([System.IO.File]::ReadAllText($b) -replace "`r`n", "`n"))
+}
+
 function ConfigurarSas {
   PonerVariable "SETIASTROPILOT_REPO" $REPO
   foreach ($n in @("SetiAstroPilot.py", "SetiAstroPilot_Chat.py")) {
     $origen = Join-Path $REPO "sas\puente\$n"
     $destino = Join-Path $sasScripts $n
     $t = (T "SASpro: copiado $n a" "SASpro: copied $n to") + " $sasScripts"
-    if ($Simular) { Haria $t; continue }
-    if (-not (Test-Path -LiteralPath $sasScripts)) { New-Item -ItemType Directory -Path $sasScripts -Force | Out-Null }
-    if ((Test-Path -LiteralPath $destino) -and ((Get-FileHash -LiteralPath $destino).Hash -eq (Get-FileHash -LiteralPath $origen).Hash)) {
+    if (MismoTexto $destino $origen) {
       Info (T "SASpro: $n ya está al día." "SASpro: $n is up to date."); continue
     }
+    if ($Simular) { Haria $t; continue }
+    if (-not (Test-Path -LiteralPath $sasScripts)) { New-Item -ItemType Directory -Path $sasScripts -Force | Out-Null }
     Copia $destino
     Copy-Item -LiteralPath $origen -Destination $destino -Force
     Ok $t
