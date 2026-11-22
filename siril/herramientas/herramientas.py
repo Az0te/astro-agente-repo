@@ -133,9 +133,9 @@ def ping(siril):
         r["imagen"] = _info(siril)
     try:
         import syqon
-        s = syqon.estado()
-        r["syqon"] = {"version": s.get("version"), "gratis": [m for m in syqon.GRATIS if m in s["modelos"]]} \
-            if s.get("disponible") else None
+        sq = syqon.estado()      # no «s»: es el módulo sirilpy en este fichero (UnboundLocalError en ping)
+        r["syqon"] = {"version": sq.get("version"), "gratis": [m for m in syqon.GRATIS if m in sq["modelos"]]} \
+            if sq.get("disponible") else None
     except Exception:
         r["syqon"] = None
     return r
