@@ -822,8 +822,8 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/01-estirado.md",
-   "descripcion": "Paso 1 no lineal: compara GHS por pasadas cortas en tres intensidades (suave y medio paran al 60 y 80 % del ruido límite; fuerte, al fallo), arcsinh al fallo y autostretch enlazado sobre la starless lineal, todos con el cielo en el mismo objetivo (0,10 nebulosas y cúmulos, 0,07 galaxias, 0,12 nebulosas oscuras), y recomienda el que más separa la señal débil del fondo sin fallos de ruido, recorte ni dominante. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También GHS con el punto de simetría en la señal débil (brazos). Mide senal_debil (zona débil del objeto sobre el cielo); en galaxias, y en empates de separación, recomienda el que más la levanta. Topes: p99 ≤ 0,80, p999 ≤ 0,92 y que estire (p99 al menos 0,10 sobre el cielo); GHS en modo que conserva el color. También un estirado por escalas (base comprimida, detalle conservado), con el mismo cielo y topes. Antes de estirar quita el pedestal del cielo en lineal (un mismo resto en los tres canales: sale el color real), y en GHS y arcsinh las altas luces van hacia neutro (sin núcleo salmón). Sólo falla por dominante si es un tinte (aditivo en las celdas oscuras y planas), no por el color propio de polvo o nebulosa.",
-   "resumen": "Paso 1 NL: compara GHS, arcsinh, por escalas y autostretch con el mismo cielo; no cambia la imagen (aplicarCandidato).",
+   "descripcion": "Paso 1 no lineal: compara GHS por pasadas cortas en tres intensidades (suave y medio paran al 60 y 80 % del ruido límite; fuerte, al fallo), arcsinh al fallo, autostretch enlazado y un hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo (0,10 nebulosas y cúmulos, 0,07 galaxias, 0,12 nebulosas oscuras), y recomienda el que más separa la señal débil del fondo sin fallos de ruido, recorte ni dominante. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También GHS con el punto de simetría en la señal débil (brazos). Mide senal_debil (zona débil del objeto sobre el cielo); en galaxias, y en empates de separación, recomienda el que más la levanta. Topes: p99 ≤ 0,80, p999 ≤ 0,92 y que estire (p99 al menos 0,10 sobre el cielo); GHS en modo que conserva el color. También un estirado por escalas (base comprimida, detalle conservado), con el mismo cielo y topes. Antes de estirar quita el pedestal del cielo en lineal (un mismo resto en los tres canales: sale el color real), y en GHS y arcsinh las altas luces van hacia neutro (sin núcleo salmón). Sólo falla por dominante si es un tinte (aditivo en las celdas oscuras y planas), no por el color propio de polvo o nebulosa.",
+   "resumen": "Paso 1 NL: compara GHS, arcsinh, por escalas, autostretch e hiperbólico con el mismo cielo; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
     "properties": {
@@ -856,10 +856,11 @@
         "ghs_debil",
         "asinh",
         "escalas",
-        "autostretch"
+        "autostretch",
+        "hiperbolico"
        ]
       },
-      "description": "Métodos a comparar (por defecto todos: GHS suave, medio y al fallo, arcsinh, por escalas y autostretch)."
+      "description": "Métodos a comparar (por defecto todos: GHS suave, medio y al fallo, arcsinh, por escalas, autostretch e hiperbólico)."
      },
      "negro_lineal": {
       "type": "boolean",

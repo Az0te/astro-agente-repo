@@ -28,6 +28,7 @@ import numpy as np
 import herramientas as H
 import halo as _halo
 import syqon as _syqon
+import hiperbolico as _hip
 
 TRABAJO = H.DATOS / "trabajo"
 CONFIG = H.DATOS / "config.json"
@@ -1879,6 +1880,17 @@ def _asinh_al_fallo(siril, info, crudo, cielo, lim):
     return c, d
 
 
+def _hiperbolico(siril, info, crudo, cielo, lim, proteccion=1.5, color=1.0):
+    """Hiperbólico en luminancia que conserva el color (hiperbolico.py), con el cielo en el objetivo y luego el punto negro
+    como los demás."""
+    q, d = _hip.estirar(np.clip(_de_siril(crudo), 0, 1), cielo=cielo, proteccion=proteccion, color=color)
+    _restaurar(siril, _a_siril(q, crudo.dtype).reshape(crudo.shape))
+    c = _medir(siril, info)
+    bp, c = _punto_negro(siril, info, c, cielo, lim.get("por_canal"))
+    d["punto_negro_final"] = _r(bp, 5)
+    return c, d
+
+
 def _autostretch(siril, info, crudo, cielo, lim):
     siril.cmd("autostretch", "-linked", "-2.8", f"{min(0.5, cielo * 2):.3f}")
     c = _medir(siril, info)
@@ -2088,7 +2100,7 @@ def _dominante_aditiva(p, celdas_px=None, S=64):
 
 
 def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
-                      metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "asinh", "escalas", "autostretch"),
+                      metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "asinh", "escalas", "autostretch", "hiperbolico"),
                       negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True):
     """Paso 1 no lineal: compara GHS al fallo, arcsinh, estirado por escalas y autostretch con el cielo en el mismo
     objetivo. No cambia la imagen.
@@ -2136,7 +2148,8 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
              "ghs_debil": ("GHS al fallo, simetría en la señal débil", ln(_ghs_debil)),
              "asinh": ("arcsinh al fallo", ln(_asinh_al_fallo)),
              "escalas": ("por escalas (base comprimida, detalle conservado)", _escalas),
-             "autostretch": ("autostretch enlazado", _autostretch)}
+             "autostretch": ("autostretch enlazado", _autostretch),
+             "hiperbolico": ("hiperbólico en luminancia, color conservado", _hiperbolico)}
     r = {"cielo_objetivo": cielo, "limites": {k: v for k, v in lim.items() if k != "por_canal"},
          "punto_negro": "por canal" if negro_por_canal else "común", "candidatos": [], "errores": []}
     if bps_lineal is not None:
