@@ -520,7 +520,7 @@
    "fichero": "gradiente.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free y con IA, GradientCorrection de PixInsight, MGC con y sin bordes, polinomio robusto de grado 1 y 2, polinomio fuera del halo (+ crominancia: quita manchas de color de escala media sin tocar la luminancia), y las cadenas polinomio + gradiente de bordes, polinomio + cielo con máscara y polinomio + GraXpert) sobre copias GC_*, mide cuánto se come cada modelo del objeto, cuánto gradiente de cielo deja y las manchas de brillo y color que quedan en bordes y centro, y recomienda: entre los que no se comen el objeto y no dejan manchas visibles, el que menos objeto quita. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias. Incluye diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto).",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (GraXpert sample_free y con IA, SyQon DeepGradient por syqon-cli si SyQon Studio está instalado (necesita internet, 5 s a ~2 min; si no, va en omitidos; opciones.syqon: false para no probarlo), GradientCorrection de PixInsight, MGC con y sin bordes, polinomio robusto de grado 1 y 2, polinomio fuera del halo (+ crominancia: quita manchas de color de escala media sin tocar la luminancia), y las cadenas polinomio + gradiente de bordes, polinomio + cielo con máscara y polinomio + GraXpert) sobre copias GC_*, mide cuánto se come cada modelo del objeto, cuánto gradiente de cielo deja y las manchas de brillo y color que quedan en bordes y centro, y recomienda: entre los que no se comen el objeto y no dejan manchas visibles, el que menos objeto quita. No toca la original. Varios minutos: devuelve un trabajo. UNA vista por llamada: para varias, gradienteVarias. Incluye diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto).",
    "resumen": "Paso 9 lineal, UNA vista: compara GraXpert, GradientCorrection, MGC, polinomio, polinomio fuera del halo (+ crominancia) y polinomio + bordes / + GraXpert sobre copias GC_*, mide manchas y recomienda. Devuelve un trabajo.",
    "paso": "lineal/09-correccion-gradiente.md",
    "params": {
@@ -757,7 +757,7 @@
    "fichero": "deconvolucion.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 13 lineal: rejilla de BlurXTerminator en un recorte (no toca la imagen) con FWHM, ringing, gusanos y contraste por variante, y recomendación.",
+   "descripcion": "Paso 13 lineal: rejilla de BlurXTerminator en un recorte (no toca la imagen) con FWHM, ringing, gusanos y contraste por variante, y recomendación. Con SyQon Studio instalado añade SyQon Parallax Nano (corrección + deblur, --application 0,5) como variante EXPERIMENTAL, con saturados (en lineal recorta núcleos a 1,0: descartado si satura más que la original); no entra en la recomendación.",
    "paso": "lineal/13-bxt-completo.md",
    "params": {
     "type": "object",
@@ -768,7 +768,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\" | \"cumulo\" | \"snr_bajo\", nonstellar: [..], stars, halos, recorte: 1500 }"
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\" | \"cumulo\" | \"snr_bajo\", nonstellar: [..], stars, halos, recorte: 1500, syqon: false (sin Parallax), syqonAplicacion: 0.5 }"
      }
     },
     "required": [
@@ -829,8 +829,8 @@
    "fichero": "ruido.js",
    "nivel": "copias",
    "timeout_s": 1800,
-   "descripcion": "Compara NoiseXTerminator (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45), NXT con separación de frecuencias (en color: croma de baja frecuencia 1,0 contra las manchas de color), NXT fuerte sólo en zonas de poca señal (máscara), MLDenoise (amount 1,0, modelo .xmlm del perfil; lento) y MultiscaleTGVDenoise (strength 0,5/1,0) sobre la misma entrada con las medidas de reducirRuido, y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
-   "resumen": "Compara NXT, MLDenoise y MultiscaleTGVDenoise sobre la misma entrada y se queda con el mejor que cumple. Preferible a reducirRuido.",
+   "descripcion": "Compara NoiseXTerminator (lineal 0,30/0,50/0,70; estirada 0,15/0,30/0,45), NXT con separación de frecuencias (en color: croma de baja frecuencia 1,0 contra las manchas de color), NXT fuerte sólo en zonas de poca señal (máscara), MLDenoise (amount 1,0, modelo .xmlm del perfil; lento) MultiscaleTGVDenoise (strength 0,5/1,0) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) sobre la misma entrada con las medidas de reducirRuido, y se queda con el mejor que cumpla los controles; devuelve la tabla de la comparación. Preferible a reducirRuido con un solo valor.",
+   "resumen": "Compara NXT, MLDenoise, MultiscaleTGVDenoise y SyQon Prism (lineal) sobre la misma entrada y se queda con el mejor que cumple. Preferible a reducirRuido.",
    "paso": "lineal/14-noisex-suave.md",
    "params": {
     "type": "object",
@@ -841,7 +841,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodos: [\"nxt\", \"frecuencias\", \"mascara\", \"ml\", \"tgv\", \"hibrido\"], niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
+      "description": "Opcional. { metodos: [\"nxt\", \"frecuencias\", \"mascara\", \"ml\", \"tgv\", \"hibrido\", \"syqon\"] (syqon = SyQon Prism, solo lineal; si no está o la imagen es no lineal va en omitidos), niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
      }
     },
     "required": [
@@ -854,7 +854,7 @@
    "fichero": "ruido.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 15 lineal: StarXTerminator en una copia: starless + capa de estrellas, con comprobaciones.",
+   "descripcion": "Paso 15 lineal: StarXTerminator en una copia: starless + capa de estrellas, con comprobaciones. Con motor: \"syqon\", SyQon Axiom Mini (syqon-cli) SOLO sobre imagen ya estirada (en lineal sale rota y se niega).",
    "paso": "lineal/15-starx.md",
    "params": {
     "type": "object",
@@ -865,7 +865,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { nuevaVista: \"Starless\", nuevasEstrellas, overlap }"
+      "description": "Opcional. { nuevaVista: \"Starless\", nuevasEstrellas, overlap, motor: \"syqon\" (solo estirada) }"
      }
     },
     "required": [

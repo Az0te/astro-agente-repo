@@ -463,6 +463,26 @@ function gradienteCandidatos(viewId, o) {
     }
   }
 
+  // SyQon DeepGradient (syqon-cli, 22 nov 2026), sobre una copia. Necesita internet (y las bases de ASTAP); si SyQon Studio
+  // no está, o la casilla Internet está desmarcada, va en omitidos. syqon: false para no probarlo.
+  if (o.syqon !== false) {
+    if (typeof syqonGradiente !== "function") eval(File.readTextFile(GR_DIR + "/syqon.js"));
+    if (!sqHay("deep-gradient")) (r.omitidos = r.omitidos || []).push("SyQon DeepGradient: SyQon Studio no está instalado.");
+    else if (typeof PIASTROPILOT_INTERNET !== "undefined" && PIASTROPILOT_INTERNET === false)
+      (r.omitidos = r.omitidos || []).push("SyQon DeepGradient: necesita internet y la casilla Internet está desmarcada.");
+    else {
+      try {
+        var sqg = syqonGradiente(viewId, { nuevaVista: grFreeId("GC_SYQON") });
+        r.candidatos.push({ vista: sqg.vista, modelo: sqg.modelo, metodo: "SyQon DeepGradient", parametros: sqg.comando,
+                            metricas: grMeasure(base, sqg.modelo, sqg.vista, range0),
+                            notas: "IA de SyQon Studio con referencia del cielo (necesita internet); " + sqg.segundos + " s. El modelo es original − corregida." });
+      } catch (e) {
+        if (e.codigo == 4) (r.omitidos = r.omitidos || []).push("SyQon DeepGradient: licencia o modelo no disponible (código 4).");
+        else r.errores.push("SyQon DeepGradient: " + e);
+      }
+    }
+  }
+
   // GradientCorrection (proceso nativo de PixInsight): automático, sin astrometría ni MARS, con protección de las
   // estructuras. Sobre una copia; genera el modelo de gradiente. gradientCorrection: false para no probarlo; gcOpts
   // para cambiar sus parámetros (scale, smoothness, protection...).

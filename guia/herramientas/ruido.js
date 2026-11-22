@@ -244,9 +244,11 @@ function reducirRuido(viewId, o) {
   // modelo (MLDenoise.modelPath vacío) y dejaba vistas temporales abiertas en cada intento.
   var metodo = String(o.metodo || "nxt").toLowerCase().replace(/[^a-z]/g, "");
   metodo = { noisex: "nxt", noisexterminator: "nxt", mldenoise: "ml", multiscaletgvdenoise: "tgv", tgvdenoise: "tgv",
-             hybrid: "hibrido", mask: "mascara" }[metodo] || metodo;
-  if (["nxt", "mascara", "ml", "tgv", "hibrido"].indexOf(metodo) < 0)
-    throw new Error("metodo «" + o.metodo + "» no existe: usa \"nxt\", \"ml\", \"tgv\", \"mascara\" o \"hibrido\" (en minúsculas)");
+             hybrid: "hibrido", mask: "mascara", prism: "syqon", syqonprism: "syqon" }[metodo] || metodo;
+  if (["nxt", "mascara", "ml", "tgv", "hibrido", "syqon"].indexOf(metodo) < 0)
+    throw new Error("metodo «" + o.metodo + "» no existe: usa \"nxt\", \"ml\", \"tgv\", \"mascara\", \"hibrido\" o \"syqon\" (en minúsculas)");
+  if (metodo === "syqon" && typeof syqonRuido !== "function")
+    eval(File.readTextFile(((typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS : File.homeDirectory + "/astro-agente-repo/guia/herramientas") + "/syqon.js"));
   var aviso = null, t0 = Date.now();
   var mono = src.image.numberOfChannels === 1;
   if (metodo === "hibrido" && rdModeloML(o)) o.modelo = rdModeloML(o);
@@ -261,9 +263,18 @@ function reducirRuido(viewId, o) {
   }
   if (metodo === "ml" && !rdModeloML(o)) throw new Error("MLDenoise necesita un modelo .xmlm: pásalo en { modelo } o apunta su ruta en perfil.md");
   if (metodo === "tgv" && typeof MultiscaleTGVDenoise !== "function") throw new Error("MultiscaleTGVDenoise no está disponible (PixInsight 1.9.6 o posterior)");
-  var w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn")), v = w.mainView;
-  var nxtHechos = null, mascaraInfo = null, linealIn = src.image.median() < 0.05;
-  if (metodo === "nxt") {
+  var nxtHechos = null, mascaraInfo = null, linealIn = src.image.median() < 0.05, sqInfo = null, w, v;
+  if (metodo === "syqon") {
+    // SyQon Prism Essential (syqon-cli): crea su propia vista nueva; solo lineal (en no lineal da código 2).
+    var nombreSq = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn");
+    for (var nq = 2; !ImageWindow.windowById(nombreSq).isNull; ++nq) nombreSq = ((typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn")) + "_" + nq;
+    sqInfo = syqonRuido(viewId, { nuevaVista: nombreSq });
+    w = ImageWindow.windowById(sqInfo.vista); v = w.mainView;
+  } else {
+    w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_dn")); v = w.mainView;
+  }
+  if (metodo === "syqon") { }
+  else if (metodo === "nxt") {
     nxtHechos = rdNXT(v, o);
     if (o.frecuencias && !nxtHechos.some(function (h) { return /low_freq_color|color_low_freq|lf_color|LfColor/.test(h); }))
       aviso = (aviso ? aviso + "; " : "") + "esta versión de NXT no tiene croma de baja frecuencia: se aplicó sin ella (" + nxtHechos.join(", ") + ")";
@@ -356,14 +367,16 @@ function reducirRuido(viewId, o) {
   return {
     vista: v.id, original: viewId,
     metodo: { nxt: o.frecuencias ? "NoiseXTerminator con separación de color y de frecuencias" : "NoiseXTerminator",
-              mascara: "NoiseXTerminator sólo donde hay poca señal (máscara)", ml: "MLDenoise", tgv: "MultiscaleTGVDenoise" }[metodo] || "híbrido MLDenoise + NXT",
+              mascara: "NoiseXTerminator sólo donde hay poca señal (máscara)", ml: "MLDenoise", tgv: "MultiscaleTGVDenoise",
+              syqon: "SyQon Prism Essential" }[metodo] || "híbrido MLDenoise + NXT",
     parametros: metodo === "nxt" ? (o.frecuencias ? { frecuencias: o.frecuencias, aplicado: nxtHechos } :
                                   { denoise: (o.denoise !== undefined) ? o.denoise : 0.50, detail: (o.detail !== undefined) ? o.detail : 0.15,
                                     iterations: o.iterations || 2, croma: (o.croma !== undefined) ? o.croma : null }) :
                 metodo === "mascara" ? { denoise: mascaraInfo.denoise, mascara_cobertura_pct: mascaraInfo.cobertura_pct,
                                          mascara: "1 en cielo y señal débil, 0 desde cielo + 20σ (rampa desde + 3σ), suavizada" } :
                 metodo === "ml" ? { amount: (o.amount !== undefined) ? o.amount : 1.0 } :
-                metodo === "tgv" ? { strength: (o.strength !== undefined) ? o.strength : 0.5 } : { modelo: o.modelo },
+                metodo === "tgv" ? { strength: (o.strength !== undefined) ? o.strength : 0.5 } :
+                metodo === "syqon" ? { comando: sqInfo.comando, proveedor: sqInfo.proveedor } : { modelo: o.modelo },
     aviso: aviso, segundos: Math.round((Date.now() - t0) / 1000), medidas: q, no_cumple: noCumple,
     control: {
       medido: { contraste_conservado: q.contraste_zona_debil_pct >= -5, residual_solo_ruido: q.residual_estructura <= 2.0,
@@ -397,8 +410,8 @@ function ruidoCandidatos(viewId, o) {
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
   var lineal = src.image.median() < 0.05, t0 = Date.now();
-  var metodos = o.metodos || ["nxt", "frecuencias", "mascara", "ml", "tgv"], color = src.image.numberOfChannels >= 3;
-  var pruebas = [];
+  var metodos = o.metodos || ["nxt", "frecuencias", "mascara", "ml", "tgv", "syqon"], color = src.image.numberOfChannels >= 3;
+  var pruebas = [], omitidos = [];
   if (metodos.indexOf("nxt") >= 0)
     (o.niveles || (lineal ? [0.30, 0.50, 0.70] : [0.15, 0.30, 0.45])).forEach(function (d) {
       pruebas.push({ etiqueta: "NXT denoise " + d, op: { metodo: "nxt", denoise: d }, sufijo: "_nxt" + Math.round(100 * d) });
@@ -425,6 +438,14 @@ function ruidoCandidatos(viewId, o) {
   // (principal: true) o si se pide en metodos. Nunca con estrellas.
   if (metodos.indexOf("hibrido") >= 0 || (o.principal && !o.metodos))
     pruebas.push({ etiqueta: "Híbrido MLDenoise fino + NXT 0.95 grueso", op: { metodo: "hibrido" }, sufijo: "_hib" });
+  // SyQon Prism Essential (syqon-cli, 22 nov 2026): solo lineal; si SyQon Studio no está, se omite sin fallar.
+  if (metodos.indexOf("syqon") >= 0) {
+    if (typeof sqHay !== "function")
+      eval(File.readTextFile(((typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS : File.homeDirectory + "/astro-agente-repo/guia/herramientas") + "/syqon.js"));
+    if (!lineal) { if (o.metodos) omitidos.push("SyQon Prism Essential: solo admite imagen lineal."); }
+    else if (!sqHay("prism-essential")) { if (o.metodos) omitidos.push("SyQon Prism Essential: SyQon Studio no está instalado."); }
+    else pruebas.push({ etiqueta: "SyQon Prism Essential", op: { metodo: "syqon" }, sufijo: "_prism" });
+  }
 
   // Imagen grande: se compara en un recorte representativo y sólo el ganador se aplica a la imagen entera (MLDenoise
   // corre en CPU en Radeon: ~13 s por megapíxel; en 89 MP, ~20 min por candidato). recorte: false para comparar entera.
@@ -453,7 +474,10 @@ function ruidoCandidatos(viewId, o) {
       cands.push({ etiqueta: p.etiqueta, orden: n, r: rr, op: p.opCompleta, segundos: Math.round((Date.now() - t1) / 1000),
                    previa: pxPrevia(rr.vista, "ruido_" + rr.vista, { rect: zona, lado: lz, stf: refPrev ? refPrev.stf : undefined }) });
     }
-    catch (e) { cands.push({ etiqueta: p.etiqueta, orden: n, error: String(e && e.message ? e.message : e) }); }
+    catch (e) {
+      if (e && e.codigo == 4) omitidos.push(p.etiqueta + ": licencia o modelo no disponible en SyQon (código 4).");
+      else cands.push({ etiqueta: p.etiqueta, orden: n, error: String(e && e.message ? e.message : e) });
+    }
   });
   var ok = cands.filter(function (c) { return c.r && !c.r.no_cumple.length; }), best = null;
   // 12 nov 2026 (Tarántula): ganaba TGV 1,0 con residual_estructura 2,98 (residual_solo_ruido: false) frente a TGV 0,5 con
@@ -520,7 +544,7 @@ function ruidoCandidatos(viewId, o) {
                 " (repetir con metodos/niveles sólo de ese, o recorte: false para comparar en la imagen entera)." : ".");
   }
   return {
-    vista: vista, original: viewId, comparados: comparados,
+    vista: vista, original: viewId, comparados: comparados, omitidos: omitidos.length ? omitidos : undefined,
     comparado_en: rec ? { recorte: [rec.x0, rec.y0, rec.x1, rec.y1], nota: "candidatos medidos en un recorte de " + rec.width + "×" + rec.height +
                           " px (cielo y señal débil); el ganador se aplicó a la imagen entera" + (completa ? " en " + completa.segundos_imagen_entera + " s" : "") }
                       : "imagen entera",
@@ -563,6 +587,18 @@ function separarEstrellas(viewId, o) {
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
   src.image.resetSelections();
   var lineal = src.image.median() < 0.05;
+  // motor: "syqon" = SyQon Axiom Mini por syqon-cli (22 nov 2026), SOLO sobre imagen estirada (en lineal sale rota).
+  if (String(o.motor || "").toLowerCase() === "syqon") {
+    if (typeof syqonEstrellas !== "function")
+      eval(File.readTextFile(((typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS : File.homeDirectory + "/astro-agente-repo/guia/herramientas") + "/syqon.js"));
+    var sq = syqonEstrellas(viewId, { nuevaVista: (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_starless"),
+                                      nuevasEstrellas: (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas) || (viewId + "_estrellas") });
+    return { starless: sq.starless, estrellas: sq.estrellas, original: viewId, lineal: false, motor: "SyQon Axiom Mini",
+             comando: sq.comando, segundos: sq.segundos, no_cumple: [],
+             control: { revisar_a_ojo: ["restos de estrellas en la starless", "nebulosa o polvo en la capa de estrellas",
+                                        "nivel del fondo de la starless (Axiom lo baja algo)"],
+                        nota: "Recombinar con screen (la imagen ya estaba estirada)." } };
+  }
   var w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_starless")), v = w.mainView, t0 = Date.now();
   var before = []; ImageWindow.windows.forEach(function (x) { before.push(x.mainView.id); });
   var S = new StarXTerminator;

@@ -47,6 +47,7 @@
 #include "../../guia/herramientas/estrellas.js"
 #include "../../guia/herramientas/exportar.js"
 #include "../../guia/herramientas/graxpert.js"
+#include "../../guia/herramientas/syqon.js"
 #include "../../guia/herramientas/gradiente.js"
 #include "../../guia/herramientas/hdr.js"
 #include "../../guia/herramientas/lineal.js"
@@ -93,7 +94,8 @@ function pprVista(id) {
 
 function pprPing() {
    return { runner: PPR_VERSION, pixinsight: CoreApplication.versionMajor + "." + CoreApplication.versionMinor + "." +
-            CoreApplication.versionRelease, build: __PI_BUILD__, ventanas: ImageWindow.windows.length };
+            CoreApplication.versionRelease, build: __PI_BUILD__, ventanas: ImageWindow.windows.length,
+            syqon: (function () { try { var s = syqonEstado(); return s.disponible ? { version: s.version, gratis: SQ_GRATIS.filter(function (m) { return !!s.modelos[m]; }) } : null; } catch (e) { return null; } })() };
 }
 
 function pprVistas() {

@@ -433,7 +433,7 @@ function plElegirModelo(aj, paso) {
 // ---------------------------------------------------------------------------------------------------------------
 
 var PL_ORDEN_GUIA = ["procesos", "gradcompare", "analisis", "alineado", "preproceso", "bandaestrecha", "boost", "color",
-                     "combinacion", "deconvolucion", "realces", "estirado", "estrellas", "exportar", "graxpert",
+                     "combinacion", "deconvolucion", "realces", "estirado", "estrellas", "exportar", "graxpert", "syqon",
                      "gradiente", "hdr", "lineal", "mascaras", "nucleo", "recombinacion", "ruido", "web"];
 var plGuiaCargada = null;   // carpeta de la guía cargada
 

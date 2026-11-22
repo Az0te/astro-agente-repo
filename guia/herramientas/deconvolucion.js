@@ -210,10 +210,40 @@ function bxtCandidatos(viewId, o) {
     if (pv) variantes[variantes.length - 1].previa = pv;
     if (!o.dejarRecortes) w.forceClose();
   }
+  // SyQon Parallax Nano (syqon-cli, 22 nov 2026), EXPERIMENTAL: corrección + deblur mezclados con --application (0,5 por
+  // defecto). En lineal recorta núcleos a 1,0 desde la corrección: se cuentan los saturados y, si son más que en la
+  // original, queda descartado. No entra en la recomendación (es de BXT); se enseña para comparar. syqon: false = no.
+  var omitidos = [];
+  if (o.syqon !== false) {
+    if (typeof syqonParallax !== "function")
+      eval(File.readTextFile(((typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS : File.homeDirectory + "/astro-agente-repo/guia/herramientas") + "/syqon.js"));
+    if (!sqHay("parallax-nano")) { if (o.syqon) omitidos.push("SyQon Parallax Nano: SyQon Studio no está instalado."); }
+    else {
+      try {
+        var ap = (o.syqonAplicacion !== undefined) ? o.syqonAplicacion : 0.5;
+        var sp = syqonParallax(w0.mainView.id, { aplicacion: ap, nuevaVista: "BXTc_parallax" });
+        var mp = dcMeasure(View.viewById(sp.vista), CR, base);
+        var vp = { vista: sp.vista, metodo: "SyQon Parallax Nano corrección + deblur, aplicación " + ap + " (experimental)",
+                   fwhm_px: mp.fwhm_px, ringing: mp.ringing,
+                   gusanos: ref.hf.fondo > 0 ? +(mp.hf.fondo / ref.hf.fondo).toFixed(3) : null,
+                   contraste: ref.hf.objeto > 0 ? +(mp.hf.objeto / ref.hf.objeto).toFixed(3) : null,
+                   saturados_antes: sp.saturados_antes, saturados: sp.saturados_despues, comando: sp.comando, segundos: sp.segundos,
+                   experimental: true, descartado: sp.descartar || undefined };
+        var pvp = pxPrevia(sp.vista, prefP + sp.vista, { rect: zona, lado: lz, stf: refPrev ? refPrev.stf : undefined });
+        if (pvp) vp.previa = pvp;
+        variantes.push(vp);
+        if (!o.dejarRecortes) ImageWindow.windowById(sp.vista).forceClose();
+      } catch (e) {
+        if (e.codigo == 4) omitidos.push("SyQon Parallax Nano: licencia o modelo no disponible (código 4).");
+        else omitidos.push("SyQon Parallax Nano: error: " + e);
+      }
+    }
+  }
   if (!o.dejarRecortes) w0.forceClose();
   var rec = null;
   for (var j = variantes.length - 1; j >= 0; --j) {
     var c = variantes[j];
+    if (c.experimental) continue;
     if ((c.ringing === null || c.ringing >= -0.01) && (c.gusanos === null || c.gusanos <= 1.3)) { rec = c; break; }
   }
   var motivo = rec ? "nonstellar más alto sin ringing y sin textura nueva en el fondo" :
@@ -224,7 +254,8 @@ function bxtCandidatos(viewId, o) {
   return {
     original: viewId, recorte: [R.left, R.top, R.width, R.height], tipo: o.tipo || "nebulosa",
     sin_bxt: { fwhm_px: base.fwhm_px, estrellas_medidas: base.estrellas, ringing: base.ringing },
-    variantes: variantes, recomendada: { nonstellar: rec.nonstellar, stars: rec.stars, halos: rec.halos, motivo: motivo },
+    variantes: variantes, omitidos: omitidos.length ? omitidos : undefined,
+    recomendada: { nonstellar: rec.nonstellar, stars: rec.stars, halos: rec.halos, motivo: motivo },
     segundos: Math.round((Date.now() - t0) / 1000),
     control: {
       medido: { fwhm_baja: rec.fwhm_px !== null && base.fwhm_px !== null && rec.fwhm_px < base.fwhm_px,
