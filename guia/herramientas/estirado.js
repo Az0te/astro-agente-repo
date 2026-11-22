@@ -476,6 +476,49 @@ function esCieloA(view, objetivo) {
   return "MTF " + m.toPrecision(4);
 }
 
+// Estirado hiperbólico en luminancia que conserva el color (22 nov 2026). Idea pública, inspirada en el planteamiento de
+// VeraLux HyperMetric Stretch (Riccardo Paterniti, GPL-3; no se ha copiado su código ni sus constantes): la luminancia
+// (media de canales, tras un punto negro común 6 ruidos bajo el cielo) pasa por la curva hiperbólica generalizada
+//   f(t) = (1 − (1 + b·D·t)^(−1/b)) / (1 − (1 + b·D)^(−1/b))
+// con D buscado para que el cielo quede en el objetivo, y cada canal se multiplica por el mismo factor f(L)/L: el color
+// de cada píxel no cambia. b = protección de luces (más alto, luces menos comprimidas). color < 1 mezcla con la curva
+// aplicada canal a canal. Si un canal pasa de 1, el píxel entero baja en proporción (mismo tono).
+function esHipF(t, D, b) { t = t < 0 ? 0 : t > 1 ? 1 : t; return (1 - Math.pow(1 + b * D * t, -1 / b)) / (1 - Math.pow(1 + b * D, -1 / b)); }
+function esHiperbolico(view, cielo, b, color) {
+  var im = view.image, W = im.width, H = im.height, C = im.numberOfChannels, R = new Rect(0, 0, W, H), n = W * H;
+  var ch = [], L = new Float32Array(n), c, i;
+  for (c = 0; c < C; ++c) { ch.push(new Float32Array(n)); im.getSamples(ch[c], R, c); for (i = 0; i < n; ++i) L[i] += ch[c][i] / C; }
+  // cielo de la luminancia: mediana de las celdas de 64 px más oscuras (10 %); ruido por diferencias entre vecinos
+  var S = 64, cel = [], tmp = [];
+  for (var y0 = 0; y0 + S <= H; y0 += S) for (var x0 = 0; x0 + S <= W; x0 += S) {
+    tmp.length = 0; for (var yy = y0; yy < y0 + S; yy += 4) for (var xx = x0; xx < x0 + S; xx += 4) tmp.push(L[yy * W + xx]);
+    tmp.sort(function (p, q) { return p - q; }); cel.push(tmp[tmp.length >> 1]);
+  }
+  cel.sort(function (p, q) { return p - q; });
+  var osc = cel.slice(0, Math.max(3, Math.floor(cel.length / 10))), cs = osc[osc.length >> 1], dif = [];
+  for (i = 0; i + 1 < n; i += 97) dif.push(L[i + 1] - L[i]);
+  dif.sort(function (p, q) { return p - q; });
+  var md = dif[dif.length >> 1], ad = dif.map(function (d) { return Math.abs(d - md); }).sort(function (p, q) { return p - q; });
+  var ruido = 1.4826 * ad[ad.length >> 1] / Math.SQRT2, bp = Math.max(0, cs - 6 * ruido), esc = 1 / Math.max(1 - bp, 1e-6);
+  var tc = Math.max((cs - bp) * esc, 1e-7), lo = Math.log(1e-3), hi = Math.log(1e8);
+  for (var it = 0; it < 60; ++it) { var mid = 0.5 * (lo + hi); if (esHipF(tc, Math.exp(mid), b) < cielo) lo = mid; else hi = mid; }
+  var D = Math.exp(0.5 * (lo + hi));
+  view.beginProcess();
+  var v = [0, 0, 0, 0];
+  for (i = 0; i < n; ++i) {
+    var t = (L[i] - bp) * esc, k = t > 1e-7 ? esHipF(t, D, b) / t : 0, mx = 0;
+    for (c = 0; c < C; ++c) {
+      var x = Math.max(0, (ch[c][i] - bp) * esc), q = x * k;
+      if (color < 1) q = color * q + (1 - color) * esHipF(x, D, b);
+      v[c] = q; if (q > mx) mx = q;
+    }
+    for (c = 0; c < C; ++c) ch[c][i] = Math.min(1, mx > 1 ? v[c] / mx : v[c]);
+  }
+  for (c = 0; c < C; ++c) im.setSamples(ch[c], R, c);
+  view.endProcess();
+  return { D: +D.toPrecision(4), proteccion_b: b, color: color, punto_negro: +bp.toPrecision(4), cielo_lineal: +cs.toPrecision(4) };
+}
+
 function esArcsinh(view, stretch, bp) {
   var A = new ArcsinhStretch;
   A.stretch = stretch; A.blackPoint = bp; A.protectHighlights = true; A.useRGBWS = false;
@@ -506,7 +549,7 @@ function estirarCandidatos(viewId, o) {
       } finally { var wN = ImageWindow.windowById(neuC.vista); if (!wN.isNull) wN.forceClose(); }
     }
   }
-  var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "ghs_debil", "mas", "arcsinh"], t0 = Date.now();
+  var cielo = o.cielo || 0.10, metodos = o.metodos || ["ghs", "ghs_debil", "mas", "arcsinh", "hiperbolico"], t0 = Date.now();
   // Imagen grande (> 8 MP): se comparan los métodos en un recorte con cielo y señal (rdElegirRecorte, ruido.js) y sólo el
   // ganador se aplica a la imagen entera (9 nov 2026: en un drizzle 2x de 89 MP cada pasada de GHS al fallo es lenta).
   var Wi = win.mainView.image.width, Hi = win.mainView.image.height;
@@ -603,6 +646,17 @@ function estirarCandidatos(viewId, o) {
       var ajA = esCieloA(wa.mainView, cielo);
       medir(wa.mainView, "ArcsinhStretch (stretch " + s.toFixed(1) + ")", { stretch: +s.toFixed(1), punto_negro: +bp.toPrecision(4), ajuste_cielo: ajA }, t3, "arcsinh");
     } catch (e) { cands.push({ etiqueta: "ArcsinhStretch", error: String(e && e.message ? e.message : e) }); }
+  }
+  // Hiperbólico en luminancia que conserva el color (esHiperbolico). o.hiperbolico = { proteccion: 1.5, color: 1.0 }.
+  if (metodos.indexOf("hiperbolico") >= 0) {
+    var t4 = Date.now();
+    try {
+      var hop = o.hiperbolico || {}, hb = (hop.proteccion !== undefined) ? hop.proteccion : 1.5, hc = (hop.color !== undefined) ? hop.color : 1.0;
+      var wh = esCopy(viewId, viewId + "_st_hip"); wh.show();
+      var dh = esHiperbolico(wh.mainView, cielo, hb, hc);
+      dh.ajuste_cielo = esCieloA(wh.mainView, cielo);
+      medir(wh.mainView, "Hiperbólico en luminancia, color conservado (b " + hb + ")", dh, t4, "hiperbolico");
+    } catch (e) { cands.push({ etiqueta: "Hiperbólico", error: String(e && e.message ? e.message : e) }); }
   }
   var ok = cands.filter(function (c) { return c.medidas && !c.fallos.length; });
   var lista = ok.length ? ok : cands.filter(function (c) { return c.medidas; });

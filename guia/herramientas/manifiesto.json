@@ -989,8 +989,8 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 1800,
-   "descripcion": "Paso 1 no lineal: compara GHS al fallo (con la simetría en el cielo y en la señal débil), MultiscaleAdaptiveStretch y ArcsinhStretch sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante; devuelve la tabla de la comparación. Preferible a estirarStarless con un solo método. Se niega si la vista aún tiene estrellas (no es la starless de separarEstrellas) y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
-   "resumen": "Paso 1 no lineal: compara GHS, MAS y Arcsinh sobre la starless lineal con el mismo cielo y elige. Preferible a estirarStarless.",
+   "descripcion": "Paso 1 no lineal: compara GHS al fallo (con la simetría en el cielo y en la señal débil), MultiscaleAdaptiveStretch, ArcsinhStretch y un estirado hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante; devuelve la tabla de la comparación. Preferible a estirarStarless con un solo método. Se niega si la vista aún tiene estrellas (no es la starless de separarEstrellas) y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
+   "resumen": "Paso 1 no lineal: compara GHS, MAS, Arcsinh e hiperbólico sobre la starless lineal con el mismo cielo y elige. Preferible a estirarStarless.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",
@@ -1001,7 +1001,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { cielo: 0.10, metodos: [\"ghs\", \"ghs_debil\", \"mas\", \"arcsinh\"], ruidoMax: 0.15, mas: { parámetros de MAS }, nuevaVista, cerrar: false para conservar los demás }"
+      "description": "Opcional. { cielo: 0.10, metodos: [\"ghs\", \"ghs_debil\", \"mas\", \"arcsinh\", \"hiperbolico\"], hiperbolico: { proteccion: 1.5, color: 1.0 }, ruidoMax: 0.15, mas: { parámetros de MAS }, nuevaVista, cerrar: false para conservar los demás }"
      }
     },
     "required": [
