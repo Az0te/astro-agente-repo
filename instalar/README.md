@@ -1,5 +1,7 @@
 # Instalador para Windows
 
+*English: [README.en.md](README.en.md). El instalador habla español o inglés según el idioma de Windows (`-Idioma es` o `-Idioma en` para elegirlo).*
+
 Instala y configura AstroPilot (PiAstroPilot para PixInsight, SirilAstroPilot y SetiAstroPilot) con un solo script.
 
 ## Cómo se usa
@@ -7,8 +9,10 @@ Instala y configura AstroPilot (PiAstroPilot para PixInsight, SirilAstroPilot y 
 - **Sin el repositorio todavía**: abre PowerShell y pega
 
   ```
-  irm https://raw.githubusercontent.com/Az0te/astro-agente-repo/main/instalar/instalar.ps1 | iex
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Az0te/astro-agente-repo/main/instalar/instalar.ps1).TrimStart([char]0xFEFF)))
   ```
+
+  Si PowerShell no deja ejecutar scripts, antes: `Set-ExecutionPolicy -Scope Process Bypass`.
 
 - **Con el repositorio ya descargado**: doble clic en `instalar\Instalar.cmd`.
 
@@ -50,7 +54,7 @@ Más detalle en [Qué IA usar](../README.md#qué-ia-usar-y-cómo-configurarla).
 ## Opciones
 
 ```
-instalar.ps1 [-Carpeta <ruta>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfigurar] [-SinGit]
+instalar.ps1 [-Carpeta <ruta>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfigurar] [-SinGit] [-Idioma es|en]
 ```
 
 - `-Carpeta`: dónde instalar (si no, pregunta; por defecto `%USERPROFILE%\astro-agente-repo`).
@@ -58,3 +62,4 @@ instalar.ps1 [-Carpeta <ruta>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfi
 - `-SinPreguntas`: acepta lo que va por defecto; con `-IA` elige la IA sin preguntar.
 - `-SinConfigurar`: solo descarga o actualiza el repositorio.
 - `-SinGit`: usa el ZIP aunque tengas Git.
+- `-Idioma`: `es` o `en`; si no, el de Windows.

@@ -29,10 +29,10 @@ Alain Escaffre's original project is an **autonomous** pipeline designed for mac
 
 ## Quick install on Windows
 
-The [installer](instalar/README.md) (in Spanish) sets everything up with a single script. If you don't have the repository yet, open PowerShell and paste:
+The [installer](instalar/README.en.md) sets everything up with a single script (it speaks English or Spanish, following the Windows language; `-Idioma en` or `-Idioma es` to choose). If you don't have the repository yet, open PowerShell and paste:
 
 ```
-irm https://raw.githubusercontent.com/Az0te/astro-agente-repo/main/instalar/instalar.ps1 | iex
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Az0te/astro-agente-repo/main/instalar/instalar.ps1).TrimStart([char]0xFEFF)))
 ```
 
 If you already have it, double-click `instalar\Instalar.cmd`. The script:
@@ -43,7 +43,7 @@ If you already have it, double-click `instalar\Instalar.cmd`. The script:
 - **guides you through installing the AI** you pick, one or several: **Claude** (Claude Desktop and Claude Code), **Codex**, **local with Ollama** (it suggests a Qwen model based on your GPU memory) or **Gemini** (it opens the free key page and saves the key);
 - sets up the MCP servers in Claude Desktop, Claude Code and Codex, the Siril scripts folder and the SASpro launchers.
 
-Before touching a config file it keeps a `.antes-astropilot` copy, and `-Simular` shows what it would do without changing anything. Run it again later to update. Options and details in [`instalar/README.md`](instalar/README.md).
+Before touching a config file it keeps a `.antes-astropilot` copy, and `-Simular` shows what it would do without changing anything. Run it again later to update. Options and details in [`instalar/README.en.md`](instalar/README.en.md).
 
 ## Getting started with PiAstroPilot Lite
 

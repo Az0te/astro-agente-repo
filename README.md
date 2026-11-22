@@ -29,10 +29,10 @@ El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para
 
 ## Instalación rápida en Windows
 
-El [instalador](instalar/README.md) lo deja todo listo con un solo script. Si aún no tienes el repositorio, abre PowerShell y pega:
+El [instalador](instalar/README.md) lo deja todo listo con un solo script (habla español o inglés según el idioma de Windows; `-Idioma es` o `-Idioma en` para elegirlo). Si aún no tienes el repositorio, abre PowerShell y pega:
 
 ```
-irm https://raw.githubusercontent.com/Az0te/astro-agente-repo/main/instalar/instalar.ps1 | iex
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Az0te/astro-agente-repo/main/instalar/instalar.ps1).TrimStart([char]0xFEFF)))
 ```
 
 Si ya lo tienes, haz doble clic en `instalar\Instalar.cmd`. El script:

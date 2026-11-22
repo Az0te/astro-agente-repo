@@ -1,24 +1,23 @@
-﻿# Instalador de AstroPilot para Windows (PiAstroPilot, SirilAstroPilot y SetiAstroPilot).
-# Copyright (c) 2026 Rafael Vidal. Licencia MIT. https://github.com/Az0te/astro-agente-repo
+﻿# Instalador de AstroPilot para Windows (PiAstroPilot, SirilAstroPilot y SetiAstroPilot) / AstroPilot installer for Windows.
+# Copyright (c) 2026 Rafael Vidal. Licencia MIT / MIT licence. https://github.com/Az0te/astro-agente-repo
 #
-# Qué hace:
-#   1. Busca PixInsight, Siril y Seti Astro Suite Pro (registro de Windows y carpetas habituales).
-#   2. Descarga el repositorio en la carpeta que elijas (git clone si hay git; si no, el ZIP de GitHub). Si ya está, lo
-#      actualiza.
-#   3. Comprueba Node.js (18 o superior) y, si falta, ofrece instalarlo con winget.
-#   4. Configura cada programa encontrado: servidor MCP en Claude Desktop, Claude Code y Codex (los que tengas), carpeta de
-#      scripts de Siril, lanzadores de SASpro y la variable PIXINSIGHT_EXE si PixInsight no está en su sitio habitual.
-#   5. Guía para instalar la IA: Claude (Desktop y Code), Codex, local con Ollama (según la memoria de la gráfica) o Gemini.
-#   6. Crea guia/perfil.md a partir de guia/perfil-ejemplo.md si no existe.
-# Antes de tocar un fichero de configuración guarda una copia con la extensión .antes-astropilot.
+# Qué hace / What it does:
+#   1. Busca PixInsight, Siril y Seti Astro Suite Pro / Finds PixInsight, Siril and Seti Astro Suite Pro.
+#   2. Descarga o actualiza el repositorio en la carpeta elegida (git o ZIP) / Downloads or updates the repo (git or ZIP).
+#   3. Comprueba Node.js 18+ (lo instala con winget si falta) / Checks Node.js 18+ (installs it with winget if missing).
+#   4. Guía para instalar la IA: Claude, Codex, local (Ollama) o Gemini / Guides the AI install: Claude, Codex, local, Gemini.
+#   5. Configura los servidores MCP (Claude Desktop, Claude Code, Codex), Siril, SASpro y PIXINSIGHT_EXE.
+#   6. Crea guia/perfil.md desde perfil-ejemplo.md / Creates guia/perfil.md from the example.
+# Copia de cada fichero de configuración tocado con .antes-astropilot / Backup of each config file touched: .antes-astropilot.
 #
-# Uso (doble clic en Instalar.cmd, o en PowerShell):
-#   powershell -ExecutionPolicy Bypass -File instalar.ps1 [-Carpeta <ruta>] [-Simular] [-SinPreguntas] [-SinConfigurar] [-SinGit]
-#   -Simular        no cambia nada: dice lo que haría.
-#   -SinPreguntas   acepta las opciones por defecto.
-#   -SinConfigurar  solo descarga o actualiza el repositorio.
-#   -SinGit         descarga el ZIP aunque haya git.
-#   -IA "1,3"       IA que instalar sin preguntar (1 Claude, 2 Codex, 3 local con Ollama, 4 Gemini); con -SinPreguntas.
+# Uso / Usage (doble clic / double click Instalar.cmd, or PowerShell):
+#   instalar.ps1 [-Carpeta <ruta>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfigurar] [-SinGit] [-Idioma es|en]
+#   -Simular        no cambia nada / changes nothing, only says what it would do.
+#   -SinPreguntas   acepta lo de por defecto / accepts the defaults.
+#   -IA "1,3"       1 Claude, 2 Codex, 3 Ollama, 4 Gemini (con / with -SinPreguntas).
+#   -SinConfigurar  solo el repositorio / only the repository.
+#   -SinGit         ZIP aunque haya git / ZIP even if git is installed.
+#   -Idioma         es o en; por defecto el de Windows / default: the Windows language.
 
 [CmdletBinding()]
 param(
@@ -27,7 +26,8 @@ param(
   [switch]$SinPreguntas,
   [switch]$SinConfigurar,
   [switch]$SinGit,
-  [string]$IA = ""
+  [string]$IA = "",
+  [string]$Idioma = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,20 +35,26 @@ $REPO_URL = "https://github.com/Az0te/astro-agente-repo"
 $ZIP_URL  = "$REPO_URL/archive/refs/heads/main.zip"
 $SUFIJO   = ".antes-astropilot"
 $script:avisos = New-Object System.Collections.Generic.List[string]
-$script:hecho  = New-Object System.Collections.Generic.List[string]
+
+if (-not $Idioma) { $Idioma = if ((Get-UICulture).TwoLetterISOLanguageName -eq "es") { "es" } else { "en" } }
+$Ingles = ($Idioma.ToLower() -ne "es")
+# Ojo: PowerShell no distingue mayúsculas en las variables; un $EN aquí sería el parámetro $en.
+function T($es, $en) { if ($Ingles) { return $en } else { return $es } }
 
 function Titulo($t) { Write-Host ""; Write-Host "== $t ==" -ForegroundColor Cyan }
-function Ok($t)     { Write-Host "  [ok] $t" -ForegroundColor Green; $script:hecho.Add($t) }
+function Ok($t)     { Write-Host "  [ok] $t" -ForegroundColor Green }
 function Info($t)   { Write-Host "  $t" }
 function Aviso($t)  { Write-Host "  [!] $t" -ForegroundColor Yellow; $script:avisos.Add($t) }
-function Haria($t)  { Write-Host "  [simulación] $t" -ForegroundColor DarkGray }
+function Nota($t)   { $script:avisos.Add($t) }
+function Haria($t)  { Write-Host ("  [" + (T "simulación" "dry run") + "] $t") -ForegroundColor DarkGray }
 
 function Preguntar($texto, [bool]$porDefecto = $true) {
   if ($SinPreguntas) { return $porDefecto }
-  $op = if ($porDefecto) { "S/n" } else { "s/N" }
+  $op = if ($porDefecto) { T "S/n" "Y/n" } else { T "s/N" "y/N" }
   $r = Read-Host "  $texto [$op]"
   if ([string]::IsNullOrWhiteSpace($r)) { return $porDefecto }
-  return $r.Trim().ToLower().StartsWith("s") -or $r.Trim().ToLower().StartsWith("y")
+  $r = $r.Trim().ToLower()
+  return ($r.StartsWith("s") -or $r.StartsWith("y"))
 }
 
 function Barras($p) { return ($p -replace '\\', '/') }
@@ -73,7 +79,15 @@ function RefrescarPath {
   $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
 }
 
-# --- 1. Programas ---------------------------------------------------------------------------------------------------
+function Winget($id) {
+  $w = Comando "winget"
+  if (-not $w) { return $false }
+  & $w install --id $id -e --accept-source-agreements --accept-package-agreements
+  RefrescarPath
+  return $true
+}
+
+# --- 1. Programas / Programs ----------------------------------------------------------------------------------------
 
 function EntradasDesinstalar {
   $claves = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -95,38 +109,40 @@ function BuscarExe($patron, [string[]]$relativos, [string[]]$porDefecto) {
   return $null
 }
 
-Titulo "Programas"
+Titulo (T "Programas" "Programs")
 $PI_DEF = "C:\Program Files\PixInsight\bin\PixInsight.exe"
 $piExe  = BuscarExe '^PixInsight' @("bin\PixInsight.exe") @($PI_DEF)
 $sirilExe = BuscarExe '^Siril' @("bin\siril.exe") @("C:\Program Files\Siril\bin\siril.exe")
 $sasExe = BuscarExe 'Seti ?Astro' @("setiastrosuitepro.exe") @("C:\Program Files\SetiAstroSuitePro\setiastrosuitepro.exe")
 $sasScripts = Join-Path $env:LOCALAPPDATA "SASpro\scripts"
-if (-not $sasExe -and (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "SASpro"))) { $sasExe = "(sin ejecutable localizado)" }
+if (-not $sasExe -and (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "SASpro"))) { $sasExe = (T "(sin ejecutable localizado)" "(executable not located)") }
 
-if ($piExe)    { Ok "PixInsight: $piExe" }    else { Info "PixInsight: no encontrado" }
-if ($sirilExe) { Ok "Siril: $sirilExe" }      else { Info "Siril: no encontrado" }
-if ($sasExe)   { Ok "Seti Astro Suite Pro: $sasExe" } else { Info "Seti Astro Suite Pro: no encontrado" }
+$noEsta = T "no encontrado" "not found"
+if ($piExe)    { Ok "PixInsight: $piExe" }    else { Info "PixInsight: $noEsta" }
+if ($sirilExe) { Ok "Siril: $sirilExe" }      else { Info "Siril: $noEsta" }
+if ($sasExe)   { Ok "Seti Astro Suite Pro: $sasExe" } else { Info "Seti Astro Suite Pro: $noEsta" }
 if (-not ($piExe -or $sirilExe -or $sasExe)) {
-  Aviso "No encuentro PixInsight, Siril ni SASpro. Se puede descargar el repositorio igualmente, pero no habrá nada que configurar."
+  Aviso (T "No encuentro PixInsight, Siril ni SASpro. Se puede descargar el repositorio igualmente, pero no habrá nada que configurar." `
+           "PixInsight, Siril and SASpro not found. The repository can still be downloaded, but there will be nothing to configure.")
 }
 
-# --- 2. Carpeta y repositorio ---------------------------------------------------------------------------------------
+# --- 2. Repositorio / Repository ------------------------------------------------------------------------------------
 
 function EsRepo($c) { return (Test-Path -LiteralPath (Join-Path $c "guia\herramientas\manifiesto.json")) -and (Test-Path -LiteralPath (Join-Path $c "mcp")) }
 
 function ElegirCarpeta {
   if ($Carpeta) { return $Carpeta }
-  # Lanzado desde dentro del repo (instalar\instalar.ps1): esa es la carpeta.
   if ($PSScriptRoot) {
     $padre = Split-Path -Parent $PSScriptRoot
-    if ($padre -and (EsRepo $padre)) { Info "Uso el repositorio en el que está este instalador: $padre"; return $padre }
+    if ($padre -and (EsRepo $padre)) { Info (T "Uso el repositorio en el que está este instalador: $padre" "Using the repository this installer is in: $padre"); return $padre }
   }
   $def = Join-Path $env:USERPROFILE "astro-agente-repo"
   if ($SinPreguntas) { return $def }
   try {
     Add-Type -AssemblyName System.Windows.Forms
     $d = New-Object System.Windows.Forms.FolderBrowserDialog
-    $d.Description = "Carpeta donde instalar AstroPilot (se creará 'astro-agente-repo' dentro si eliges una carpeta que no esté vacía)"
+    $d.Description = T "Carpeta donde instalar AstroPilot (si no está vacía, se creará 'astro-agente-repo' dentro)" `
+                       "Folder to install AstroPilot in (if it is not empty, 'astro-agente-repo' will be created inside)"
     $d.SelectedPath = $env:USERPROFILE
     if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       $sel = $d.SelectedPath
@@ -134,7 +150,7 @@ function ElegirCarpeta {
       return (Join-Path $sel "astro-agente-repo")
     }
   } catch { }
-  $r = Read-Host "  Carpeta de instalación [$def]"
+  $r = Read-Host ("  " + (T "Carpeta de instalación" "Install folder") + " [$def]")
   if ([string]::IsNullOrWhiteSpace($r)) { return $def }
   return $r.Trim('"', ' ')
 }
@@ -145,11 +161,11 @@ function DescargarZip($destino) {
   New-Item -ItemType Directory -Path $tmp | Out-Null
   try {
     $zip = Join-Path $tmp "repo.zip"
-    Info "Descargando $ZIP_URL ..."
+    Info ((T "Descargando" "Downloading") + " $ZIP_URL ...")
     Invoke-WebRequest -Uri $ZIP_URL -OutFile $zip -UseBasicParsing
     Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force
     $raiz = Get-ChildItem -LiteralPath $tmp -Directory | Select-Object -First 1
-    if (-not $raiz) { throw "El ZIP no tiene la carpeta esperada." }
+    if (-not $raiz) { throw (T "El ZIP no tiene la carpeta esperada." "The ZIP does not contain the expected folder.") }
     if (-not (Test-Path -LiteralPath $destino)) { New-Item -ItemType Directory -Path $destino | Out-Null }
     # Copia encima: sobrescribe los ficheros del repo y deja los tuyos (perfil.md, tmp_*...).
     Copy-Item -Path (Join-Path $raiz.FullName "*") -Destination $destino -Recurse -Force
@@ -158,43 +174,45 @@ function DescargarZip($destino) {
   }
 }
 
-Titulo "Repositorio"
-$REPO = ElegirCarpeta
-$REPO = [System.IO.Path]::GetFullPath($REPO)
-Info "Carpeta: $REPO"
+Titulo (T "Repositorio" "Repository")
+$REPO = [System.IO.Path]::GetFullPath((ElegirCarpeta))
+Info ((T "Carpeta" "Folder") + ": $REPO")
 $git = if ($SinGit) { $null } else { Comando "git" }
+$tal = T "Uso el repositorio tal como está." "Using the repository as it is."
 
 if (EsRepo $REPO) {
   if (Test-Path -LiteralPath (Join-Path $REPO ".git")) {
-    if ($git -and (Preguntar "El repositorio ya está. ¿Actualizarlo con git pull?" $true)) {
+    if ($git -and (Preguntar (T "El repositorio ya está. ¿Actualizarlo con git pull?" "The repository is already there. Update it with git pull?") $true)) {
       if ($Simular) { Haria "git -C `"$REPO`" pull --ff-only" }
       else {
         & $git -C $REPO pull --ff-only
-        if ($LASTEXITCODE -ne 0) { Aviso "git pull no pudo actualizar (¿cambios locales?). Sigo con lo que hay." } else { Ok "Repositorio actualizado (git pull)" }
+        if ($LASTEXITCODE -ne 0) { Aviso (T "git pull no pudo actualizar (¿cambios locales?). Sigo con lo que hay." "git pull could not update (local changes?). Carrying on with what is there.") }
+        else { Ok (T "Repositorio actualizado (git pull)" "Repository updated (git pull)") }
       }
-    } else { Info "Uso el repositorio tal como está." }
-  } elseif (Preguntar "El repositorio ya está (sin git). ¿Actualizarlo con el ZIP de GitHub?" $false) {
-    if ($Simular) { Haria "descargar $ZIP_URL y copiarlo encima de $REPO" } else { DescargarZip $REPO; Ok "Repositorio actualizado (ZIP)" }
-  } else { Info "Uso el repositorio tal como está." }
+    } else { Info $tal }
+  } elseif (Preguntar (T "El repositorio ya está (sin git). ¿Actualizarlo con el ZIP de GitHub?" "The repository is already there (no git). Update it with the GitHub ZIP?") $false) {
+    if ($Simular) { Haria "ZIP $ZIP_URL -> $REPO" } else { DescargarZip $REPO; Ok (T "Repositorio actualizado (ZIP)" "Repository updated (ZIP)") }
+  } else { Info $tal }
 } else {
   if ((Test-Path -LiteralPath $REPO) -and (Get-ChildItem -LiteralPath $REPO -Force | Select-Object -First 1)) {
-    throw "La carpeta $REPO existe, no está vacía y no es el repositorio. Elige otra."
+    throw (T "La carpeta $REPO existe, no está vacía y no es el repositorio. Elige otra." "The folder $REPO exists, is not empty and is not the repository. Choose another one.")
   }
+  $bajado = T "Repositorio descargado en $REPO" "Repository downloaded to $REPO"
   if ($git) {
     if ($Simular) { Haria "git clone $REPO_URL `"$REPO`"" }
     else {
       & $git clone "$REPO_URL.git" $REPO
-      if ($LASTEXITCODE -ne 0) { Aviso "git clone falló; pruebo con el ZIP."; DescargarZip $REPO }
-      Ok "Repositorio descargado en $REPO"
+      if ($LASTEXITCODE -ne 0) { Aviso (T "git clone falló; pruebo con el ZIP." "git clone failed; trying the ZIP."); DescargarZip $REPO }
+      Ok $bajado
     }
   } else {
-    Info "No hay git: descargo el ZIP (para actualizar más adelante, vuelve a ejecutar este instalador)."
-    if ($Simular) { Haria "descargar $ZIP_URL en $REPO" } else { DescargarZip $REPO; Ok "Repositorio descargado en $REPO" }
+    Info (T "No hay git: descargo el ZIP (para actualizar más adelante, vuelve a ejecutar este instalador)." "No git: downloading the ZIP (to update later, run this installer again).")
+    if ($Simular) { Haria "ZIP $ZIP_URL -> $REPO" } else { DescargarZip $REPO; Ok $bajado }
   }
-  if (-not $Simular -and -not (EsRepo $REPO)) { throw "Después de descargar, $REPO no parece el repositorio (falta guia\herramientas\manifiesto.json)." }
+  if (-not $Simular -and -not (EsRepo $REPO)) { throw (T "Después de descargar, $REPO no parece el repositorio." "After downloading, $REPO does not look like the repository.") }
 }
 
-if ($SinConfigurar) { Titulo "Listo"; Info "Repositorio en $REPO (sin configurar programas: -SinConfigurar)."; return }
+if ($SinConfigurar) { Titulo (T "Listo" "Done"); Info ((T "Repositorio en" "Repository in") + " $REPO (-SinConfigurar)."); return }
 
 # --- 3. Node.js -----------------------------------------------------------------------------------------------------
 
@@ -205,25 +223,22 @@ function VersionNode {
   try { $v = (& $n -v) -replace '^v', ''; return [int]($v.Split('.')[0]) } catch { return 0 }
 }
 $nodeMayor = VersionNode
-if ($nodeMayor -ge 18) { Ok "Node.js $nodeMayor (vale 18 o superior)" }
+if ($nodeMayor -ge 18) { Ok ("Node.js $nodeMayor " + (T "(vale 18 o superior)" "(18 or later is fine)")) }
 else {
-  if ($nodeMayor -gt 0) { Aviso "Node.js $nodeMayor es antiguo: los servidores MCP necesitan 18 o superior." }
-  $winget = Comando "winget"
-  if ($winget -and (Preguntar "Falta Node.js 18+. ¿Instalar Node.js LTS con winget?" $true)) {
+  if ($nodeMayor -gt 0) { Aviso (T "Node.js $nodeMayor es antiguo: los servidores MCP necesitan 18 o superior." "Node.js $nodeMayor is too old: the MCP servers need 18 or later.") }
+  if ((Comando "winget") -and (Preguntar (T "Falta Node.js 18+. ¿Instalar Node.js LTS con winget?" "Node.js 18+ is missing. Install Node.js LTS with winget?") $true)) {
     if ($Simular) { Haria "winget install OpenJS.NodeJS.LTS" }
     else {
-      & $winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements
-      RefrescarPath
+      [void](Winget "OpenJS.NodeJS.LTS")
       $nodeMayor = VersionNode
-      if ($nodeMayor -ge 18) { Ok "Node.js $nodeMayor instalado" } else { Aviso "No veo Node.js tras instalarlo: cierra y vuelve a abrir la ventana y repite el instalador." }
+      if ($nodeMayor -ge 18) { Ok "Node.js $nodeMayor" }
+      else { Aviso (T "No veo Node.js tras instalarlo: cierra y vuelve a abrir la ventana y repite el instalador." "Node.js not found after installing: close and reopen the window and run the installer again.") }
     }
-  } elseif ($nodeMayor -lt 18) { Aviso "Instala Node.js 18 o superior desde https://nodejs.org y vuelve a ejecutar el instalador." }
+  } elseif ($nodeMayor -lt 18) { Aviso (T "Instala Node.js 18 o superior desde https://nodejs.org y vuelve a ejecutar el instalador." "Install Node.js 18 or later from https://nodejs.org and run the installer again.") }
 }
 $node = Comando "node"
-$nodeCmd = if ($node) { $node } else { "node" }
 
-# --- 3b. Inteligencia artificial ------------------------------------------------------------------------------------
-# Guía para instalar la IA que vaya a usar el asistente: Claude, Codex, local (Ollama) o Gemini. Se puede elegir más de una.
+# --- 4. Inteligencia artificial / AI --------------------------------------------------------------------------------
 
 function VramGB {
   $max = 0
@@ -236,96 +251,106 @@ function VramGB {
 }
 
 function IaClaude {
-  Info "Claude (Anthropic): la mejor con la guía. Necesita suscripción Pro/Max o clave de API de pago."
+  Info (T "Claude (Anthropic): la mejor con la guía. Necesita suscripción Pro/Max o clave de API de pago." `
+          "Claude (Anthropic): the best with the guide. Needs a Pro/Max subscription or a paid API key.")
   $desk = (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "AnthropicClaude")) -or (Test-Path -LiteralPath (Join-Path $env:APPDATA "Claude"))
   $code = (Comando "claude") -or (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ".local\bin\claude.exe"))
-  if ($desk) { Ok "Claude Desktop ya está instalado" }
-  elseif (Preguntar "¿Instalar Claude Desktop (la app, para usar el MCP desde ella)?" $true) {
-    $w = Comando "winget"
+  if ($desk) { Ok (T "Claude Desktop ya está instalado" "Claude Desktop is already installed") }
+  elseif (Preguntar (T "¿Instalar Claude Desktop (la app, para usar el MCP desde ella)?" "Install Claude Desktop (the app, to use the MCP from it)?") $true) {
     if ($Simular) { Haria "winget install Anthropic.Claude" }
-    elseif ($w) { & $w install --id Anthropic.Claude -e --accept-source-agreements --accept-package-agreements; Ok "Claude Desktop instalado: ábrelo e inicia sesión." }
-    else { Aviso "Descarga Claude Desktop de https://claude.ai/download"; Start-Process "https://claude.ai/download" }
+    elseif (Winget "Anthropic.Claude") { Ok (T "Claude Desktop instalado: ábrelo e inicia sesión." "Claude Desktop installed: open it and sign in.") }
+    else { Aviso (T "Descarga Claude Desktop de https://claude.ai/download" "Download Claude Desktop from https://claude.ai/download"); Start-Process "https://claude.ai/download" }
   }
-  if ($code) { Ok "Claude Code ya está instalado" }
-  elseif (Preguntar "¿Instalar Claude Code (lo usan el Lite, el módulo y los chats de Siril y SASpro)?" $true) {
+  if ($code) { Ok (T "Claude Code ya está instalado" "Claude Code is already installed") }
+  elseif (Preguntar (T "¿Instalar Claude Code (lo usan el Lite, el módulo y los chats de Siril y SASpro)?" "Install Claude Code (used by the Lite, the module and the Siril and SASpro chats)?") $true) {
     if ($Simular) { Haria "irm https://claude.ai/install.ps1 | iex" }
     else {
       Invoke-RestMethod "https://claude.ai/install.ps1" | Invoke-Expression
       RefrescarPath
       $env:Path += ";" + (Join-Path $env:USERPROFILE ".local\bin")
-      Ok "Claude Code instalado."
+      Ok (T "Claude Code instalado." "Claude Code installed.")
     }
-    $script:avisos.Add("Claude Code: abre una terminal, escribe claude e inicia sesión una vez.")
+    Nota (T "Claude Code: abre una terminal, escribe claude e inicia sesión una vez." "Claude Code: open a terminal, type claude and sign in once.")
   }
 }
 
 function IaCodex {
-  Info "Codex (OpenAI): buena con la guía. Necesita suscripción de ChatGPT o clave de API."
-  if (Comando "codex") { Ok "Codex ya está instalado" }
+  Info (T "Codex (OpenAI): buena con la guía. Necesita suscripción de ChatGPT o clave de API." "Codex (OpenAI): good with the guide. Needs a ChatGPT subscription or an API key.")
+  if (Comando "codex") { Ok (T "Codex ya está instalado" "Codex is already installed") }
   else {
     $npm = Comando "npm"
-    if (-not $npm) { Aviso "Codex necesita Node.js (npm). Instala Node.js y repite."; return }
-    if (Preguntar "¿Instalar Codex (npm install -g @openai/codex)?" $true) {
+    if (-not $npm) { Aviso (T "Codex necesita Node.js (npm). Instala Node.js y repite." "Codex needs Node.js (npm). Install Node.js and run again."); return }
+    if (Preguntar (T "¿Instalar Codex (npm install -g @openai/codex)?" "Install Codex (npm install -g @openai/codex)?") $true) {
       if ($Simular) { Haria "npm install -g @openai/codex" }
-      else { & $npm install -g "@openai/codex"; RefrescarPath; Ok "Codex instalado." }
+      else { & $npm install -g "@openai/codex"; RefrescarPath; Ok (T "Codex instalado." "Codex installed.") }
     } else { return }
   }
   $dir = Join-Path $env:USERPROFILE ".codex"
   if (-not $Simular -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
   $codex = Comando "codex"
-  if ($codex -and -not $Simular -and (Preguntar "¿Iniciar sesión en Codex ahora (abre el navegador)?" $true)) { & $codex login }
-  else { $script:avisos.Add("Codex: en una terminal, codex login (una vez).") }
+  if ($codex -and -not $Simular -and (Preguntar (T "¿Iniciar sesión en Codex ahora (abre el navegador)?" "Sign in to Codex now (opens the browser)?") $true)) { & $codex login }
+  else { Nota (T "Codex: en una terminal, codex login (una vez)." "Codex: in a terminal, codex login (once).") }
 }
 
 function IaLocal {
   $vram = VramGB
-  Info "IA local con Ollama: gratis y sin enviar nada fuera del PC. Pide una gráfica con mucha memoria."
-  if ($vram -gt 0) { Info "Tu gráfica tiene unos $vram GB." }
+  Info (T "IA local con Ollama: gratis y sin enviar nada fuera del PC. Pide una gráfica con mucha memoria." `
+          "Local AI with Ollama: free and nothing leaves your PC. Needs a graphics card with plenty of memory.")
+  if ($vram -gt 0) { Info (T "Tu gráfica tiene unos $vram GB." "Your graphics card has about $vram GB.") }
   $modelo = if ($vram -ge 20) { "qwen3:32b" } elseif ($vram -ge 12) { "qwen3:14b" } else { "qwen3:8b" }
-  if ($vram -lt 20) { Aviso "Con menos de 20 GB de gráfica los modelos locales van justos con la guía: $modelo servirá para probar, pero elegirá peor que Claude o uno de 32B." }
+  if ($vram -lt 20) {
+    Aviso (T "Con menos de 20 GB de gráfica los modelos locales van justos con la guía: $modelo servirá para probar, pero elegirá peor que Claude o uno de 32B." `
+             "With less than 20 GB of graphics memory local models struggle with the guide: $modelo will do for testing, but it will choose worse than Claude or a 32B model.")
+  }
+  $exeOllama = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
   $ollama = Comando "ollama"
-  if (-not $ollama) { $p = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"; if (Test-Path -LiteralPath $p) { $ollama = $p } }
-  if ($ollama) { Ok "Ollama ya está instalado" }
-  elseif (Preguntar "¿Instalar Ollama?" $true) {
-    $w = Comando "winget"
+  if (-not $ollama -and (Test-Path -LiteralPath $exeOllama)) { $ollama = $exeOllama }
+  if ($ollama) { Ok (T "Ollama ya está instalado" "Ollama is already installed") }
+  elseif (Preguntar (T "¿Instalar Ollama?" "Install Ollama?") $true) {
     if ($Simular) { Haria "winget install Ollama.Ollama" }
-    elseif ($w) {
-      & $w install --id Ollama.Ollama -e --accept-source-agreements --accept-package-agreements
-      RefrescarPath
+    elseif (Winget "Ollama.Ollama") {
       $ollama = Comando "ollama"
-      if (-not $ollama) { $p = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"; if (Test-Path -LiteralPath $p) { $ollama = $p } }
-      Ok "Ollama instalado."
-    } else { Aviso "Descarga Ollama de https://ollama.com/download"; Start-Process "https://ollama.com/download"; return }
+      if (-not $ollama -and (Test-Path -LiteralPath $exeOllama)) { $ollama = $exeOllama }
+      Ok (T "Ollama instalado." "Ollama installed.")
+    } else { Aviso (T "Descarga Ollama de https://ollama.com/download" "Download Ollama from https://ollama.com/download"); Start-Process "https://ollama.com/download"; return }
   } else { return }
-  if (Preguntar "¿Descargar ahora el modelo $modelo (varios GB)?" $true) {
+  if (Preguntar (T "¿Descargar ahora el modelo $modelo (varios GB)?" "Download the $modelo model now (several GB)?") $true) {
     if ($Simular -or -not $ollama) { Haria "ollama pull $modelo" }
-    else { & $ollama pull $modelo; if ($LASTEXITCODE -eq 0) { Ok "Modelo $modelo descargado" } else { Aviso "No se pudo descargar ${modelo}: abre Ollama y repite ollama pull $modelo" } }
-  } else { $script:avisos.Add("IA local: ollama pull $modelo cuando quieras.") }
-  $script:avisos.Add("IA local: en el Lite elige el proveedor Ollama; en los chats de Siril y SASpro tus modelos salen solos.")
+    else {
+      & $ollama pull $modelo
+      if ($LASTEXITCODE -eq 0) { Ok (T "Modelo $modelo descargado" "Model $modelo downloaded") }
+      else { Aviso (T "No se pudo descargar ${modelo}: abre Ollama y repite ollama pull $modelo" "Could not download ${modelo}: open Ollama and run ollama pull $modelo") }
+    }
+  } else { Nota (T "IA local: ollama pull $modelo cuando quieras." "Local AI: ollama pull $modelo whenever you like.") }
+  Nota (T "IA local: en el Lite elige el proveedor Ollama; en los chats de Siril y SASpro tus modelos salen solos." `
+          "Local AI: in the Lite choose the Ollama provider; in the Siril and SASpro chats your models appear by themselves.")
 }
 
 function IaGemini {
-  Info "Gemini (Google): gratis con una clave, pero MENOS fiable con la guía. Sirve para probar; revisa cada paso."
-  Info "En el nivel gratis Google puede usar lo que se envía (medidas y miniaturas) para mejorar sus modelos."
-  if ([Environment]::GetEnvironmentVariable("GEMINI_API_KEY", "User")) { Ok "Ya tienes la clave GEMINI_API_KEY guardada"; return }
-  if (-not (Preguntar "¿Abrir la página para sacar la clave gratis y guardarla aquí?" $true)) { return }
-  if ($Simular) { Haria "abrir https://aistudio.google.com/apikey y guardar GEMINI_API_KEY"; return }
+  Info (T "Gemini (Google): gratis con una clave, pero MENOS fiable con la guía. Sirve para probar; revisa cada paso." `
+          "Gemini (Google): free with a key, but LESS reliable with the guide. Good for trying it out; check every step.")
+  Info (T "En el nivel gratis Google puede usar lo que se envía (medidas y miniaturas) para mejorar sus modelos." `
+          "On the free tier Google may use what is sent (measurements and thumbnails) to improve its models.")
+  if ([Environment]::GetEnvironmentVariable("GEMINI_API_KEY", "User")) { Ok (T "Ya tienes la clave GEMINI_API_KEY guardada" "Your GEMINI_API_KEY is already saved"); return }
+  if (-not (Preguntar (T "¿Abrir la página para sacar la clave gratis y guardarla aquí?" "Open the page to get the free key and save it here?") $true)) { return }
+  if ($Simular) { Haria "https://aistudio.google.com/apikey -> GEMINI_API_KEY"; return }
   Start-Process "https://aistudio.google.com/apikey"
-  $seg = Read-Host "  Pega la clave (no se ve al escribir; Intro vacío para saltar)" -AsSecureString
+  $seg = Read-Host ("  " + (T "Pega la clave (no se ve al escribir; Intro vacío para saltar)" "Paste the key (hidden while typing; empty Enter to skip)")) -AsSecureString
   $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($seg)
   try { $clave = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
-  if ([string]::IsNullOrWhiteSpace($clave)) { Info "Sin clave: se puede poner luego en el chat (botón Clave...)."; return }
+  if ([string]::IsNullOrWhiteSpace($clave)) { Info (T "Sin clave: se puede poner luego en el chat (botón Clave...)." "No key: you can add it later in the chat (Key... button)."); return }
   [Environment]::SetEnvironmentVariable("GEMINI_API_KEY", $clave.Trim(), "User")
   $clave = $null
-  Ok "Clave de Gemini guardada en tu usuario (GEMINI_API_KEY). No la compartas."
+  Ok (T "Clave de Gemini guardada en tu usuario (GEMINI_API_KEY). No la compartas." "Gemini key saved for your user (GEMINI_API_KEY). Do not share it.")
 }
 
-Titulo "Inteligencia artificial"
-Info "¿Qué IA vas a usar? Puedes elegir varias, separadas por comas:"
-Info "  1 = Claude (la mejor, de pago)   2 = Codex (OpenAI, de pago)"
-Info "  3 = Local con Ollama (gratis, necesita gráfica potente)   4 = Gemini (gratis con clave, menos fiable)"
-Info "  0 o Intro = ninguna ahora"
-$eleccion = if ($SinPreguntas) { $IA } else { Read-Host "  Elección" }
+Titulo (T "Inteligencia artificial" "Artificial intelligence")
+Info (T "¿Qué IA vas a usar? Puedes elegir varias, separadas por comas:" "Which AI will you use? You can pick several, separated by commas:")
+Info (T "  1 = Claude (la mejor, de pago)   2 = Codex (OpenAI, de pago)" "  1 = Claude (the best, paid)   2 = Codex (OpenAI, paid)")
+Info (T "  3 = Local con Ollama (gratis, necesita gráfica potente)   4 = Gemini (gratis con clave, menos fiable)" `
+        "  3 = Local with Ollama (free, needs a powerful graphics card)   4 = Gemini (free with a key, less reliable)")
+Info (T "  0 o Intro = ninguna ahora" "  0 or Enter = none for now")
+$eleccion = if ($SinPreguntas) { $IA } else { Read-Host ("  " + (T "Elección" "Choice")) }
 foreach ($o in (("" + $eleccion) -split '[,; ]+' | Where-Object { $_ })) {
   switch ($o.Trim()) {
     "1" { Write-Host ""; IaClaude }
@@ -333,11 +358,11 @@ foreach ($o in (("" + $eleccion) -split '[,; ]+' | Where-Object { $_ })) {
     "3" { Write-Host ""; IaLocal }
     "4" { Write-Host ""; IaGemini }
     "0" { }
-    default { Aviso "Opción desconocida: $o" }
+    default { Aviso ((T "Opción desconocida" "Unknown option") + ": $o") }
   }
 }
 
-# --- 4. Servidores MCP ----------------------------------------------------------------------------------------------
+# --- 5. Servidores MCP / MCP servers --------------------------------------------------------------------------------
 
 $servidores = [ordered]@{}
 if ($piExe)    { $servidores["piastropilot"]    = Join-Path $REPO "mcp\dist\piastropilot-mcp.mjs" }
@@ -346,10 +371,10 @@ if ($sasExe)   { $servidores["setiastropilot"]  = Join-Path $REPO "sas\mcp\dist\
 
 function PonerVariable($nombre, $valor) {
   $actual = [Environment]::GetEnvironmentVariable($nombre, "User")
-  if ($actual -eq $valor) { Info "$nombre ya vale $valor"; return }
-  if ($Simular) { Haria "variable de usuario $nombre = $valor"; return }
+  if ($actual -eq $valor) { Info ("$nombre = $valor " + (T "(ya estaba)" "(already set)")); return }
+  if ($Simular) { Haria ((T "variable de usuario" "user variable") + " $nombre = $valor"); return }
   [Environment]::SetEnvironmentVariable($nombre, $valor, "User")
-  Ok "Variable de usuario $nombre = $valor"
+  Ok ((T "Variable de usuario" "User variable") + " $nombre = $valor")
 }
 
 # Claude Desktop: claude_desktop_config.json. Se edita con node (PowerShell 5.1 no lee bien algunos JSON) y, si el
@@ -384,8 +409,8 @@ if (!simular) fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + "\n", "utf8");
 
 function ConfigurarClaudeDesktop {
   $dir = Join-Path $env:APPDATA "Claude"
-  if (-not (Test-Path -LiteralPath $dir)) { Info "Claude Desktop: no está instalado (no hay $dir)."; return }
-  if (-not $node) { Aviso "Claude Desktop: sin Node.js no puedo editar su configuración."; return }
+  if (-not (Test-Path -LiteralPath $dir)) { Info (T "Claude Desktop: no está instalado." "Claude Desktop: not installed."); return }
+  if (-not $node) { Aviso (T "Claude Desktop: sin Node.js no puedo editar su configuración." "Claude Desktop: without Node.js its settings cannot be edited."); return }
   $cfg = Join-Path $dir "claude_desktop_config.json"
   $srv = [ordered]@{}
   foreach ($k in $servidores.Keys) { $srv[$k] = @{ command = "node"; args = @((Barras $servidores[$k])) } }
@@ -396,17 +421,27 @@ function ConfigurarClaudeDesktop {
   $salida = & $node $js 2>&1
   $codigo = $LASTEXITCODE
   Remove-Item -LiteralPath $js -ErrorAction SilentlyContinue
-  if ($codigo -ne 0) { Aviso "Claude Desktop: $cfg no es un JSON válido y no sé repararlo; no lo toco. Añade los servidores a mano (mcp\README.md)."; return }
+  if ($codigo -ne 0) {
+    Aviso (T "Claude Desktop: $cfg no es un JSON válido y no sé repararlo; no lo toco. Añade los servidores a mano (mcp\README.md)." `
+             "Claude Desktop: $cfg is not valid JSON and cannot be repaired; left untouched. Add the servers by hand (mcp\README.md).")
+    return
+  }
   foreach ($l in $salida) {
     $l = "$l"
-    if ($l -eq "REPARADO" -and $Simular) { Haria "Claude Desktop: su configuración está rota (JSON incompleto); la repararía (con copia en $cfg$SUFIJO)." }
-    elseif ($l -eq "REPARADO") { Aviso "Claude Desktop: su configuración estaba rota (JSON incompleto); la he reparado (copia en $cfg$SUFIJO)." }
-    elseif ($l.StartsWith("QUITADO ")) { if ($Simular) { Haria "Claude Desktop: quitar el servidor viejo $($l.Substring(8)) (su fichero ya no existe)" } else { Ok "Claude Desktop: quitado el servidor viejo $($l.Substring(8)) (su fichero ya no existe)" } }
-    elseif ($l.StartsWith("PUESTO ")) { if ($Simular) { Haria "Claude Desktop: servidor $($l.Substring(7))" } else { Ok "Claude Desktop: servidor $($l.Substring(7))" } }
-    elseif ($l.StartsWith("IGUAL ")) { Info "Claude Desktop: $($l.Substring(6)) ya estaba bien" }
+    if ($l -eq "REPARADO") {
+      if ($Simular) { Haria (T "Claude Desktop: su configuración está rota (JSON incompleto); la repararía." "Claude Desktop: its settings are broken (incomplete JSON); would repair them.") }
+      else { Aviso (T "Claude Desktop: su configuración estaba rota (JSON incompleto); la he reparado (copia en $cfg$SUFIJO)." "Claude Desktop: its settings were broken (incomplete JSON); repaired (backup in $cfg$SUFIJO).") }
+    }
+    elseif ($l.StartsWith("QUITADO ")) {
+      $t = (T "Claude Desktop: quitado el servidor viejo" "Claude Desktop: removed the old server") + " $($l.Substring(8)) " + (T "(su fichero ya no existe)" "(its file no longer exists)")
+      if ($Simular) { Haria $t } else { Ok $t }
+    }
+    elseif ($l.StartsWith("PUESTO ")) { $t = (T "Claude Desktop: servidor" "Claude Desktop: server") + " $($l.Substring(7))"; if ($Simular) { Haria $t } else { Ok $t } }
+    elseif ($l.StartsWith("IGUAL ")) { Info ("Claude Desktop: $($l.Substring(6)) " + (T "ya estaba bien" "already correct")) }
   }
   if (-not $Simular -and (Get-Process -Name "claude" -ErrorAction SilentlyContinue)) {
-    Aviso "Claude Desktop está abierto: ciérralo del todo (también en la bandeja) y vuelve a abrirlo para que vea los servidores."
+    Aviso (T "Claude Desktop está abierto: ciérralo del todo (también en la bandeja) y vuelve a abrirlo para que vea los servidores." `
+             "Claude Desktop is open: quit it completely (also from the tray) and reopen it so it sees the servers.")
   }
 }
 
@@ -416,7 +451,7 @@ function ConfigurarClaudeCode {
     $p = Join-Path $env:USERPROFILE ".local\bin\claude.exe"
     if (Test-Path -LiteralPath $p) { $claude = $p }
   }
-  if (-not $claude) { Info "Claude Code: no está instalado."; return }
+  if (-not $claude) { Info (T "Claude Code: no está instalado." "Claude Code: not installed."); return }
   foreach ($k in $servidores.Keys) {
     $ruta = Barras $servidores[$k]
     if ($Simular) { Haria "claude mcp add --scope user $k -- node $ruta"; continue }
@@ -425,13 +460,14 @@ function ConfigurarClaudeCode {
     & $claude mcp add --scope user $k -- node $ruta 2>&1 | Out-Null
     $codigo = $LASTEXITCODE
     $ErrorActionPreference = "Stop"
-    if ($codigo -eq 0) { Ok "Claude Code: servidor $k (ámbito usuario)" } else { Aviso "Claude Code: no pude registrar $k. A mano: claude mcp add --scope user $k -- node $ruta" }
+    if ($codigo -eq 0) { Ok ((T "Claude Code: servidor" "Claude Code: server") + " $k") }
+    else { Aviso ((T "Claude Code: no pude registrar $k. A mano:" "Claude Code: could not register $k. By hand:") + " claude mcp add --scope user $k -- node $ruta") }
   }
 }
 
 function ConfigurarCodex {
   $dir = Join-Path $env:USERPROFILE ".codex"
-  if (-not (Test-Path -LiteralPath $dir)) { Info "Codex: no está instalado (no hay $dir)."; return }
+  if (-not (Test-Path -LiteralPath $dir)) { Info (T "Codex: no está instalado." "Codex: not installed."); return }
   $f = Join-Path $dir "config.toml"
   $lineas = if (Test-Path -LiteralPath $f) { [System.IO.File]::ReadAllLines($f) } else { @() }
   $nuevas = New-Object System.Collections.Generic.List[string]
@@ -444,28 +480,31 @@ function ConfigurarCodex {
   foreach ($k in $servidores.Keys) {
     $nuevas.Add(""); $nuevas.Add("[mcp_servers.$k]"); $nuevas.Add('command = "node"'); $nuevas.Add('args = ["' + (Barras $servidores[$k]) + '"]')
   }
-  if ($Simular) { Haria "Codex: servidores $($servidores.Keys -join ', ') en $f"; return }
+  $t = (T "Codex: servidores" "Codex: servers") + " $($servidores.Keys -join ', ') (config.toml)"
+  if ($Simular) { Haria $t; return }
   Copia $f
   EscribirUtf8SinBom $f (($nuevas -join "`r`n") + "`r`n")
-  Ok "Codex: servidores $($servidores.Keys -join ', ') en config.toml"
+  Ok $t
 }
 
 if ($servidores.Count) {
-  Titulo "Servidores MCP"
-  foreach ($k in $servidores.Keys) { if (-not (Test-Path -LiteralPath $servidores[$k]) -and -not $Simular) { Aviso "Falta $($servidores[$k])" } }
+  Titulo (T "Servidores MCP" "MCP servers")
+  foreach ($k in $servidores.Keys) { if (-not (Test-Path -LiteralPath $servidores[$k]) -and -not $Simular) { Aviso ((T "Falta" "Missing") + " $($servidores[$k])") } }
   ConfigurarClaudeDesktop
   ConfigurarClaudeCode
   ConfigurarCodex
 }
 
-# --- 5. Cada programa -----------------------------------------------------------------------------------------------
+# --- 6. Cada programa / Each program --------------------------------------------------------------------------------
 
 if ($piExe) {
   Titulo "PixInsight"
-  if ($piExe -ne $PI_DEF) { PonerVariable "PIXINSIGHT_EXE" (Barras $piExe) } else { Info "PixInsight en su ruta habitual: no hace falta PIXINSIGHT_EXE." }
-  Info "PiAstroPilot Lite (opcional, sin MCP): en PixInsight, Script > Feature Scripts... > Add, elige"
-  Info "   $(Join-Path $REPO 'piastropilot\script') y pulsa Done. Queda en Script > PiAstroPilot > PiAstroPilotLite."
-  $script:avisos.Add("PixInsight: para el Lite, Script > Feature Scripts... > Add > $(Join-Path $REPO 'piastropilot\script') (no se puede hacer desde fuera de PixInsight).")
+  if ($piExe -ne $PI_DEF) { PonerVariable "PIXINSIGHT_EXE" (Barras $piExe) }
+  else { Info (T "PixInsight en su ruta habitual: no hace falta PIXINSIGHT_EXE." "PixInsight in its usual place: PIXINSIGHT_EXE not needed.") }
+  $lite = Join-Path $REPO "piastropilot\script"
+  $t = T "PixInsight: para el Lite (opcional, sin MCP), Script > Feature Scripts... > Add > $lite > Done (no se puede hacer desde fuera de PixInsight)." `
+         "PixInsight: for the Lite (optional, no MCP), Script > Feature Scripts... > Add > $lite > Done (cannot be done from outside PixInsight)."
+  Info $t; Nota $t
 }
 
 function ConfigurarSiril {
@@ -475,11 +514,13 @@ function ConfigurarSiril {
          Select-Object -First 1
   $puente = Join-Path $REPO "siril\puente"
   if (-not $ini) {
-    Aviso "Siril: no encuentro su configuración (¿no se ha abierto nunca?). Ábrelo una vez y repite, o en Preferencias > Scripts añade $puente."
+    Aviso (T "Siril: no encuentro su configuración (¿no se ha abierto nunca?). Ábrelo una vez y repite, o en Preferencias > Scripts añade $puente." `
+             "Siril: its settings were not found (never opened?). Open it once and run again, or add $puente in Preferences > Scripts.")
     return
   }
-  if (Get-Process -Name "siril" -ErrorAction SilentlyContinue) {
-    Aviso "Siril está abierto y guarda su configuración al cerrarse (borraría el cambio). Ciérralo y repite el instalador, o añade a mano $puente en Preferencias > Scripts."
+  if (-not $Simular -and (Get-Process -Name "siril" -ErrorAction SilentlyContinue)) {
+    Aviso (T "Siril está abierto y guarda su configuración al cerrarse (borraría el cambio). Ciérralo y repite el instalador, o añade $puente en Preferencias > Scripts." `
+             "Siril is open and saves its settings on exit (it would undo the change). Close it and run the installer again, or add $puente in Preferences > Scripts.")
     return
   }
   $texto = [System.IO.File]::ReadAllText($ini.FullName)
@@ -494,8 +535,8 @@ function ConfigurarSiril {
     if ($enGui -and $l -match '^\s*script_path\s*=(.*)$') {
       $lista = @($Matches[1].Split(';') | Where-Object { $_ -ne "" })
       $ya = $lista | Where-Object { ($_ -replace '\\\\', '\').TrimEnd('\') -ieq $puente.TrimEnd('\') }
-      if ($ya) { Info "Siril: $puente ya está en las carpetas de scripts."; return }
-      # Quitar otras copias del puente de AstroPilot que ya no existan (repo movido).
+      if ($ya) { Info (T "Siril: $puente ya está en las carpetas de scripts." "Siril: $puente is already in the script folders."); return }
+      # Quitar otras copias del puente que ya no existan (repo movido) / drop stale copies of the bridge folder.
       $lista = @($lista | Where-Object { $p = ($_ -replace '\\\\', '\'); -not ($p -match 'siril\\puente\\?$' -and -not (Test-Path -LiteralPath $p)) })
       $lineas[$i] = "script_path=" + (($lista + $iniEsc) -join ';') + ";"
       $hecho = $true; break
@@ -505,10 +546,11 @@ function ConfigurarSiril {
     if ($idxGui -lt 0) { $lineas.Add("[gui]"); $idxGui = $lineas.Count - 1 }
     $lineas.Insert($idxGui + 1, "script_path=$iniEsc;")
   }
-  if ($Simular) { Haria "Siril: añadir $puente a script_path de $($ini.FullName)"; return }
+  $t = (T "Siril: añadido $puente a las carpetas de scripts" "Siril: added $puente to the script folders") + " ($($ini.Name))"
+  if ($Simular) { Haria $t; return }
   Copia $ini.FullName
   EscribirUtf8SinBom $ini.FullName ($lineas -join $nl)
-  Ok "Siril: $puente añadido a las carpetas de scripts ($($ini.Name)). En Siril, Scripts debe mostrar SirilAstroPilot."
+  Ok $t
 }
 if ($sirilExe) { Titulo "Siril"; ConfigurarSiril }
 
@@ -517,32 +559,35 @@ function ConfigurarSas {
   foreach ($n in @("SetiAstroPilot.py", "SetiAstroPilot_Chat.py")) {
     $origen = Join-Path $REPO "sas\puente\$n"
     $destino = Join-Path $sasScripts $n
-    if ($Simular) { Haria "SASpro: copiar $n a $sasScripts"; continue }
+    $t = (T "SASpro: copiado $n a" "SASpro: copied $n to") + " $sasScripts"
+    if ($Simular) { Haria $t; continue }
     if (-not (Test-Path -LiteralPath $sasScripts)) { New-Item -ItemType Directory -Path $sasScripts -Force | Out-Null }
-    if ((Test-Path -LiteralPath $destino) -and ((Get-FileHash -LiteralPath $destino).Hash -eq (Get-FileHash -LiteralPath $origen).Hash)) { Info "SASpro: $n ya está al día."; continue }
+    if ((Test-Path -LiteralPath $destino) -and ((Get-FileHash -LiteralPath $destino).Hash -eq (Get-FileHash -LiteralPath $origen).Hash)) {
+      Info (T "SASpro: $n ya está al día." "SASpro: $n is up to date."); continue
+    }
     Copia $destino
     Copy-Item -LiteralPath $origen -Destination $destino -Force
-    Ok "SASpro: $n copiado a $sasScripts"
+    Ok $t
   }
-  Info "En SASpro, Scripts > Reload Scripts: aparece AstroPilot > SetiAstroPilot."
+  Info (T "En SASpro, Scripts > Reload Scripts: aparece AstroPilot > SetiAstroPilot." "In SASpro, Scripts > Reload Scripts: AstroPilot > SetiAstroPilot appears.")
 }
 if ($sasExe) { Titulo "Seti Astro Suite Pro"; ConfigurarSas }
 
-# --- 6. Perfil ------------------------------------------------------------------------------------------------------
+# --- 7. Perfil / Profile --------------------------------------------------------------------------------------------
 
 $perfil = Join-Path $REPO "guia\perfil.md"
 $ejemplo = Join-Path $REPO "guia\perfil-ejemplo.md"
 if (-not (Test-Path -LiteralPath $perfil) -and (Test-Path -LiteralPath $ejemplo)) {
-  Titulo "Perfil"
-  if ($Simular) { Haria "crear guia\perfil.md desde perfil-ejemplo.md" }
-  else { Copy-Item -LiteralPath $ejemplo -Destination $perfil; Ok "Creado guia\perfil.md: rellénalo con tu equipo, tu cielo y tus rutas." }
+  Titulo (T "Perfil" "Profile")
+  $t = T "Creado guia\perfil.md: rellénalo con tu equipo, tu cielo y tus rutas." "Created guia\perfil.md: fill it in with your equipment, sky and paths."
+  if ($Simular) { Haria $t } else { Copy-Item -LiteralPath $ejemplo -Destination $perfil; Ok $t }
 }
 
-# --- Resumen --------------------------------------------------------------------------------------------------------
+# --- Resumen / Summary ----------------------------------------------------------------------------------------------
 
-Titulo "Resumen"
-Info "Repositorio: $REPO"
-if ($Simular) { Info "Simulación: no se ha cambiado nada." }
+Titulo (T "Resumen" "Summary")
+Info ((T "Repositorio" "Repository") + ": $REPO")
+if ($Simular) { Info (T "Simulación: no se ha cambiado nada." "Dry run: nothing has been changed.") }
 foreach ($a in $script:avisos) { Write-Host "  - $a" -ForegroundColor Yellow }
-Info "Para actualizar más adelante, vuelve a ejecutar este instalador."
-Info "Las copias de los ficheros de configuración tocados terminan en $SUFIJO."
+Info (T "Para actualizar más adelante, vuelve a ejecutar este instalador." "To update later, run this installer again.")
+Info (T "Las copias de los ficheros de configuración tocados terminan en $SUFIJO." "Backups of the config files touched end in $SUFIJO.")
