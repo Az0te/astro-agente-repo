@@ -17,6 +17,7 @@ Resúmenes y referencias usados para escribir esta guía. Todo el contenido est�
 - Nitidez no lineal: https://ssr.app.astrobin.com/forum/topic/175861/what-is-your-preferred-way-of-non-linear-sharpening
 - DBXtract (Raúl Hussein), documentación y tabla de QE del IMX571: https://dbxtract.astrocitas.com/DBXtract.html
 - Halos púrpura con PixelMath: https://discuss.pixls.us/t/removing-purple-star-halos-in-siril-using-pixel-math/28617
+- VeraLux HyperMetric Stretch (Riccardo Paterniti, 2025; scripts de Siril, GPL-3.0-or-later): **solo como inspiración** del estirado hiperbólico en luminancia que conserva el color (`hiperbolico.py`, `esHiperbolico` en `estirado.js`). No se ha copiado su código, ni su estructura ni sus constantes: la curva es la hiperbólica generalizada de GHS, y el cielo objetivo se busca igual que en los demás estirados de la guía. En la comparativa del 22 nov 2026 el script original se ejecutó fuera del repositorio, solo como referencia.
 
 ## PixInsight
 
