@@ -27,11 +27,29 @@ El proyecto original de Alain Escaffre es un pipeline **autónomo** pensado para
 - **Trabajos largos sin bloquear**: las llamadas de más de 45 s devuelven un id y el resultado se recoge con `estado(trabajo)`.
 - **Guía de procesado** orientada a OSC + dual band desde cielo urbano, HDR con tomas cortas, halos de estrellas brillantes, emulación de DBXtract con PixelMath, sustracción de continuo y mezcla de cámaras mono y OSC. Probada también con **cámara monocromo y banda estrecha** (LRGB + Hα, OIII y SII, paleta SHO).
 
+## Instalación rápida en Windows
+
+El [instalador](instalar/README.md) lo deja todo listo con un solo script. Si aún no tienes el repositorio, abre PowerShell y pega:
+
+```
+irm https://raw.githubusercontent.com/Az0te/astro-agente-repo/main/instalar/instalar.ps1 | iex
+```
+
+Si ya lo tienes, haz doble clic en `instalar\Instalar.cmd`. El script:
+
+- busca PixInsight, Siril y SASpro;
+- descarga o actualiza el repositorio en la carpeta que elijas (con Git o con el ZIP);
+- comprueba Node.js y, si falta, lo instala con `winget`;
+- **te guía para instalar la IA** que elijas, una o varias: **Claude** (Claude Desktop y Claude Code), **Codex**, **local con Ollama** (propone el modelo Qwen según la memoria de tu gráfica) o **Gemini** (abre la página de la clave gratuita y la guarda);
+- configura los servidores MCP en Claude Desktop, Claude Code y Codex, la carpeta de scripts de Siril y los lanzadores de SASpro.
+
+Antes de tocar un fichero de configuración guarda una copia `.antes-astropilot`, y con `-Simular` dice lo que haría sin cambiar nada. Para actualizar más adelante, vuelve a ejecutarlo. Opciones y detalles en [`instalar/README.md`](instalar/README.md).
+
 ## Empezar con PiAstroPilot Lite
 
 Es lo que usará la mayoría: no necesita Node.js, servidor MCP ni compilar nada.
 
-1. Descarga el repositorio (**Code > Download ZIP** en GitHub) y descomprímelo, por ejemplo en `C:\Users\<tu_usuario>\astro-agente-repo`.
+1. Descarga el repositorio (**Code > Download ZIP** en GitHub) y descomprímelo, por ejemplo en `C:\Users\<tu_usuario>\astro-agente-repo`. O usa el [instalador](#instalación-rápida-en-windows), que hace este paso y el siguiente.
 2. Ten un modelo: [Ollama](https://ollama.com) con un modelo descargado (local y gratis, p. ej. `ollama pull qwen3:32b`), Claude Code / Codex instalados y con sesión iniciada, o una clave gratuita de Gemini (sin gráfica ni suscripción, menos fiable). Ver [Qué IA usar y cómo configurarla](#qué-ia-usar-y-cómo-configurarla).
 3. En PixInsight 1.9.6 o superior: **Script > Feature Scripts… > Add**, elige la carpeta `piastropilot\script` y pulsa **Done**.
 4. Abre tu imagen y lanza **Script > PiAstroPilot > PiAstroPilotLite**. Elige el modelo en la pestaña **Modelo** y escribe en **Prompt**, por ejemplo «hazme un análisis de la imagen».
@@ -51,7 +69,7 @@ Detalles e instalación del MCP (Claude Code, Codex) en [`siril/README.md`](siri
 
 ## Qué IA usar y cómo configurarla
 
-Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía con el modelo que elijas.
+Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía con el modelo que elijas. El [instalador](#instalación-rápida-en-windows) instala Claude, Codex, Ollama con su modelo o la clave de Gemini por ti; abajo está cómo hacerlo a mano.
 
 | IA | Coste | Qué necesitas | Dónde funciona | Fiabilidad con la guía |
 |---|---|---|---|---|
@@ -124,7 +142,7 @@ Detalles, herramientas e instalación del MCP en [`sas/README.md`](sas/README.md
 
 ## Instalación (servidor MCP)
 
-> **Instalación rápida en Windows:** el [instalador](instalar/README.md) detecta PixInsight, Siril y SASpro, descarga el repositorio donde digas, instala la IA que elijas (Claude, Codex, local con Ollama o Gemini) y deja configurados los servidores MCP y las carpetas de scripts. Lo de abajo es la instalación a mano.
+> El [instalador](#instalación-rápida-en-windows) hace todo esto solo. Lo de abajo es la instalación a mano.
 
 1. Descarga o clona este repositorio, por ejemplo en `C:\Users\<tu_usuario>\astro-agente`. Vale cualquier carpeta (también la `astro-agente-repo-main` del ZIP de GitHub): el servidor MCP y el runner encuentran la guía (`guia/`) a partir de su propia ubicación, sin tocar ningún fichero. Si usas el módulo PiAstroPilot y el repo no está en `~/astro-agente-repo`, indica la carpeta `guia/` en sus Ajustes.
 2. Registra el servidor MCP piastropilot en tu cliente (no hace falta `npm install`: `mcp/dist/piastropilot-mcp.mjs` lleva todo dentro). Con Claude Code:
