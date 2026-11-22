@@ -124,7 +124,7 @@ Detalles, herramientas e instalación del MCP en [`sas/README.md`](sas/README.md
 
 ## Instalación (servidor MCP)
 
-1. Descarga o clona este repositorio, por ejemplo en `C:\Users\<tu_usuario>\astro-agente`.
+1. Descarga o clona este repositorio, por ejemplo en `C:\Users\<tu_usuario>\astro-agente`. Vale cualquier carpeta (también la `astro-agente-repo-main` del ZIP de GitHub): el servidor MCP y el runner encuentran la guía (`guia/`) a partir de su propia ubicación, sin tocar ningún fichero. Si usas el módulo PiAstroPilot y el repo no está en `~/astro-agente-repo`, indica la carpeta `guia/` en sus Ajustes.
 2. Registra el servidor MCP piastropilot en tu cliente (no hace falta `npm install`: `mcp/dist/piastropilot-mcp.mjs` lleva todo dentro). Con Claude Code:
    ```
    claude mcp add piastropilot -- node C:/Users/<tu_usuario>/astro-agente/mcp/dist/piastropilot-mcp.mjs

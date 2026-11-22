@@ -29,13 +29,22 @@
 // Umbrales de manchas_color (grManchas), medidos en M31 (13 nov 2026): GraXpert IA 13, GraXpert 8 21, polinomio 2 38
 // (manchas verdes y violetas que se veían en la miniatura), polinomio 1 53.
 var GR_MANCHAS_LEVE = 20, GR_MANCHAS_SE_VEN = 30;
-var GR_DIR = (typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS
-           : File.homeDirectory + "/astro-agente-repo/guia/herramientas";
+// Carpeta de las herramientas: GUIA_HERRAMIENTAS si la han puesto (Lite, módulo, petición del MCP); si no, la ruta
+// clásica. Se mira en cada uso porque el runner la recibe en cada petición, después de cargar este fichero.
+function grDir() {
+  return (typeof GUIA_HERRAMIENTAS === "string" && GUIA_HERRAMIENTAS) ? GUIA_HERRAMIENTAS
+         : File.homeDirectory + "/astro-agente-repo/guia/herramientas";
+}
+var GR_DIR = grDir();
 if (typeof gcPrepare !== "function") eval(File.readTextFile(GR_DIR + "/gradcompare.js"));
 if (typeof pxMGC !== "function") eval(File.readTextFile(GR_DIR + "/procesos.js"));
-// Siempre se recarga: PixInsight conserva las funciones globales entre ejecuciones del runner y con la guarda se quedaba
-// la versión vieja de gradbordes.js (14 nov 2026).
-eval(File.readTextFile(GR_DIR + "/gradbordes.js"));
+// Se recarga siempre que se sepa dónde está la guía: PixInsight conserva las funciones globales entre ejecuciones y con
+// la guarda se quedaba la versión vieja de gradbordes.js (14 nov 2026). En el runner del MCP gradbordes.js ya viene por
+// #include y GUIA_HERRAMIENTAS aún no existe al cargar: no se busca en ninguna ruta fija (en otra carpeta que
+// ~/astro-agente-repo el runner no arrancaba, 22 nov 2026).
+if (typeof gbPesoBordes !== "function" ||
+    (typeof GUIA_HERRAMIENTAS === "string" && GUIA_HERRAMIENTAS && File.exists(GR_DIR + "/gradbordes.js")))
+  eval(File.readTextFile(GR_DIR + "/gradbordes.js"));
 
 function grIds() {
   var ids = [], ws = ImageWindow.windows;
@@ -384,7 +393,7 @@ function gradienteCandidatos(viewId, o) {
   var hasWCS = win.hasAstrometricSolution;
 
   // Cuñas sin datos (masters sin alinear/recortar): el modelo de fondo intenta ajustar el relleno y falsea todo.
-  if (typeof bordesSinDatos !== "function") eval(File.readTextFile(GR_DIR + "/analisis.js"));
+  if (typeof bordesSinDatos !== "function") eval(File.readTextFile(grDir() + "/analisis.js"));
   var bd = bordesSinDatos(win.mainView);
   if (bd.hay && !o.ignorarBordes)
     throw new Error("La imagen tiene bordes sin datos (arriba " + bd.arriba + ", abajo " + bd.abajo + ", izquierda " + bd.izquierda +
@@ -466,7 +475,7 @@ function gradienteCandidatos(viewId, o) {
   // SyQon DeepGradient (syqon-cli, 22 nov 2026), sobre una copia. Necesita internet (y las bases de ASTAP); si SyQon Studio
   // no está, o la casilla Internet está desmarcada, va en omitidos. syqon: false para no probarlo.
   if (o.syqon !== false) {
-    if (typeof syqonGradiente !== "function") eval(File.readTextFile(GR_DIR + "/syqon.js"));
+    if (typeof syqonGradiente !== "function") eval(File.readTextFile(grDir() + "/syqon.js"));
     if (!sqHay("deep-gradient")) (r.omitidos = r.omitidos || []).push("SyQon DeepGradient: SyQon Studio no está instalado.");
     else if (typeof PIASTROPILOT_INTERNET !== "undefined" && PIASTROPILOT_INTERNET === false)
       (r.omitidos = r.omitidos || []).push("SyQon DeepGradient: necesita internet y la casilla Internet está desmarcada.");

@@ -48,6 +48,7 @@
 #include "../../guia/herramientas/exportar.js"
 #include "../../guia/herramientas/graxpert.js"
 #include "../../guia/herramientas/syqon.js"
+#include "../../guia/herramientas/gradbordes.js"
 #include "../../guia/herramientas/gradiente.js"
 #include "../../guia/herramientas/hdr.js"
 #include "../../guia/herramientas/lineal.js"
@@ -59,8 +60,11 @@
 
 var PPR_VERSION = "0.3.0";
 var PPR_DIR = File.homeDirectory + "/.piastropilot";
-// Rutas de la guía que usan algunas funciones para cargar dependencias; el servidor las manda en cada petición.
-var PIASTROPILOT_GUIA = File.homeDirectory + "/astro-agente-repo/guia";
+// Rutas de la guía que usan algunas funciones para cargar dependencias; el servidor las manda en cada petición (pet.guia,
+// sale de dónde esté el repo). Si ya hay una válida (petición anterior, Lite) se conserva; la de ~/astro-agente-repo es
+// solo el último recurso: el repo puede estar en cualquier carpeta (22 nov 2026).
+var PIASTROPILOT_GUIA = (typeof PIASTROPILOT_GUIA === "string" && PIASTROPILOT_GUIA && File.directoryExists(PIASTROPILOT_GUIA))
+   ? PIASTROPILOT_GUIA : File.homeDirectory + "/astro-agente-repo/guia";
 var GUIA_HERRAMIENTAS = PIASTROPILOT_GUIA + "/herramientas";
 // Carpeta de las miniaturas de las comparaciones (pxPrevia). El Lite y el módulo con modelos locales ponen la suya; por el
 // MCP (Claude en el módulo) no había ninguna y gradienteCandidatos y compañía no hacían previas (17 nov 2026).
