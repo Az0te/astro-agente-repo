@@ -101,7 +101,7 @@ Every part (Lite, the module, the Siril and SASpro chats) follows the same guide
 
 1. Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) with your Google account, no card needed. **Do not share it or paste it into chats.**
 2. **Siril and SASpro chats**: choose *Gemini Flash-Lite (API gratis, rápido)* and press **Key…** to paste it. It is stored only on your PC, as the user environment variable `GEMINI_API_KEY`.
-3. **Lite**: provider *Gemini (API, gratis con clave)* and paste the key in *Settings > Clave de Gemini*. If left empty, it uses `GEMINI_API_KEY`.
+3. **Lite**: provider *Gemini (API, gratis con clave)*. If there is no key, it asks for it when you pick it (and later with the **Key…** button next to the provider). It is stored in the same `GEMINI_API_KEY` variable as the chats.
 4. **Module** (build 115 or later): model *Gemini Flash-Lite (API gratis)*. It reads `GEMINI_API_KEY`. Like the local model, it proposes the calls for you to review.
 5. **Flash-Lite** answers in seconds. **Flash** reasons somewhat better, but on the free tier it can take minutes per answer. If Google retires a model, the chats switch on their own to the one the API suggests.
 

@@ -177,6 +177,16 @@ var PL_TR = {
    "Dictado de macOS: haz clic en el prompt y pulsa dos veces la tecla Fn (o 🌐); habla y pulsa Enviar.":
       "macOS dictation: click in the prompt and press the Fn key (or 🌐) twice; speak and press Send.",
    "Dictado: no hay dictado del sistema en Linux; escribe el prompt.": "Dictation: there is no system dictation on Linux; type the prompt.",
+   "Clave…": "Key…", "Clave de Gemini": "Gemini key", "Aceptar": "OK", "Cancelar": "Cancel",
+   "Abrir la página de la clave": "Open the key page",
+   "Clave de la API de Gemini (gratis en aistudio.google.com/apikey). Se guarda sólo en este PC.":
+      "Gemini API key (free at aistudio.google.com/apikey). Stored only on this PC.",
+   "Clave guardada en GEMINI_API_KEY.": "Key saved in GEMINI_API_KEY.",
+   "Clave GEMINI_API_KEY borrada.": "Key GEMINI_API_KEY deleted.",
+   "Clave de Gemini guardada en los ajustes de PixInsight.": "Gemini key saved in PixInsight settings.",
+   "Clave de Gemini borrada.": "Gemini key deleted.",
+   "No se pudo guardar la clave en GEMINI_API_KEY; pégala en Ajustes («Clave de Gemini»).":
+      "Could not save the key in GEMINI_API_KEY; paste it in Settings («Clave de Gemini»).",
 };
 
 // Trozos de textos montados con variables (de más largo a más corto al aplicarlos).
@@ -991,18 +1001,46 @@ var PL_CLAVE_ENTORNO = null;
 function plClaveGemini(aj) {
    var c = String(aj.claveGemini || "").trim();
    if (c.length) return c;
-   if (PL_CLAVE_ENTORNO !== null) return PL_CLAVE_ENTORNO;
-   PL_CLAVE_ENTORNO = "";
-   if (!plEsWindows()) return "";
+   if (PL_CLAVE_ENTORNO) return PL_CLAVE_ENTORNO;   // una vacía no se guarda: se vuelve a mirar (pudo crearse luego)
+   // En Windows, primero el registro: el entorno de PixInsight se copió al abrirlo y no ve una clave cambiada después.
+   var v = plEsWindows() ? plRegClave("query") : "";
+   if (!v.length) v = plEntorno("GEMINI_API_KEY").trim();
+   if (v.length) PL_CLAVE_ENTORNO = v;
+   return v;
+}
+
+// reg.exe sobre HKCU\Environment\GEMINI_API_KEY: "query" devuelve la clave; "add" (con valor) y "delete" devuelven "ok" o "".
+function plRegClave(orden, valor) {
    try {
       var P = new ExternalProcess, out = "", t0 = Date.now();
       P.onStandardOutputDataAvailable = function () { out += String(this.stdout); };
-      P.start("reg", ["query", "HKCU\\Environment", "/v", "GEMINI_API_KEY"]);
+      var a = [orden, "HKCU\\Environment", "/v", "GEMINI_API_KEY"];
+      if (orden == "add") a = a.concat(["/t", "REG_SZ", "/d", valor, "/f"]);
+      else if (orden == "delete") a.push("/f");
+      P.start("reg", a);
       while ((P.isStarting || P.isRunning) && Date.now() - t0 < 5000) { plEventos(); plDormir(20); }
+      if (orden != "query") return P.exitCode === 0 ? "ok" : "";
       var m = /GEMINI_API_KEY\s+REG_(?:EXPAND_)?SZ\s+(\S+)/.exec(out);
-      if (m) PL_CLAVE_ENTORNO = m[1];
-   } catch (e) {}
-   return PL_CLAVE_ENTORNO;
+      return m ? m[1] : "";
+   } catch (e) { return ""; }
+}
+
+// Botón «Clave…» (como en los chats de Siril y SASpro): en Windows, variable de entorno de usuario GEMINI_API_KEY
+// (la misma de los tres chats), y se vacía la de Ajustes para que no la tape; fuera de Windows, en los ajustes de
+// PixInsight. Valor vacío = borrarla. Devuelve el texto para la línea de estado.
+function plGuardarClaveGemini(aj, valor) {
+   valor = String(valor || "").trim();
+   PL_CLAVE_ENTORNO = null;
+   if (plEsWindows()) {
+      if (!plRegClave(valor.length ? "add" : "delete", valor) && valor.length)
+         return "No se pudo guardar la clave en GEMINI_API_KEY; pégala en Ajustes («Clave de Gemini»).";
+      aj.claveGemini = "";
+      aj.guardar();
+      return valor.length ? "Clave guardada en GEMINI_API_KEY." : "Clave GEMINI_API_KEY borrada.";
+   }
+   aj.claveGemini = valor;
+   aj.guardar();
+   return valor.length ? "Clave de Gemini guardada en los ajustes de PixInsight." : "Clave de Gemini borrada.";
 }
 
 function plImagenesDe(texto) {
@@ -1017,8 +1055,8 @@ function plImagenesDe(texto) {
 function plGeminiChat(aj, sistema, mensajes, estado, modelo) {
    var clave = plClaveGemini(aj);
    if (!clave.length)
-      throw new Error("Falta la clave de Gemini: sácala gratis en https:/" + "/aistudio.google.com/apikey y pégala en Ajustes " +
-                      "(«Clave de Gemini»), o crea la variable de entorno GEMINI_API_KEY.");
+      throw new Error("Falta la clave de Gemini: sácala gratis en https:/" + "/aistudio.google.com/apikey y pégala con el botón " +
+                      "«Clave…» de la pestaña Modelo (o en Ajustes, «Clave de Gemini»).");
    var conv = [{ role: "system", content: sistema }].concat(mensajes.map(function (m) { return { role: m.role, content: m.content }; }));
    var ult = conv[conv.length - 1];
    if (ult.role == "user") {
@@ -2138,6 +2176,48 @@ class PLDialogo extends Dialog {
    }
 }
 
+// Ventana para pegar la clave de Gemini (botón «Clave…» y al elegir Gemini sin clave). Texto oculto, como en Siril/SAS.
+class PLDialogoClave extends Dialog {
+   constructor(hay) {
+      super();
+      var self = this;
+      this.windowTitle = plT("Clave de Gemini");
+      var l = new Label(this);
+      l.wordWrapping = true;
+      l.useRichText = false;
+      var en = PL_EN;
+      l.text = (en ? "Paste your Gemini key (free at " : "Pega tu clave de Gemini (gratis en ") + "https:/" + "/aistudio.google.com/apikey).\n" +
+               (plEsWindows() ? (en ? "It is stored only on this PC, in the user variable GEMINI_API_KEY (the one the Siril and SASpro chats use)."
+                                    : "Se guarda sólo en este PC, en la variable de usuario GEMINI_API_KEY (la de los chats de Siril y SASpro).")
+                              : (en ? "It is stored only on this PC, in the PixInsight settings." : "Se guarda sólo en este PC, en los ajustes de PixInsight.")) +
+               (hay ? (en ? "\nOne is already stored: leave the field empty and press OK to delete it."
+                          : "\nYa hay una guardada: deja el campo vacío y pulsa Aceptar para borrarla.") : "");
+      l.setScaledMinWidth(460);
+      this.eClave = new Edit(this);
+      this.eClave.passwordMode = true;
+      var bWeb = new PushButton(this);
+      bWeb.text = plT("Abrir la página de la clave");
+      bWeb.onClick = function () {
+         var url = "https:/" + "/aistudio.google.com/apikey";
+         try {
+            if (plEsWindows()) ExternalProcess.startDetached("explorer", [url]);
+            else ExternalProcess.startDetached(CoreApplication.platform == "MacOSX" ? "open" : "xdg-open", [url]);
+         } catch (e) {}
+      };
+      var bOk = new PushButton(this);
+      bOk.text = plT("Aceptar"); bOk.defaultButton = true;
+      bOk.onClick = function () { self.clave = self.eClave.text.trim(); self.ok(); };
+      var bNo = new PushButton(this);
+      bNo.text = plT("Cancelar");
+      bNo.onClick = function () { self.cancel(); };
+      var fb = new HorizontalSizer; fb.spacing = 6; fb.add(bWeb); fb.addStretch(); fb.add(bOk); fb.add(bNo);
+      this.sizer = new VerticalSizer;
+      this.sizer.margin = 10; this.sizer.spacing = 8;
+      this.sizer.add(l); this.sizer.add(this.eClave); this.sizer.add(fb);
+      this.adjustToContents();
+   }
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Panel de IA local (23 nov 2026): debajo del chat y sólo con Ollama o RDNA-FAST. Modelo cargado (cuantización,
 // contexto, tamaño), % del modelo en la GPU, memoria de la gráfica, contexto usado y carga. Lee /api/ps (Ollama) y
@@ -2581,12 +2661,34 @@ function plConstruirDialogo(aj) {
    this.cPensar.onCheck = function (c) { aj.pensar = c; };
    this.notaModelo = new Label(pModelo);
    this.notaModelo.wordWrapping = true;
-   this.cProv.onItemSelected = function (i) { aj.proveedor = PROV[i][0]; aj.rdnaAuto = false; self.rellenarModelos(false);
-                                              if (self.panelLocal) self.panelLocal.tick(); };
+   // Clave de Gemini, como el botón «Clave…» de los chats de Siril y SASpro: sólo con Gemini; «✓» si ya hay una.
+   this.bClave = new PushButton(pModelo);
+   this.bClave.text = "Clave…";
+   this.bClave.toolTip = "Clave de la API de Gemini (gratis en aistudio.google.com/apikey). Se guarda sólo en este PC.";
+   this.bClave.onClick = function () { self.pedirClave(); };
+   this.pintarClave = function () {
+      this.bClave.visible = aj.proveedor == "gemini";
+      if (aj.proveedor == "gemini") this.bClave.text = plT("Clave…") + (plClaveGemini(aj).length ? " ✓" : "");
+   };
+   this.pedirClave = function () {
+      this.leerAjustes();
+      var d = new PLDialogoClave(plClaveGemini(aj).length > 0);
+      if (!d.execute()) return false;
+      this.estadoLbl.text = plT(plGuardarClaveGemini(aj, d.clave));
+      this.eGemini.text = aj.claveGemini;
+      this.pintarClave();
+      return true;
+   };
+   this.cProv.onItemSelected = function (i) {
+      aj.proveedor = PROV[i][0]; aj.rdnaAuto = false; self.rellenarModelos(false);
+      if (self.panelLocal) self.panelLocal.tick();
+      // Al elegir Gemini sin clave, se pide en el momento (como en Siril/SASpro, pero sin tener que buscar el botón).
+      if (aj.proveedor == "gemini") { self.leerAjustes(); if (!plClaveGemini(aj).length) self.pedirClave(); }
+   };
 
    var fP = new HorizontalSizer; fP.spacing = 6;
    var l1 = new Label(pModelo); l1.text = "Proveedor:"; l1.setScaledMinWidth(90); l1.textAlignment = TextAlign_Right | TextAlign_VertCenter;
-   fP.add(l1); fP.add(this.cProv); fP.addStretch();
+   fP.add(l1); fP.add(this.cProv); fP.add(this.bClave); fP.addStretch();
    var fM = new HorizontalSizer; fM.spacing = 6;
    var l2 = new Label(pModelo); l2.text = "Modelo:"; l2.setScaledMinWidth(90); l2.textAlignment = TextAlign_Right | TextAlign_VertCenter;
    fM.add(l2); fM.add(this.cModelo); fM.add(this.bTags); fM.addStretch();
@@ -2707,7 +2809,7 @@ function plConstruirDialogo(aj) {
    };
    // Idioma: los textos fijos se guardan en español la primera vez y se traducen con plT. Los que cambian solos
    // (estado, tokens, modelo elegido, notas) se traducen donde se escriben y se rehacen aquí.
-   var dinamicos = [this.estadoLbl, this.usoLbl, this.eleccionLbl, this.notaModelo, this.fuentePesos];
+   var dinamicos = [this.estadoLbl, this.usoLbl, this.eleccionLbl, this.notaModelo, this.fuentePesos, this.bClave];
    this.aplicarIdioma = function () {
       controles.forEach(function (o) {
          if (!o.es) o.es = { text: /^(Label|PushButton|CheckBox)$/.test(o.clase) && dinamicos.indexOf(o.c) < 0 ? o.c.text : null,
@@ -2810,7 +2912,7 @@ function plConstruirDialogo(aj) {
          } catch (e) { this.notaModelo.text = plT(String(e.message || e)); if (avisar) this.estadoLbl.text = plT(this.notaModelo.text); }
       } else if (aj.proveedor == "gemini") {
          lista = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
-         this.notaModelo.text = plT("Gemini por su API, gratis con una clave de aistudio.google.com/apikey (pestaña Ajustes). " +
+         this.notaModelo.text = plT("Gemini por su API, gratis con una clave de aistudio.google.com/apikey (botón «Clave…»). " +
                                 "Flash-Lite es rápido (unos segundos por respuesta); Flash razona mejor pero en el nivel gratuito " +
                                 "puede tardar minutos. En el nivel gratuito, Google puede usar lo que se envía (números y previas).");
       } else if (aj.proveedor == "claude") {
@@ -2827,6 +2929,7 @@ function plConstruirDialogo(aj) {
       this.cModelo.currentItem = lista.indexOf(actual);
       this.cModelo.editText = actual;
       this.rellenarPesos();
+      this.pintarClave();
    };
 
    // tipo: user (tu mensaje), asst (respuesta del modelo, en Markdown), err (error) o info (resultados y avisos).

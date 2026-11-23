@@ -100,7 +100,7 @@ Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía 
 
 1. Saca una clave gratis en [aistudio.google.com/apikey](https://aistudio.google.com/apikey), con tu cuenta de Google y sin tarjeta. **No la compartas ni la pegues en chats.**
 2. **Chats de Siril y SASpro**: elige *Gemini Flash-Lite (API gratis, rápido)* y pulsa **Clave…** para pegarla. Se guarda solo en tu PC, como variable de entorno de usuario `GEMINI_API_KEY`.
-3. **Lite**: proveedor *Gemini (API, gratis con clave)* y pega la clave en *Ajustes > Clave de Gemini*. Si la dejas vacía, usa `GEMINI_API_KEY`.
+3. **Lite**: proveedor *Gemini (API, gratis con clave)*. Si no hay clave, la pide al elegirlo (y luego con el botón **Clave…** junto al proveedor). Se guarda en la misma variable `GEMINI_API_KEY` que los chats.
 4. **Módulo** (build 115 o posterior): modelo *Gemini Flash-Lite (API gratis)*. Lee `GEMINI_API_KEY`. Como el modelo local, propone las llamadas para que las revises.
 5. **Flash-Lite** responde en segundos. **Flash** razona algo mejor, pero en el nivel gratuito puede tardar minutos por respuesta. Si Google retira un modelo, los chats cambian solos al que indique la API.
 
