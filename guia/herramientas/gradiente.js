@@ -72,8 +72,11 @@ function grRename(oldId, newId) {
   return id;
 }
 
-// GraXpert (proceso de PixInsight) sobre una vista, sin modificarla. escala: número (sample_free) o "IA".
+// GraXpert sobre una vista, sin modificarla. escala: número (sample_free) o "IA". Usa el proceso de PixInsight si el
+// módulo está instalado; si no (23 nov 2026: se cae de la lista de módulos), GraXpert -cli con graxpert.js.
+// Devuelve { corr, mod, via } (via: "" con el módulo, " (GraXpert -cli)" sin él).
 function grGraXpert(srcId, escala, nombre, ref) {
+  if (typeof GraXpert === "undefined") return grGraXpertCli(srcId, escala, nombre, ref);
   var before = grIds(), G = new GraXpert, v = View.viewById(srcId);
   G.backgroundExtraction = true;
   G.backgroundExtractionSampleFree = escala !== "IA";
@@ -88,7 +91,19 @@ function grGraXpert(srcId, escala, nombre, ref) {
   if (!corr || !mod) throw new Error("no encuentro las salidas de GraXpert (nuevas: " + nuevas.join(", ") + ")");
   corr = grRename(corr, nombre); mod = grRename(mod, nombre + "_modelo");
   try { ImageWindow.windowById(corr).keywords = (ref || v.window).keywords; } catch (e) { }
-  return { corr: corr, mod: mod };
+  return { corr: corr, mod: mod, via: "" };
+}
+
+// Lo mismo con el ejecutable de GraXpert (graxpert.js), sin el módulo de PixInsight. graxpert.js se carga en el ámbito
+// global (eval indirecto) para que respete un GX_EXE definido en el perfil.
+function grGraXpertCli(srcId, escala, nombre, ref) {
+  if (typeof graxpertBGE !== "function") (0, eval)(File.readTextFile(grDir() + "/graxpert.js"));
+  var v = View.viewById(srcId);
+  var g = escala === "IA" ? graxpertBGE(srcId, { method: "AI", tag: "gr_tmp" })
+                          : graxpertBGE(srcId, { method: "sample_free", scale: escala, tag: "gr_tmp" });
+  var corr = grRename(g.corrected, nombre), mod = grRename(g.model, nombre + "_modelo");
+  try { ImageWindow.windowById(corr).keywords = (ref || v.window).keywords; } catch (e) { }
+  return { corr: corr, mod: mod, via: " (GraXpert -cli)" };
 }
 
 function grDuplicate(srcId, newId) {
@@ -413,31 +428,14 @@ function gradienteCandidatos(viewId, o) {
     r.mascara = o.mascara;
   }
 
-  // GraXpert sample_free, sustracción, sobre la original sin modificarla.
+  // GraXpert sample_free, sustracción, sobre la original sin modificarla (módulo o, si no está, GraXpert -cli).
   for (var i = 0; i < scalesGX.length; ++i) {
     var s = scalesGX[i];
     try {
-      before = grIds();
-      var G = new GraXpert;
-      G.backgroundExtraction = true;
-      G.backgroundExtractionSampleFree = true;
-      G.sampleFreeScale = s;
-      G.correction = "Subtraction";
-      G.createBackground = true;
-      G.replaceImage = false;
-      if (!G.executeOn(win.mainView)) throw new Error("GraXpert devolvió false");
-      var nuevas = grNew(before), corr = null, mod = null;
-      for (var k = 0; k < nuevas.length; ++k) {
-        if (nuevas[k].indexOf("background_extraction") >= 0) corr = nuevas[k];
-        else if (nuevas[k].indexOf("background") >= 0) mod = nuevas[k];
-      }
-      if (!corr || !mod) throw new Error("no encuentro las salidas de GraXpert (nuevas: " + nuevas.join(", ") + ")");
-      corr = grRename(corr, "GC_GX" + s);
-      try { ImageWindow.windowById(corr).keywords = win.keywords; } catch (e) { }
-      mod = grRename(mod, "GC_GX" + s + "_modelo");
-      r.candidatos.push({ vista: corr, modelo: mod, metodo: "GraXpert", parametros: "sample_free escala " + s + ", sustracción",
-                          metricas: grMeasure(base, mod, corr, range0),
-                          notas: ImageWindow.windowById(corr).hasAstrometricSolution ? "Conserva la astrometría." : "Sin astrometría: repetir blindSolve." });
+      var gxs = grGraXpert(viewId, s, "GC_GX" + s, win);
+      r.candidatos.push({ vista: gxs.corr, modelo: gxs.mod, metodo: "GraXpert", parametros: "sample_free escala " + s + ", sustracción" + gxs.via,
+                          metricas: grMeasure(base, gxs.mod, gxs.corr, range0),
+                          notas: ImageWindow.windowById(gxs.corr).hasAstrometricSolution ? "Conserva la astrometría." : "Sin astrometría: repetir blindSolve." });
     } catch (e) {
       r.errores.push("GraXpert escala " + s + ": " + e);
     }
@@ -447,26 +445,10 @@ function gradienteCandidatos(viewId, o) {
   // para no probarlo.
   if (o.graxpertIA !== false) {
     try {
-      before = grIds();
-      var GI = new GraXpert;
-      GI.backgroundExtraction = true;
-      GI.backgroundExtractionSampleFree = false;
-      GI.correction = "Subtraction";
-      GI.createBackground = true;
-      GI.replaceImage = false;
-      if (!GI.executeOn(win.mainView)) throw new Error("GraXpert IA devolvió false");
-      var nuevasI = grNew(before), corrI = null, modI = null;
-      for (var ki = 0; ki < nuevasI.length; ++ki) {
-        if (nuevasI[ki].indexOf("background_extraction") >= 0) corrI = nuevasI[ki];
-        else if (nuevasI[ki].indexOf("background") >= 0) modI = nuevasI[ki];
-      }
-      if (!corrI || !modI) throw new Error("no encuentro las salidas de GraXpert IA (nuevas: " + nuevasI.join(", ") + ")");
-      corrI = grRename(corrI, "GC_GXIA");
-      try { ImageWindow.windowById(corrI).keywords = win.keywords; } catch (e) { }
-      modI = grRename(modI, "GC_GXIA_modelo");
-      r.candidatos.push({ vista: corrI, modelo: modI, metodo: "GraXpert", parametros: "modelo de IA, sustracción",
-                          metricas: grMeasure(base, modI, corrI, range0),
-                          notas: ImageWindow.windowById(corrI).hasAstrometricSolution ? "Conserva la astrometría." : "Sin astrometría: repetir blindSolve." });
+      var gxi = grGraXpert(viewId, "IA", "GC_GXIA", win);
+      r.candidatos.push({ vista: gxi.corr, modelo: gxi.mod, metodo: "GraXpert", parametros: "modelo de IA, sustracción" + gxi.via,
+                          metricas: grMeasure(base, gxi.mod, gxi.corr, range0),
+                          notas: ImageWindow.windowById(gxi.corr).hasAstrometricSolution ? "Conserva la astrometría." : "Sin astrometría: repetir blindSolve." });
     } catch (e) {
       r.errores.push("GraXpert IA: " + e);
     }
@@ -732,7 +714,7 @@ function gradienteCandidatos(viewId, o) {
         r.intermedias.push(gx.mod);
         var mt2 = grModeloCadena(viewId, gx.corr, gx.corr + "_modelo_total");
         var cg = { vista: gx.corr, modelo: mt2, metodo: "Polinomio + GraXpert",
-                   parametros: "grado " + gc + " + GraXpert " + (gs === "IA" ? "IA" : "sample_free escala " + gs),
+                   parametros: "grado " + gc + " + GraXpert " + (gs === "IA" ? "IA" : "sample_free escala " + gs) + gx.via,
                    metricas: grMeasure(base, mt2, gx.corr, range0), notas: "Segunda pasada de GraXpert sobre el polinomio." };
         cg.metricas.manchas = grManchas(gx.corr, base, o);
         r.candidatos.push(cg);
