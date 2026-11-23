@@ -201,6 +201,29 @@ function beSinEstrellas(v) {
     return !s || s.length < 100;
   } catch (e) { return false; }
 }
+// Canal del continuo (23 nov 2026, IC 405 con Qwen, pasada C1-f: el OIII se midió y se restó con el R porque el modelo no
+// pasó canal y el valor por defecto era 0). El OIII va con el G (el B lleva Hβ): si la raya es OIII (FILTER, la propiedad
+// del filtro o «OIII»/«O3» en el id), canal 1 por defecto y se niega con canal 0 salvo forzar. El resto, R (canal 0).
+function beEsOIII(v, id) {
+  // El id manda: «OIII_raw_S2O3» es la capa OIII aunque venga de un S2O3; «Ha_raw» no lo es aunque el FILTER diga HaO3.
+  var s = String(id || "");
+  if (/(^|[^a-z])oiii/i.test(s)) return true;
+  if (/^(ha|h_?alpha|sii|s2|hb|hbeta|l|r|g|b|rgb)([^a-z]|$)/i.test(s)) return false;
+  // Sin pista en el id: el filtro de la raya (no un dual band que lleve O3 junto a Hα o SII).
+  var t = "";
+  try { var k = v.window.keywords; for (var i = 0; i < k.length; ++i) if (k[i].name == "FILTER") t += " " + k[i].strippedValue; } catch (e) { }
+  try { var f = v.propertyValue("Instrument:Filter:Name"); if (f) t += " " + f; } catch (e) { }
+  return /(^|[^a-z])(oiii|o3)([^a-z]|$)/i.test(t) && !/(ha|h-?alpha|sii|s2)[^a-z]*o3|o3[^a-z]*(ha|sii|s2)/i.test(t);
+}
+function beCanal(v, id, o) {
+  var oiii = beEsOIII(v, id);
+  if (o.canal === undefined) return oiii ? 1 : 0;
+  if (oiii && +o.canal === 0 && !o.forzar)
+    throw new Error(id + " es OIII: el continuo del OIII se mide y se resta con el G (opciones.canal: 1), no con el R; el B lleva Hβ. " +
+                    "Quita canal (por defecto ya es 1 con OIII) o pon canal: 1. opciones.forzar: true sólo si el usuario lo pide.");
+  return o.canal;
+}
+
 function beOriginal(v) { try { var p = v.propertyValue("PiAstroPilot:Original"); return p ? String(p) : null; } catch (e) { return null; } }
 function beRutaK() { return File.systemTempDirectory + "/piastropilot-continuo.json"; }
 function beLeerK() { try { if (File.exists(beRutaK())) return JSON.parse(File.readTextFile(beRutaK())) || []; } catch (e) { } return []; }
@@ -219,7 +242,7 @@ function beKMedido(k, canal) {
 // del flujo. nb: banda estrecha CON estrellas (gris o canal 0); cont: banda ancha calibrada CON estrellas (canal 'canal').
 function medirContinuo(nbId, contId, o) {
   nbId = beId(nbId); contId = beId(contId); o = o || {};
-  var nb = beView(nbId), ct = beView(contId), ch = (o.canal !== undefined) ? o.canal : 0;
+  var nb = beView(nbId), ct = beView(contId), ch = beCanal(nb, nbId, o);
   if (ch !== 0 && ch !== 1 && ch !== 2)
     throw new Error("canal debe ser 0, 1 o 2 (no '" + ch + "'). El continuo sólo se mide con un master de BANDA ESTRECHA (Hα, OIII) " +
                     "frente a uno de banda ancha: con un solo master RGB/OSC el Paso 16 no aplica, sáltalo");
@@ -285,6 +308,7 @@ function restarContinuo(nbId, contId, o) {
   if (o.k === undefined) throw new Error("Falta k: medirlo antes con medirContinuo sobre las capas con estrellas");
   // Doble resta (pasada C1-e1, 23 nov 2026: Qwen restó el continuo al Hα con estrellas, separó estrellas y lo volvió a
   // restar sobre esa starless: le quedó ~84 % de la emisión y agujeros donde hay continuo).
+  var nb = beView(nbId), ct = beView(contId);   // antes de la guarda: con «nb» sin asignar la marca no se leía (sólo valía el _CS del id)
   var yaCS = false;
   try { yaCS = !!nb.propertyValue("PiAstroPilot:ContinuoRestado"); } catch (e) { }
   if (!yaCS && /_CS(_|\d|$)/.test(String(nbId))) yaCS = true;
@@ -292,12 +316,12 @@ function restarContinuo(nbId, contId, o) {
     throw new Error(nbId + " ya tiene el continuo restado (viene de restarContinuo): no se resta dos veces. Si le falta la separación " +
       "de estrellas, separarEstrellas sobre ella y pasa su starless a inyectarHa; si hay que repetir la resta, hazla sobre la raya de antes " +
       "de restarContinuo (sin _CS). opciones.forzar: true sólo si el usuario lo pide.");
-  var chK = (o.canal !== undefined) ? o.canal : 0, medido = beKMedido(+o.k, chK);
+  var chK = beCanal(nb, nbId, o), medido = beKMedido(+o.k, chK);
   if (!medido && !o.forzar)
     throw new Error("k = " + o.k + " no lo ha medido medirContinuo (canal " + chK + "): no se inventa ni se retoca. Si el resultado no " +
       "convence, mídelo otra vez con medirContinuo { nb: raya CON estrellas, continuo: RGB calibrada CON estrellas, opciones: { canal } } " +
       "y pasa el k que devuelva. opciones.forzar: true sólo si el usuario da otro k expresamente.");
-  var nb = beView(nbId), ct = beView(contId), ch = (o.canal !== undefined) ? o.canal : 0;
+  var ch = chK;
   var zN = beZones(nb), zC = beZones(ct);
   var c = (o.c !== undefined) ? o.c : 0;   // por defecto sin desplazamiento; se informa del cielo resultante
   var id = beUnique((typeof o.nuevaVista === "string" && o.nuevaVista) || (nbId + "_CS"));

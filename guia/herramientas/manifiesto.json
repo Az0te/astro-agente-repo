@@ -893,7 +893,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { canal, maxEstrellas, picoMax, forzar: true (medir aunque la vista parezca starless: sólo si el usuario lo pide) }"
+      "description": "Opcional. { canal (por defecto 0 = R; con una raya OIII, 1 = G, y se niega con 0), maxEstrellas, picoMax, forzar: true (medir aunque la vista parezca starless: sólo si el usuario lo pide) }"
      }
     },
     "required": [
@@ -922,7 +922,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { k (el que devuelve medirContinuo; otro se rechaza), c, canal, nuevaVista, forzar: true (k que no viene de medirContinuo: sólo si el usuario lo da) }"
+      "description": "Opcional. { k (el que devuelve medirContinuo; otro se rechaza), c, canal (como en medirContinuo: OIII = 1, el G, por defecto), nuevaVista, forzar: true (k que no viene de medirContinuo: sólo si el usuario lo da) }"
      }
     },
     "required": [

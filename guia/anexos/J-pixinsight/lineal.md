@@ -513,7 +513,7 @@ La fórmula es `Ha_sub = Hα − k·R − c`. En nebulosa de emisión y reflexi�
 ]}
 ```
 
-OIII: canal 1 (G). Con el `k` que devuelva, en otra respuesta:
+OIII: canal 1 (G); con una raya OIII (por `FILTER` o por «OIII»/«O3» en el id) es el valor por defecto, y con `canal: 0` las dos funciones se niegan. Con el `k` que devuelva, en otra respuesta:
 
 ```json
 {"llamadas": [
