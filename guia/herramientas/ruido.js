@@ -372,6 +372,8 @@ function reducirRuido(viewId, o) {
                   (linealSrc ? "repetir sobre la misma entrada con menos denoise (0,50); si la entrada ya pasó por el NXT suave del Paso 14, " +
                                "basta con 0,50 o menos (galaxia grande, 7 nov 2026: 0,50 + 0,70 subió el moteado de 0,35 a 0,92)"
                              : "no aplicar este NXT"));
+  // Las marcas de la entrada (sin estrellas, continuo restado) siguen valiendo tras el denoise; NXT y compañía pueden borrarlas.
+  try { rdCopiarMarcas(View.viewById(viewId), v); } catch (e) { }
   return {
     vista: v.id, original: viewId,
     metodo: { nxt: o.frecuencias ? "NoiseXTerminator con separación de color y de frecuencias" : "NoiseXTerminator",
@@ -621,6 +623,9 @@ function separarEstrellas(viewId, o) {
   if (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
     ImageWindow.windowById(starsId).mainView.id = o.nuevasEstrellas; starsId = o.nuevasEstrellas;
   }
+  // StarX sobre la copia borra las propiedades que rdCopy le había copiado (pasada C1-e1, 23 nov 2026: el Hα _CS separado
+  // perdió «ContinuoRestado» y Qwen restó el continuo dos veces): se vuelven a copiar desde la entrada después del proceso.
+  rdCopiarMarcas(src, v);
   try { v.setPropertyValue("PiAstroPilot:SinEstrellas", true); v.setPropertyValue("PiAstroPilot:Original", String(viewId)); } catch (e) { }   // inyectarHa y medirContinuo
   var seg = Math.round((Date.now() - t0) / 1000);
   // Comprobaciones: suma exacta (lineal) y que la capa de estrellas no se lleve estructura extensa.

@@ -311,7 +311,8 @@ function cbSinEstrellas(v) {
   } catch (e) { return null; }
 }
 function cbContinuoRestado(v) {
-  try { return !!v.propertyValue("PiAstroPilot:ContinuoRestado"); } catch (e) { return false; }
+  try { if (v.propertyValue("PiAstroPilot:ContinuoRestado")) return true; } catch (e) { }
+  return /_CS(_|\d|$)/.test(String(v.id));   // por si un proceso borró la marca (StarX, NXT)
 }
 function cbGuardaOrden(vr, vh, vo) {
   var faltan = [];

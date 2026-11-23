@@ -283,6 +283,15 @@ function medirContinuo(nbId, contId, o) {
 function restarContinuo(nbId, contId, o) {
   nbId = beId(nbId); contId = beId(contId); o = o || {};
   if (o.k === undefined) throw new Error("Falta k: medirlo antes con medirContinuo sobre las capas con estrellas");
+  // Doble resta (pasada C1-e1, 23 nov 2026: Qwen restó el continuo al Hα con estrellas, separó estrellas y lo volvió a
+  // restar sobre esa starless: le quedó ~84 % de la emisión y agujeros donde hay continuo).
+  var yaCS = false;
+  try { yaCS = !!nb.propertyValue("PiAstroPilot:ContinuoRestado"); } catch (e) { }
+  if (!yaCS && /_CS(_|\d|$)/.test(String(nbId))) yaCS = true;
+  if (yaCS && !o.forzar)
+    throw new Error(nbId + " ya tiene el continuo restado (viene de restarContinuo): no se resta dos veces. Si le falta la separación " +
+      "de estrellas, separarEstrellas sobre ella y pasa su starless a inyectarHa; si hay que repetir la resta, hazla sobre la raya de antes " +
+      "de restarContinuo (sin _CS). opciones.forzar: true sólo si el usuario lo pide.");
   var chK = (o.canal !== undefined) ? o.canal : 0, medido = beKMedido(+o.k, chK);
   if (!medido && !o.forzar)
     throw new Error("k = " + o.k + " no lo ha medido medirContinuo (canal " + chK + "): no se inventa ni se retoca. Si el resultado no " +
