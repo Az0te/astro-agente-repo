@@ -772,7 +772,7 @@ function plPromptSistema(aj) {
    "gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB SOLA (12) → deconvolución " +
    "completa de la RGB y de cada raya (13) → medirContinuo con la raya y la RGB AÚN CON ESTRELLAS (16) → separarEstrellas de " +
    "la RGB y de cada raya, y su ruido (15) → restarContinuo sobre las dos starless (16: vista _CS) → inyectarHa (10) con la " +
-   "starless de la RGB y el Hα _CS (y oiii) → checkpoint (17) → estirar. inyectarHa se niega con estrellas o sin continuo " +
+   "starless de la RGB y el Hα _CS (y el OIII _CS, restado con canal 1) → checkpoint (17) → estirar. inyectarHa se niega con estrellas o sin continuo " +
    "restado; restarContinuo sólo acepta el k que devuelve medirContinuo (si no convence, se vuelve a medir, no se inventa). " +
    "El denoise principal va DESPUÉS de separar estrellas, sobre las starless (antes, como mucho el suave del Paso 14); inyectarHa con su modo por defecto, no \"mezcla\", salvo que " +
    "el usuario lo pida. Combinar antes del color sesga los factores y deja el cielo teñido. El cielo se neutraliza sobre la starless lineal (las funciones de estirado " +

@@ -319,12 +319,14 @@ function cbGuardaOrden(vr, vh, vo) {
   if (cbSinEstrellas(vr) === false) faltan.push("la RGB '" + vr.id + "' tiene estrellas (pasa la starless de separarEstrellas de la RGB calibrada)");
   if (cbSinEstrellas(vh) === false) faltan.push("el Hα '" + vh.id + "' tiene estrellas");
   if (!cbContinuoRestado(vh)) faltan.push("el Hα '" + vh.id + "' no tiene el continuo restado (no viene de restarContinuo)");
+  // El OIII con el mismo criterio que el Hα (pasada C1-e2, 23 nov 2026: entró sin restar el continuo; el de G, canal 1).
   if (vo && cbSinEstrellas(vo) === false) faltan.push("el OIII '" + vo.id + "' tiene estrellas");
+  if (vo && !cbContinuoRestado(vo)) faltan.push("el OIII '" + vo.id + "' no tiene el continuo restado (restarContinuo con opciones.canal: 1, el G, y el k de medirContinuo con canal 1)");
   if (!faltan.length) return;
   throw new Error("inyectarHa va DESPUÉS del Paso 16 (guía, Paso 10): " + faltan.join("; ") + ". Secuencia: calibrarColor (RGB sola) → " +
     "bxtAplicar (RGB y raya) → medirContinuo { nb: raya CON estrellas, continuo: RGB calibrada CON estrellas } → separarEstrellas " +
     "de la RGB y de cada raya → restarContinuo { nb: raya starless, continuo: RGB starless, opciones: { k } } → inyectarHa { rgb: " +
-    "RGB starless, ha: la vista _CS de restarContinuo }. Siguiente llamada: la primera de esa secuencia que falte. " +
+    "RGB starless, ha: la vista _CS de restarContinuo, opciones: { oiii: la del OIII, también _CS (canal 1) } }. Siguiente llamada: la primera de esa secuencia que falte. " +
     "opciones.forzar: true sólo si el usuario lo pide expresamente.");
 }
 

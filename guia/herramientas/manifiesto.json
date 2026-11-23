@@ -655,7 +655,7 @@
    "fichero": "combinacion.js",
    "nivel": "copias",
    "timeout_s": 600,
-   "descripcion": "Paso 10 lineal, que se EJECUTA TRAS EL PASO 16: inyecta Hα (lineal, alineado, SIN estrellas y con el continuo restado: la vista _CS de restarContinuo) en el rojo de la RGB calibrada SIN estrellas (starless de separarEstrellas) bajo máscara de nebulosa, y con opciones.oiii la capa OIII en verde y azul a partes iguales. Nebulosas: modo \"senal\" (suma la señal del Hα ajustada al R, sube la nebulosa ≈ α·100 %). Galaxias: modo \"suma\" (sólo el exceso de Hα sobre R). Se niega si la RGB lleva FILTER de banda estrecha (sería el propio dual band) y si la RGB o el Hα tienen estrellas o el Hα no viene de restarContinuo; el error dice la llamada siguiente.",
+   "descripcion": "Paso 10 lineal, que se EJECUTA TRAS EL PASO 16: inyecta Hα (lineal, alineado, SIN estrellas y con el continuo restado: la vista _CS de restarContinuo) en el rojo de la RGB calibrada SIN estrellas (starless de separarEstrellas) bajo máscara de nebulosa, y con opciones.oiii la capa OIII en verde y azul a partes iguales. Nebulosas: modo \"senal\" (suma la señal del Hα ajustada al R, sube la nebulosa ≈ α·100 %). Galaxias: modo \"suma\" (sólo el exceso de Hα sobre R). Se niega si la RGB lleva FILTER de banda estrecha (sería el propio dual band) y si la RGB, el Hα o el OIII tienen estrellas o si el Hα o el OIII no vienen de restarContinuo (el OIII con canal 1, el G); el error dice la llamada siguiente.",
    "paso": "lineal/10-combinacion-rgb-nb.md",
    "params": {
     "type": "object",

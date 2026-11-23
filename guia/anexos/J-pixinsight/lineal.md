@@ -310,7 +310,7 @@ Ficha: [lineal/10-combinacion-rgb-nb.md](../../lineal/10-combinacion-rgb-nb.md)
 
 `combinarMasters` con RGB + Hα inyecta en el acto: no usarlo con la RGB sin calibrar; tras el Paso 16, `inyectarHa` directamente.
 
-**Guarda del orden** (23 nov 2026): `inyectarHa` se niega, y dice la llamada que falta, si la RGB o el Hα tienen estrellas o si el Hα no viene de `restarContinuo`. Lo sabe por las marcas que ponen `separarEstrellas` y `restarContinuo` en la vista, que heredan las copias de `reducirRuido`, `ruidoCandidatos` y `neutralizarCielo`; sin marca, cuenta las estrellas con StarDetector. `combinarMasters` con RGB + Hα sin esas marcas junta lo demás y no inyecta. `forzar: true` sólo si el usuario lo pide.
+**Guarda del orden** (23 nov 2026): `inyectarHa` se niega, y dice la llamada que falta, si la RGB, el Hα o el OIII tienen estrellas o si el Hα o el OIII no vienen de `restarContinuo` (el OIII, con `canal: 1`, el G). Lo sabe por las marcas que ponen `separarEstrellas` y `restarContinuo` en la vista, que heredan las copias de `reducirRuido`, `ruidoCandidatos` y `neutralizarCielo`; sin marca, cuenta las estrellas con StarDetector. `combinarMasters` con RGB + Hα sin esas marcas junta lo demás y no inyecta. `forzar: true` sólo si el usuario lo pide.
 
 **En una llamada, con todos los masters** (`herramientas/combinacion.js`): `combinarMasters(carpeta o lista, { tipo })` trabaja con 2 a 8 masters alineados (Paso 5); LRGB son 4.
 - Abre cada master y lo clasifica por su filtro (`FILTER` o el nombre): L, R, G, B, Hα, OIII, SII, Hβ o RGB (color). Si no reconoce un filtro, se le indica en `clases`.
