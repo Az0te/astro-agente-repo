@@ -1523,6 +1523,36 @@ function plJsonTolerante(texto) {
    }
 }
 
+// «forzar» sólo si lo pide el usuario (23 nov 2026, IC 405 con Qwen3.8 en RDNA-FAST, pasada C1-d3): tras dos negativas
+// de exportarFinal por el cielo, el modelo exportó pasando forzar: true por su cuenta. Igual que los chats de Siril y
+// SASpro (c9ef937, ddbeee7): se quita «forzar» de cualquier llamada salvo que el último mensaje del usuario diga forzar,
+// fuérzalo, force, «igualmente»… resolverAstrometria queda fuera: su forzar no salta una guarda, borra la solución vieja.
+var PL_PIDE_FORZAR = /\b(forzar|fuerza\w*|fuerces?|force\w*|forzad[oa]s?|igualmente)\b/;
+var PL_FORZAR_LIBRE = { resolverAstrometria: true };
+function plPideForzar(textoUsuario) {
+   var t = String(textoUsuario || "").toLowerCase();
+   try { t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) { }
+   return PL_PIDE_FORZAR.test(t);
+}
+function plQuitarForzar(texto, textoUsuario) {
+   var quitados = [];
+   if (!/"forzar"/.test(texto) || plPideForzar(textoUsuario)) return { texto: texto, quitados: quitados };
+   var o;
+   try { o = plJsonTolerante(texto); } catch (e) { return { texto: texto, quitados: quitados }; }
+   if (!o || !(o.llamadas instanceof Array)) return { texto: texto, quitados: quitados };
+   var limpiar = function (x, prof) {
+      var q = false;
+      if (!x || typeof x !== "object" || prof > 3) return false;
+      if (x.hasOwnProperty("forzar")) { delete x.forzar; q = true; }
+      for (var k in x) if (x.hasOwnProperty(k) && x[k] && typeof x[k] === "object" && !(x[k] instanceof Array)) q = limpiar(x[k], prof + 1) || q;
+      return q;
+   };
+   o.llamadas.forEach(function (ll) {
+      if (ll && ll.parametros && !PL_FORZAR_LIBRE[ll.funcion] && limpiar(ll.parametros, 0)) quitados.push(ll.funcion);
+   });
+   return { texto: quitados.length ? JSON.stringify(o) : texto, quitados: quitados };
+}
+
 function plEjecutarLlamadas(aj, texto) {
    var avisos = plCargarGuia(aj.guia), g = plGlobal(), salida = [], t0 = Date.now();
    g.PIASTROPILOT_INTERNET = !!aj.internet;   // web.js lo respeta: sin la casilla, simbad/wikipedia/... no salen a internet
@@ -3042,6 +3072,8 @@ function plConstruirDialogo(aj) {
       else if (/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) && this.objetivoSerie) this.serie = true;
       else { this.serie = true; this.pasosSerie = 0; this.objetivoSerie = t; }
       this.mensajes.push({ role: "user", content: t });
+      // Para plQuitarForzar: «sigue» no cambia lo que pidió el usuario.
+      if (!/^\s*(sigue|contin[uú]a|continue|go on)\b/i.test(t) || !this.ultimoUsuario) this.ultimoUsuario = t;
       this.anotar(plT("Tú"), t, "user");
       this.consultar();
    };
@@ -3050,6 +3082,13 @@ function plConstruirDialogo(aj) {
       if (!this.pendiente || this.estado) return;
       var s = this.pendiente;
       this.ponerPendiente(null);
+      var qf = plQuitarForzar(s, this.ultimoUsuario);
+      if (qf.quitados.length) {
+         s = qf.texto;
+         var avF = "Quito «forzar» de " + qf.quitados.join(", ") + ": el usuario no lo ha pedido.";
+         console.warningln("[PiAstroPilotLite] " + avF);
+         this.anotar("Aviso", avF);
+      }
       this.estadoLbl.text = plT("Ejecutando llamadas…");
       plEventos();
       // Subs aprobados pedidos y lanzarWBPP con las carpetas (todos los lights): no se ejecuta; vuelve al modelo como
