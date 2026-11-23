@@ -17,6 +17,8 @@ Thumbs.db
 
 # Previas y comparaciones temporales de pruebas
 tmp_*/
+# Carpeta de trabajo de las sesiones de Claude (scripts de un solo uso)
+scratchpad/
 
 # Perfil personal (rutas, equipo y preferencias): no se publica
 guia/perfil.md
