@@ -137,6 +137,13 @@ function rdQuality(before, after) {
            manchas_color_cambio_pct: rdCambio(rdMoteado(before, sky, na), rdMoteado(after, sky, na)) };
 }
 
+// Marcas de vista que la guía usa para comprobar el orden del Paso 10 (inyectarHa): las ponen separarEstrellas
+// (PiAstroPilot:SinEstrellas) y restarContinuo (PiAstroPilot:ContinuoRestado). Las copias las heredan.
+var PAP_MARCAS = ["PiAstroPilot:SinEstrellas", "PiAstroPilot:ContinuoRestado"];
+function rdCopiarMarcas(srcView, dstView) {
+  PAP_MARCAS.forEach(function (m) { try { var p = srcView.propertyValue(m); if (p) dstView.setPropertyValue(m, p); } catch (e) { } });
+}
+
 function rdCopy(viewId, newId) {
   var src = ImageWindow.windowById(viewId);
   if (src.isNull) throw new Error("No existe la vista " + viewId);
@@ -146,6 +153,7 @@ function rdCopy(viewId, newId) {
   var w = new ImageWindow(im.width, im.height, im.numberOfChannels, 32, true, im.isColor, id);
   w.mainView.beginProcess(); w.mainView.image.assign(im); w.mainView.endProcess();
   if (src.hasAstrometricSolution) w.copyAstrometricSolution(src);
+  rdCopiarMarcas(src.mainView, w.mainView);
   w.show();
   return w;
 }
@@ -593,6 +601,7 @@ function separarEstrellas(viewId, o) {
       eval(File.readTextFile(((typeof GUIA_HERRAMIENTAS !== "undefined") ? GUIA_HERRAMIENTAS : File.homeDirectory + "/astro-agente-repo/guia/herramientas") + "/syqon.js"));
     var sq = syqonEstrellas(viewId, { nuevaVista: (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_starless"),
                                       nuevasEstrellas: (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas) || (viewId + "_estrellas") });
+    try { View.viewById(sq.starless).setPropertyValue("PiAstroPilot:SinEstrellas", true); } catch (e) { }
     return { starless: sq.starless, estrellas: sq.estrellas, original: viewId, lineal: false, motor: "SyQon Axiom Mini",
              comando: sq.comando, segundos: sq.segundos, no_cumple: [],
              control: { revisar_a_ojo: ["restos de estrellas en la starless", "nebulosa o polvo en la capa de estrellas",
@@ -612,6 +621,7 @@ function separarEstrellas(viewId, o) {
   if (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
     ImageWindow.windowById(starsId).mainView.id = o.nuevasEstrellas; starsId = o.nuevasEstrellas;
   }
+  try { v.setPropertyValue("PiAstroPilot:SinEstrellas", true); } catch (e) { }   // la usa inyectarHa (Paso 10)
   var seg = Math.round((Date.now() - t0) / 1000);
   // Comprobaciones: suma exacta (lineal) y que la capa de estrellas no se lleve estructura extensa.
   var a = rdLum(src), sl = rdLum(v), st = rdLum(View.viewById(starsId)), maxErr = 0, n = a.L.length;

@@ -260,6 +260,9 @@ function restarContinuo(nbId, contId, o) {
   var zR = beZones(r), keep = (zN.zona_r[0] - zN.cielo[0]) > 0 ? (zR.zona_r[0] - zR.cielo[0]) / (zN.zona_r[0] - zN.cielo[0]) : null;
   var P2 = new PixelMath; P2.useSingleExpression = true; P2.expression = "max($T, 0)"; P2.createNewImage = false;
   P2.truncate = true; P2.truncateLower = 0; P2.truncateUpper = 1; P2.executeOn(r);
+  // Marcas para inyectarHa (Paso 10): continuo restado y, si la raya venía de separarEstrellas, sin estrellas.
+  try { r.setPropertyValue("PiAstroPilot:ContinuoRestado", true); } catch (e) { }
+  try { if (nb.propertyValue("PiAstroPilot:SinEstrellas")) r.setPropertyValue("PiAstroPilot:SinEstrellas", true); } catch (e) { }
   r.window.show();
   if (nb.window.hasAstrometricSolution) r.window.copyAstrometricSolution(nb.window);
   var negPct = +(100 * neg / (n / 3)).toFixed(3), noCumple = [];

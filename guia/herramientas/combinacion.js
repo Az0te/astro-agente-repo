@@ -195,8 +195,17 @@ function combinarMasters(lista, o) {
   }
   // 3. Hα en la RGB.
   if (por.RGB && por.Ha && o.inyectar !== false && !/SHO|HSO|HOO|PALETA|FORAXX/i.test(String(o.tipo || ""))) {
-    var h = inyectarHa(por.RGB[0], por.Ha[0], { tipo: o.tipo, alfa: o.alfa, nuevaVista: por.RGB[0] + "_Ha",
-                                               oiii: (por.OIII && o.oiii !== false && o.tipo != "galaxia") ? por.OIII[0] : null });
+    var h = null;
+    try {
+      h = inyectarHa(por.RGB[0], por.Ha[0], { tipo: o.tipo, alfa: o.alfa, nuevaVista: por.RGB[0] + "_Ha", forzar: o.forzar,
+                                              oiii: (por.OIII && o.oiii !== false && o.tipo != "galaxia") ? por.OIII[0] : null });
+    } catch (e) {
+      // La guarda del orden del Paso 10 no tumba el resto de la combinación: se dice y se sigue sin inyectar.
+      if (!/va DESPUÉS del Paso 16/.test(String(e.message || e))) throw e;
+      r.control.medido.push("Inyección de Hα NO hecha: " + (e.message || e));
+    }
+  }
+  if (h) {
     r.hecho.push("Hα inyectado en el R de " + por.RGB[0] + (h.oiii ? " y OIII en G y B (" + h.oiii.vista + ")" : "") + " → " + h.vista + " (" + h.control.medido[0] + ")");
     r.no_cumple = r.no_cumple.concat(h.no_cumple);
     r.control.revisar_a_ojo = r.control.revisar_a_ojo.concat(h.control.revisar_a_ojo);
@@ -288,9 +297,40 @@ function cbFiltroEstrecho(v) {
   return /dual|duo|tri.?band|quad|extreme|enhance|ultimate|\d+(\.\d+)?\s*nm\b|\b(ha|h-?alpha|o3|oiii|s2|sii)\b/i.test(f) ? f : null;
 }
 
+// Guarda del orden del Paso 10 (Rafael, 23 nov 2026): en las pasadas C1 de IC 405, Qwen inyectó el Hα en la RGB CON
+// estrellas y SIN restar el continuo, con la guía nueva y con la antigua. La inyección va tras el Paso 16: RGB y raya sin
+// estrellas (separarEstrellas pone PiAstroPilot:SinEstrellas) y Hα sin continuo (restarContinuo pone
+// PiAstroPilot:ContinuoRestado); las copias de ruido.js y neutralizarCielo heredan las marcas. Sin marca de estrellas se
+// cuentan con StarDetector (una starless deja muy pocas); sin StarDetector no se puede saber y no se bloquea por eso.
+function cbSinEstrellas(v) {
+  try { if (v.propertyValue("PiAstroPilot:SinEstrellas")) return true; } catch (e) { }
+  try {
+    if (typeof StarDetector === "undefined") return null;
+    var D = new StarDetector, s = D.stars(v.image);
+    return !s || s.length < 300;
+  } catch (e) { return null; }
+}
+function cbContinuoRestado(v) {
+  try { return !!v.propertyValue("PiAstroPilot:ContinuoRestado"); } catch (e) { return false; }
+}
+function cbGuardaOrden(vr, vh, vo) {
+  var faltan = [];
+  if (cbSinEstrellas(vr) === false) faltan.push("la RGB '" + vr.id + "' tiene estrellas (pasa la starless de separarEstrellas de la RGB calibrada)");
+  if (cbSinEstrellas(vh) === false) faltan.push("el Hα '" + vh.id + "' tiene estrellas");
+  if (!cbContinuoRestado(vh)) faltan.push("el Hα '" + vh.id + "' no tiene el continuo restado (no viene de restarContinuo)");
+  if (vo && cbSinEstrellas(vo) === false) faltan.push("el OIII '" + vo.id + "' tiene estrellas");
+  if (!faltan.length) return;
+  throw new Error("inyectarHa va DESPUÉS del Paso 16 (guía, Paso 10): " + faltan.join("; ") + ". Secuencia: calibrarColor (RGB sola) → " +
+    "bxtAplicar (RGB y raya) → medirContinuo { nb: raya CON estrellas, continuo: RGB calibrada CON estrellas } → separarEstrellas " +
+    "de la RGB y de cada raya → restarContinuo { nb: raya starless, continuo: RGB starless, opciones: { k } } → inyectarHa { rgb: " +
+    "RGB starless, ha: la vista _CS de restarContinuo }. Siguiente llamada: la primera de esa secuencia que falte. " +
+    "opciones.forzar: true sólo si el usuario lo pide expresamente.");
+}
+
 function inyectarHa(rgb, ha, o) {
   o = o || {};
   var vr = cbView(rgb), vh = cbView(ha);
+  if (!o.forzar) cbGuardaOrden(vr, vh, o.oiii ? cbView(o.oiii) : null);
   if (vr.image.numberOfChannels < 3) throw new Error(vr.id + " no es RGB");
   if (vr.image.width != vh.image.width || vr.image.height != vh.image.height)
     throw new Error("Tamaños distintos: alinear y recortar antes (Paso 5, alinearMasters)");

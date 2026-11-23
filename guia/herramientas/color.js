@@ -254,6 +254,9 @@ function neutralizarCielo(viewId, o) {
   var w = new ImageWindow(sim.width, sim.height, 3, 32, true, true, id);
   w.mainView.beginProcess(); w.mainView.image.assign(sim); w.mainView.endProcess();
   if (src.hasAstrometricSolution) w.copyAstrometricSolution(src);
+  // Las marcas de separarEstrellas / restarContinuo pasan a la copia (inyectarHa las comprueba).
+  ["PiAstroPilot:SinEstrellas", "PiAstroPilot:ContinuoRestado"].forEach(function (m) {
+    try { var p = src.mainView.propertyValue(m); if (p) w.mainView.setPropertyValue(m, p); } catch (e) { } });
   w.show();
   var v = w.mainView, im = v.image, nombres = ["rojo", "verde", "azul"];
   var pct = function (m) { var mean = (m[0] + m[1] + m[2]) / 3; return mean > 0 ? 100 * (Math.max.apply(null, m) - Math.min.apply(null, m)) / mean : 0; };

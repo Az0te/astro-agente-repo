@@ -769,9 +769,11 @@ function plPromptSistema(aj) {
    plOrdenPasos() + "\n" +
    "Con varios masters (RGB + banda estrecha o dual band) USA TODOS; el número de paso no es el orden: alinear (5) → desmezclar " +
    "CADA dual band (7) → combinarMismoCanal de las capas de la misma raya (OIII de dos filtros, SII de dos filtros) → " +
-   "gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB SOLA (12) → combinar (10) → " +
-   "deconvolución completa (13) → separar estrellas (15) → ruido de la starless (15) → estirar. Combinar antes del color " +
-   "sesga los factores y deja el cielo teñido. El cielo se neutraliza sobre la starless lineal (las funciones de estirado " +
+   "gradiente de cada capa (9) → deconvolución de corrección de la RGB (11) → color de la RGB SOLA (12) → deconvolución " +
+   "completa de la RGB y de cada raya (13) → medirContinuo con la raya y la RGB AÚN CON ESTRELLAS (16) → separarEstrellas de " +
+   "la RGB y de cada raya, y su ruido (15) → restarContinuo sobre las dos starless (16: vista _CS) → inyectarHa (10) con la " +
+   "starless de la RGB y el Hα _CS (y oiii) → checkpoint (17) → estirar. inyectarHa se niega con estrellas o sin continuo " +
+   "restado. Combinar antes del color sesga los factores y deja el cielo teñido. El cielo se neutraliza sobre la starless lineal (las funciones de estirado " +
    "lo hacen solas). PERO en una nebulosa de emisión con mucha más banda estrecha que RGB (horas de dual band frente a minutos " +
    "de RGB) NO inyectes en el RGB: ruta de PALETA (combinarMasters con tipo de paleta no inyecta). Con paleta (componerPaleta), las capas siguen separadas hasta estirarlas; pasa todas las rayas (S, H, O y " +
    "B = Hβ: la NATURAL usa las cuatro) y las estrellas salen de la RGB. Excepción: si el objeto tiene REFLEXIÓN (polvo azul junto a estrellas brillantes que sólo da el RGB: IC 405, M20, M78, NGC 1977…) NO es ruta de paleta aunque haya más banda estrecha: RGB calibrado de color + inyección de Hα (y OIII) con combinar; una paleta pierde el azul de reflexión y lo vuelve dorado o verde (IC 405, 19 nov 2026). fondoCandidatos (cielo oscuro y neutro, 0,05–0,08: con " +
