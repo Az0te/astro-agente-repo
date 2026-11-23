@@ -105,10 +105,32 @@ function bsSaturate(view, mid, mascara) {
   if (!ok) throw new Error("Curva de saturación falló (" + mid + ")");
 }
 
+// Color de la franja algo por encima del cielo (23 nov 2026, IC 405 con Qwen, pasada C1-d2): la variante «+ medios»
+// dejaba el cielo neutro en el punto de anclaje (cielo_rgb 0,065/0,065/0,065) pero teñía de magenta el fondo débil justo
+// por encima (R/G 1,12, B/G 1,12), y la saturación lo amplió. Medianas de R, G y B de los píxeles cuya luminancia está
+// entre los percentiles 10 y 30 (muestreo cada 4 px); devuelve R/G y B/G.
+function bsFranja(view, lo, hi) {
+  var im = view.image, W = im.width, H = im.height, paso = 4, nc = im.numberOfChannels;
+  if (nc < 3) return null;
+  var fila = [new Float32Array(W), new Float32Array(W), new Float32Array(W)], R = [], G = [], B = [], L = [];
+  for (var y = 0; y < H; y += paso) {
+    for (var c = 0; c < 3; ++c) im.getSamples(fila[c], new Rect(0, y, W, y + 1), c);
+    for (var x = 0; x < W; x += paso) { var r = fila[0][x], g = fila[1][x], bb = fila[2][x]; R.push(r); G.push(g); B.push(bb); L.push((r + g + bb) / 3); }
+  }
+  var orden = L.slice().sort(function (a, b) { return a - b; });
+  var q1 = orden[Math.floor((lo || 0.10) * (orden.length - 1))], q3 = orden[Math.floor((hi || 0.30) * (orden.length - 1))];
+  var r2 = [], g2 = [], b2 = [];
+  for (var i = 0; i < L.length; ++i) if (L[i] >= q1 && L[i] <= q3) { r2.push(R[i]); g2.push(G[i]); b2.push(B[i]); }
+  var med = function (a) { a.sort(function (p, q) { return p - q; }); return a.length ? a[a.length >> 1] : 0; };
+  var mr = med(r2), mg = med(g2), mb = med(b2);
+  return mg > 0 ? { R_G: +(mr / mg).toFixed(4), B_G: +(mb / mg).toFixed(4), luminancia: [+q1.toFixed(4), +q3.toFixed(4)] } : null;
+}
+
 // Paso 5 no lineal, nivel del fondo (15 nov 2026, IC 1396 con Qwen): el estirado deja el cielo en ~0,10 y los finales
 // salían grises y planos (0,12) frente a la versión de Rafael (~0,02, con el 3 % del polvo más oscuro en negro). Punto
 // negro por canal hasta cielo = t (y neutro), en copias; recomienda el más oscuro que no lleva a 0 más de o.cerosMax %.
-//   fondoCandidatos("Final", { cielos: [0.08, 0.05, 0.03], cerosMax: 2 })
+//   fondoCandidatos("Final", { cielos: [0.08, 0.05, 0.03], cerosMax: 2, tinteMax: 0.03 })
+// Cada variante (también la «+ medios») se descarta si tiñe la franja p10–p30 más de tinteMax frente a la entrada.
 function fondoCandidatos(viewId, o) {
   o = o || {};
   if (viewId && typeof viewId === "object") viewId = viewId.id || viewId.vista;
@@ -122,6 +144,9 @@ function fondoCandidatos(viewId, o) {
   var cands = [];
   // Mediana de la imagen como medida de la nebulosa (en IC 1396 llena el campo).
   var m0 = esMedian(v0), variantes = [];
+  // Tinte permitido en la franja p10–p30 frente a la entrada (la franja puede ser nebulosa con color propio: se compara
+  // con la entrada, no con 1).
+  var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0);
   cielos.forEach(function (t) { variantes.push([t, false]); variantes.push([t, true]); });
   variantes.forEach(function (vt) {
     var t = vt[0], medios = vt[1];
@@ -149,10 +174,14 @@ function fondoCandidatos(viewId, o) {
     }
     var c = esCheck(w.mainView), s1 = esSkyDominance(w.mainView);
     var cielo = s1.canales && s1.canales.length ? (s1.canales[0] + s1.canales[1] + s1.canales[2]) / 3 : c.cielo;
-    var nuevos = c.cero_pct - c0.cero_pct;
+    var nuevos = c.cero_pct - c0.cero_pct, f1 = bsFranja(w.mainView), tinte = null;
+    if (f0 && f1) tinte = Math.max(Math.abs(f1.R_G / f0.R_G - 1), Math.abs(f1.B_G / f0.B_G - 1));
     cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : ""), vista: w.mainView.id, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
                  ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
-                 cumple: nuevos <= cerosMax, previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
+                 franja_p10_p30: f1, tinte_franja_pct: tinte === null ? null : +(100 * tinte).toFixed(1),
+                 no_cumple: (nuevos > cerosMax ? ["lleva a 0 un " + nuevos.toFixed(2) + " % más de píxeles (máx. " + cerosMax + ")"] : [])
+                   .concat(tinte !== null && tinte > tinteMax ? ["tiñe el fondo débil (franja p10–p30): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + f0.R_G + " y " + f0.B_G + " de la entrada (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
+                 cumple: nuevos <= cerosMax && !(tinte !== null && tinte > tinteMax), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
   });
   if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,
                               motivo: "El cielo ya está en " + (s0.reduce(function (a, b) { return a + b; }, 0) / s0.length).toFixed(3) + ", igual o por debajo de los niveles pedidos." };
@@ -163,12 +192,12 @@ function fondoCandidatos(viewId, o) {
     return c.cielo < a.cielo ? c : a; }) : null;
   cands.forEach(function (c) { if (c !== mejor && o.cerrar !== false) { var ww = ImageWindow.windowById(c.vista); if (!ww.isNull) ww.forceClose(); } });
   return {
-    vista: mejor ? mejor.vista : viewId, original: viewId, antes: { cielo_rgb: s0.map(function (x) { return +x.toFixed(4); }), ceros_pct: +c0.cero_pct.toFixed(3) },
+    vista: mejor ? mejor.vista : viewId, original: viewId, antes: { cielo_rgb: s0.map(function (x) { return +x.toFixed(4); }), ceros_pct: +c0.cero_pct.toFixed(3), franja_p10_p30: f0 },
     comparados: cands.map(function (c) { var x = {}; for (var k in c) x[k] = c[k]; x.elegido = c === mejor; return x; }),
     recomendado: mejor ? mejor.metodo : null,
     motivo: mejor ? mejor.metodo + ": el cielo más oscuro (" + mejor.cielo + ") y neutro sin llevar a 0 más de un " + cerosMax +
-                    " % de los píxeles. Un fondo demasiado negro se come la nebulosa débil: mira la previa." :
-                    "Todos llevan a 0 demasiados píxeles: deja el fondo como está o pide un nivel más alto (cielos).",
+                    " % de los píxeles ni teñir el fondo débil (franja p10–p30, tinte " + mejor.tinte_franja_pct + " % ≤ " + (100 * tinteMax) + " %). Un fondo demasiado negro se come la nebulosa débil: mira la previa." :
+                    "Ninguno cumple (llevan a 0 demasiados píxeles o tiñen el fondo débil: ver no_cumple de cada uno): deja el fondo como está o pide otros niveles (cielos).",
     siguiente: "Sigue con " + (mejor ? mejor.vista : viewId) + " (exportarFinal)."
   };
 }
