@@ -108,8 +108,11 @@ function bsSaturate(view, mid, mascara) {
 // Color de la franja algo por encima del cielo (23 nov 2026, IC 405 con Qwen, pasada C1-d2): la variante «+ medios»
 // dejaba el cielo neutro en el punto de anclaje (cielo_rgb 0,065/0,065/0,065) pero teñía de magenta el fondo débil justo
 // por encima (R/G 1,12, B/G 1,12), y la saturación lo amplió. Medianas de R, G y B de los píxeles cuya luminancia está
-// entre los percentiles 10 y 30 (muestreo cada 4 px); devuelve R/G y B/G.
-function bsFranja(view, lo, hi) {
+// entre los percentiles 10 y 30 (muestreo cada 4 px), MENOS el cielo de cada canal: el color de la señal sobre el cielo.
+// Con cocientes de valores absolutos el punto negro solo ya «teñía» (bajar el cielo de 0,10 a 0,05 subía R/G un 22 %
+// en la pasada C1-d3 sin cambiar el color): restando el cielo, el punto negro deja el color igual (0,2 %) y la curva
+// «+ medios» se ve (3–5 %). Devuelve R/G y B/G sobre el cielo y los absolutos.
+function bsFranja(view, cielo, lo, hi) {
   var im = view.image, W = im.width, H = im.height, paso = 4, nc = im.numberOfChannels;
   if (nc < 3) return null;
   var fila = [new Float32Array(W), new Float32Array(W), new Float32Array(W)], R = [], G = [], B = [], L = [];
@@ -122,8 +125,11 @@ function bsFranja(view, lo, hi) {
   var r2 = [], g2 = [], b2 = [];
   for (var i = 0; i < L.length; ++i) if (L[i] >= q1 && L[i] <= q3) { r2.push(R[i]); g2.push(G[i]); b2.push(B[i]); }
   var med = function (a) { a.sort(function (p, q) { return p - q; }); return a.length ? a[a.length >> 1] : 0; };
-  var mr = med(r2), mg = med(g2), mb = med(b2);
-  return mg > 0 ? { R_G: +(mr / mg).toFixed(4), B_G: +(mb / mg).toFixed(4), luminancia: [+q1.toFixed(4), +q3.toFixed(4)] } : null;
+  var mr = med(r2), mg = med(g2), mb = med(b2), c = (cielo && cielo.length === 3) ? cielo : [0, 0, 0];
+  var dr = mr - c[0], dg = mg - c[1], db = mb - c[2];
+  if (!(dg > 1e-4)) return null;   // la franja no se separa del cielo: no se puede juzgar el color
+  return { R_G: +(dr / dg).toFixed(4), B_G: +(db / dg).toFixed(4), R_G_abs: +(mr / mg).toFixed(4), B_G_abs: +(mb / mg).toFixed(4),
+           luminancia: [+q1.toFixed(4), +q3.toFixed(4)] };
 }
 
 // Paso 5 no lineal, nivel del fondo (15 nov 2026, IC 1396 con Qwen): el estirado deja el cielo en ~0,10 y los finales
@@ -146,7 +152,7 @@ function fondoCandidatos(viewId, o) {
   var m0 = esMedian(v0), variantes = [];
   // Tinte permitido en la franja p10–p30 frente a la entrada (la franja puede ser nebulosa con color propio: se compara
   // con la entrada, no con 1).
-  var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0);
+  var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0, s0);
   cielos.forEach(function (t) { variantes.push([t, false]); variantes.push([t, true]); });
   variantes.forEach(function (vt) {
     var t = vt[0], medios = vt[1];
@@ -174,13 +180,13 @@ function fondoCandidatos(viewId, o) {
     }
     var c = esCheck(w.mainView), s1 = esSkyDominance(w.mainView);
     var cielo = s1.canales && s1.canales.length ? (s1.canales[0] + s1.canales[1] + s1.canales[2]) / 3 : c.cielo;
-    var nuevos = c.cero_pct - c0.cero_pct, f1 = bsFranja(w.mainView), tinte = null;
+    var nuevos = c.cero_pct - c0.cero_pct, f1 = bsFranja(w.mainView, s1.canales), tinte = null;
     if (f0 && f1) tinte = Math.max(Math.abs(f1.R_G / f0.R_G - 1), Math.abs(f1.B_G / f0.B_G - 1));
     cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : ""), vista: w.mainView.id, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
                  ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
                  franja_p10_p30: f1, tinte_franja_pct: tinte === null ? null : +(100 * tinte).toFixed(1),
                  no_cumple: (nuevos > cerosMax ? ["lleva a 0 un " + nuevos.toFixed(2) + " % más de píxeles (máx. " + cerosMax + ")"] : [])
-                   .concat(tinte !== null && tinte > tinteMax ? ["tiñe el fondo débil (franja p10–p30): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + f0.R_G + " y " + f0.B_G + " de la entrada (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
+                   .concat(tinte !== null && tinte > tinteMax ? ["tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + f0.R_G + " y " + f0.B_G + " de la entrada (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
                  cumple: nuevos <= cerosMax && !(tinte !== null && tinte > tinteMax), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
   });
   if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,
