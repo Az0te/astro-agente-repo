@@ -16,7 +16,9 @@ Installs and sets up AstroPilot (PiAstroPilot for PixInsight, SirilAstroPilot an
 
 - **With the repository already downloaded**: double-click `instalar\Instalar.cmd`.
 
-To see what it would do without changing anything: `Instalar.cmd -Simular`. To update later, run it again.
+- **Only add the MCP servers to Claude**: double-click `instalar\Claude-MCP.cmd`. It registers `piastropilot`, `sirilastropilot` and `setiastropilot` (depending on the programs it finds) in Claude Desktop and Claude Code, without downloading anything or touching Siril, SASpro or the AI. Useful, for example, after installing Claude Desktop or if you move the repository. The first time, use the full installer: Siril needs its scripts folder and SASpro its launchers.
+
+To see what it would do without changing anything: `Instalar.cmd -Simular` (or `Claude-MCP.cmd -Simular`). To update later, run it again.
 
 ## What it does
 
@@ -57,12 +59,13 @@ More detail in [Which AI to use](../README.en.md).
 ## Options
 
 ```
-instalar.ps1 [-Carpeta <path>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfigurar] [-SinGit] [-Idioma es|en]
+instalar.ps1 [-Carpeta <path>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfigurar] [-SoloMCP] [-SinGit] [-Idioma es|en]
 ```
 
 - `-Carpeta`: where to install (otherwise it asks; default `%USERPROFILE%\astro-agente-repo`).
 - `-Simular`: dry run, changes nothing.
 - `-SinPreguntas`: accepts the defaults; with `-IA` it picks the AI without asking.
 - `-SinConfigurar`: only downloads or updates the repository.
+- `-SoloMCP`: only registers the MCP servers in Claude Desktop and Claude Code (what `Claude-MCP.cmd` does).
 - `-SinGit`: uses the ZIP even if you have Git.
 - `-Idioma`: `es` or `en`; otherwise the Windows language.

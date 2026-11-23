@@ -11,11 +11,12 @@
 # Copia de cada fichero de configuración tocado con .antes-astropilot / Backup of each config file touched: .antes-astropilot.
 #
 # Uso / Usage (doble clic / double click Instalar.cmd, or PowerShell):
-#   instalar.ps1 [-Carpeta <ruta>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfigurar] [-SinGit] [-Idioma es|en]
+#   instalar.ps1 [-Carpeta <ruta>] [-Simular] [-SinPreguntas] [-IA "1,3"] [-SinConfigurar] [-SoloMCP] [-SinGit] [-Idioma es|en]
 #   -Simular        no cambia nada / changes nothing, only says what it would do.
 #   -SinPreguntas   acepta lo de por defecto / accepts the defaults.
 #   -IA "1,3"       1 Claude, 2 Codex, 3 Ollama, 4 Gemini (con / with -SinPreguntas).
 #   -SinConfigurar  solo el repositorio / only the repository.
+#   -SoloMCP        solo registra los MCP en Claude Desktop y Claude Code (Claude-MCP.cmd) / only registers the MCP servers in Claude.
 #   -SinGit         ZIP aunque haya git / ZIP even if git is installed.
 #   -Idioma         es o en; por defecto el de Windows / default: the Windows language.
 
@@ -25,6 +26,7 @@ param(
   [switch]$Simular,
   [switch]$SinPreguntas,
   [switch]$SinConfigurar,
+  [switch]$SoloMCP,
   [switch]$SinGit,
   [string]$IA = "",
   [string]$Idioma = ""
@@ -182,7 +184,10 @@ Info ((T "Carpeta" "Folder") + ": $REPO")
 $git = if ($SinGit) { $null } else { Comando "git" }
 $tal = T "Uso el repositorio tal como está." "Using the repository as it is."
 
-if (EsRepo $REPO) {
+if ($SoloMCP) {
+  if (-not (EsRepo $REPO)) { throw (T "$REPO no es el repositorio de AstroPilot: ejecuta Claude-MCP.cmd desde su carpeta instalar, o el instalador completo." "$REPO is not the AstroPilot repository: run Claude-MCP.cmd from its instalar folder, or the full installer.") }
+  Info $tal
+} elseif (EsRepo $REPO) {
   if (Test-Path -LiteralPath (Join-Path $REPO ".git")) {
     if ($git -and (Preguntar (T "El repositorio ya está. ¿Actualizarlo con git pull?" "The repository is already there. Update it with git pull?") $true)) {
       if ($Simular) { Haria "git -C `"$REPO`" pull --ff-only" }
@@ -367,6 +372,7 @@ function IaGemini {
   Ok (T "Clave de Gemini guardada en tu usuario (GEMINI_API_KEY). No la compartas." "Gemini key saved for your user (GEMINI_API_KEY). Do not share it.")
 }
 
+if (-not $SoloMCP) {
 Titulo (T "Inteligencia artificial" "Artificial intelligence")
 Info (T "¿Qué IA vas a usar? Puedes elegir varias, separadas por comas:" "Which AI will you use? You can pick several, separated by commas:")
 Info (T "  1 = Claude (la mejor; app Claude Desktop con cuenta gratis, o de pago)   2 = Codex (OpenAI, de pago)" `
@@ -384,6 +390,7 @@ foreach ($o in (("" + $eleccion) -split '[,; ]+' | Where-Object { $_ })) {
     "0" { }
     default { Aviso ((T "Opción desconocida" "Unknown option") + ": $o") }
   }
+}
 }
 
 # --- 5. Servidores MCP / MCP servers --------------------------------------------------------------------------------
@@ -545,7 +552,13 @@ if ($servidores.Count) {
   foreach ($k in $servidores.Keys) { if (-not (Test-Path -LiteralPath $servidores[$k]) -and -not $Simular) { Aviso ((T "Falta" "Missing") + " $($servidores[$k])") } }
   ConfigurarClaudeDesktop
   ConfigurarClaudeCode
-  ConfigurarCodex
+  if (-not $SoloMCP) { ConfigurarCodex }
+  if ($SoloMCP -and (HayClaudeDesktop)) {
+    Nota (T "Claude Desktop: con la cuenta gratis usa solo Sonnet. Para cargar la guía, en el chat pulsa + y añade SKILL.md del conector piastropilot (o sirilastropilot / setiastropilot). Si se agota la cuota gratis, sigue con Gemini (gratis con clave) o con Qwen local (Ollama)." `
+            "Claude Desktop: with the free account use only Sonnet. To load the guide, press + in the chat and add SKILL.md from the piastropilot connector (or sirilastropilot / setiastropilot). If the free quota runs out, carry on with Gemini (free with a key) or local Qwen (Ollama).")
+  }
+} elseif ($SoloMCP) {
+  Aviso (T "No encuentro PixInsight, Siril ni SASpro: no hay ningún MCP que registrar." "PixInsight, Siril and SASpro not found: there is no MCP server to register.")
 }
 
 # --- 6. Cada programa / Each program --------------------------------------------------------------------------------
@@ -557,7 +570,7 @@ if ($piExe) {
   $lite = Join-Path $REPO "piastropilot\script"
   $t = T "PixInsight: para el Lite (opcional, sin MCP), Script > Feature Scripts... > Add > $lite > Done (no se puede hacer desde fuera de PixInsight)." `
          "PixInsight: for the Lite (optional, no MCP), Script > Feature Scripts... > Add > $lite > Done (cannot be done from outside PixInsight)."
-  Info $t; Nota $t
+  if (-not $SoloMCP) { Info $t; Nota $t }
 }
 
 function ConfigurarSiril {
@@ -605,7 +618,7 @@ function ConfigurarSiril {
   EscribirUtf8SinBom $ini.FullName ($lineas -join $nl)
   Ok $t
 }
-if ($sirilExe) { Titulo "Siril"; ConfigurarSiril }
+if ($sirilExe -and -not $SoloMCP) { Titulo "Siril"; ConfigurarSiril }
 
 # Mismo contenido aunque cambien los saltos de línea (git en Windows deja CRLF; una copia anterior puede tener LF).
 function MismoTexto($a, $b) {
@@ -630,13 +643,13 @@ function ConfigurarSas {
   }
   Info (T "En SASpro, Scripts > Reload Scripts: aparece AstroPilot > SetiAstroPilot." "In SASpro, Scripts > Reload Scripts: AstroPilot > SetiAstroPilot appears.")
 }
-if ($sasExe) { Titulo "Seti Astro Suite Pro"; ConfigurarSas }
+if ($sasExe -and -not $SoloMCP) { Titulo "Seti Astro Suite Pro"; ConfigurarSas }
 
 # --- 7. Perfil / Profile --------------------------------------------------------------------------------------------
 
 $perfil = Join-Path $REPO "guia\perfil.md"
 $ejemplo = Join-Path $REPO "guia\perfil-ejemplo.md"
-if (-not (Test-Path -LiteralPath $perfil) -and (Test-Path -LiteralPath $ejemplo)) {
+if (-not $SoloMCP -and -not (Test-Path -LiteralPath $perfil) -and (Test-Path -LiteralPath $ejemplo)) {
   Titulo (T "Perfil" "Profile")
   $t = T "Creado guia\perfil.md: rellénalo con tu equipo, tu cielo y tus rutas." "Created guia\perfil.md: fill it in with your equipment, sky and paths."
   if ($Simular) { Haria $t } else { Copy-Item -LiteralPath $ejemplo -Destination $perfil; Ok $t }

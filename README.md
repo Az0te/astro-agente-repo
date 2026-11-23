@@ -87,7 +87,7 @@ Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía 
 Para quien no tiene suscripción: **Claude Code no tiene plan gratuito** (si escribes `claude` en una terminal te pedirá suscripción o clave de API), pero la app **Claude Desktop** sí funciona con una cuenta gratis de claude.ai y habla con PixInsight, Siril y SASpro por MCP.
 
 1. Instala [Claude Desktop](https://claude.ai/download) e inicia sesión (o usa el [instalador](#instalación-rápida-en-windows), opción 1, y responde que no tienes suscripción).
-2. Registra los servidores en `%APPDATA%\Claude\claude_desktop_config.json` (el instalador lo hace solo y guarda una copia `.antes-astropilot`):
+2. Registra los servidores en `%APPDATA%\Claude\claude_desktop_config.json` (el instalador lo hace solo, y `instalar\Claude-MCP.cmd` hace solo este paso; los dos guardan una copia `.antes-astropilot`):
 
    ```json
    {
