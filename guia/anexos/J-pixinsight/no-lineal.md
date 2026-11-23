@@ -258,7 +258,7 @@ Devuelve `candidatos` (vista, `tamano_x` y `saturacion_x` conseguidos frente a l
 ]}
 ```
 
-Devuelve los pasos, antes y después por canal (mediana, MAD, máximo, pix_098, p90_estrellas) y el control. Si la limpieza se llevaría más del 10 % del brillo, `prepararEstrellas` no limpia y lo dice en `no_cumple`.
+Devuelve los pasos, antes y después por canal (mediana, MAD, máximo, pix_098, p90_estrellas) y el control. Con un candidato de `estirarEstrellasCandidatos` (ya preparado) no hace nada: devuelve la misma vista con `ya_preparada` y lo siguiente es `recombinarEstrellas`. Si la limpieza se llevaría más del 10 % del brillo, `prepararEstrellas` no limpia y lo dice en `no_cumple`.
 
 **A mano en PixInsight (valores de referencia)**
 

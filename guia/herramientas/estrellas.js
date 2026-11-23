@@ -69,6 +69,18 @@ function stStarPct(view) {
   return +(100 * k / n).toFixed(2);
 }
 
+// p99,9 del máximo de R, G y B (muestra cada 5 px): en una capa lineal, las estrellas brillantes quedan por debajo de ~0,1.
+function stP999(im) {
+  var W = im.width, H = im.height, nc = im.numberOfChannels, fila = new Float32Array(W), m = [];
+  for (var y = 0; y < H; y += 5) {
+    var mx = new Float32Array(Math.ceil(W / 5));
+    for (var c = 0; c < nc; ++c) { im.getSamples(fila, new Rect(0, y, W, y + 1), c); for (var x = 0, j = 0; x < W; x += 5, ++j) if (fila[x] > mx[j]) mx[j] = fila[x]; }
+    for (var k = 0; k < mx.length; ++k) m.push(mx[k]);
+  }
+  m.sort(function (a, b) { return a - b; });
+  return m.length ? m[Math.floor(0.999 * (m.length - 1))] : 0;
+}
+
 function prepararEstrellas(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
@@ -86,9 +98,21 @@ function prepararEstrellas(viewId, o) {
                     "pasa la capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas), nunca la starless, la paleta ni la imagen saturada. " +
                     "Si SÍ es la capa de estrellas de un campo muy denso (Nubes de Magallanes, Vía Láctea), las estrellas débiles " +
                     "llenan el fondo: estirarla con un k menor (estirarEstrellas con k 300–1000) o recombinarla sin este paso");
+  // Candidato de estirarEstrellasCandidatos: ya viene estirado y preparado (suelo a 0, luces comprimidas). En 6 de 9
+  // pasadas C1 de IC 405 (23 nov 2026) Qwen lo pasó otra vez por aquí y daba «capa LINEAL» (su mediana es 0 por el suelo):
+  // vuelta perdida. Se devuelve tal cual, sin error, y se dice que se recombine.
+  try {
+    if (!o.forzar && View.viewById(viewId).propertyValue("PiAstroPilot:EstrellasPreparadas"))
+      return { vista: viewId, original: viewId, ya_preparada: true, pasos: [], no_cumple: [],
+               siguiente: "recombinarEstrellas { starless: la starless final, estrellas: \"" + viewId + "\" }",
+               control: { nota: "Esta capa ya sale preparada de estirarEstrellasCandidatos (limpieza, suelo, luces): no se prepara " +
+                                "otra vez. Recombínala directamente." } };
+  } catch (e) { }
   // Capa LINEAL (sin estirar): fondo ~1e-6 (una estirada lo tiene ~1e-3). Qwen pasó la «_stars» en vez de la «_stars_estiradas».
+  // Una capa estirada y con el suelo ya a 0 también tiene mediana 0: se mira además el p99,9 (en lineal las estrellas
+  // brillantes quedan muy abajo).
   var stMedMax = 0; for (var c0 = 0; c0 < 3; ++c0) { sim.selectedChannel = c0; stMedMax = Math.max(stMedMax, sim.median()); } sim.resetSelections();
-  if (!o.forzar && stMedMax < 2e-5) {
+  if (!o.forzar && stMedMax < 2e-5 && stP999(sim) < 0.15) {
     var cands = []; ["_estiradas", "_estirada", "_st", "_stretched"].forEach(function (suf) { if (!ImageWindow.windowById(viewId + suf).isNull) cands.push(viewId + suf); });
     throw new Error(viewId + " es la capa de estrellas LINEAL (sin estirar: mediana " + stMedMax.toExponential(1) + "). Pasa la estirada (r.estrellas.vista de estirarCapas)" +
                     (cands.length ? ": " + cands.join(" o ") : "; o mejor, estirarEstrellasCandidatos con esta capa lineal (Paso 8: la estira y saca los candidatos)"));
@@ -384,6 +408,7 @@ function estirarEstrellasCandidatos(viewId, o) {
       if (src.hasAstrometricSolution) pv.window.copyAstrometricSolution(src);
       if (c.saturacion_pedida > 1) stSaturarMezcla(pv, c.saturacion_pedida);
       c.vista = prep.vista;
+      try { pv.setPropertyValue("PiAstroPilot:EstrellasPreparadas", true); } catch (e3) { }   // prepararEstrellas no la repite
       c.pix_estrella_pct = stStarPct(pv);
       c.croma = +stCroma(pv).toFixed(3);
       c.no_cumple = prep.no_cumple || [];

@@ -1417,7 +1417,7 @@
    "fichero": "estrellas.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 8 no lineal: limpia y ajusta una capa de estrellas ya estirada (residuos, suelo, saturación, techo) en una copia. estirarEstrellasCandidatos ya la aplica a cada candidato.",
+   "descripcion": "Paso 8 no lineal: limpia y ajusta una capa de estrellas ya estirada (residuos, suelo, saturación, techo) en una copia. estirarEstrellasCandidatos ya la aplica a cada candidato: con uno de sus candidatos no hace nada y devuelve la misma vista (ya_preparada), y lo siguiente es recombinarEstrellas.",
    "paso": "no-lineal/08-estrellas.md",
    "params": {
     "type": "object",
