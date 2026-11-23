@@ -2111,8 +2111,8 @@ class PLDialogo extends Dialog {
 // ---------------------------------------------------------------------------------------------------------------
 // Panel de IA local (23 nov 2026): debajo del chat y sólo con Ollama o RDNA-FAST. Modelo cargado (cuantización,
 // contexto, tamaño), % del modelo en la GPU, memoria de la gráfica, contexto usado y carga. Lee /api/ps (Ollama) y
-// /props + /slots (llama-server) en un hilo aparte, y los contadores de la GPU de Windows con PowerShell (Get-Counter,
-// ~1,5 s) sin esperar a que termine: nada de esto frena ni rompe el chat; lo que no se puede leer sale como «—».
+// /props + /slots (llama-server) y los contadores de la GPU de Windows (Get-Counter) con un PowerShell que se lanza sin
+// esperarlo (~2 s); se para mientras se ejecutan las llamadas de la guía. Lo que no se puede leer sale como «—».
 // No carga ni descarga modelos (salvo el botón). Variable de entorno ASTROPILOT_PANEL=0: panel apagado.
 // ---------------------------------------------------------------------------------------------------------------
 var PL_LOCAL_ULT = null;   // última respuesta local: { proveedor, modelo, entrada, salida, tps, hora }
@@ -2123,29 +2123,20 @@ function plLocalUltimo(proveedor, modelo, entrada, salida, tps) {
                     tps: tps > 0 && isFinite(tps) ? tps : 0, hora: Date.now() };
 }
 
-// Cuerpo del hilo del panel (autocontenido, como plHiloRed): GET de cada URL; null si no responde o no es 200.
-function plHiloPanel(job) {
-   function vivo() { try { return !Thread.current.isAborted; } catch (e) { return true; } }
-   var out = {};
-   for (var k in job.urls) {
-      try {
-         var rec = new ByteArray, t = new NetworkTransfer;
-         t.setURL(job.urls[k]);
-         t.setConnectionTimeout(2);
-         t.onDownloadDataAvailable = function (d) { rec.add(d); return vivo(); };
-         t.onTransferProgress = function () { return vivo(); };
-         out[k] = t.download() && t.responseCode == 200 ? rec.utf8ToString() : null;
-      } catch (e) { out[k] = null; }
-   }
-   return out;
-}
-
-// Uso de la GPU (motor más cargado: 3D o Compute, sumando procesos, como el Administrador de tareas; con Ollama y
-// llama-server en la RX 7900 la carga sale en «compute 0», 86 % generando, 23 nov 2026) y memoria dedicada
-// de la gráfica con más memoria usada; total de la gráfica del registro (qwMemorySize). Una línea JSON.
-var PL_PS_GPU =
+// Lecturas del panel en UN PowerShell (23 nov 2026, tras el cierre de PixInsight del 23-11 a las 12:20, APPCRASH
+// 0x80000003 en PixInsight.exe+0xcb866 durante gradienteVarias): antes el panel abría un Thread de PJSR con
+// NetworkTransfer cada 2,5 s y otro PowerShell con lectura de stdout por evento, también mientras corría una
+// herramienta larga en el hilo principal. Ahora no hay Thread ni eventos: HTTP (2 s de plazo) y contadores de la GPU
+// (motor más cargado de la gráfica con más memoria usada; «compute 0» con Ollama y llama-server en la RX 7900) en un
+// proceso que se lanza sin esperar y cuya salida se lee al terminar. Una línea «@@{json}».
+var PL_PS_PANEL =
+   "param([string]$ps, [string]$rd)\r\n" +
    "$ErrorActionPreference = 'SilentlyContinue'\r\n" +
-   "$inv = [Globalization.CultureInfo]::InvariantCulture\r\n" +
+   "$ProgressPreference = 'SilentlyContinue'\r\n" +
+   "[Console]::OutputEncoding = [Text.Encoding]::UTF8\r\n" +
+   "function Leer($u) { if (-not $u) { return $null }; try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 $u; if ($r.StatusCode -eq 200) { return [string]$r.Content } } catch {}; return $null }\r\n" +
+   "$o = @{ ps = (Leer $ps) }\r\n" +
+   "if ($rd -and $rd -ne 'ninguno') { $o.props = (Leer \"$rd/props\"); $o.slots = (Leer \"$rd/slots\") }\r\n" +
    "$s = (Get-Counter -Counter '\\GPU Engine(*)\\Utilization Percentage','\\GPU Adapter Memory(*)\\Dedicated Usage').CounterSamples\r\n" +
    "$mem = @{}; $eng = @{}\r\n" +
    "foreach ($c in $s) {\r\n" +
@@ -2153,12 +2144,15 @@ var PL_PS_GPU =
    "  if ($p -match 'adapter memory\\((luid_[^)]*?)_phys') { $mem[$matches[1]] = [double]$c.CookedValue }\r\n" +
    "  elseif ($p -match '(luid_\\w+?_\\w+?)_phys.*engtype_([^)]+)\\)') { $k = $matches[1] + '|' + $matches[2]; $eng[$k] = [double]$eng[$k] + $c.CookedValue }\r\n" +
    "}\r\n" +
-   "$luid = ($mem.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1).Key\r\n" +
-   "$uso = 0.0; $tipo = ''\r\n" +
-   "foreach ($e in $eng.GetEnumerator()) { $l, $t = $e.Key -split '\\|'; if ($l -eq $luid -and $e.Value -gt $uso) { $uso = $e.Value; $tipo = $t } }\r\n" +
-   "$tot = 0.0\r\n" +
-   "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' | ForEach-Object { $q = $_.'HardwareInformation.qwMemorySize'; if ($q -and [double]$q -gt $tot) { $tot = [double]$q } }\r\n" +
-   "'{\"gpu\":' + ([math]::Round([math]::Min(100.0, $uso), 1)).ToString($inv) + ',\"motor\":\"' + $tipo + '\",\"vram\":' + ([double]$mem[$luid]).ToString('0', $inv) + ',\"total\":' + $tot.ToString('0', $inv) + '}'\r\n";
+   "if ($mem.Count) {\r\n" +
+   "  $luid = ($mem.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1).Key\r\n" +
+   "  $uso = 0.0; $tipo = ''\r\n" +
+   "  foreach ($e in $eng.GetEnumerator()) { $l, $t = $e.Key -split '\\|'; if ($l -eq $luid -and $e.Value -gt $uso) { $uso = $e.Value; $tipo = $t } }\r\n" +
+   "  $tot = 0.0\r\n" +
+   "  Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' | ForEach-Object { $q = $_.'HardwareInformation.qwMemorySize'; if ($q -and [double]$q -gt $tot) { $tot = [double]$q } }\r\n" +
+   "  $o.gpu = @{ gpu = [math]::Round([math]::Min(100.0, $uso), 1); motor = $tipo; vram = [double]$mem[$luid]; total = $tot }\r\n" +
+   "}\r\n" +
+   "'@@' + ($o | ConvertTo-Json -Compress -Depth 3)\r\n";
 
 function plBarraPanel(padre) {
    var c = new Control(padre);
@@ -2186,8 +2180,7 @@ function PLPanelLocal(dlg, padre, aj) {
    var VERDE = 0xff4caf50, AMBAR = 0xffe0a030, ROJO = 0xffe0453a, cVerde = "#3fa34d", cAmbar = "#d99a20", cRojo = "#e0453a";
    this.apagado = plEntorno("ASTROPILOT_PANEL") == "0";
    this.datos = {}; this.gpu = null;
-   this.hilo = null; this.t0Hilo = 0;
-   this.pGpu = null; this.salidaGpu = ""; this.t0Gpu = 0; this.fallosGpu = 0;
+   this.proc = null; this.t0Proc = 0; this.proximo = 0; this.fallos = 0; this.enTick = false;
    this.cargados = [];
 
    var g = this.grupo = new GroupBox(padre);
@@ -2216,67 +2209,56 @@ function PLPanelLocal(dlg, padre, aj) {
    this.urlOllama = function () { return String(aj.ollamaUrl || PL_URL_OLLAMA).replace(/[\/]+$/, ""); };
    this.urlRdna = function () { return String(aj.urlRdna || PL_URL_RDNA).replace(/[\/]+$/, "").replace(/[\/]v1$/, ""); };
 
-   // Lecturas HTTP: el hilo de la vuelta anterior se recoge y se lanza otro; si tarda más de 10 s se aborta.
-   this.leerHttp = function () {
-      if (this.hilo) {
-         var th = this.hilo;
-         if (th.isActive) {
-            if (Date.now() - this.t0Hilo < 10000) return;
-            try { th.abort(); th.wait(); } catch (e) {}
-            this.hilo = null; this.datos = { prov: aj.proveedor, hora: Date.now() };
-            return;
-         }
-         var r = null;
-         try { if (!(th.error && String(th.error).length)) r = th.result; } catch (e) {}
-         this.hilo = null;
-         this.datos = r || {}; this.datos.prov = this.provHilo; this.datos.hora = Date.now();
-      }
-      var urls = { ps: this.urlOllama() + "/api/ps" };
-      if (aj.proveedor == "rdna") { urls.props = this.urlRdna() + "/props"; urls.slots = this.urlRdna() + "/slots"; }
-      this.provHilo = aj.proveedor;
-      if (typeof Thread === "undefined") {
-         this.datos = plHiloPanel({ urls: urls }); this.datos.prov = aj.proveedor; this.datos.hora = Date.now();
+   // «localhost» puede resolverse primero a ::1 y Ollama sólo escucha en 127.0.0.1 (cada lectura esperaba 2 s).
+   function local127(u) { return u.replace(/[\/][\/]localhost\b/i, "/" + "/127.0.0.1"); }
+
+   // Lecturas: un único ExternalProcess, reutilizado; sin eventos (la salida se lee cuando ha terminado). Si tarda más
+   // de 15 s se mata. El siguiente, 3 s después de terminar el anterior. Tres fallos seguidos: no se intenta más.
+   this.leer = function () {
+      if (!plEsWindows() || this.fallos >= 3) return;
+      var p = this.proc;
+      if (p && (p.isStarting || p.isRunning)) {
+         if (Date.now() - this.t0Proc > 15000) { plParar(p); ++this.fallos; this.proximo = Date.now() + 10000; }
          return;
       }
-      this.hilo = new Thread(plHiloPanel, { urls: urls }, { pooled: false });
-      this.t0Hilo = Date.now();
-      this.hilo.start();
-   };
-
-   // Contadores de la GPU: un PowerShell cada ~5 s como mucho, sin esperarlo. Tres fallos seguidos: no se intenta más.
-   this.leerGpu = function () {
-      if (!plEsWindows() || this.fallosGpu >= 3) return;
-      if (this.pGpu) {
-         var p = this.pGpu;
-         if (p.isStarting || p.isRunning) {
-            if (Date.now() - this.t0Gpu > 8000) { plParar(p); this.pGpu = null; ++this.fallosGpu; }
-            return;
-         }
-         this.pGpu = null;
-         var m = /\{[^{}]*\}/.exec(this.salidaGpu), d = null;
-         try { d = m ? JSON.parse(m[0]) : null; } catch (e) {}
-         if (d && d.vram > 0) { d.hora = Date.now(); this.gpu = d; this.fallosGpu = 0; } else ++this.fallosGpu;
+      if (p && this.t0Proc && !this.leido) {
+         this.leido = true;
+         this.proximo = Date.now() + 3000;
+         var txt = "", d = null;
+         try { txt = String(p.stdout || ""); } catch (e) {}
+         var k = txt.indexOf("@@");
+         try { d = k >= 0 ? JSON.parse(txt.substring(k + 2).trim()) : null; } catch (e) {}
+         if (d && typeof d == "object") {
+            this.datos = { prov: this.provLectura, ps: d.ps || null, props: d.props || null, slots: d.slots || null, hora: Date.now() };
+            if (d.gpu && d.gpu.vram > 0) { this.gpu = d.gpu; this.gpu.hora = Date.now(); }
+            this.fallos = 0;
+         } else ++this.fallos;
       }
-      if (Date.now() - this.t0Gpu < 4500) return;
-      this.salidaGpu = ""; this.t0Gpu = Date.now();
-      try {
-         var dir = plCarpeta(PL_TMP), f = dir + "/panel_gpu.ps1";
-         if (!this.psEscrito || !File.exists(f)) { File.writeTextFile(f, PL_PS_GPU); this.psEscrito = true; }
-         var q = new ExternalProcess;
-         q.workingDirectory = dir;
-         q.onStandardOutputDataAvailable = function () { P.salidaGpu += String(this.stdout); };
-         q.start("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", f]);
-         this.pGpu = q;
-      } catch (e) { ++this.fallosGpu; }
+      if (Date.now() < this.proximo) return;
+      var dir = plCarpeta(PL_TMP), f = dir + "/panel_local.ps1";
+      if (!this.psEscrito || !File.exists(f)) { File.writeTextFile(f, PL_PS_PANEL); this.psEscrito = true; }
+      if (!p) { p = this.proc = new ExternalProcess; p.workingDirectory = dir; }
+      this.provLectura = aj.proveedor;
+      this.leido = false;
+      this.t0Proc = Date.now();
+      this.proximo = Date.now() + 3000;
+      p.start("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", f,
+                                 local127(this.urlOllama()) + "/api/ps", aj.proveedor == "rdna" ? local127(this.urlRdna()) : "ninguno"]);
    };
 
+   // Pausa mientras se ejecutan las llamadas de la guía (dlg.ejecutando): no se lanza nada ni se repinta. Guardia de
+   // reentrada: las herramientas y plHttp procesan eventos y el temporizador puede volver a entrar.
    this.tick = function () {
-      var local = this.esLocal();
-      if (this.grupo.visible != local) this.grupo.visible = local;
-      if (!local) return;
-      try { this.leerHttp(); } catch (e) {}
-      try { this.leerGpu(); } catch (e) {}
-      try { this.pintar(); } catch (e) { this.lCarga.text = "—"; console.warningln("[PiAstroPilotLite] panel local: " + (e.message || e)); }
+      if (this.enTick || dlg.ejecutando) return;
+      this.enTick = true;
+      try {
+         var local = this.esLocal();
+         if (this.grupo.visible != local) this.grupo.visible = local;
+         if (local) {
+            try { this.leer(); } catch (e) { ++this.fallos; }
+            try { this.pintar(); } catch (e) { this.lCarga.text = "—"; console.warningln("[PiAstroPilotLite] panel local: " + (e.message || e)); }
+         }
+      } finally { this.enTick = false; }
    };
 
    // Caracteres de historial que se mandarían ahora frente al tope a partir del cual se recorta en bloque.
@@ -2412,9 +2394,7 @@ function PLPanelLocal(dlg, padre, aj) {
    };
    this.parar = function () {
       try { this.timer.stop(); } catch (e) {}
-      try { if (this.hilo && this.hilo.isActive) { this.hilo.abort(); this.hilo.wait(); } } catch (e) {}
-      this.hilo = null;
-      plParar(this.pGpu); this.pGpu = null;
+      plParar(this.proc);
    };
 }
 
@@ -3074,11 +3054,14 @@ function plConstruirDialogo(aj) {
       plEventos();
       // Subs aprobados pedidos y lanzarWBPP con las carpetas (todos los lights): no se ejecuta; vuelve al modelo como
       // error para que haga antes seleccionarSubs (16-11-2026: Qwen apiló dos veces los 230 y se comió el aviso del plan).
-      var r = (this.pideAprobados && /"lanzarWBPP"/.test(s) && !/\.txt"/i.test(s))
-        ? { ok: false, segundos: 0, texto: "No ejecuto lanzarWBPP: el usuario pidió los subs aprobados y lights no es la lista_aprobados " +
-            "de seleccionarSubs. Ejecuta antes seleccionarSubs sobre las carpetas LIGHT y repite lanzarWBPP con lights = su " +
-            "lista_aprobados (el fichero .txt que devuelve)." }
-        : plEjecutarLlamadas(aj, s);
+      this.ejecutando = true;   // el panel de IA local se para mientras tanto
+      try {
+         var r = (this.pideAprobados && /"lanzarWBPP"/.test(s) && !/\.txt"/i.test(s))
+           ? { ok: false, segundos: 0, texto: "No ejecuto lanzarWBPP: el usuario pidió los subs aprobados y lights no es la lista_aprobados " +
+               "de seleccionarSubs. Ejecuta antes seleccionarSubs sobre las carpetas LIGHT y repite lanzarWBPP con lights = su " +
+               "lista_aprobados (el fichero .txt que devuelve)." }
+           : plEjecutarLlamadas(aj, s);
+      } finally { this.ejecutando = false; }
       plRegEjecucion(s, r);
       plMetricasEjecucion(this.metricas, s, r);
       this.anotar(r.ok ? "Resultado (" + r.segundos.toFixed(1) + " s)" : "Error al ejecutar", r.texto, r.ok ? "info" : "err");

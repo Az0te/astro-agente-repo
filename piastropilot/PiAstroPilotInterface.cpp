@@ -2304,7 +2304,10 @@ String PiAstroPilotInterface::RunWithRunner( const String& calls, const String& 
 void PiAstroPilotInterface::e_Timer( Timer& )
 {
    // Panel de IA local (build 117): sólo lanza su lectura sin esperarla y pinta la última; nunca para el chat.
-   if ( GUI != nullptr && m_cfg.currentModel >= 0 && m_cfg.currentModel < int( m_cfg.models.size() ) )
+   // Pausa mientras se ejecutan las llamadas de la guía o dentro de otro tic / evento de proceso (reentrada por
+   // ProcessEvents), como el Lite tras el cierre del 23 nov 2026.
+   if ( GUI != nullptr && !m_scriptRunning && !m_inTimer && !m_inProcessEvent &&
+        m_cfg.currentModel >= 0 && m_cfg.currentModel < int( m_cfg.models.size() ) )
       try { GUI->Local_Panel.Tick( m_cfg.models[m_cfg.currentModel], m_busy, m_cfg.TempDir(), IsVisible() ); } catch ( ... ) {}
 
    if ( m_busy )
