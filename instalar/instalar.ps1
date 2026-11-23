@@ -283,7 +283,7 @@ function IaClaude {
   }
   if ((HayClaudeDesktop) -or $Simular) { Nota (T "Claude Desktop: inicia sesión en la app (la cuenta gratis vale) y, con la cuenta gratis, usa solo Sonnet en el selector de modelo. Para cargar la guía, en el chat pulsa + y añade SKILL.md del conector piastropilot (o sirilastropilot / setiastropilot). Si se agota la cuota gratis, sigue con Gemini (gratis con clave) o con Qwen local (Ollama)." `
           "Claude Desktop: sign in in the app (a free account is enough) and, with the free account, use only Sonnet in the model picker. To load the guide, press + in the chat and add SKILL.md from the piastropilot connector (or sirilastropilot / setiastropilot). If the free quota runs out, carry on with Gemini (free with a key) or local Qwen (Ollama).") }
-  if ($code) { Ok (T "Claude Code ya está instalado" "Claude Code is already installed"); return }
+  if ($code) { Ok (T "Claude Code ya está instalado" "Claude Code is already installed"); [void](ComprobarClaudeCode $false); return }
   if (-not (Preguntar (T "¿Tienes suscripción Pro/Max o clave de API de Anthropic? (sin ella Claude Code no funciona; con la cuenta gratis basta Claude Desktop)" `
                          "Do you have a Pro/Max subscription or an Anthropic API key? (without one Claude Code does not work; with a free account Claude Desktop is enough)") $false)) {
     Nota (T "Claude Code no instalado: con cuenta gratis no escribas claude en la terminal (pide suscripción); usa la app Claude Desktop." `
@@ -293,13 +293,74 @@ function IaClaude {
   if (Preguntar (T "¿Instalar Claude Code (lo usan el Lite, el módulo y los chats de Siril y SASpro)?" "Install Claude Code (used by the Lite, the module and the Siril and SASpro chats)?") $true) {
     if ($Simular) { Haria "irm https://claude.ai/install.ps1 | iex" }
     else {
-      Invoke-RestMethod "https://claude.ai/install.ps1" | Invoke-Expression
+      try { Invoke-RestMethod "https://claude.ai/install.ps1" | Invoke-Expression }
+      catch { Aviso ((T "El instalador oficial de Claude Code falló:" "The official Claude Code installer failed:") + " $($_.Exception.Message)") }
       RefrescarPath
-      $env:Path += ";" + (Join-Path $env:USERPROFILE ".local\bin")
-      Ok (T "Claude Code instalado." "Claude Code installed.")
     }
-    Nota (T "Claude Code: abre una terminal, escribe claude e inicia sesión una vez con tu suscripción o clave de API." "Claude Code: open a terminal, type claude and sign in once with your subscription or API key.")
+    if (ComprobarClaudeCode $true) { Ok (T "Claude Code instalado." "Claude Code installed.") }
   }
+}
+
+# Carpeta del claude.exe del instalador oficial.
+function CarpetaClaudeCode { return (Join-Path $env:USERPROFILE ".local\bin") }
+
+# Añade una carpeta al PATH del usuario sin estropear las entradas con %VARIABLES%: se lee el valor sin expandir del
+# registro y se escribe como REG_EXPAND_SZ (SetEnvironmentVariable lo guardaría expandido y como REG_SZ).
+function AnadirAlPathUsuario($carpeta) {
+  $clave = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
+  try {
+    $crudo = "" + $clave.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    foreach ($e in ($crudo -split ';')) {
+      if ($e -and ([Environment]::ExpandEnvironmentVariables($e).TrimEnd('\') -ieq $carpeta.TrimEnd('\'))) { return $false }
+    }
+    $nuevo = if ($crudo.Trim().TrimEnd(';')) { $crudo.TrimEnd(';') + ";" + $carpeta } else { $carpeta }
+    $clave.SetValue("Path", $nuevo, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+  } finally { $clave.Close() }
+  # Aviso a Windows de que cambió el entorno (las terminales que se abran después ya lo ven).
+  [Environment]::SetEnvironmentVariable("ASTROPILOT_TMP", "1", "User")
+  [Environment]::SetEnvironmentVariable("ASTROPILOT_TMP", $null, "User")
+  return $true
+}
+
+# Tras instalar Claude Code (o si ya estaba): claude --version, su carpeta en el PATH del usuario y, recién instalado,
+# abrirlo en otra ventana para iniciar sesión. Devuelve $true si claude responde.
+function ComprobarClaudeCode([bool]$recien) {
+  $dir = CarpetaClaudeCode
+  $exe = Comando "claude"
+  if (-not $exe -and (Test-Path -LiteralPath (Join-Path $dir "claude.exe"))) { $exe = Join-Path $dir "claude.exe" }
+  if ($Simular) {
+    Haria "claude --version"
+    Haria ((T "añadir al PATH del usuario, si falta:" "add to the user PATH, if missing:") + " $dir")
+    if ($recien) { Haria (T "abrir claude en otra ventana para iniciar sesión" "open claude in another window to sign in") }
+    return $true
+  }
+  if (-not $exe) {
+    Aviso (T "No encuentro claude.exe tras instalar Claude Code. Repite en una terminal: irm https://claude.ai/install.ps1 | iex" `
+             "claude.exe not found after installing Claude Code. Run again in a terminal: irm https://claude.ai/install.ps1 | iex")
+    return $false
+  }
+  $ErrorActionPreference = "Continue"
+  $version = (& $exe --version 2>&1 | Select-Object -First 1)
+  $codigo = $LASTEXITCODE
+  $ErrorActionPreference = "Stop"
+  if ($codigo -ne 0) { Aviso ((T "claude --version falló:" "claude --version failed:") + " $version"); return $false }
+  Ok "claude --version: $version"
+  $carpetaExe = Split-Path -Parent $exe
+  if ($carpetaExe -ieq $dir.TrimEnd('\')) {
+    if (AnadirAlPathUsuario $dir) { Ok ((T "Añadido al PATH del usuario:" "Added to the user PATH:") + " $dir " + (T "(vale en las terminales que abras a partir de ahora)" "(works in terminals opened from now on)")) }
+    else { Info ((T "PATH del usuario: ya incluye" "User PATH: already includes") + " $dir") }
+    if (-not (($env:Path -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') })) { $env:Path += ";" + $dir }
+  }
+  if ($recien) {
+    Info (T "Falta iniciar sesión una vez con tu suscripción o clave de API (se abre el navegador)." "You still need to sign in once with your subscription or API key (the browser opens).")
+    if (-not $SinPreguntas -and (Preguntar (T "¿Abrir Claude Code ahora en otra ventana para iniciar sesión?" "Open Claude Code now in another window to sign in?") $true)) {
+      Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoExit", "-NoProfile", "-Command", "& '$($exe -replace "'", "''")'")
+      Ok (T "Claude Code abierto en otra ventana: sigue sus pasos para iniciar sesión y luego ciérrala." "Claude Code opened in another window: follow its steps to sign in, then close it.")
+    } else {
+      Nota (T "Claude Code: abre una terminal nueva, escribe claude e inicia sesión una vez con tu suscripción o clave de API." "Claude Code: open a new terminal, type claude and sign in once with your subscription or API key.")
+    }
+  }
+  return $true
 }
 
 function IaCodex {
