@@ -152,7 +152,7 @@ function fondoCandidatos(viewId, o) {
   var m0 = esMedian(v0), variantes = [];
   // Tinte permitido en la franja p10–p30 frente a la entrada (la franja puede ser nebulosa con color propio: se compara
   // con la entrada, no con 1).
-  var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0, s0);
+  var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0, s0), fPlano = {};
   cielos.forEach(function (t) { variantes.push([t, false]); variantes.push([t, true]); });
   variantes.forEach(function (vt) {
     var t = vt[0], medios = vt[1];
@@ -181,12 +181,17 @@ function fondoCandidatos(viewId, o) {
     var c = esCheck(w.mainView), s1 = esSkyDominance(w.mainView);
     var cielo = s1.canales && s1.canales.length ? (s1.canales[0] + s1.canales[1] + s1.canales[2]) / 3 : c.cielo;
     var nuevos = c.cero_pct - c0.cero_pct, f1 = bsFranja(w.mainView, s1.canales), tinte = null;
-    if (f0 && f1) tinte = Math.max(Math.abs(f1.R_G / f0.R_G - 1), Math.abs(f1.B_G / f0.B_G - 1));
+    // La «+ medios» se compara con el punto negro solo del mismo nivel: así se mide sólo lo que tiñe la curva (en una
+    // paleta de IC 1396, 23 nov 2026, el punto negro solo daba 5,5 % frente a la entrada por recortar a 0 parte de la
+    // franja en un canal, sin teñir nada). El punto negro solo no se juzga por tinte.
+    if (!medios) fPlano[t] = f1;
+    var fRef = medios ? fPlano[t] : null;
+    if (fRef && f1) tinte = Math.max(Math.abs(f1.R_G / fRef.R_G - 1), Math.abs(f1.B_G / fRef.B_G - 1));
     cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : ""), vista: w.mainView.id, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
                  ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
                  franja_p10_p30: f1, tinte_franja_pct: tinte === null ? null : +(100 * tinte).toFixed(1),
                  no_cumple: (nuevos > cerosMax ? ["lleva a 0 un " + nuevos.toFixed(2) + " % más de píxeles (máx. " + cerosMax + ")"] : [])
-                   .concat(tinte !== null && tinte > tinteMax ? ["tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + f0.R_G + " y " + f0.B_G + " de la entrada (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
+                   .concat(tinte !== null && tinte > tinteMax ? ["la curva «+ medios» tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " con el punto negro solo (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
                  cumple: nuevos <= cerosMax && !(tinte !== null && tinte > tinteMax), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
   });
   if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,

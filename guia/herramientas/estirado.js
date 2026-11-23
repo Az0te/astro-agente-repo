@@ -553,7 +553,42 @@ function esArcsinh(view, stretch, bp) {
   if (!A.executeOn(view)) throw new Error("ArcsinhStretch falló");
 }
 
+// Ruta de paleta: el MISMO estirado en todas las rayas (23 nov 2026, IC 1396 con Qwen: estirarCandidatos en cada raya por
+// separado eligió un método distinto en cada una, la relación entre canales cambió y la paleta salió apagada). La primera
+// raya (mono) que se compara fija el método y el cielo; en las demás rayas mono, estirarCandidatos aplica ese mismo método
+// sin volver a comparar y lo dice (mismo_metodo_que). { mismoMetodo: false } o metodos explícitos para comparar de nuevo.
+function esRutaRaya() { return File.systemTempDirectory + "/piastropilot-raya.json"; }
 function estirarCandidatos(viewId, o) {
+  if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
+  o = o || {};
+  if (o._sinComprobar) return esEstirarCandidatosBase(viewId, o);
+  var w0 = ImageWindow.windowById(viewId);
+  var mono = !w0.isNull && w0.mainView.image.numberOfChannels === 1, prev = null;
+  if (mono && !o.metodos && o.mismoMetodo !== false) {
+    try { if (File.exists(esRutaRaya())) prev = JSON.parse(File.readTextFile(esRutaRaya())); } catch (e) { prev = null; }
+    if (prev && (Date.now() - prev.t > 6 * 3600000 || prev.vista === String(viewId) || !prev.clave)) prev = null;
+  }
+  var o2 = o;
+  if (prev) {
+    o2 = {}; for (var k in o) o2[k] = o[k];
+    o2.metodos = [prev.clave];
+    if (o2.cielo === undefined && prev.cielo) o2.cielo = prev.cielo;
+  }
+  var r = esEstirarCandidatosBase(viewId, o2);
+  if (mono && !prev && r && r.comparados) {
+    var g = r.comparados.filter(function (c) { return c.elegido; })[0];
+    if (g && g.clave)
+      try { File.writeTextFile(esRutaRaya(), JSON.stringify({ clave: g.clave, metodo: g.metodo, vista: String(viewId), cielo: r.cielo_objetivo, t: Date.now() })); } catch (e) { }
+  }
+  if (prev && r) {
+    r.mismo_metodo_que = { raya: prev.vista, metodo: prev.metodo, cielo: prev.cielo,
+                           nota: "Mismo método y cielo que en la primera raya comparada: en una paleta todas las rayas van con el mismo estirado " +
+                                 "(si no, cambia la relación entre canales y con ella los colores). { mismoMetodo: false } para comparar de nuevo." };
+  }
+  return r;
+}
+
+function esEstirarCandidatosBase(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
   o = o || {};
   var win = ImageWindow.windowById(viewId);

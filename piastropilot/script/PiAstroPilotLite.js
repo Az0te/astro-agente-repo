@@ -787,7 +787,7 @@ function plPromptSistema(aj) {
    "El denoise principal va DESPUÉS de separar estrellas, sobre las starless (antes, como mucho el suave del Paso 14); inyectarHa con su modo por defecto, no \"mezcla\", salvo que " +
    "el usuario lo pida. Combinar antes del color sesga los factores y deja el cielo teñido. El cielo se neutraliza sobre la starless lineal (las funciones de estirado " +
    "lo hacen solas). PERO en una nebulosa de emisión con mucha más banda estrecha que RGB (horas de dual band frente a minutos " +
-   "de RGB) NO inyectes en el RGB: ruta de PALETA (combinarMasters con tipo de paleta no inyecta). Con paleta (componerPaleta), las capas siguen separadas hasta estirarlas; pasa todas las rayas (S, H, O y " +
+   "de RGB) NO inyectes en el RGB: ruta de PALETA (combinarMasters con tipo de paleta no inyecta). Con paleta: primero previsualizarPaletas con sii y hb (previa de todas: HOO, SHO, Natural, Foraxx; componerPaleta se niega sin ellas), todas las rayas con el MISMO estirado; en componerPaleta, las capas siguen separadas hasta estirarlas; pasa todas las rayas (S, H, O y " +
    "B = Hβ: la NATURAL usa las cuatro) y las estrellas salen de la RGB. Excepción: si el objeto tiene REFLEXIÓN (polvo azul junto a estrellas brillantes que sólo da el RGB) NO es ruta de paleta aunque haya más banda estrecha: RGB calibrado de color + inyección de Hα (y OIII) con combinar; una paleta pierde el azul de reflexión y lo vuelve dorado o verde (en una prueba, 19 nov 2026). fondoCandidatos (cielo oscuro y neutro, 0,05–0,08: con " +
    "0,10–0,13 la imagen queda gris y plana) va justo después de componer la paleta, ANTES de saturar: con el cielo teñido la " +
    "saturación se bloquea por la dominante.\n\n" +

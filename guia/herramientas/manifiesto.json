@@ -1001,7 +1001,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { cielo: 0.10, metodos: [\"ghs\", \"ghs_debil\", \"mas\", \"arcsinh\", \"hiperbolico\"], hiperbolico: { proteccion: 1.5, color: 1.0 }, ruidoMax: 0.15, mas: { parámetros de MAS }, nuevaVista, cerrar: false para conservar los demás }"
+      "description": "Opcional. { cielo: 0.10, metodos: [\"ghs\", \"ghs_debil\", \"mas\", \"arcsinh\", \"hiperbolico\"], hiperbolico: { proteccion: 1.5, color: 1.0 }, ruidoMax: 0.15, mas: { parámetros de MAS }, nuevaVista, cerrar: false para conservar los demás, mismoMetodo: false (por defecto, en una raya mono después de otra ya comparada, repite su método y cielo para que todas las rayas de la paleta lleven el mismo estirado) }"
      }
     },
     "required": [
@@ -1062,7 +1062,7 @@
    "fichero": "bandaestrecha.js",
    "nivel": "disco",
    "timeout_s": 600,
-   "descripcion": "Paso 2 no lineal: previas de paletas (~1200 px) desde Hα y OIII YA estirados igual; guarda JPG en 'carpeta' si se da.",
+   "descripcion": "Paso 2 no lineal: previas de paletas (~1200 px) desde Hα y OIII YA estirados igual (HOO Soft y Hard, Foraxx bicolor, HOO NOVA) y, con opciones.sii y opciones.hb, también SHO, Foraxx y la Natural de cuatro rayas, con las mismas fórmulas que componerPaleta; guarda JPG en 'carpeta' si se da. Va SIEMPRE antes de componerPaleta, que sin previas recientes se niega: se enseñan todas y elige el usuario (con Hβ, la Natural suele ser la más fiel).",
    "paso": "no-lineal/02-lrgb-paleta.md",
    "params": {
     "type": "object",
@@ -1077,7 +1077,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { carpeta, lado: 1200 }"
+      "description": "Opcional. { sii: id SII estirada, hb: id Hβ estirada (añaden SHO, Foraxx y la Natural con Hβ), paletas: [nombres de paletasDisponibles] (las que se añaden; por defecto SHO, FORAXX y NATURAL), carpeta, lado: 1200 }"
      }
     },
     "required": [
@@ -1091,7 +1091,7 @@
    "fichero": "bandaestrecha.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, NATURAL (las cuatro rayas: Hα y SII en rojo, OIII y Hβ en turquesa; con varios dual band pasa TODAS), FORAXX, FORAXX_BICOLOR y las familias Foraxx de AutoPalette Studio: FORAXX_SHO/HOS/OHS/HOO/HSO/OSH/SOH y sus 42 variantes FORAXX_<familia>_<variante>; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); equilibra el verde con SCNR si G domina (Hα al verde). Devuelve la paleta SIN estrellas: después saturarAlFallo(paleta), prepararEstrellas(capa de estrellas RGB estirada, nunca la paleta) y recombinarEstrellas (r.siguiente). Es la que se usa cuando el usuario pide una paleta.",
+   "descripcion": "Paso 2 no lineal: paleta a resolución completa (SHO, HSO, OHS, HOS, SOH, OSH, HOO, HOO_SOFT/NEUTRAL/HARD, HOO_NOVA, NATURAL (las cuatro rayas: Hα y SII en rojo, OIII y Hβ en turquesa; con varios dual band pasa TODAS), FORAXX, FORAXX_BICOLOR y las familias Foraxx de AutoPalette Studio: FORAXX_SHO/HOS/OHS/HOO/HSO/OSH/SOH y sus 42 variantes FORAXX_<familia>_<variante>; lista con paletasDisponibles()) con PixelMath desde las rayas desmezcladas (mono), SIN estrellas y YA estiradas con el mismo cielo (estirarStarless(raya, { cielo: 0.10 })); equilibra el verde con SCNR si G domina (Hα al verde). Devuelve la paleta SIN estrellas: después saturarAlFallo(paleta), prepararEstrellas(capa de estrellas RGB estirada, nunca la paleta) y recombinarEstrellas (r.siguiente). Es la que se usa cuando el usuario pide una paleta. Se niega si no hay previas recientes de previsualizarPaletas (comparar antes, regla de la guía) y avisa si hay una capa Hβ abierta que no se pasa.",
    "resumen": "Paso 2 no lineal: paleta (SHO, HOO, NATURAL con Hβ, Foraxx…; lista con paletasDisponibles) desde rayas mono SIN estrellas y ya estiradas. Devuelve la paleta sin estrellas.",
    "paso": "no-lineal/02-lrgb-paleta.md",
    "params": {
@@ -1103,7 +1103,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { paleta (por defecto SHO con S, HOO sin S; sin SII las de S usan SII sintético y salen pseudo), blend (0..1, mezcla del canal compartido; 0,6 = Soft), verde (0..1, SCNR si G domina; 0,8 por defecto; false = no tocar), estrellas: id de la capa de estrellas RGB estirada (se devuelve para recombinarla al final; sumarEstrellas: true la suma ya y entonces no hay Pasos 8–9), nuevaVista }"
+      "description": "Opcional. { paleta (por defecto NATURAL con B (Hβ), SHO con S, HOO sin S; sin SII las de S usan SII sintético y salen pseudo), blend (0..1, mezcla del canal compartido; 0,6 = Soft), verde (0..1, SCNR si G domina; 0,8 por defecto; false = no tocar), estrellas: id de la capa de estrellas RGB estirada (se devuelve para recombinarla al final; sumarEstrellas: true la suma ya y entonces no hay Pasos 8–9), nuevaVista }"
      }
     },
     "required": [

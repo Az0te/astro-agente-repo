@@ -4,6 +4,8 @@
 
 Primer paso de la sesión no lineal: leer antes `estado.md` (Paso 17 lineal). Aquí se estira **sólo la starless**. La capa de estrellas se queda **lineal** y se estira en el [Paso 8](08-estrellas.md), justo antes de recombinar, donde el usuario elige entre tres candidatos (Rafael, 11 nov 2026). No cerrar ni retocar la starless estirada que sale de aquí ni la capa de estrellas lineal: el Paso 8 las necesita tal cual. Irreversible: lo que no se limpió en lineal queda amplificado.
 
+**En una paleta, el mismo estirado en todas las rayas:** la herramienta de comparación elige el método en la primera raya (el Hα) y en las demás aplica ese mismo método y cielo sin volver a comparar; si cada raya gana un método distinto, cambia la relación entre canales y con ella los colores (en una prueba, la paleta salió apagada).
+
 **Siempre se comparan métodos** con la herramienta de comparación del estirado; estirar con un solo método sólo para repetir el ya elegido (p. ej. en cada raya de una paleta). La comparación descarta también el estirado que deja la nebulosa demasiado arriba (mediana de la señal > 0,25): en una prueba, un GHS al fallo con la simetría en la señal débil la dejó en ~0,39 y, con contraste, saturación y nitidez, el centro se quemó.
 
 **Cielo objetivo** (estirado al fallo, el método por defecto): **0,10 en nebulosas y cúmulos; 0,07 en galaxias**.

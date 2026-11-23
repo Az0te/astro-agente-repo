@@ -53,11 +53,11 @@ Ficha: [no-lineal/02-lrgb-paleta.md](../../no-lineal/02-lrgb-paleta.md)
 - Previas a mano: reducir con IntegerResample (Average) y PixelMath con símbolos, comprobando el valor devuelto. Plancha: copiar cada preview en su casilla de una ImageWindow grande con `setSamples`; si los rótulos con Bitmap/Graphics fallan, numerar las casillas.
 - Foraxx: copiadas de las funciones `foraxSHO`…`foraxSOH` de AutoPalette Studio v1.2.0 (fuente "DBXtract / Mono" para dual band, nunca "OSC Dualband"). En SHO sin equilibrar `quitarVerde` no corrige el verde porque mira sólo el cielo: lo hace `componerPaleta`.
 
-**Previews en una llamada** (`herramientas/bandaestrecha.js`): `previsualizarPaletas(ha, oiii, { carpeta })` genera a ~1200 px Classic HOO Soft y Hard, Foraxx Classic bicolor y HOO con límite al OIII (NOVA) desde capas ya estiradas con el mismo estirado, y las guarda como JPG para enseñarlas y preguntar.
+**Previews en una llamada** (`herramientas/bandaestrecha.js`): `previsualizarPaletas(ha, oiii, { sii, hb, carpeta })` genera a ~1200 px Classic HOO Soft y Hard, Foraxx Classic bicolor y HOO con límite al OIII (NOVA) y, con `sii` y `hb`, también SHO, Foraxx y la Natural de cuatro rayas (con las fórmulas de `componerPaleta`), desde capas ya estiradas con el mismo estirado, y las guarda como JPG para enseñarlas y preguntar. **Siempre antes de componer** (23 nov 2026): `componerPaleta` se niega sin previas recientes y avisa si hay una capa Hβ abierta que no se le pasa; con Hβ, su paleta por defecto es la Natural.
 
 ```json
 {"llamadas": [
-  {"funcion": "previsualizarPaletas", "parametros": {"ha": "Ha_st", "oiii": "OIII_st", "opciones": {"carpeta": "<versión>/prev/paletas"}}}
+  {"funcion": "previsualizarPaletas", "parametros": {"ha": "Ha_st", "oiii": "OIII_st", "opciones": {"sii": "SII_st", "hb": "Hb_st", "carpeta": "<versión>/prev/paletas"}}}
 ]}
 ```
 
@@ -70,7 +70,7 @@ Ficha: [no-lineal/02-lrgb-paleta.md](../../no-lineal/02-lrgb-paleta.md)
 ]}
 ```
 
-Devuelve la paleta **sin estrellas** (la `estrellas` sólo se anota para el final): después `colorCandidatos(paleta)` (o `saturarAlFallo`), `estirarEstrellasCandidatos(capa de estrellas RGB lineal, { starlessActual: paleta })` (nunca sobre la paleta: da error) y `recombinarEstrellas(paleta saturada, estrellas elegidas)`. Si G domina (la raya del verde, casi siempre Hα, manda) aplica SCNR Average Neutral 0,8 y da G/max(R,B) antes y después; `verde: 1` lo apura, `verde: false` lo deja. Paletas: SHO, HSO, OHS, HOS, SOH, OSH, HOO (Soft/Neutral/Hard), HOO_NOVA, FORAXX, FORAXX_BICOLOR, las siete familias Foraxx de AutoPalette Studio (FORAXX_SHO, _HOS, _OHS, _HOO, _HSO, _OSH, _SOH) y sus 42 variantes FORAXX_<familia>_<variante>, copiadas del script instalado (`paletasDisponibles()`); sin SII real las de S usan el SII sintético y salen marcadas pseudo. Antes, para cada raya desmezclada (mono): `separarEstrellas` y `estirarStarless(starless, { cielo: 0.10 })`; la RGB, con SPCC, da las estrellas (capa lineal de `separarEstrellas`, estirada en el Paso 8 con `estirarEstrellasCandidatos`). Si el usuario ya ha dicho la paleta, no hacen falta previas.
+Devuelve la paleta **sin estrellas** (la `estrellas` sólo se anota para el final): después `colorCandidatos(paleta)` (o `saturarAlFallo`), `estirarEstrellasCandidatos(capa de estrellas RGB lineal, { starlessActual: paleta })` (nunca sobre la paleta: da error) y `recombinarEstrellas(paleta saturada, estrellas elegidas)`. Si G domina (la raya del verde, casi siempre Hα, manda) aplica SCNR Average Neutral 0,8 y da G/max(R,B) antes y después; `verde: 1` lo apura, `verde: false` lo deja. Paletas: SHO, HSO, OHS, HOS, SOH, OSH, HOO (Soft/Neutral/Hard), HOO_NOVA, FORAXX, FORAXX_BICOLOR, las siete familias Foraxx de AutoPalette Studio (FORAXX_SHO, _HOS, _OHS, _HOO, _HSO, _OSH, _SOH) y sus 42 variantes FORAXX_<familia>_<variante>, copiadas del script instalado (`paletasDisponibles()`); sin SII real las de S usan el SII sintético y salen marcadas pseudo. Antes, para cada raya desmezclada (mono): `separarEstrellas` y el mismo estirado en todas (`estirarCandidatos` en el Hα y, en las demás, `estirarCandidatos` repite solo ese método y cielo, o `estirarStarless` con el mismo cielo); la RGB, con SPCC, da las estrellas (capa lineal de `separarEstrellas`, estirada en el Paso 8 con `estirarEstrellasCandidatos`). Aunque el usuario haya dicho la paleta, las previas van antes: son baratas y `componerPaleta` las exige.
 
 <a id="no-lineal-03"></a>
 ### Fase no lineal · Paso 3: SCNR

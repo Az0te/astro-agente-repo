@@ -389,10 +389,37 @@ function previsualizarPaletas(haId, oiiiId, o) {
     else if (typeof pxPrevia === "function") { var pv = pxPrevia(id, "pal_" + p.n, { estirar: false }); if (pv) e.previa = pv; }   // miniatura para el chat
     w.show(); out.push(e);
   }
+  // Previas también de las paletas con SII y de la Natural (23 nov 2026, IC 1396 con Qwen: sin previas más que de HOO, el
+  // modelo se saltó la comparación y compuso una SHO sin Hβ, apagada, frente a la Natural de referencia). Con o.sii y o.hb
+  // (capas estiradas, mono) se añaden SHO, Natural (con Hβ si lo hay) y Foraxx, hechas con componerPaleta sobre copias
+  // reducidas (mismas fórmulas e igualado que a resolución completa). o.paletas: lista de nombres para elegir otras.
+  var extra = o.paletas || ((o.sii ? ["SHO", "FORAXX"] : []).concat(["NATURAL"]));
+  if (extra.length) {
+    var wS = o.sii ? small(beView(beId(o.sii)), "bePalS") : null, wB = o.hb ? small(beView(beId(o.hb)), "bePalB") : null;
+    try {
+      extra.forEach(function (nom, j) {
+        var n = String(nom).toUpperCase(), cap = { H: "bePalH", O: "bePalO" };
+        if (wS) cap.S = "bePalS";
+        if (wB) cap.B = "bePalB";
+        var vid = "bePal_" + n, e2 = { paleta: n, vista: vid };
+        try {
+          var rp = componerPaleta(cap, { paleta: n, nuevaVista: vid, _previa: true });
+          vid = rp.vista; e2.vista = vid; e2.formula = "R = " + rp.formula.R + "; G = " + rp.formula.G + "; B = " + rp.formula.B;
+          if (rp.paleta !== n) e2.paleta = rp.paleta;
+          var w2 = ImageWindow.windowById(vid);
+          if (dir) { var path2 = dir + "/" + String(pal.length + j + 1).replace(/^(\d)$/, "0$1") + "_" + rp.paleta + ".jpg"; w2.saveAs(path2, false, false, false, false); e2.jpg = path2; }
+          else if (typeof pxPrevia === "function") { var pv2 = pxPrevia(vid, "pal_" + rp.paleta, { estirar: false }); if (pv2) e2.previa = pv2; }
+          w2.show();
+        } catch (x2) { e2.error = String(x2 && x2.message ? x2.message : x2); }
+        out.push(e2);
+      });
+    } finally { if (wS) wS.forceClose(); if (wB) wB.forceClose(); }
+  }
+  beAnotarPrevias(out.map(function (x) { return x.paleta; }));
   wH.forceClose(); wO.forceClose();
   return { previews: out, reduccion: f, carpeta: dir,
            control: { medido: { previews_creadas: out.length },
-                      revisar_a_ojo: ["elegir con el usuario (pregunta de una palabra, con una recomendada)", "fondo teñido u OIII que inunda el campo de cian"],
+                      revisar_a_ojo: ["elegir con el usuario (pregunta de una palabra, con una recomendada; con Hβ, la Natural suele ser la más fiel)", "fondo teñido u OIII que inunda el campo de cian"],
                       nota: "Sin SII real: cualquier paleta con S sería pseudo-SHO. Con la elegida, aplicar la misma fórmula a resolución completa y las estrellas RGB en screen. Una paleta es una convención, no el color real." } };
 }
 
@@ -500,6 +527,14 @@ var BE_PALETAS = (function () {
   return T;
 })();
 
+// Previas de paleta hechas (registro en la carpeta temporal: el MCP arranca un script nuevo en cada llamada).
+function beRutaPrevias() { return File.systemTempDirectory + "/piastropilot-paletas.json"; }
+function beAnotarPrevias(nombres) { try { File.writeTextFile(beRutaPrevias(), JSON.stringify({ t: Date.now(), paletas: nombres })); } catch (e) { } }
+function bePreviasRecientes() {
+  try { if (File.exists(beRutaPrevias())) { var r = JSON.parse(File.readTextFile(beRutaPrevias())); if (Date.now() - r.t < 86400000) return r; } } catch (e) { }
+  return null;
+}
+
 function paletasDisponibles() {
   var r = {};
   for (var k in BE_PALETAS) r[k] = (BE_PALETAS[k].usaS ? "[con SII] " : "") + BE_PALETAS[k].d;
@@ -531,7 +566,16 @@ function componerPaleta(capas, o) {
     if (v) ids[k] = beId(v);
   });
   if (!ids.H || !ids.O) throw new Error("Hacen falta al menos H (Hα) y O (OIII)");
-  var tieneS = !!ids.S, nombre = String(o.paleta || (tieneS ? "SHO" : "HOO")).toUpperCase().replace(/[\s-]+/g, "_");
+  // Regla de la guía: previa de todas las opciones antes de elegir (23 nov 2026, IC 1396: sin previas salió una SHO sin Hβ).
+  if (!o._previa && !o.forzar && !bePreviasRecientes())
+    throw new Error("Antes de componer la paleta, compara las previas: previsualizarPaletas { ha: <Hα estirada>, oiii: <OIII estirada>, " +
+                    "opciones: { sii: <SII estirada si la hay>, hb: <Hβ estirada si la hay> } } (HOO, SHO, Natural, Foraxx…) y elige con el " +
+                    "usuario; después componerPaleta con la elegida. opciones.forzar: true sólo si el usuario lo pide.");
+  // Una capa Hβ abierta que no se pasa: la Natural (cuatro rayas) la usa (IC 1396, 23 nov 2026: se quedó fuera).
+  var hbSinUsar = null;
+  if (!ids.B && !o._previa) ImageWindow.windows.forEach(function (w0) { var i0 = w0.mainView.id; if (!hbSinUsar && /^hb([^a-z]|$)/i.test(i0) && w0.mainView.image.numberOfChannels === 1) hbSinUsar = i0; });
+  // Con Hβ, la paleta por defecto es la Natural (las cuatro rayas).
+  var tieneS = !!ids.S, nombre = String(o.paleta || (ids.B ? "NATURAL" : tieneS ? "SHO" : "HOO")).toUpperCase().replace(/[\s-]+/g, "_");
   var def = BE_PALETAS[nombre];
   if (!def) throw new Error("paleta '" + o.paleta + "' no reconocida. Disponibles: " + Object.keys(BE_PALETAS).join(", "));
   var ref = beView(ids.H), W = ref.image.width, Hh = ref.image.height, med = {};
@@ -594,6 +638,8 @@ function componerPaleta(capas, o) {
   w.keywords = ref.window.keywords;
   if (ref.window.hasAstrometricSolution) try { w.copyAstrometricSolution(ref.window); } catch (x) { }
   var noCumple = [];
+  if (hbSinUsar) noCumple.push("hay una capa Hβ abierta (" + hbSinUsar + ") que no se ha pasado: la Natural usa las cuatro rayas " +
+                               "(capas: { S, H, O, B: \"" + hbSinUsar + "\" }); estírala como las demás y repite si conviene");
   // Equilibrio del verde (8 nov 2026, IC 1396 SHO): con cada raya estirada al mismo cielo, la que va al verde (casi siempre Hα)
   // domina y la imagen sale verde entera; quitarVerde no lo ve porque mide sólo el cielo. Se mide en toda la imagen
   // G / max(R, B) y, si pasa de 1,05, SCNR (Average Neutral, conserva luminosidad) con amount o.verde (0,8 por defecto).
@@ -638,8 +684,8 @@ function componerPaleta(capas, o) {
   im.resetSelections();
   w.show();
   var siguiente = sumadas ? "La paleta ya lleva las estrellas: saturarAlFallo(\"" + id + "\") con cuidado y exportar; NO prepararEstrellas ni recombinarEstrellas."
-    : "Paleta SIN estrellas: 1) fondoCandidatos(\"" + id + "\") (cielo oscuro y neutro; sigue con su r.vista); 2) saturarAlFallo(esa vista, { tipo: \"nebulosa\" }); 3) prepararEstrellas(" + (estrellasId ? "\"" + estrellasId + "\"" : "capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas)") +
-      ") — sobre la CAPA DE ESTRELLAS, nunca sobre la paleta; 4) recombinarEstrellas(paleta saturada, estrellas preparadas); 5) exportarFinal.";
+    : "Paleta SIN estrellas: 1) fondoCandidatos(\"" + id + "\") (cielo oscuro y neutro; sigue con su r.vista); 2) colorCandidatos(esa vista, { tipo: \"nebulosa\" }) (saturación con máscara de luminancia); 3) contrasteCandidatos sobre la elegida; 4) prepararEstrellas(" + (estrellasId ? "\"" + estrellasId + "\"" : "capa de estrellas RGB estirada (r.estrellas.vista de estirarCapas)") +
+      ") — sobre la CAPA DE ESTRELLAS, nunca sobre la paleta (o mejor estirarEstrellasCandidatos con la capa lineal); 5) recombinarEstrellas(paleta saturada, estrellas preparadas); 6) exportarFinal.";
   return {
     vista: id, paleta: etiqueta, previa: (typeof pxPrevia === "function" ? pxPrevia(id, "pal_" + id, { estirar: false }) : null) || undefined,
     capas: ids, medianas_capas: med, mediana_por_canal: porCanal, hecho: hecho, no_cumple: noCumple,

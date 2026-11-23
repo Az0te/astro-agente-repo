@@ -2107,9 +2107,15 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, 
                           if m["ceros_nuevos_pct"] > ceros_max else [])
         # Un punto negro muy distinto por canal (cielo teñido) cambia el color del OBJETO: IC 405 (20 nov 2026), bp
         # [0,03, 0,12, 0,15] con el cielo cian se comió el verde y el azul de la nebulosa y el rojo salió R/G ×1,5.
+        # La «+ medios» frente al punto negro solo del mismo nivel (sólo lo que tiñe la curva); el punto negro solo no se juzga.
+        m["tinte_franja_pct"] = None
+        if x["metodo"].endswith("+ medios"):
+            plano = next((y for y in r["candidatos"] if y["metodo"] == x["metodo"][:-len(" + medios")]), None)
+            if plano is not None:
+                m["tinte_franja_pct"] = _tinte_franja(plano["metricas"].get("franja_p10_p30"), m.get("franja_p10_p30"))
         if m.get("tinte_franja_pct") is not None and m["tinte_franja_pct"] > tinte_max:
-            x["no_cumple"].append(f"tiñe el fondo débil (franja p10–p30, color sobre el cielo): {m['tinte_franja_pct']} % frente "
-                                  f"a la entrada (máx {tinte_max} %)")
+            x["no_cumple"].append(f"la curva «+ medios» tiñe el fondo débil (franja p10–p30, color sobre el cielo): "
+                                  f"{m['tinte_franja_pct']} % frente al punto negro solo (máx {tinte_max} %)")
         if abs(m["objeto_rg_x"] - 1) > 0.10:   # 0,15 dejó pasar ×1,146 en la v4 y el rojo se fue con la saturación
             x["no_cumple"].append(f"cambia el color del objeto: R/G ×{m['objeto_rg_x']} (el cielo está teñido: corrige "
                                   "la dominante antes, en lineal, con calibrarColor o neutralizarFondo sobre el cielo)")

@@ -2792,6 +2792,7 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None,
     grupo = "fondo"
     _limpiar_grupo(grupo)
     f0 = _franja_sobre_cielo(p, s0)
+    f_plano = {}
     r = {"antes": {"cielo_rgb": [_r(x, 4) for x in s0], "franja_p10_p30": f0}, "candidatos": [], "errores": []}
     n = 0
     obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
@@ -2824,10 +2825,14 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None,
             fal = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                    if m["ceros_nuevos_pct"] > ceros_max else [])
             f1 = _franja_sobre_cielo(q, rgb)
-            m["franja_p10_p30"], m["tinte_franja_pct"] = f1, _tinte_franja(f0, f1)
+            # La «+ medios» frente al punto negro solo del mismo nivel (sólo lo que tiñe la curva); el punto negro solo no se
+            # juzga: en paletas recortaba parte de la franja a 0 en un canal y parecía teñir.
+            if not medios:
+                f_plano[t] = f1
+            m["franja_p10_p30"], m["tinte_franja_pct"] = f1, (_tinte_franja(f_plano.get(t), f1) if medios else None)
             if m["tinte_franja_pct"] is not None and m["tinte_franja_pct"] > tinte_max:
-                fal.append(f"tiñe el fondo débil (franja p10–p30, color sobre el cielo): {m['tinte_franja_pct']} % frente a la "
-                           f"entrada (máx {tinte_max} %)")
+                fal.append(f"la curva «+ medios» tiñe el fondo débil (franja p10–p30, color sobre el cielo): {m['tinte_franja_pct']} % "
+                           f"frente al punto negro solo (máx {tinte_max} %)")
             res = q if info["top_down"] else q[:, ::-1, :]
             res = _a_siril(res, crudo.dtype).reshape(crudo.shape)
             nombre = f"cielo a {t:g}" + (" + medios" if medios else "")
