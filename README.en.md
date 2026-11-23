@@ -74,7 +74,7 @@ Every part (Lite, the module, the Siril and SASpro chats) follows the same guide
 
 | AI | Cost | What you need | Where it works | Reliability with the guide |
 |---|---|---|---|---|
-| **Claude Desktop** (Anthropic, app) | **free** with a claude.ai account, small quota | the app and the MCP servers in its settings (the installer does it) | PixInsight, Siril and SASpro by talking to Claude in the app (not the Lite, the module or the chats) | the best, while the quota lasts |
+| **Claude Desktop** (Anthropic, app) | **free** with a claude.ai account, **Sonnet** only, small quota | the app and the MCP servers in its settings (the installer does it) | PixInsight, Siril and SASpro by talking to Claude in the app (not the Lite, the module or the chats) | the best, while the quota lasts |
 | **Claude Code** (Anthropic) | subscription or paid API | Claude Code installed and signed in | everywhere; processes on its own through MCP | the best (the guide's reference) |
 | **Codex** (OpenAI) | ChatGPT subscription or API | `npm install -g @openai/codex` and `codex login` | everywhere; processes on its own through MCP (in Lite it proposes the calls) | good |
 | **Local with Ollama** (e.g. Qwen) | free | a GPU with enough VRAM (about 16–24 GB for a 27–32B Qwen) | everywhere | good with the large models; nothing leaves your PC |
@@ -99,7 +99,8 @@ For those without a subscription: **Claude Code has no free plan** (typing `clau
    ```
 
    For Siril and SASpro, the same with `sirilastropilot` (`siril/mcp/dist/sirilastropilot-mcp.mjs`) and `setiastropilot` (`sas/mcp/dist/setiastropilot-mcp.mjs`). Quit the app completely (also from the tray) and open it again.
-3. In the chat, press **+**, pick the program's connector and add `SKILL.md` to load the guide. Then ask for the step you want with the program open.
+3. With the free account, pick **Sonnet** in the app's model picker and use only that one.
+4. In the chat, press **+**, pick the program's connector and add `SKILL.md` to load the guide. Then ask for the step you want with the program open.
 
 > **The free quota is small and can run out halfway through a processing session**: every step sends measurements and thumbnails, and a full session uses many messages. When it runs out you have to wait a few hours. To work without interruptions, carry on with [Gemini](#gemini-free-with-a-key) (free with a key, less reliable) or [local Qwen](#local-with-ollama) if your graphics card can take it, or move to a subscription.
 

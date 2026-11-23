@@ -73,7 +73,7 @@ Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía 
 
 | IA | Coste | Qué necesitas | Dónde funciona | Fiabilidad con la guía |
 |---|---|---|---|---|
-| **Claude Desktop** (Anthropic, app) | **gratis** con cuenta de claude.ai, cuota pequeña | la app y los servidores MCP en su configuración (el instalador lo hace) | PixInsight, Siril y SASpro hablando con Claude en la app (no el Lite, el módulo ni los chats) | la mejor, mientras dure la cuota |
+| **Claude Desktop** (Anthropic, app) | **gratis** con cuenta de claude.ai, solo con **Sonnet**, cuota pequeña | la app y los servidores MCP en su configuración (el instalador lo hace) | PixInsight, Siril y SASpro hablando con Claude en la app (no el Lite, el módulo ni los chats) | la mejor, mientras dure la cuota |
 | **Claude Code** (Anthropic) | suscripción o API de pago | Claude Code instalado y con sesión | todas; procesa solo con MCP | la mejor (referencia de la guía) |
 | **Codex** (OpenAI) | suscripción de ChatGPT o API | `npm install -g @openai/codex` y `codex login` | todas; procesa solo con MCP (en Lite propone las llamadas) | buena |
 | **Local con Ollama** (p. ej. Qwen) | gratis | una gráfica con VRAM suficiente (unos 16–24 GB para Qwen de 27–32B) | todas | buena con los modelos grandes; sin enviar nada fuera del PC |
@@ -98,7 +98,8 @@ Para quien no tiene suscripción: **Claude Code no tiene plan gratuito** (si esc
    ```
 
    Para Siril y SASpro, igual con `sirilastropilot` (`siril/mcp/dist/sirilastropilot-mcp.mjs`) y `setiastropilot` (`sas/mcp/dist/setiastropilot-mcp.mjs`). Cierra la app del todo (también en la bandeja) y ábrela otra vez.
-3. En el chat, pulsa **+**, elige el conector del programa y añade `SKILL.md` para cargar la guía. Luego pide el paso que quieras con el programa abierto.
+3. Con la cuenta gratis, elige **Sonnet** en el selector de modelo de la app y usa solo ese.
+4. En el chat, pulsa **+**, elige el conector del programa y añade `SKILL.md` para cargar la guía. Luego pide el paso que quieras con el programa abierto.
 
 > **La cuota gratuita es pequeña y puede agotarse a mitad de un procesado**: cada paso manda medidas y miniaturas, y un procesado completo usa muchos mensajes. Cuando se agota hay que esperar unas horas. Para trabajar sin cortes, sigue con [Gemini](#gemini-gratis-con-clave) (gratis con clave, menos fiable) o con [Qwen local](#local-con-ollama) si tu gráfica da, o pasa a una suscripción.
 

@@ -263,8 +263,8 @@ function IaClaude {
   Info (T "Claude (Anthropic): la mejor con la guía. Hay dos formas de usarla:" "Claude (Anthropic): the best with the guide. There are two ways to use it:")
   Info (T "  - La app Claude Desktop con una cuenta GRATIS de claude.ai: habla con PixInsight, Siril y SASpro por MCP." `
           "  - The Claude Desktop app with a FREE claude.ai account: talks to PixInsight, Siril and SASpro through MCP.")
-  Info (T "    La cuota gratis es pequeña y puede agotarse a mitad de un procesado; entonces hay que esperar unas horas." `
-          "    The free quota is small and can run out halfway through a processing session; then you have to wait a few hours.")
+  Info (T "    Con la cuenta gratis usa solo el modelo Sonnet. La cuota gratis es pequeña y puede agotarse a mitad de un procesado; entonces hay que esperar unas horas." `
+          "    With the free account use only the Sonnet model. The free quota is small and can run out halfway through a processing session; then you have to wait a few hours.")
   Info (T "  - Claude Code (el comando claude de la terminal): NO tiene plan gratis, pide suscripción Pro/Max o clave de API." `
           "  - Claude Code (the claude command in the terminal): has NO free plan, it asks for a Pro/Max subscription or an API key.")
   Info (T "    Lo usan el Lite, el módulo y los chats de Siril y SASpro con el proveedor Claude." `
@@ -276,8 +276,8 @@ function IaClaude {
     elseif (Winget "Anthropic.Claude") { Ok (T "Claude Desktop instalado: ábrelo e inicia sesión (o crea una cuenta gratis)." "Claude Desktop installed: open it and sign in (or create a free account).") }
     else { Aviso (T "Descarga Claude Desktop de https://claude.ai/download" "Download Claude Desktop from https://claude.ai/download"); Start-Process "https://claude.ai/download" }
   }
-  if ((HayClaudeDesktop) -or $Simular) { Nota (T "Claude Desktop: inicia sesión en la app (la cuenta gratis vale). Para cargar la guía, en el chat pulsa + y añade SKILL.md del conector piastropilot (o sirilastropilot / setiastropilot). Si se agota la cuota gratis, sigue con Gemini (gratis con clave) o con Qwen local (Ollama)." `
-          "Claude Desktop: sign in in the app (a free account is enough). To load the guide, press + in the chat and add SKILL.md from the piastropilot connector (or sirilastropilot / setiastropilot). If the free quota runs out, carry on with Gemini (free with a key) or local Qwen (Ollama).") }
+  if ((HayClaudeDesktop) -or $Simular) { Nota (T "Claude Desktop: inicia sesión en la app (la cuenta gratis vale) y, con la cuenta gratis, usa solo Sonnet en el selector de modelo. Para cargar la guía, en el chat pulsa + y añade SKILL.md del conector piastropilot (o sirilastropilot / setiastropilot). Si se agota la cuota gratis, sigue con Gemini (gratis con clave) o con Qwen local (Ollama)." `
+          "Claude Desktop: sign in in the app (a free account is enough) and, with the free account, use only Sonnet in the model picker. To load the guide, press + in the chat and add SKILL.md from the piastropilot connector (or sirilastropilot / setiastropilot). If the free quota runs out, carry on with Gemini (free with a key) or local Qwen (Ollama).") }
   if ($code) { Ok (T "Claude Code ya está instalado" "Claude Code is already installed"); return }
   if (-not (Preguntar (T "¿Tienes suscripción Pro/Max o clave de API de Anthropic? (sin ella Claude Code no funciona; con la cuenta gratis basta Claude Desktop)" `
                          "Do you have a Pro/Max subscription or an Anthropic API key? (without one Claude Code does not work; with a free account Claude Desktop is enough)") $false)) {
