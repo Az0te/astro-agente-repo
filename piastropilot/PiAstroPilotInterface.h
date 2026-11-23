@@ -28,6 +28,7 @@
 
 #include "PiAstroPilotAgent.h"
 #include "PiAstroPilotDialogs.h"
+#include "PiAstroPilotLocalPanel.h"
 #include "PiAstroPilotInstance.h"
 
 #include <memory>
@@ -200,6 +201,7 @@ private:
          HorizontalSizer   Status_Sizer;
             Label             Status_Label;
             PushButton        Cancel_Button;
+         PiAstroPilotLocalPanel Local_Panel;    // panel de IA local (build 117): sólo con Ollama / RDNA-FAST
             Control           Config_Control;    // pestaña «Ajustes»
             VerticalSizer     Config_Sizer;
                HorizontalSizer   Guide_Sizer;

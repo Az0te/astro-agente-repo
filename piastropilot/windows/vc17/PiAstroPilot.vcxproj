@@ -143,6 +143,7 @@
     <ClCompile Include="..\..\PiAstroPilotProcess.cpp"/>
     <ClCompile Include="..\..\PiAstroPilotI18n.cpp" />
     <ClCompile Include="..\..\PiAstroPilotJson.cpp"/>
+    <ClCompile Include="..\..\PiAstroPilotLocalPanel.cpp"/>
     <ClCompile Include="..\..\PiAstroPilotRender.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -151,6 +152,7 @@
     <ClInclude Include="..\..\PiAstroPilotInstance.h"/>
     <ClInclude Include="..\..\PiAstroPilotI18n.h" />
     <ClInclude Include="..\..\PiAstroPilotJson.h"/>
+    <ClInclude Include="..\..\PiAstroPilotLocalPanel.h"/>
     <ClInclude Include="..\..\PiAstroPilotRender.h" />
     <ClInclude Include="..\..\PiAstroPilotInterface.h"/>
     <ClInclude Include="..\..\PiAstroPilotModule.h"/>

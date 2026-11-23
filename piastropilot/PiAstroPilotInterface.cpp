@@ -2171,6 +2171,9 @@ void PiAstroPilotInterface::e_ProcessFinished( ExternalProcess& sender, int exit
       {
          const int ctx = LocalContextTokens( m_job.model ), limite = ctx - 8000 - 1000;   // mismo presupuesto que el recorte del historial
          int usados = int( u["prompt_tokens"].n + u["completion_tokens"].n );
+         if ( GUI != nullptr )   // panel de IA local: tok/s sólo si el servidor los da (llama-server: timings)
+            try { GUI->Local_Panel.NoteUsage( int( u["prompt_tokens"].n ), int( u["completion_tokens"].n ),
+                                              res["timings"]["predicted_per_second"].n, ctx ); } catch ( ... ) {}
          contexto = String().Format( "%d / %d tokens (%d %%)", usados, ctx, int( 100.0*usados/ctx + 0.5 ) ) +
                     Tr( u". Hacia los " ) + String().Format( "%d", limite ) + Tr( u" se empiezan a recortar los mensajes más antiguos." );
       }
@@ -2300,6 +2303,10 @@ String PiAstroPilotInterface::RunWithRunner( const String& calls, const String& 
 
 void PiAstroPilotInterface::e_Timer( Timer& )
 {
+   // Panel de IA local (build 117): sólo lanza su lectura sin esperarla y pinta la última; nunca para el chat.
+   if ( GUI != nullptr && m_cfg.currentModel >= 0 && m_cfg.currentModel < int( m_cfg.models.size() ) )
+      try { GUI->Local_Panel.Tick( m_cfg.models[m_cfg.currentModel], m_busy, m_cfg.TempDir(), IsVisible() ); } catch ( ... ) {}
+
    if ( m_busy )
       UpdateStatus();
 
@@ -2683,6 +2690,7 @@ PiAstroPilotInterface::GUIData::GUIData( PiAstroPilotInterface& w )
    Global_Sizer.SetMargin( 6 );
    Global_Sizer.SetSpacing( 6 );
    Global_Sizer.Add( Tabs, 100 );
+   Global_Sizer.Add( Local_Panel );
    Global_Sizer.Add( Status_Sizer );
 
    w.SetSizer( Global_Sizer );
