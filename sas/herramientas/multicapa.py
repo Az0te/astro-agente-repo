@@ -15,6 +15,7 @@
 #   de las estrellas. La vista no cambia hasta aplicarCandidato(id). Mismos criterios que en Siril.
 # combinarRGB: tres vistas mono alineadas (R, G, B) → vista RGB nueva, en lineal, sin escalar canales.
 
+import re
 import time
 from pathlib import Path
 
@@ -1213,20 +1214,52 @@ def _fotometria_continuo(N, C, pico_max=0.80, max_estrellas=3000):
     return np.array(razones, dtype=np.float64)
 
 
-def medirContinuo(ctx, nb, continuo, canal=0):
+# Guardas del Paso 16 (23 nov 2026, pasadas C1 de IC 405 en PixInsight con Qwen: k medido sobre starless con 34 restos
+# de estrellas, k inventado, doble resta y el OIII restado con el R). Igual que en guia/herramientas/bandaestrecha.js.
+_K_MEDIDOS = []          # {"k", "canal", "nb", "continuo", "t"} de medirContinuo; restarContinuo sólo acepta éstos
+_RESTADAS = set()        # vistas que salen de restarContinuo (además del _CS del nombre)
+_ES_CS = re.compile(r"_CS(_|\d|$)")
+
+
+def _es_oiii(nombre):
+    """¿La raya es OIII? Por el nombre: «OIII…» (también OIII_raw_S2O3), nunca Hα, SII, Hβ ni un dual band HaO3/S2O3."""
+    s = str(nombre or "")
+    if re.search(r"(^|[^a-z])oiii", s, re.I):
+        return True
+    if re.match(r"(ha|h_?alpha|sii|s2|hb|hbeta)([^a-z]|$)", s, re.I):
+        return False
+    return bool(re.search(r"(^|[^a-z0-9])o3([^a-z]|$)", s, re.I)) and not re.search(r"(ha|sii|s2|si)[^a-z]*o3", s, re.I)
+
+
+def _canal_continuo(nombre, canal, forzar):
+    """Canal del continuo: con OIII el G (1) por defecto y nunca el R salvo forzar (el B lleva Hβ); el resto, el R (0)."""
+    oiii = _es_oiii(nombre)
+    if canal is None:
+        return 1 if oiii else 0
+    if oiii and int(canal) == 0 and not forzar:
+        raise ValueError(f"'{nombre}' es OIII: su continuo se mide y se resta con el G (canal 1), no con el R; el B lleva Hβ. "
+                         "Quita canal (con OIII ya es 1) o pon canal 1.")
+    return int(canal)
+
+
+def medirContinuo(ctx, nb, continuo, canal=None, forzar=False):
     """Paso 16 lineal: mide k, la parte de continuo de la banda ancha que hay en la capa de banda estrecha, por
     fotometría de estrellas (las dos vistas CON estrellas, alineadas y del mismo tamaño). nb: Hα, OIII o SII (mono);
     continuo: la RGB o el canal de banda ancha (canal 0 R para Hα y SII, 1 G para OIII). Solo lectura."""
+    canal = _canal_continuo(nb, canal, forzar)
     dn, N = _canal(ctx, nb, 0)
     dc, C = _canal(ctx, continuo, canal, N.shape)
     k = _fotometria_continuo(N, C)
-    if len(k) < 20:
+    # 100 estrellas, no 20: con una starless (o la vista que separarEstrellas dejó sin estrellas) quedan unos pocos
+    # restos y daban k absurdos (k 3,14 con 34 restos en PixInsight). Sin 100, no hay k.
+    if len(k) < 100:
         nombres = f"{H._nombre(dn)} {H._nombre(dc)}"
-        raise RuntimeError(f"Pocas estrellas medidas ({len(k)}): el continuo se mide con las estrellas, así que las dos "
+        raise RuntimeError(f"Pocas estrellas medidas ({len(k)}, hacen falta 100): no hay k. El continuo se mide con las estrellas, así que las dos "
                            "vistas tienen que tenerlas (la raya y la RGB de ANTES de separarEstrellas, ya alineadas; nunca "
                            "una starless)" + (". Una de ellas parece una starless" if "starless" in nombres.lower() else "")
                            + ". Si el Hα ya se inyectó en la RGB (combinarCandidatos), el Paso 16 no aplica: sáltalo.")
     q1, q2, q3 = (float(np.percentile(k, x)) for x in (25, 50, 75))
+    _K_MEDIDOS.append({"k": _r(q2, 4), "canal": canal, "nb": H._nombre(dn), "continuo": H._nombre(dc), "t": time.time()})
     return {"k": _r(q2, 4), "estrellas": int(len(k)), "rango_intercuartil": [_r(q1, 4), _r(q3, 4)],
             "nb": H._nombre(dn), "continuo": H._nombre(dc), "canal_continuo": canal,
             "control": {"medido": {"estrellas_suficientes": len(k) >= 100},
@@ -1234,11 +1267,21 @@ def medirContinuo(ctx, nb, continuo, canal=0):
                                 "restarContinuo con las capas SIN estrellas y este k."}}
 
 
-def restarContinuo(ctx, nb, continuo, k, canal=0, c=0.0, nombre=None):
+def restarContinuo(ctx, nb, continuo, k, canal=None, c=0.0, nombre=None, forzar=False):
     """Paso 16 lineal: nb − k·continuo[canal] − c en una vista nueva, sobre las capas SIN estrellas (k de medirContinuo,
     medido con estrellas). Mide los negativos antes de recortar (sobre-resta) y cuánto brillo conserva la emisión."""
     if k is None:
         raise ValueError("Falta k: mídelo antes con medirContinuo sobre las capas con estrellas.")
+    canal = _canal_continuo(nb, canal, forzar)
+    if not forzar and (_ES_CS.search(str(nb)) or str(nb) in _RESTADAS):
+        raise RuntimeError(f"'{nb}' ya tiene el continuo restado (viene de restarContinuo): no se resta dos veces. Si le "
+                           "faltan las estrellas fuera, separarEstrellas sobre ella; si hay que repetir la resta, sobre la "
+                           "raya de antes (sin _CS).")
+    if not forzar and not any(x["canal"] == canal and abs(x["k"] - float(k)) <= 0.0005 + 0.001 * abs(x["k"])
+                              and time.time() - x["t"] < 86400 for x in _K_MEDIDOS):
+        raise RuntimeError(f"k = {k} no lo ha medido medirContinuo (canal {canal}): no se inventa ni se retoca. Si el "
+                           "resultado no convence, mídelo otra vez con medirContinuo (raya y RGB CON estrellas) y pasa el k "
+                           "que devuelva.")
     dn, N = _canal(ctx, nb, 0)
     dc, C = _canal(ctx, continuo, canal, N.shape)
     out = N - float(k) * C - float(c)
@@ -1260,6 +1303,7 @@ def restarContinuo(ctx, nb, continuo, k, canal=0, c=0.0, nombre=None):
     nuevo = ctx.open_new_document(np.ascontiguousarray(out), metadata=m, name=nombre)
     vista = H._nombre(H._base(nuevo)) if nuevo is not None else nombre
     _anotar_origen(vista, [_fuente(ctx, dn), _fuente(ctx, dc)])
+    _RESTADAS.add(vista)
     no = []
     if neg > 0.5:
         no.append(f"{_r(neg, 3)} % de píxeles negativos antes de recortar: k o c demasiado altos, o zonas de continuo "

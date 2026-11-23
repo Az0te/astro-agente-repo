@@ -2101,7 +2101,7 @@ def _dominante_aditiva(p, celdas_px=None, S=64):
 
 def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
                       metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "asinh", "escalas", "autostretch", "hiperbolico"),
-                      negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True):
+                      negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True, senal_max=0.25):
     """Paso 1 no lineal: compara GHS al fallo, arcsinh, estirado por escalas y autostretch con el cielo en el mismo
     objetivo. No cambia la imagen.
     negro_lineal: punto negro por canal en lineal antes de estirar (el pedestal del cielo fuera), ver _negro_lineal.
@@ -2189,13 +2189,16 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
                     fal.append(f"apenas estira: p99 {c['p99']} a menos de 0,10 del cielo")
                 if abs(c["cielo"] - cielo) > 0.02:
                     fal.append(f"cielo {c['cielo']} fuera del objetivo {cielo}")
+                med_sen = _mediana_senal(_lum(pp), c["cielo"], c["ruido_rel"] * c["cielo"])
+                if med_sen is not None and med_sen > senal_max:
+                    fal.append(f"señal demasiado arriba: mediana de la señal {med_sen} > {senal_max}")
                 if dom >= 5 and tinte >= 5:
                     fal.append(f"tinte del cielo {tinte} % (dominante de las celdas oscuras {_r(dom, 1)} %) aun con el cielo "
                                "neutralizado en lineal: se combinó banda estrecha antes del color o el color no está calibrado "
                                "(rehacer: color de la RGB sola y combinar después). quitarVerde sólo corrige verde")
                 cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": nombre, "huella_base": huella})
                 r["candidatos"].append({"id": cid, "metodo": nombre, "medidas": _sin_privado(c), "separacion": _r(sep, 2),
-                                        "senal_debil": _r(senal_debil, 4),
+                                        "senal_debil": _r(senal_debil, 4), "mediana_senal": med_sen,
                                         "dominante_cielo_pct": _r(dom, 1), "tinte_cielo_pct": tinte,
                                         "color_propio_fondo_pct": propio,
                                         "nucleo": _sat_nucleo(pp) if info["canales"] == 3 else None,
@@ -2207,6 +2210,14 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
         _restaurar(siril, crudo_original)
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
     pool = ok or (sorted(r["candidatos"], key=lambda x: len(x["no_cumple"]))[:1] if r["candidatos"] else [])
+    alta = lambda x: any(f.startswith("señal demasiado arriba") for f in x["no_cumple"])
+    otros = lambda x: len([f for f in x["no_cumple"] if not f.startswith("señal demasiado arriba")])
+    if not ok and r["candidatos"] and all(alta(x) for x in r["candidatos"]):
+        # Todos dejan la señal por encima del techo: el que la deja más baja (entre los de menos fallos de otro tipo).
+        menos = min(otros(x) for x in r["candidatos"])
+        pool = [min((x for x in r["candidatos"] if otros(x) == menos), key=lambda x: x.get("mediana_senal") or 9)]
+        r["aviso"] = (f"Todos los métodos dejan la señal por encima de {senal_max}: se recomienda el que la deja más baja "
+                      f"({pool[0]['metodo']}, {pool[0].get('mediana_senal')}). Contraste, saturación y nitidez suaves.")
     mejor = None
     if pool:
         smax = max(x["separacion"] or 0 for x in pool)
@@ -2730,7 +2741,39 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     return r
 
 
-def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None):
+def _franja_sobre_cielo(q, cielo_rgb, lo=10, hi=30):
+    """Color del fondo débil SOBRE el cielo (23 nov 2026, guia/herramientas/boost.js): medianas de R, G y B de los píxeles
+    entre los percentiles 10 y 30 de luminancia menos el cielo de cada canal; devuelve R/G y B/G. Con valores absolutos el
+    punto negro solo ya parecía teñir; restando el cielo no cambia (0,2 %) y la curva «+ medios» que tiñe se ve (3–9 %)."""
+    if q.shape[0] != 3 or len(cielo_rgb) != 3:
+        return None
+    s = q[:, ::4, ::4].reshape(3, -1)
+    L = s.mean(axis=0)
+    a, b = np.percentile(L, [lo, hi])
+    sel = (L >= a) & (L <= b)
+    if not sel.any():
+        return None
+    m = np.median(s[:, sel], axis=1) - np.asarray(cielo_rgb, dtype=np.float64)
+    if m[1] <= 1e-4:
+        return None
+    return {"R_G": round(float(m[0] / m[1]), 4), "B_G": round(float(m[2] / m[1]), 4)}
+
+
+def _tinte_franja(f0, f1):
+    if not f0 or not f1:
+        return None
+    return round(100.0 * max(abs(f1["R_G"] / f0["R_G"] - 1), abs(f1["B_G"] / f0["B_G"] - 1)), 1)
+
+
+def _mediana_senal(L, cielo, ruido_abs, frac_min=0.05):
+    """Mediana de la SEÑAL tras estirar (23 nov 2026, guia/herramientas/estirado.js): píxeles a más de 5 ruidos del cielo.
+    En PixInsight un GHS con la simetría en la señal débil dejó la nebulosa en ~0,34–0,39 y el centro se quemó."""
+    v = np.asarray(L, dtype=np.float32)[::4, ::4].ravel()
+    s = v[v > cielo + 5 * max(ruido_abs, 1e-6)]
+    return round(float(np.median(s)), 4) if s.size >= frac_min * v.size else None
+
+
+def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None, tinte_max=3.0):
     """Paso 5 no lineal (fondo): punto negro por canal para dejar el cielo en varios niveles, neutro; mide píxeles
     nuevos a 0, cielo y ruido y recomienda el más oscuro que no recorta más del ceros_max %. La imagen no cambia.
     IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13 salían grises y planos frente a la versión de
@@ -2748,7 +2791,8 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None)
     huella = _huella(crudo)
     grupo = "fondo"
     _limpiar_grupo(grupo)
-    r = {"antes": {"cielo_rgb": [_r(x, 4) for x in s0]}, "candidatos": [], "errores": []}
+    f0 = _franja_sobre_cielo(p, s0)
+    r = {"antes": {"cielo_rgb": [_r(x, 4) for x in s0], "franja_p10_p30": f0}, "candidatos": [], "errores": []}
     n = 0
     obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
     m_obj = float(np.median(_lum(p)[obj_px]))
@@ -2779,6 +2823,11 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None)
             m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)   # lo que decide (ceros_pct incluye los de antes)
             fal = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                    if m["ceros_nuevos_pct"] > ceros_max else [])
+            f1 = _franja_sobre_cielo(q, rgb)
+            m["franja_p10_p30"], m["tinte_franja_pct"] = f1, _tinte_franja(f0, f1)
+            if m["tinte_franja_pct"] is not None and m["tinte_franja_pct"] > tinte_max:
+                fal.append(f"tiñe el fondo débil (franja p10–p30, color sobre el cielo): {m['tinte_franja_pct']} % frente a la "
+                           f"entrada (máx {tinte_max} %)")
             res = q if info["top_down"] else q[:, ::-1, :]
             res = _a_siril(res, crudo.dtype).reshape(crudo.shape)
             nombre = f"cielo a {t:g}" + (" + medios" if medios else "")
@@ -2800,8 +2849,8 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None)
     else:
         r["recomendado"] = None
         r["motivo"] = ("El cielo ya está igual o por debajo de los niveles pedidos." if not r["candidatos"]
-                       else "Todos recortan demasiado: deja el fondo como está o pide un nivel más alto.")
-    r["leyenda"] = "cielo: nivel medio del cielo por canal tras el punto negro. La imagen NO ha cambiado: aplicarCandidato(id)."
+                       else "Ninguno cumple (recortan demasiado o tiñen el fondo débil: ver no_cumple): deja el fondo como está o pide otros niveles.")
+    r["leyenda"] = "cielo: nivel medio del cielo por canal tras el punto negro. tinte_franja_pct: cambio de color del fondo débil (sobre el cielo) frente a la entrada. La imagen NO ha cambiado: aplicarCandidato(id)."
     _asegurar_restaurado(siril, crudo, huella, r)
     _galeria(r, info, p, None)
     return r

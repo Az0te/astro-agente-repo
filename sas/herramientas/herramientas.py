@@ -1342,7 +1342,7 @@ LOCALES = {"estirado_mtf": _estirado_mtf, "estirado_sas_directo": _estirado_sas_
            "hiperbolico": lambda p, **op: _hip.estirar(p, **op)[0]}
 
 
-def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True, hiperbolico=True):
+def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True, hiperbolico=True, senal_max=0.25):
     """Paso NL1: estirado estadístico de SASpro (enlazado y por canal, varias medianas), GHS, un estirado MTF propio y el
     hiperbólico en luminancia que conserva el color (cielo 0,10 y 0,12),
     medidos con los criterios de la ficha: cielo, ruido relativo, recortes en negro y en blanco. La vista no cambia.
@@ -1382,6 +1382,7 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
         r = M.sin_privado(m)
         if len(cp) == 3:
             r["dominante_cielo"] = _r(max(cp) - min(cp), 4)
+        r["mediana_senal"] = _mediana_senal(M.lum(q), float(m["cielo"]), float(m["ruido"]))
         return r
 
     r = _comparar(ctx, d, "estirado", lista, medir)
@@ -1404,7 +1405,16 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
         castigo += max(0.0, (m["alto_pct"] or 0) - 0.5) * 5
         castigo += abs((m["cielo"] or 0) - 0.12) * 5
         castigo += (m.get("dominante_cielo") or 0) * 20
+        # Techo de la señal (23 nov 2026): por encima de senal_max, castigo grande y proporcional; si todos lo superan,
+        # gana el que la deja más baja.
+        ms = m.get("mediana_senal")
+        if ms is not None and ms > senal_max:
+            castigo += 10 + 20 * (ms - senal_max)
         return castigo
+
+    for x in r["candidatos"]:
+        ms = x["metricas"].get("mediana_senal")
+        x["no_cumple"] = [f"señal demasiado arriba: mediana de la señal {ms} > {senal_max}"] if ms is not None and ms > senal_max else []
 
     if r["candidatos"]:
         mejor = min(r["candidatos"], key=nota)
@@ -2008,7 +2018,39 @@ def _punto_negro_medios(p, bp, t, obj_px, m_obj):
     return np.where(q > t, t + (1 - t) * v, q).astype(np.float32)
 
 
-def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
+def _franja_sobre_cielo(q, cielo_rgb, lo=10, hi=30):
+    """Color del fondo débil SOBRE el cielo (23 nov 2026, guia/herramientas/boost.js): medianas de R, G y B de los píxeles
+    entre los percentiles 10 y 30 de luminancia menos el cielo de cada canal; devuelve R/G y B/G. Con valores absolutos el
+    punto negro solo ya parecía teñir; restando el cielo no cambia (0,2 %) y la curva «+ medios» que tiñe se ve (3–9 %)."""
+    if q.shape[0] != 3 or len(cielo_rgb) != 3:
+        return None
+    s = q[:, ::4, ::4].reshape(3, -1)
+    L = s.mean(axis=0)
+    a, b = np.percentile(L, [lo, hi])
+    sel = (L >= a) & (L <= b)
+    if not sel.any():
+        return None
+    m = np.median(s[:, sel], axis=1) - np.asarray(cielo_rgb, dtype=np.float64)
+    if m[1] <= 1e-4:
+        return None
+    return {"R_G": round(float(m[0] / m[1]), 4), "B_G": round(float(m[2] / m[1]), 4)}
+
+
+def _tinte_franja(f0, f1):
+    if not f0 or not f1:
+        return None
+    return round(100.0 * max(abs(f1["R_G"] / f0["R_G"] - 1), abs(f1["B_G"] / f0["B_G"] - 1)), 1)
+
+
+def _mediana_senal(L, cielo, ruido_abs, frac_min=0.05):
+    """Mediana de la SEÑAL tras estirar (23 nov 2026, guia/herramientas/estirado.js): píxeles a más de 5 ruidos del cielo.
+    En PixInsight un GHS con la simetría en la señal débil dejó la nebulosa en ~0,34–0,39 y el centro se quemó."""
+    v = np.asarray(L, dtype=np.float32)[::4, ::4].ravel()
+    s = v[v > cielo + 5 * max(ruido_abs, 1e-6)]
+    return round(float(np.median(s)), 4) if s.size >= frac_min * v.size else None
+
+
+def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tinte_max=3.0):
     """NL5 fondo: punto negro por canal para dejar el cielo en varios niveles (más oscuro = más profundidad y
     contraste) y neutro; mide píxeles nuevos a 0, cielo y ruido, y recomienda el más oscuro que no recorta más del
     ceros_max % de los píxeles. La vista no cambia. IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13
@@ -2028,11 +2070,14 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
     def rg(q):                                   # color del objeto: R/G mediano en la zona del objeto
         return float(np.median(q[0][obj_px])) / max(float(np.median(q[1][obj_px])), 1e-6) if q.shape[0] == 3 else 1.0
     rg0 = rg(p)
+    f0 = _franja_sobre_cielo(p, s0)
 
     def medir(q):
         c = M.cielo(q)
         rgb = M.cielo_por_canal(q, cel) if q.shape[0] == 3 else [c["cielo"]]
+        f1 = _franja_sobre_cielo(q, rgb)
         return {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
+                "franja_p10_p30": f1, "tinte_franja_pct": _tinte_franja(f0, f1),
                 "objeto_mediana": _r(float(np.median(M.lum(q)[obj_px])), 4),
                 "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), "objeto_rg_x": _r(rg(q) / max(rg0, 1e-6), 3),
                 **M.recortes(q)}
@@ -2062,6 +2107,9 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
                           if m["ceros_nuevos_pct"] > ceros_max else [])
         # Un punto negro muy distinto por canal (cielo teñido) cambia el color del OBJETO: IC 405 (20 nov 2026), bp
         # [0,03, 0,12, 0,15] con el cielo cian se comió el verde y el azul de la nebulosa y el rojo salió R/G ×1,5.
+        if m.get("tinte_franja_pct") is not None and m["tinte_franja_pct"] > tinte_max:
+            x["no_cumple"].append(f"tiñe el fondo débil (franja p10–p30, color sobre el cielo): {m['tinte_franja_pct']} % frente "
+                                  f"a la entrada (máx {tinte_max} %)")
         if abs(m["objeto_rg_x"] - 1) > 0.10:   # 0,15 dejó pasar ×1,146 en la v4 y el rojo se fue con la saturación
             x["no_cumple"].append(f"cambia el color del objeto: R/G ×{m['objeto_rg_x']} (el cielo está teñido: corrige "
                                   "la dominante antes, en lineal, con calibrarColor o neutralizarFondo sobre el cielo)")
@@ -2077,8 +2125,8 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0):
                        f"cada 100; límite {ceros_max} %, la referencia de IC 1396 tiene un 3 % en negro): APLÍCALO salvo que "
                        "la previa muestre la nebulosa débil comida.")
     else:
-        r["motivo"] = "Todos recortan demasiado: deja el fondo como está o pide un nivel más alto."
-    r["antes"] = {"cielo_rgb": [_r(x, 4) for x in s0]}
+        r["motivo"] = "Ninguno cumple (recortan, cambian el color del objeto o tiñen el fondo débil: ver no_cumple): deja el fondo como está o pide otros niveles."
+    r["antes"] = {"cielo_rgb": [_r(x, 4) for x in s0], "franja_p10_p30": f0}
     r["siguiente"] = "Aplica el recomendado con aplicarCandidato antes de seguir (comparar no cambia la imagen)."
     return _galeria(r, p, None)
 
