@@ -40,6 +40,12 @@ try:                                                    # registro de sesiones l
     _spec.loader.exec_module(registro_sesion)
 except Exception:                                       # sin el módulo el chat funciona igual, sin registrar
     registro_sesion = None
+try:                                                    # panel de IA local bajo el chat (23 nov 2026)
+    _spec = _ilu.spec_from_file_location("astropilot_panel_local", AQUI / "panel_local.py")
+    panel_local = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(panel_local)
+except Exception:                                       # sin el módulo el chat funciona igual, sin panel
+    panel_local = None
 MINIS = DATOS / "chat"
 PUERTO = int(os.environ.get("SIRILASTROPILOT_PUERTO", "48731"))
 OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
@@ -572,6 +578,9 @@ def pedir_api(api, modelo, mensajes, herramientas, emitir):
     ch = (r.get("choices") or [{}])[0]
     m = ch.get("message") or {}
     u = r.get("usage") or {}
+    if local and panel_local:
+        panel_local.anotar("rdna", modelo, u.get("prompt_tokens"), u.get("completion_tokens"),
+                           (r.get("timings") or {}).get("predicted_per_second"))
     out = {"role": "assistant", "content": m.get("content") or ""}
     if m.get("tool_calls"):
         # Las llamadas vuelven tal cual (sólo se completa lo que falte): Gemini 3 pone en extra_content la
@@ -732,6 +741,9 @@ class MotorLocal:
                         time.sleep(2)
                 tok_in += int(r.get("prompt_eval_count") or 0)
                 tok_out += int(r.get("eval_count") or 0)
+                if panel_local:
+                    panel_local.anotar("ollama", self.modelo, r.get("prompt_eval_count"), r.get("eval_count"),
+                                       (r.get("eval_count") or 0) / (r["eval_duration"] / 1e9) if r.get("eval_duration") else 0)
                 m = r.get("message", {})
                 llamadas = m.get("tool_calls") or []
                 if not llamadas and not (m.get("content") or "").strip():
@@ -1555,6 +1567,21 @@ class Ventana(QMainWindow):
         caja.addWidget(self.chat, 1)
         caja.addLayout(abajo)
         caja.addLayout(pie)
+        # Panel de IA local (Ollama / RDNA-FAST): oculto con los demás modelos; se refresca solo cada 2,5 s.
+        self.panel = None
+        if panel_local:
+            try:
+                self.panel = panel_local.PanelLocal(
+                    proveedor=lambda: {LOCAL: "ollama", RDNA: "rdna"}.get(self.modelo.currentText()),
+                    modelo=lambda: self.modelo_local.currentText() if self.modelo.currentText() == LOCAL
+                    else APIS[RDNA].get("_modelo_vivo") or modelo_api(APIS[RDNA]),
+                    ocupado=lambda: self.ocupado,
+                    tope=lambda: LIMITE_TOKENS_LOCAL if self.modelo.currentText() == LOCAL else APIS[RDNA]["limite"],
+                    url_ollama=OLLAMA, url_rdna=APIS[RDNA]["url"].rsplit("/chat/", 1)[0], en=lambda: self.lang == "en")
+                caja.addWidget(self.panel)
+            except Exception as e:                      # el panel nunca impide abrir el chat
+                print(f"[chat] panel de IA local desactivado: {type(e).__name__}: {e}")
+                self.panel = None
         w = QWidget()
         w.setLayout(caja)
         self.setCentralWidget(w)
@@ -1679,6 +1706,8 @@ class Ventana(QMainWindow):
             self.b_clave.setText(self.T("clave") + (" ✓" if clave_api(APIS[nombre]["clave"]) else ""))
         self.guardar(modelo=nombre)
         self.limpiar()
+        if self.panel:
+            self.panel.tick()
 
     def pintar_total(self):
         t = self.total
@@ -1957,6 +1986,8 @@ class Ventana(QMainWindow):
             self.poner(f'<div class="pie">{html.escape(self.T("turno", e=_n(e), s=_n(s), c=c, t=ev.get("segundos", 0)) + ctx)}</div>')
             self.pintar_total()
             self.ocupado = False
+            if self.panel:
+                self.panel.tick()
             self.b_enviar.setEnabled(True)
             self.b_parar.setEnabled(False)
             if self.c_leer.isChecked() and not self.cancelar:
