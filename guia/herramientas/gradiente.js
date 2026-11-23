@@ -75,8 +75,9 @@ function grRename(oldId, newId) {
 // GraXpert sobre una vista, sin modificarla. escala: número (sample_free) o "IA". Usa el proceso de PixInsight si el
 // módulo está instalado; si no (23 nov 2026: se cae de la lista de módulos), GraXpert -cli con graxpert.js.
 // Devuelve { corr, mod, via } (via: "" con el módulo, " (GraXpert -cli)" sin él).
+var GR_GX_CLI = false;   // opciones.graxpertCli: true fuerza GraXpert -cli aunque esté el módulo (pruebas)
 function grGraXpert(srcId, escala, nombre, ref) {
-  if (typeof GraXpert === "undefined") return grGraXpertCli(srcId, escala, nombre, ref);
+  if (GR_GX_CLI || typeof GraXpert === "undefined") return grGraXpertCli(srcId, escala, nombre, ref);
   var before = grIds(), G = new GraXpert, v = View.viewById(srcId);
   G.backgroundExtraction = true;
   G.backgroundExtractionSampleFree = escala !== "IA";
@@ -391,6 +392,7 @@ function gradienteCandidatos(viewId, o) {
   if (viewId instanceof Array) return gradienteVarias(viewId, o);
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
+  GR_GX_CLI = !!o.graxpertCli;
   var yaAlineados = grExigirAlineado(viewId, o);
   // Por defecto se comparan los tres métodos (no hay uno preferido: se aplica el que mejor mida en cada imagen).
   var scalesGX = o.graxpert || [10, 8];
