@@ -1342,7 +1342,7 @@
    "fichero": "boost.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 5 no lineal: galería de color para que el usuario elija, en copias de la starless estirada: neutra, equilibrada (saturación al fallo, RECOMENDADA), viva (+0,05 con máscara de luminancia), cálida y fría (curvas R/B suaves ancladas en el cielo) y contraste suave y medio (curva S anclada en el cielo). Mide en cada una canales > 0,98, dominante y ruido de color del cielo, tono del objeto y su deriva, saturación media y % de píxeles muy saturados, con miniatura. No elige: el usuario decide; la recomendada es la equilibrada.",
+   "descripcion": "Paso 5 no lineal: galería de color para que el usuario elija, en copias de la starless estirada: neutra, en nebulosas discreta (saturación al fallo sin máscara), equilibrada (saturación al fallo, RECOMENDADA; en nebulosas a través de una máscara de luminancia, que protege el cielo y llega más lejos), viva (+0,05 con máscara de luminancia), cálida y fría (curvas R/B suaves ancladas en el cielo) y contraste suave y medio (curva S anclada en el cielo). Mide en cada una canales > 0,98, dominante y ruido de color del cielo, tono del objeto y su deriva, saturación media y % de píxeles muy saturados, con miniatura. Avisa si el cielo sigue por encima de 0,08 (el fondo va antes de saturar). No elige: el usuario decide; la recomendada es la equilibrada.",
    "resumen": "Paso 5 no lineal: galería de saturación, equilibrio y contraste con miniaturas para que el usuario elija; recomienda la saturación al fallo.",
    "paso": "no-lineal/05-boost.md",
    "params": {
@@ -1354,7 +1354,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", candidatos: [\"neutra\",\"equilibrada\",\"viva\",\"calida\",\"fria\",\"contraste_suave\",\"contraste_medio\"], puntoMedio (salta la búsqueda al fallo), prefijo }"
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", mascara (por defecto true en nebulosas, false en galaxias), candidatos: [\"neutra\",\"discreta\",\"equilibrada\",\"viva\",\"calida\",\"fria\",\"contraste_suave\",\"contraste_medio\"], puntoMedio (salta la búsqueda al fallo), prefijo }"
      }
     },
     "required": [

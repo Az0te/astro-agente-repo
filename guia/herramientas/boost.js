@@ -375,27 +375,49 @@ function colorCandidatos(viewId, o) {
   if (src.image.median() < 0.02) throw new Error("La imagen parece lineal: el color del Paso 5 va después del estirado");
   var t0 = Date.now(), base0 = bsSky(src), m0 = bsColorMedidas(src), cielo = base0.cielo;
   var pref = (typeof o.prefijo === "string" && o.prefijo) || (viewId + "_col");
-  var claves = o.candidatos || ["neutra", "equilibrada", "viva", "calida", "fria", "contraste_suave", "contraste_medio"];
-  // Saturación al fallo de la guía (punto medio de la curva S de saturación).
-  var mid = o.puntoMedio, sf = null;
+  // Nebulosas: la recomendada satura a través de una máscara de luminancia (23 nov 2026, IC 405 con Qwen: sin máscara la
+  // saturación al fallo paraba en 0,63–0,68 por el ruido de color del cielo y la nebulosa salía plana; con máscara, la
+  // d2 llegó a 0,88 sin fallo y fue la más vistosa). La sin máscara queda como «discreta». Galaxias: como antes, salvo
+  // { mascara: true }.
+  var conMasc = (o.mascara !== undefined) ? !!o.mascara : String(o.tipo || "nebulosa").toLowerCase() !== "galaxia";
+  var claves = o.candidatos || (conMasc ? ["neutra", "discreta", "equilibrada", "viva", "calida", "fria", "contraste_suave", "contraste_medio"]
+                                       : ["neutra", "equilibrada", "viva", "calida", "fria", "contraste_suave", "contraste_medio"]);
+  // Saturación al fallo de la guía (punto medio de la curva S de saturación), sin y (en nebulosas) con máscara.
+  var mid = o.puntoMedio, sf = null, midM = null, sfM = null;
   if (mid === undefined) {
     sf = saturarAlFallo(viewId, { tipo: o.tipo, nuevaVista: "bsTmpFallo" });
     mid = sf.punto_medio_elegido;
     if (sf.vista) { var wf = ImageWindow.windowById(sf.vista); if (!wf.isNull) wf.forceClose(); }
   }
+  if (conMasc) {
+    sfM = saturarAlFallo(viewId, { tipo: o.tipo, mascara: true, nuevaVista: "bsTmpFalloM" });
+    midM = sfM.punto_medio_elegido;
+    if (sfM.vista) { var wfM = ImageWindow.windowById(sfM.vista); if (!wfM.isNull) wfM.forceClose(); }
+  }
   var masc = null;
+  var conMascara = function () { if (!masc) masc = bsMascara(src); return masc; };
+  // La saturación «equilibrada» (base de cálida, fría y contraste): con máscara en nebulosas.
+  var midEq = conMasc ? midM : mid;
+  var satEq = function (v) { if (midEq) bsSaturate(v, midEq, conMasc ? conMascara() : null); };
+  var avisos = [];
+  if (base0.cielo > 0.08)
+    avisos.push("el cielo está en " + base0.cielo.toFixed(3) + " (> 0,08): el fondo va ANTES de saturar (fondoCandidatos y aplicar el recomendado); " +
+                "con el cielo gris la saturación para antes por el ruido de color del cielo");
   var receta = {
     neutra:          { etiqueta: "neutra (sin saturar)", hacer: function (v) { } },
-    equilibrada:     { etiqueta: "equilibrada: saturación al fallo" + (mid ? " (" + mid + ")" : " (no satura: ni la más suave pasa)"),
+    discreta:        { etiqueta: "discreta: saturación al fallo sin máscara" + (mid ? " (" + mid + ")" : " (no satura)"),
                        hacer: function (v) { if (mid) bsSaturate(v, mid, null); } },
-    viva:            { etiqueta: "viva: saturación " + ((mid || 0.58) + 0.05).toFixed(2) + " con máscara de luminancia",
-                       hacer: function (v) { if (!masc) masc = bsMascara(src); bsSaturate(v, (mid || 0.58) + 0.05, masc); } },
+    equilibrada:     { etiqueta: "equilibrada: saturación al fallo" + (conMasc ? " con máscara de luminancia" : "") +
+                                 (midEq ? " (" + midEq + ")" : " (no satura: ni la más suave pasa)"),
+                       hacer: satEq },
+    viva:            { etiqueta: "viva: saturación " + ((midEq || 0.58) + 0.05).toFixed(2) + " con máscara de luminancia",
+                       hacer: function (v) { bsSaturate(v, (midEq || 0.58) + 0.05, conMascara()); } },
     calida:          { etiqueta: "cálida: equilibrada + rojo +0,015 / azul −0,015 en medios tonos",
-                       hacer: function (v) { if (mid) bsSaturate(v, mid, null); bsCurvas(v, { R: bsCurvaCanal(base0.cielo_rgb[0], 0.015), B: bsCurvaCanal(base0.cielo_rgb[2], -0.015) }); } },
+                       hacer: function (v) { satEq(v); bsCurvas(v, { R: bsCurvaCanal(base0.cielo_rgb[0], 0.015), B: bsCurvaCanal(base0.cielo_rgb[2], -0.015) }); } },
     fria:            { etiqueta: "fría: equilibrada + rojo −0,015 / azul +0,015 en medios tonos",
-                       hacer: function (v) { if (mid) bsSaturate(v, mid, null); bsCurvas(v, { R: bsCurvaCanal(base0.cielo_rgb[0], -0.015), B: bsCurvaCanal(base0.cielo_rgb[2], 0.015) }); } },
-    contraste_suave: { etiqueta: "equilibrada + curva S suave (±0,02)", hacer: function (v) { if (mid) bsSaturate(v, mid, null); bsCurvas(v, { K: bsCurvaS(cielo, 0.02) }); } },
-    contraste_medio: { etiqueta: "equilibrada + curva S media (±0,04)", hacer: function (v) { if (mid) bsSaturate(v, mid, null); bsCurvas(v, { K: bsCurvaS(cielo, 0.04) }); } }
+                       hacer: function (v) { satEq(v); bsCurvas(v, { R: bsCurvaCanal(base0.cielo_rgb[0], -0.015), B: bsCurvaCanal(base0.cielo_rgb[2], 0.015) }); } },
+    contraste_suave: { etiqueta: "equilibrada + curva S suave (±0,02)", hacer: function (v) { satEq(v); bsCurvas(v, { K: bsCurvaS(cielo, 0.02) }); } },
+    contraste_medio: { etiqueta: "equilibrada + curva S media (±0,04)", hacer: function (v) { satEq(v); bsCurvas(v, { K: bsCurvaS(cielo, 0.04) }); } }
   };
   var cands = [];
   for (var i = 0; i < claves.length; ++i) {
@@ -431,8 +453,10 @@ function colorCandidatos(viewId, o) {
   if (masc) masc.forceClose();
   var rec = cands.filter(function (c) { return c.recomendado && c.vista; })[0] || null;
   return {
-    vista: rec ? rec.vista : null, original: viewId, punto_medio_saturacion: mid || null,
+    vista: rec ? rec.vista : null, original: viewId, punto_medio_saturacion: midEq || null, con_mascara: conMasc,
+    punto_medio_sin_mascara: conMasc ? (mid || null) : undefined, avisos: avisos.length ? avisos : undefined,
     saturacion_al_fallo: sf ? { pruebas: sf.pruebas, parada: sf.parada } : undefined,
+    saturacion_al_fallo_con_mascara: sfM ? { pruebas: sfM.pruebas, parada: sfM.parada } : undefined,
     candidatos: cands, recomendado: rec ? rec.etiqueta : null,
     referencia: { tono_grados: m0.tono_grados, saturacion_media: m0.saturacion_media, muy_saturados_pct: m0.muy_saturados_pct,
                   dominante_cielo_pct: base0.dominante_pct },
