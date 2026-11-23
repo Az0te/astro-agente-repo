@@ -873,6 +873,8 @@ function plOllamaChat(aj, sistema, mensajes, estado) {
       uso.entrada += j.prompt_eval_count || 0;
       uso.salida += j.eval_count || 0;
       uso.cache += j.prompt_eval_cached_count || 0;
+      plLocalUltimo("ollama", aj.modeloOllama, j.prompt_eval_count, j.eval_count,
+                    j.eval_duration ? (j.eval_count || 0) / (j.eval_duration / 1e9) : 0);   // panel de IA local
       // También un <think> sin cerrar al final (rama b6wzqh, 13 nov 2026: Qwen 64k dejaba todo el turno dentro del razonamiento).
       var texto = String(j.message && j.message.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "")
                                                               .replace(/<think>[\s\S]*$/, "").trim();
@@ -1107,6 +1109,7 @@ function plRdnaChat(aj, sistema, mensajes, estado, modelo) {
    if (j.error) throw new Error("RDNA-FAST: " + JSON.stringify(j.error).substring(0, 500));
    var u = j.usage || {}, uso = { entrada: u.prompt_tokens || 0, salida: u.completion_tokens || 0,
                                   cache: (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) || 0, coste: 0 };
+   plLocalUltimo("rdna", modelo, uso.entrada, uso.salida, j.timings && j.timings.predicted_per_second);   // panel de IA local
    var msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
    var texto = String(msg.content || "").replace(new RegExp("<think>[\\s\\S]*?</think>\\s" + "*", "g"), "")
                                         .replace(/<think>[\s\S]*$/, "").trim();
@@ -2103,6 +2106,316 @@ class PLDialogo extends Dialog {
    }
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Panel de IA local (23 nov 2026): debajo del chat y sólo con Ollama o RDNA-FAST. Modelo cargado (cuantización,
+// contexto, tamaño), % del modelo en la GPU, memoria de la gráfica, contexto usado y carga. Lee /api/ps (Ollama) y
+// /props + /slots (llama-server) en un hilo aparte, y los contadores de la GPU de Windows con PowerShell (Get-Counter,
+// ~1,5 s) sin esperar a que termine: nada de esto frena ni rompe el chat; lo que no se puede leer sale como «—».
+// No carga ni descarga modelos (salvo el botón). Variable de entorno ASTROPILOT_PANEL=0: panel apagado.
+// ---------------------------------------------------------------------------------------------------------------
+var PL_LOCAL_ULT = null;   // última respuesta local: { proveedor, modelo, entrada, salida, tps, hora }
+var PL_GIB = 1073741824;
+
+function plLocalUltimo(proveedor, modelo, entrada, salida, tps) {
+   PL_LOCAL_ULT = { proveedor: proveedor, modelo: String(modelo || ""), entrada: entrada || 0, salida: salida || 0,
+                    tps: tps > 0 && isFinite(tps) ? tps : 0, hora: Date.now() };
+}
+
+// Cuerpo del hilo del panel (autocontenido, como plHiloRed): GET de cada URL; null si no responde o no es 200.
+function plHiloPanel(job) {
+   function vivo() { try { return !Thread.current.isAborted; } catch (e) { return true; } }
+   var out = {};
+   for (var k in job.urls) {
+      try {
+         var rec = new ByteArray, t = new NetworkTransfer;
+         t.setURL(job.urls[k]);
+         t.setConnectionTimeout(2);
+         t.onDownloadDataAvailable = function (d) { rec.add(d); return vivo(); };
+         t.onTransferProgress = function () { return vivo(); };
+         out[k] = t.download() && t.responseCode == 200 ? rec.utf8ToString() : null;
+      } catch (e) { out[k] = null; }
+   }
+   return out;
+}
+
+// Uso de la GPU (motor más cargado: 3D o Compute, sumando procesos, como el Administrador de tareas; con Ollama y
+// llama-server en la RX 7900 la carga sale en «compute 0», 86 % generando, 23 nov 2026) y memoria dedicada
+// de la gráfica con más memoria usada; total de la gráfica del registro (qwMemorySize). Una línea JSON.
+var PL_PS_GPU =
+   "$ErrorActionPreference = 'SilentlyContinue'\r\n" +
+   "$inv = [Globalization.CultureInfo]::InvariantCulture\r\n" +
+   "$s = (Get-Counter -Counter '\\GPU Engine(*)\\Utilization Percentage','\\GPU Adapter Memory(*)\\Dedicated Usage').CounterSamples\r\n" +
+   "$mem = @{}; $eng = @{}\r\n" +
+   "foreach ($c in $s) {\r\n" +
+   "  $p = $c.Path\r\n" +
+   "  if ($p -match 'adapter memory\\((luid_[^)]*?)_phys') { $mem[$matches[1]] = [double]$c.CookedValue }\r\n" +
+   "  elseif ($p -match '(luid_\\w+?_\\w+?)_phys.*engtype_([^)]+)\\)') { $k = $matches[1] + '|' + $matches[2]; $eng[$k] = [double]$eng[$k] + $c.CookedValue }\r\n" +
+   "}\r\n" +
+   "$luid = ($mem.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1).Key\r\n" +
+   "$uso = 0.0; $tipo = ''\r\n" +
+   "foreach ($e in $eng.GetEnumerator()) { $l, $t = $e.Key -split '\\|'; if ($l -eq $luid -and $e.Value -gt $uso) { $uso = $e.Value; $tipo = $t } }\r\n" +
+   "$tot = 0.0\r\n" +
+   "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' | ForEach-Object { $q = $_.'HardwareInformation.qwMemorySize'; if ($q -and [double]$q -gt $tot) { $tot = [double]$q } }\r\n" +
+   "'{\"gpu\":' + ([math]::Round([math]::Min(100.0, $uso), 1)).ToString($inv) + ',\"motor\":\"' + $tipo + '\",\"vram\":' + ([double]$mem[$luid]).ToString('0', $inv) + ',\"total\":' + $tot.ToString('0', $inv) + '}'\r\n";
+
+function plBarraPanel(padre) {
+   var c = new Control(padre);
+   c.setScaledFixedHeight(10);
+   c.setScaledMinWidth(140);
+   c.frac = 0; c.color = 0xff4caf50;
+   c.onPaint = function () {
+      var g = new Graphics(this);
+      try {
+         var w = this.width, h = this.height, f = Math.max(0, Math.min(1, this.frac || 0));
+         g.fillRect(0, 0, w, h, new Brush(0x50808080));
+         if (f > 0) g.fillRect(0, 0, Math.max(1, Math.round(w * f)), h, new Brush(this.color));
+      } catch (e) {}
+      g.end();
+   };
+   return c;
+}
+
+function PLPanelLocal(dlg, padre, aj) {
+   var P = this;
+   function tx(es, en) { return PL_EN ? en : es; }
+   function num(x, d) { var s = Number(x).toFixed(d || 0); return PL_EN ? s : s.replace(".", ","); }
+   function gb(b) { return num(b / PL_GIB, 1) + " GB"; }
+   function esc(s) { return plEsc(String(s)); }
+   var VERDE = 0xff4caf50, AMBAR = 0xffe0a030, ROJO = 0xffe0453a, cVerde = "#3fa34d", cAmbar = "#d99a20", cRojo = "#e0453a";
+   this.apagado = plEntorno("ASTROPILOT_PANEL") == "0";
+   this.datos = {}; this.gpu = null;
+   this.hilo = null; this.t0Hilo = 0;
+   this.pGpu = null; this.salidaGpu = ""; this.t0Gpu = 0; this.fallosGpu = 0;
+   this.cargados = [];
+
+   var g = this.grupo = new GroupBox(padre);
+   g.title = "IA local";
+   this.lModelo = new Label(g); this.lModelo.useRichText = true; this.lModelo.wordWrapping = true;
+   this.lGpu = new Label(g); this.lGpu.useRichText = true; this.lGpu.setScaledMinWidth(110);
+   this.lGpu.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   function filaBarra(etiqueta) {
+      var l = new Label(g); l.text = etiqueta; l.setScaledMinWidth(70); l.textAlignment = TextAlign_Left | TextAlign_VertCenter;
+      var b = plBarraPanel(g), v = new Label(g); v.setScaledMinWidth(230); v.textAlignment = TextAlign_Left | TextAlign_VertCenter;
+      var s = new HorizontalSizer; s.spacing = 8; s.add(l); s.add(b, 100); s.add(v);
+      return { titulo: l, barra: b, valor: v, sizer: s };
+   }
+   this.fMem = filaBarra("Memoria");
+   this.fCtx = filaBarra("Contexto");
+   this.lCarga = new Label(g); this.lCarga.useRichText = true;
+   this.bDescargar = new PushButton(g);
+   this.bDescargar.text = "Descargar modelo";
+   this.bDescargar.onClick = function () { P.descargar(); };
+   var f1 = new HorizontalSizer; f1.spacing = 8; f1.add(this.lModelo, 100); f1.add(this.lGpu);
+   var f4 = new HorizontalSizer; f4.spacing = 8; f4.add(this.lCarga, 100); f4.add(this.bDescargar);
+   g.sizer = new VerticalSizer; g.sizer.margin = 6; g.sizer.spacing = 4;
+   g.sizer.add(f1); g.sizer.add(this.fMem.sizer); g.sizer.add(this.fCtx.sizer); g.sizer.add(f4);
+
+   this.esLocal = function () { return !this.apagado && (aj.proveedor == "ollama" || aj.proveedor == "rdna"); };
+   this.urlOllama = function () { return String(aj.ollamaUrl || PL_URL_OLLAMA).replace(/[\/]+$/, ""); };
+   this.urlRdna = function () { return String(aj.urlRdna || PL_URL_RDNA).replace(/[\/]+$/, "").replace(/[\/]v1$/, ""); };
+
+   // Lecturas HTTP: el hilo de la vuelta anterior se recoge y se lanza otro; si tarda más de 10 s se aborta.
+   this.leerHttp = function () {
+      if (this.hilo) {
+         var th = this.hilo;
+         if (th.isActive) {
+            if (Date.now() - this.t0Hilo < 10000) return;
+            try { th.abort(); th.wait(); } catch (e) {}
+            this.hilo = null; this.datos = { prov: aj.proveedor, hora: Date.now() };
+            return;
+         }
+         var r = null;
+         try { if (!(th.error && String(th.error).length)) r = th.result; } catch (e) {}
+         this.hilo = null;
+         this.datos = r || {}; this.datos.prov = this.provHilo; this.datos.hora = Date.now();
+      }
+      var urls = { ps: this.urlOllama() + "/api/ps" };
+      if (aj.proveedor == "rdna") { urls.props = this.urlRdna() + "/props"; urls.slots = this.urlRdna() + "/slots"; }
+      this.provHilo = aj.proveedor;
+      if (typeof Thread === "undefined") {
+         this.datos = plHiloPanel({ urls: urls }); this.datos.prov = aj.proveedor; this.datos.hora = Date.now();
+         return;
+      }
+      this.hilo = new Thread(plHiloPanel, { urls: urls }, { pooled: false });
+      this.t0Hilo = Date.now();
+      this.hilo.start();
+   };
+
+   // Contadores de la GPU: un PowerShell cada ~5 s como mucho, sin esperarlo. Tres fallos seguidos: no se intenta más.
+   this.leerGpu = function () {
+      if (!plEsWindows() || this.fallosGpu >= 3) return;
+      if (this.pGpu) {
+         var p = this.pGpu;
+         if (p.isStarting || p.isRunning) {
+            if (Date.now() - this.t0Gpu > 8000) { plParar(p); this.pGpu = null; ++this.fallosGpu; }
+            return;
+         }
+         this.pGpu = null;
+         var m = /\{[^{}]*\}/.exec(this.salidaGpu), d = null;
+         try { d = m ? JSON.parse(m[0]) : null; } catch (e) {}
+         if (d && d.vram > 0) { d.hora = Date.now(); this.gpu = d; this.fallosGpu = 0; } else ++this.fallosGpu;
+      }
+      if (Date.now() - this.t0Gpu < 4500) return;
+      this.salidaGpu = ""; this.t0Gpu = Date.now();
+      try {
+         var dir = plCarpeta(PL_TMP), f = dir + "/panel_gpu.ps1";
+         if (!this.psEscrito || !File.exists(f)) { File.writeTextFile(f, PL_PS_GPU); this.psEscrito = true; }
+         var q = new ExternalProcess;
+         q.workingDirectory = dir;
+         q.onStandardOutputDataAvailable = function () { P.salidaGpu += String(this.stdout); };
+         q.start("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", f]);
+         this.pGpu = q;
+      } catch (e) { ++this.fallosGpu; }
+   };
+
+   this.tick = function () {
+      var local = this.esLocal();
+      if (this.grupo.visible != local) this.grupo.visible = local;
+      if (!local) return;
+      try { this.leerHttp(); } catch (e) {}
+      try { this.leerGpu(); } catch (e) {}
+      try { this.pintar(); } catch (e) { this.lCarga.text = "—"; console.warningln("[PiAstroPilotLite] panel local: " + (e.message || e)); }
+   };
+
+   // Caracteres de historial que se mandarían ahora frente al tope a partir del cual se recorta en bloque.
+   this.historial = function () {
+      var M = dlg.mensajes || [], t = 0;
+      for (var i = M._desde || 0; i < M.length; ++i) t += String(M[i].content || "").length;
+      return { car: t, tope: plPresupuestoHistorial(aj) };
+   };
+
+   this.pintar = function () {
+      var D = this.datos || {}, ollama = aj.proveedor == "ollama", ocupado = !!dlg.estado;
+      if (D.prov && D.prov != aj.proveedor) D = {};   // lectura del proveedor anterior
+      var G = this.gpu && Date.now() - this.gpu.hora < 20000 ? this.gpu : null;
+      var avisos = [], partes = [], nombre = "", ctx = 0, gpuPct = null, enVramModelos = 0, estado = "";
+      var ps = null;
+      try { ps = D.ps ? JSON.parse(D.ps).models || [] : null; } catch (e) {}
+      this.cargados = (ps || []).map(function (x) { return x.name || x.model; });
+      if (ps) ps.forEach(function (x) { enVramModelos += x.size_vram || 0; });
+      if (ollama) {
+         g.title = "IA local · Ollama";
+         var quiero = String(aj.modeloOllama || ""), m = null;
+         (ps || []).forEach(function (x) {
+            var n = String(x.name || x.model || "");
+            if (!m && (n == quiero || n == quiero + ":latest" || n.split(":")[0] == quiero)) m = x;
+         });
+         if (ps === null) { nombre = esc(quiero || "—"); avisos.push([cRojo, tx("Ollama no responde en ", "Ollama does not answer at ") + this.urlOllama()]); }
+         else if (!m && ps.length) { m = ps[0]; avisos.push([cAmbar, tx("El cargado no es el del Lite (", "The loaded model is not the Lite one (") + esc(quiero) + ")"]); }
+         if (m) {
+            nombre = esc(m.name || m.model);
+            var det = m.details || {};
+            if (det.quantization_level) partes.push(esc(det.quantization_level));
+            if (det.parameter_size) partes.push(esc(det.parameter_size));
+            ctx = m.context_length || 0;
+            if (m.size) { partes.push(gb(m.size)); gpuPct = Math.round(100 * (m.size_vram || 0) / m.size); }
+            if (gpuPct !== null && gpuPct < 100)
+               avisos.push([cRojo, num(100 - gpuPct) + tx(" % del modelo va en la CPU: será lento", " % of the model runs on the CPU: it will be slow")]);
+            var exp = Date.parse(m.expires_at || ""), min = isFinite(exp) ? (exp - Date.now()) / 60000 : NaN;
+            estado = ocupado ? tx("generando", "generating") :
+                     tx("en reposo", "idle") + (isFinite(min) ? (min > 525600 ? tx(" · no se descarga", " · never unloads") :
+                     min > 0 ? tx(" · se descarga en ", " · unloads in ") + Math.ceil(min) + " min" : "") : "");
+         } else if (ps !== null) {
+            nombre = esc(quiero || "—");
+            estado = ocupado ? tx("cargando el modelo…", "loading the model…") : tx("sin modelo cargado (se carga al enviar)", "no model loaded (loads on send)");
+         }
+         if (!ctx) { var mk = /(\d+)k\b/i.exec(nombre); if (mk) ctx = parseInt(mk[1], 10) * 1024; }
+         if (ps && ps.length >= 2)
+            avisos.push([cRojo, tx("Hay ", "There are ") + ps.length + tx(" modelos cargados (", " models loaded (") + esc(this.cargados.join(", ")) +
+                         tx("): no caben juntos; descarga uno", "): they do not fit together; unload one")]);
+      } else {
+         g.title = "IA local · RDNA-FAST (llama-server)";
+         var pr = null, sl = null;
+         try { pr = D.props ? JSON.parse(D.props) : null; } catch (e) {}
+         try { sl = D.slots ? JSON.parse(D.slots) : null; } catch (e) {}
+         var ruta = pr ? String(pr.model_path || "") : "", base = ruta.replace(/\\/g, "/").replace(/^.*[\/]/, "");
+         nombre = esc(aj.modeloRdna || base.replace(/\.gguf$/i, "") || "llama-server");
+         var q = /(?:^|[-_.])((?:UD-)?(?:I?Q\d(?:_[A-Z0-9]+)*|BF16|F16|F32))(?=[-_.]|$)/i.exec(base);
+         if (q) partes.push(esc(q[1].toUpperCase()));
+         try { if (ruta && File.exists(ruta)) partes.push(gb(new FileInfo(ruta).size)); } catch (e) {}
+         if (pr) ctx = (pr.default_generation_settings && pr.default_generation_settings.n_ctx) || pr.n_ctx || 0;
+         if (sl instanceof Array && sl.length && sl[0].n_ctx) ctx = sl[0].n_ctx;
+         var procesando = sl instanceof Array && sl.some(function (s) { return s.is_processing; });
+         if (!pr) { avisos.push([cRojo, tx("llama-server no responde en ", "llama-server does not answer at ") + this.urlRdna()]); estado = "—"; }
+         else estado = procesando || ocupado ? tx("generando", "generating") : tx("en reposo", "idle");
+         if (ps && ps.length)
+            avisos.push([cRojo, tx("Ollama tiene cargado ", "Ollama has loaded ") + esc(this.cargados.join(", ")) +
+                         tx(": no caben los dos en la gráfica", ": both do not fit in the GPU")]);
+      }
+      if (ctx) partes.push(tx("contexto ", "context ") + Math.round(ctx / 1024) + "k");
+      // /api/ps no dice si el modelo trabaja: con la GPU cargada y el Lite sin esperar, es otra petición u otro programa.
+      if (!ocupado && G && G.gpu >= 30 && /reposo|idle/.test(estado))
+         estado = tx("GPU ocupada por otra petición u otro programa", "GPU busy with another request or program");
+
+      // Contexto usado: tokens de la última respuesta local (entrada, con la caché, + salida) frente al contexto.
+      var U = PL_LOCAL_ULT && PL_LOCAL_ULT.proveedor == aj.proveedor ? PL_LOCAL_ULT : null, usados = U ? U.entrada + U.salida : 0;
+      var H = this.historial(), fh = H.tope ? H.car / H.tope : 0, fc = ctx && usados ? usados / ctx : 0;
+      this.fCtx.barra.frac = fc;
+      this.fCtx.barra.color = fc > 0.95 ? ROJO : fc > 0.8 || fh > 0.8 ? AMBAR : VERDE;
+      this.fCtx.valor.text = (usados ? plMiles(usados) : "—") + tx(" de ", " of ") + (ctx ? Math.round(ctx / 1024) + "k" : "—") +
+                             (fc ? " (" + num(100 * fc) + " %)" : "") + tx(" · historial ", " · history ") + num(Math.min(999, 100 * fh)) + " %";
+      this.fCtx.valor.toolTip = tx("Tokens de la última respuesta (entrada con la caché + salida) frente al contexto del modelo. " +
+                                   "«Historial»: caracteres que se mandan frente al tope (", "Tokens of the last reply (input incl. cache + output) " +
+                                   "against the model context. «History»: characters sent against the cap (") + plMiles(H.tope) +
+                                tx("); al pasarlo se recorta en bloque al 60 %.", "); beyond it the history is trimmed to 60 %.");
+      if (fc > 0.8 || fh > 0.8) avisos.push([cAmbar, tx("Contexto casi lleno: pronto se recorta el historial", "Context nearly full: the history will be trimmed soon")]);
+
+      // Memoria: la dedicada de la gráfica (contador de Windows); sin contador, la de los modelos de Ollama.
+      var usada = G ? G.vram : enVramModelos, total = G && G.total > 4 * PL_GIB ? G.total : 24 * PL_GIB, fm = usada / total;
+      this.fMem.barra.frac = fm;
+      this.fMem.barra.color = fm > 0.98 ? AMBAR : VERDE;   // con qwen38-64k cargado ya va al 97 %: lo grave es el % en la GPU
+      this.fMem.valor.text = (G || usada ? gb(usada) : "—") + tx(" de ", " of ") + num(total / PL_GIB) + " GB" +
+                             (G ? "" : tx(" (sólo modelos)", " (models only)"));
+      this.fMem.valor.toolTip = tx("Memoria dedicada usada en la gráfica (todos los programas), del contador de Windows.",
+                                   "Dedicated GPU memory in use (all programs), from the Windows counter.");
+
+      this.lModelo.text = "<b>" + (nombre || "—") + "</b>" + (partes.length ? " · " + partes.join(" · ") : "") +
+                          avisos.map(function (a) { return "<br><span style=\"color:" + a[0] + "\">⚠ " + a[1] + "</span>"; }).join("");
+      var colorGpu = gpuPct === null ? "#888888" : gpuPct >= 100 ? cVerde : cRojo;
+      this.lGpu.text = "<div align=\"right\"><span style=\"font-size:20pt; font-weight:600; color:" + colorGpu + "\">" +
+                       (gpuPct === null ? "—" : num(gpuPct) + " %") + "</span><br>" + tx("en la GPU", "on the GPU") + "</div>";
+      this.lGpu.toolTip = ollama ? tx("Parte del modelo cargada en la gráfica (size_vram / size de /api/ps).", "Part of the model loaded on the GPU (size_vram / size from /api/ps).")
+                                 : tx("llama-server no lo dice: con -ngl 99 va entero en la gráfica.", "llama-server does not report it: with -ngl 99 it is fully on the GPU.");
+      var carga = [tx("Carga: ", "Load: ") + (G ? "GPU " + num(G.gpu) + " %" + (G.motor ? " (" + esc(G.motor) + ")" : "") : "GPU —"), estado];
+      if (U && U.tps) carga.push(num(U.tps, 1) + tx(" tok/s en la última respuesta", " tok/s in the last reply"));
+      this.lCarga.text = carga.filter(function (s) { return s; }).join(" · ");
+      this.bDescargar.visible = this.cargados.length > 0;
+      this.bDescargar.enabled = !ocupado;
+      this.bDescargar.text = tx(this.cargados.length > 1 ? "Descargar modelos" : "Descargar modelo", this.cargados.length > 1 ? "Unload models" : "Unload model");
+      this.bDescargar.toolTip = tx("Saca de la gráfica lo que tiene cargado Ollama (keep_alive 0): ", "Unloads what Ollama has loaded (keep_alive 0): ") +
+                                this.cargados.join(", ");
+      this.fMem.titulo.text = tx("Memoria", "Memory"); this.fCtx.titulo.text = tx("Contexto", "Context");
+      this.fMem.barra.update(); this.fCtx.barra.update();
+   };
+
+   // Botón: descarga de Ollama lo que tenga cargado (keep_alive 0). No con una petición en marcha.
+   this.descargar = function () {
+      if (dlg.estado) return;
+      var ok = [], mal = [];
+      this.cargados.forEach(function (n) {
+         var r = plHttp({ url: P.urlOllama() + "/api/generate", cuerpo: JSON.stringify({ model: n, keep_alive: 0 }), conexion: 3 }, null, 30);
+         (r.ok && r.codigo == 200 ? ok : mal).push(n);
+      });
+      if (dlg.estadoLbl) dlg.estadoLbl.text = (ok.length ? tx("Descargado de la gráfica: ", "Unloaded from the GPU: ") + ok.join(", ") : "") +
+                                              (mal.length ? tx(" · no se pudo: ", " · failed: ") + mal.join(", ") : "");
+   };
+
+   this.timer = new Timer;
+   this.timer.interval = 2.5;
+   this.timer.periodic = true;
+   this.timer.onTimeout = function () { P.tick(); };
+   this.iniciar = function () {
+      this.grupo.visible = this.esLocal();
+      if (!this.apagado) { this.timer.start(); this.tick(); }
+   };
+   this.parar = function () {
+      try { this.timer.stop(); } catch (e) {}
+      try { if (this.hilo && this.hilo.isActive) { this.hilo.abort(); this.hilo.wait(); } } catch (e) {}
+      this.hilo = null;
+      plParar(this.pGpu); this.pGpu = null;
+   };
+}
+
 function plConstruirDialogo(aj) {
    var self = this;
    this.aj = aj;
@@ -2231,6 +2544,9 @@ function plConstruirDialogo(aj) {
    filaV.add(this.bDossier); filaV.add(this.bInforme);
    pPrompt.sizer.add(filaV);
    pPrompt.sizer.add(this.estadoLbl);
+   // Panel de IA local (Ollama / RDNA-FAST): se ve sólo con esos proveedores; se refresca mientras el diálogo está abierto.
+   this.panelLocal = new PLPanelLocal(this, pPrompt, aj);
+   pPrompt.sizer.add(this.panelLocal.grupo);
 
    // --- Pestaña Modelo ---
    var pModelo = new Control(this);
@@ -2253,7 +2569,8 @@ function plConstruirDialogo(aj) {
    this.cPensar.onCheck = function (c) { aj.pensar = c; };
    this.notaModelo = new Label(pModelo);
    this.notaModelo.wordWrapping = true;
-   this.cProv.onItemSelected = function (i) { aj.proveedor = PROV[i][0]; aj.rdnaAuto = false; self.rellenarModelos(false); };
+   this.cProv.onItemSelected = function (i) { aj.proveedor = PROV[i][0]; aj.rdnaAuto = false; self.rellenarModelos(false);
+                                              if (self.panelLocal) self.panelLocal.tick(); };
 
    var fP = new HorizontalSizer; fP.spacing = 6;
    var l1 = new Label(pModelo); l1.text = "Proveedor:"; l1.setScaledMinWidth(90); l1.textAlignment = TextAlign_Right | TextAlign_VertCenter;
@@ -2372,6 +2689,7 @@ function plConstruirDialogo(aj) {
    this.onHide = function () {
       if (self.tEnlaces) self.tEnlaces.stop();
       if (self.tDictado) self.tDictado.stop();
+      if (self.panelLocal) self.panelLocal.parar();
       plParar(self.pVoz); plParar(self.pDictado);
       self.leerAjustes(); aj.guardar();
    };
@@ -2663,6 +2981,7 @@ function plConstruirDialogo(aj) {
       this.estadoLbl.text = plT(resp !== null ? "Respuesta en " + ((Date.now() - t0) / 1000).toFixed(1) + " s" +
                             (this.usoUltimo ? " · " + plUsoTexto(this.usoUltimo) : "") + "." : (cancelado ? "Cancelado." : ""));
       this.actualizarUso();
+      if (this.panelLocal) this.panelLocal.tick();
       if (resp === null) {   // la pregunta no obtuvo respuesta: no queda en el historial
          var q = this.mensajes.pop();
          // Si era la interpretación, el resultado de las llamadas sí se queda para el turno siguiente.
@@ -2869,6 +3188,7 @@ function plConstruirDialogo(aj) {
       try { self.historialBox.evaluateScript("(function(){var x=(typeof plClick==='string')?plClick:'';plClick='';return x;})();"); } catch (e) {}
    };
    this.tEnlaces.start();
+   this.panelLocal.iniciar();
 
    plBorrarTemporales();   // al abrir: miniaturas de sesiones anteriores fuera
    this.rellenarModelos(false);
@@ -3195,6 +3515,43 @@ function plPasada(proveedor, modelo, carpeta, ficheroPeticion, maxSigue) {
    d.execute();
 }
 
+// Prueba del panel de IA local:  -r=<Lite>,--panel,<captura.png>[,chat|descargar]
+// Con «descargar», tras la captura pulsa el botón «Descargar modelo».
+// Con «chat», antes una pregunta corta al modelo local (carga el modelo si no lo está) para que haya contexto y tok/s.
+// Deja la captura del panel, la del diálogo (_dialogo.png) y un .json con lo leído. No guarda ajustes ni registro.
+function plPruebaPanel(png, chat) {
+   var aj = new PLAjustes(); aj.cargar(); aj.guardar = function () {};
+   aj.elegirLocal();
+   if (aj.proveedor != "ollama" && aj.proveedor != "rdna") aj.proveedor = "ollama";
+   var out = { proveedor: aj.proveedor, modelo: aj.modelo() };
+   if (chat == "chat") {
+      try {
+         var m = [{ role: "user", content: "Contesta sólo «hola»." }], t0 = Date.now();
+         var t = aj.proveedor == "rdna" ? plRdnaChat(aj, plPromptSistema(aj), m, { cancelado: false }, aj.modeloRdna)
+                                        : plOllamaChat(aj, plPromptSistema(aj), m, { cancelado: false });
+         out.chat = { texto: plRecortar(t.texto, 200), uso: t.uso, segundos: (Date.now() - t0) / 1000 };
+      } catch (e) { out.errorChat = String(e.message || e); }
+   }
+   var d = new PLDialogo(aj), tm = new Timer;
+   tm.interval = 9; tm.periodic = false;
+   tm.onTimeout = function () {
+      var p = d.panelLocal;
+      try {
+         p.tick();
+         out.ultimo = PL_LOCAL_ULT; out.datos = p.datos; out.gpu = p.gpu;
+         out.textos = { titulo: p.grupo.title, modelo: p.lModelo.text, gpu: p.lGpu.text, memoria: p.fMem.valor.text,
+                        contexto: p.fCtx.valor.text, carga: p.lCarga.text, boton: p.bDescargar.visible ? p.bDescargar.text : "" };
+      } catch (e) { out.error = String(e.message || e); }
+      try { p.grupo.render().save(png); out.captura = png; } catch (e) { out.errorCaptura = String(e.message || e); }
+      try { var fd = png.replace(/\.png$/i, "") + "_dialogo.png"; d.render().save(fd); out.capturaDialogo = fd; } catch (e) { out.errorCapturaDialogo = String(e.message || e); }
+      if (chat == "descargar") { try { p.descargar(); out.descargar = d.estadoLbl.text; } catch (e) { out.descargar = String(e.message || e); } }
+      File.writeTextFile(png.replace(/\.png$/i, "") + ".json", JSON.stringify(out, null, 1));
+      d.ok();
+   };
+   tm.start();
+   d.execute();
+}
+
 function plMain() {
    var args = (typeof Runtime !== "undefined" && Runtime.jsArguments) ? Runtime.jsArguments :
               (typeof jsArguments !== "undefined") ? jsArguments : [];
@@ -3208,6 +3565,10 @@ function plMain() {
    }
    if (args.length >= 5 && String(args[0]) == "--pasada") {
       plPasada(String(args[1]), String(args[2]), String(args[3]), String(args[4]), args.length > 5 ? String(args[5]) : null);
+      return;
+   }
+   if (args.length >= 2 && String(args[0]) == "--panel") {
+      plPruebaPanel(String(args[1]), args.length > 2 ? String(args[2]) : "");
       return;
    }
    if (args.length && String(args[0]) == "--prueba") {
