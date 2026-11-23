@@ -521,6 +521,8 @@ OIII: canal 1 (G). Con el `k` que devuelva, en otra respuesta:
 ]}
 ```
 
+**Guardas** (23 nov 2026): `medirContinuo` se niega con una vista sin estrellas (la marca de `separarEstrellas` o menos de 100 estrellas detectadas) y dice cuál era la de antes de separar; si mide menos de 100 estrellas, no devuelve k. `restarContinuo` sólo acepta un k devuelto por `medirContinuo`: si no convence, se mide otra vez; `forzar: true` sólo con un k que dé el usuario.
+
 El ajuste lineal previo con R como referencia es LinearFit. Orden: `medirContinuo` antes de `separarEstrellas` (Paso 15), `restarContinuo` después, y con `Ha_CS` la inyección (`inyectarHa`, [Paso 10](#lineal-10)).
 
 <a id="lineal-17"></a>

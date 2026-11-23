@@ -139,7 +139,7 @@ function rdQuality(before, after) {
 
 // Marcas de vista que la guía usa para comprobar el orden del Paso 10 (inyectarHa): las ponen separarEstrellas
 // (PiAstroPilot:SinEstrellas) y restarContinuo (PiAstroPilot:ContinuoRestado). Las copias las heredan.
-var PAP_MARCAS = ["PiAstroPilot:SinEstrellas", "PiAstroPilot:ContinuoRestado"];
+var PAP_MARCAS = ["PiAstroPilot:SinEstrellas", "PiAstroPilot:ContinuoRestado", "PiAstroPilot:Original"];
 function rdCopiarMarcas(srcView, dstView) {
   PAP_MARCAS.forEach(function (m) { try { var p = srcView.propertyValue(m); if (p) dstView.setPropertyValue(m, p); } catch (e) { } });
 }
@@ -621,7 +621,7 @@ function separarEstrellas(viewId, o) {
   if (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
     ImageWindow.windowById(starsId).mainView.id = o.nuevasEstrellas; starsId = o.nuevasEstrellas;
   }
-  try { v.setPropertyValue("PiAstroPilot:SinEstrellas", true); } catch (e) { }   // la usa inyectarHa (Paso 10)
+  try { v.setPropertyValue("PiAstroPilot:SinEstrellas", true); v.setPropertyValue("PiAstroPilot:Original", String(viewId)); } catch (e) { }   // inyectarHa y medirContinuo
   var seg = Math.round((Date.now() - t0) / 1000);
   // Comprobaciones: suma exacta (lineal) y que la capa de estrellas no se lleve estructura extensa.
   var a = rdLum(src), sl = rdLum(v), st = rdLum(View.viewById(starsId)), maxErr = 0, n = a.L.length;

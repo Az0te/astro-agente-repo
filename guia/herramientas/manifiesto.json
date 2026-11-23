@@ -878,7 +878,7 @@
    "fichero": "bandaestrecha.js",
    "nivel": "lectura",
    "timeout_s": 300,
-   "descripcion": "Paso 16 lineal: mide k (continuo) por fotometría de apertura de estrellas entre la banda estrecha y el canal R de la RGB.",
+   "descripcion": "Paso 16 lineal: mide k (continuo) por fotometría de apertura de estrellas entre la banda estrecha y el canal R de la RGB. Las dos vistas CON estrellas (antes de separarEstrellas): se niega con una starless y si mide menos de 100 estrellas. El k que devuelve es el único que acepta restarContinuo.",
    "paso": "lineal/16-linearfit-continuo.md",
    "params": {
     "type": "object",
@@ -893,7 +893,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { canal, maxEstrellas, picoMax }"
+      "description": "Opcional. { canal, maxEstrellas, picoMax, forzar: true (medir aunque la vista parezca starless: sólo si el usuario lo pide) }"
      }
     },
     "required": [
@@ -907,7 +907,7 @@
    "fichero": "bandaestrecha.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 16 lineal: Hα_CS = Hα − k·R − c en una vista nueva, con negativos y emisión conservada.",
+   "descripcion": "Paso 16 lineal: Hα_CS = Hα − k·R − c en una vista nueva, con negativos y emisión conservada. Sólo acepta un k devuelto por medirContinuo; si no convence, se mide otra vez, no se inventa.",
    "paso": "lineal/16-linearfit-continuo.md",
    "params": {
     "type": "object",
@@ -922,7 +922,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { k (de medirContinuo), c, canal, nuevaVista }"
+      "description": "Opcional. { k (el que devuelve medirContinuo; otro se rechaza), c, canal, nuevaVista, forzar: true (k que no viene de medirContinuo: sólo si el usuario lo da) }"
      }
     },
     "required": [

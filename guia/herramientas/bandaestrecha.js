@@ -189,6 +189,32 @@ function desmezclarDualBand(viewId, o) {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// Guardas del Paso 16 (Rafael, 23 nov 2026). En la pasada C1-c de IC 405, Qwen midió k sobre las STARLESS (34 restos
+// de estrellas: k = 3,14) y después se inventó k = 0,5. medirContinuo se niega con capas sin estrellas y pide ≥ 100
+// estrellas; restarContinuo sólo acepta un k medido (registro en la carpeta temporal: el MCP arranca un script nuevo
+// en cada llamada) salvo forzar.
+function beSinEstrellas(v) {
+  try { if (v.propertyValue("PiAstroPilot:SinEstrellas")) return true; } catch (e) { }
+  try {
+    if (typeof StarDetector === "undefined") return false;
+    var D = new StarDetector, s = D.stars(v.image);
+    return !s || s.length < 100;
+  } catch (e) { return false; }
+}
+function beOriginal(v) { try { var p = v.propertyValue("PiAstroPilot:Original"); return p ? String(p) : null; } catch (e) { return null; } }
+function beRutaK() { return File.systemTempDirectory + "/piastropilot-continuo.json"; }
+function beLeerK() { try { if (File.exists(beRutaK())) return JSON.parse(File.readTextFile(beRutaK())) || []; } catch (e) { } return []; }
+function beGuardarK(e) {
+  var l = beLeerK().filter(function (x) { return Date.now() - (x.t || 0) < 86400000; });
+  l.push(e); if (l.length > 50) l = l.slice(l.length - 50);
+  try { File.writeTextFile(beRutaK(), JSON.stringify(l)); } catch (x) { }
+}
+function beKMedido(k, canal) {
+  var l = beLeerK(), ok = null;
+  l.forEach(function (x) { if ((x.canal || 0) == (canal || 0) && Date.now() - (x.t || 0) < 86400000 && Math.abs(x.k - k) <= 0.0005 + 0.001 * Math.abs(x.k)) ok = x; });
+  return ok;
+}
+
 // Paso 16: k del continuo por fotometría de apertura (r ≤ 7, anillo 10–14) sobre estrellas no saturadas, con centroide
 // del flujo. nb: banda estrecha CON estrellas (gris o canal 0); cont: banda ancha calibrada CON estrellas (canal 'canal').
 function medirContinuo(nbId, contId, o) {
@@ -197,6 +223,13 @@ function medirContinuo(nbId, contId, o) {
   if (ch !== 0 && ch !== 1 && ch !== 2)
     throw new Error("canal debe ser 0, 1 o 2 (no '" + ch + "'). El continuo sólo se mide con un master de BANDA ESTRECHA (Hα, OIII) " +
                     "frente a uno de banda ancha: con un solo master RGB/OSC el Paso 16 no aplica, sáltalo");
+  if (!o.forzar) {
+    var sinE = [nb, ct].filter(function (v) { return beSinEstrellas(v); });
+    if (sinE.length)
+      throw new Error("medirContinuo mide k en las ESTRELLAS: " + sinE.map(function (v) { var or = beOriginal(v);
+        return v.id + " no tiene estrellas (usa la vista de antes de separarEstrellas" + (or ? ": " + or : "") + ")"; }).join("; ") +
+        ". Pasa la raya y la RGB calibrada CON estrellas, alineadas; después separarEstrellas y restarContinuo sobre las starless con este k.");
+  }
   var W = nb.image.width, H = nb.image.height;
   if (ct.image.width !== W || ct.image.height !== H) throw new Error("Las dos imágenes no tienen el mismo tamaño (registrarlas antes)");
   var n = W * H, N = new Float32Array(n), C = new Float32Array(n);
@@ -232,12 +265,14 @@ function medirContinuo(nbId, contId, o) {
       x += R2;
     }
   // Qwen pasó la starless de la RGB (7 nov 2026): el continuo se mide en ESTRELLAS, hacen falta las dos con estrellas.
-  if (ratios.length < 20) throw new Error("Pocas estrellas medidas (" + ratios.length + "): el continuo se mide con las estrellas, así que las dos vistas " +
+  if (ratios.length < 100) throw new Error("Pocas estrellas medidas (" + ratios.length + ", hacen falta 100): no hay k. El continuo se mide con las estrellas, así que las dos vistas " +
     "tienen que tenerlas (la raya y la RGB de ANTES de separarEstrellas, ya alineadas; nunca una starless)" +
     (/starless/i.test(nbId + contId) ? ". " + (/starless/i.test(contId) ? contId : nbId) + " es una starless: usa la vista anterior a separarEstrellas" : "") +
     ". Si el Hα ya se inyectó en la RGB (combinarMasters/inyectarHa), el Paso 16 no aplica: sáltalo.");
   ratios.sort(function (a, b) { return a - b; });
-  var kk = ratios[ratios.length >> 1], q1 = ratios[Math.floor(ratios.length * 0.25)], q3 = ratios[Math.floor(ratios.length * 0.75)];
+  var kk = ratios[ratios.length >> 1];
+  beGuardarK({ k: +kk.toFixed(4), canal: ch, nb: nbId, continuo: contId, estrellas: ratios.length, t: Date.now() });
+  var q1 = ratios[Math.floor(ratios.length * 0.25)], q3 = ratios[Math.floor(ratios.length * 0.75)];
   return { k: +kk.toFixed(4), estrellas: ratios.length, rango_intercuartil: [+q1.toFixed(4), +q3.toFixed(4)], canal_continuo: ch,
            control: { medido: { estrellas_suficientes: ratios.length >= 100 },
                       revisar_a_ojo: ["tras restar: residuos simétricos en las estrellas (estrellas positivas = k baja; agujeros = k alta)"],
@@ -248,6 +283,11 @@ function medirContinuo(nbId, contId, o) {
 function restarContinuo(nbId, contId, o) {
   nbId = beId(nbId); contId = beId(contId); o = o || {};
   if (o.k === undefined) throw new Error("Falta k: medirlo antes con medirContinuo sobre las capas con estrellas");
+  var chK = (o.canal !== undefined) ? o.canal : 0, medido = beKMedido(+o.k, chK);
+  if (!medido && !o.forzar)
+    throw new Error("k = " + o.k + " no lo ha medido medirContinuo (canal " + chK + "): no se inventa ni se retoca. Si el resultado no " +
+      "convence, mídelo otra vez con medirContinuo { nb: raya CON estrellas, continuo: RGB calibrada CON estrellas, opciones: { canal } } " +
+      "y pasa el k que devuelva. opciones.forzar: true sólo si el usuario da otro k expresamente.");
   var nb = beView(nbId), ct = beView(contId), ch = (o.canal !== undefined) ? o.canal : 0;
   var zN = beZones(nb), zC = beZones(ct);
   var c = (o.c !== undefined) ? o.c : 0;   // por defecto sin desplazamiento; se informa del cielo resultante
@@ -268,7 +308,7 @@ function restarContinuo(nbId, contId, o) {
   var negPct = +(100 * neg / (n / 3)).toFixed(3), noCumple = [];
   if (negPct > 0.5) noCumple.push(negPct + " % de píxeles negativos antes de recortar: k o c demasiado altos, o zonas de continuo fuerte (enmascarar)");
   if (keep !== null && keep < 0.80) noCumple.push("la zona de emisión conserva sólo el " + Math.round(100 * keep) + " % del brillo: ¿k demasiado alta o el objeto es de reflexión?");
-  return { vista: id, nb: nbId, continuo: contId + "[" + ch + "]", k: o.k, c: c, cielo_antes: +zN.cielo[0].toPrecision(4), cielo_despues: +zR.cielo[0].toPrecision(4),
+  return { vista: id, nb: nbId, continuo: contId + "[" + ch + "]", k: o.k, k_medido: medido ? { nb: medido.nb, continuo: medido.continuo, estrellas: medido.estrellas } : "no (forzar)", c: c, cielo_antes: +zN.cielo[0].toPrecision(4), cielo_despues: +zR.cielo[0].toPrecision(4),
            negativos_pct: negPct, emision_conservada_pct: keep === null ? null : Math.round(100 * keep), no_cumple: noCumple,
            control: { medido: { sin_fondo_negativo: negPct <= 0.5, emision_conservada: keep === null || keep >= 0.80 },
                       revisar_a_ojo: ["residuos simétricos alrededor de estrellas", "discos oscuros en zonas de continuo fuerte (enmascarar o cubrir con la estrella)"],
