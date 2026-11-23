@@ -25,7 +25,7 @@ Para ver lo que haría sin cambiar nada: `Instalar.cmd -Simular`. Para actualiza
 3. **Node.js 18 o superior** (lo necesitan los servidores MCP): si falta, ofrece instalarlo con `winget`.
 4. **La IA** que elijas (puedes elegir varias); ver abajo.
 5. **Configura cada programa encontrado**:
-   - Servidores MCP (`piastropilot`, `sirilastropilot`, `setiastropilot`) en Claude Desktop, Claude Code y Codex, los que tengas. Si la configuración de Claude Desktop está rota (JSON incompleto), la repara; quita los servidores viejos del proyecto (`pixinsight`, `picopilot`) cuyo fichero ya no existe.
+   - Servidores MCP (`piastropilot`, `sirilastropilot`, `setiastropilot`) en Claude Desktop, Claude Code y Codex, los que tengas. En Claude Desktop vale aunque esté recién instalado y sin abrir (crea `%APPDATA%\Claude`). Si la configuración de Claude Desktop está rota (JSON incompleto), la repara; quita los servidores viejos del proyecto (`pixinsight`, `picopilot`) cuyo fichero ya no existe.
    - PixInsight: la variable `PIXINSIGHT_EXE` si no está en `C:\Program Files\PixInsight`. El Lite hay que añadirlo a mano en *Script > Feature Scripts… > Add* (`piastropilot\script`): PixInsight no deja hacerlo desde fuera.
    - Siril: añade `siril\puente` a las carpetas de scripts (Siril tiene que estar **cerrado**, porque guarda su configuración al salir).
    - SASpro: copia los lanzadores a `%LOCALAPPDATA%\SASpro\scripts` y define `SETIASTROPILOT_REPO`.
@@ -37,14 +37,17 @@ Antes de tocar un fichero de configuración guarda una copia con la extensión `
 
 | Opción | Coste | Qué instala el script | Fiabilidad con la guía |
 |---|---|---|---|
-| 1. **Claude** | suscripción Pro/Max o API | Claude Desktop (`winget`) y Claude Code (instalador oficial) | la mejor |
+| 1. **Claude** | **gratis** con la app Claude Desktop (cuota pequeña); Claude Code solo con suscripción Pro/Max o API | Claude Desktop (`winget`) y, si dices que tienes suscripción o API, Claude Code (instalador oficial) | la mejor |
 | 2. **Codex** (OpenAI) | suscripción de ChatGPT o API | `npm install -g @openai/codex` y `codex login` | buena |
 | 3. **Local con Ollama** | gratis | Ollama (`winget`) y un modelo Qwen según la memoria de tu gráfica: 32B con 20 GB o más, 14B con 12 GB, 8B por debajo (solo para probar) | buena con 32B; nada sale del PC |
 | 4. **Gemini** (Google) | gratis con clave | abre la página de la clave y la guarda como `GEMINI_API_KEY` (no se ve al escribirla) | menor: para probar, revisando cada paso |
 
 Después de instalar:
 
-- **Claude**: abre Claude Desktop e inicia sesión; para Claude Code, escribe `claude` en una terminal una vez. En el Lite, proveedor *Claude Code (CLI)*; en los chats de Siril y SASpro, *Claude (CLI)*.
+- **Claude gratis (Claude Desktop)**: abre la app e inicia sesión con tu cuenta de claude.ai (la gratuita vale). El instalador ya ha registrado `piastropilot`, `sirilastropilot` y `setiastropilot` en `%APPDATA%\Claude\claude_desktop_config.json`; si la app estaba abierta, ciérrala del todo (también en la bandeja) y ábrela otra vez. Para cargar la guía, en el chat pulsa **+**, elige el conector del programa y añade `SKILL.md`. Desde ahí se procesa hablando con Claude en la app; el Lite, el módulo y los chats de Siril y SASpro **no** usan esta vía.
+  - **No escribas `claude` en una terminal con una cuenta gratis**: eso es Claude Code, que no tiene plan gratuito y te pedirá suscripción o clave de API.
+  - La cuota gratuita es pequeña y **puede agotarse a mitad de un procesado** (cada paso manda medidas y miniaturas); entonces hay que esperar unas horas. Si te pasa a menudo, sigue con **Gemini** (gratis con clave, menos fiable) o con **Qwen local** (Ollama, si tu gráfica da).
+- **Claude Code (de pago)**: el instalador solo lo ofrece si dices que tienes suscripción Pro/Max o clave de API. Escribe `claude` en una terminal una vez para iniciar sesión. En el Lite, proveedor *Claude Code (CLI)*; en los chats de Siril y SASpro, *Claude (CLI)*.
 - **Codex**: `codex login` una vez. En el Lite, *Codex (CLI)*; en los chats, *Codex (CLI)*.
 - **Local**: con Ollama abierto, en el Lite elige *Ollama* y *Leer modelos de Ollama*; en los chats salen solos.
 - **Gemini**: en el Lite, *Gemini (API, gratis con clave)*; en los chats, *Gemini Flash-Lite*.

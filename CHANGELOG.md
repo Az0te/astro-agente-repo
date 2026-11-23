@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **Instalador: Claude gratis con Claude Desktop** (23 nov 2026, Rafael, `instalar/instalar.ps1`, README). A un compañero, al escribir `claude` en la terminal, Claude Code le pidió suscripción: no tiene plan gratuito. La opción 1 del instalador explica ahora las dos vías: la app Claude Desktop con cuenta gratis (servidores MCP en `claude_desktop_config.json`, guía con **+** > `SKILL.md`, aviso de que la cuota puede agotarse a mitad de un procesado y de Gemini o Qwen local como alternativa) y Claude Code solo si se tiene suscripción o API (pregunta antes de instalarlo; con `-SinPreguntas` no lo instala). Claude Desktop recién instalado y sin abrir también queda configurado (crea `%APPDATA%\Claude`) y, si existe la copia del paquete MSIX, se configura igual. README con la sección «Claude Desktop (gratis)».
+
 - **WBPP: plan antes de lanzar y modo sesiones automático** (16 nov 2026, Rafael, `preproceso.js`, Lite, guía). Segunda pasada de PiAstroPilot con IC 1805: el modelo llamó a `lanzarWBPP` sin `sesiones` y WBPP rechazó los 12 masters en FITS y calibró sin flats.
   - `lanzarWBPP` sin `confirmar: true` ya no lanza: devuelve el plan (`esperando_confirmacion`) para que el usuario lo vea; se lanza repitiendo la llamada con `confirmar: true`. Sin parar sólo si el usuario pidió el procesado completo. **Las llamadas a `lanzarWBPP` de antes sin `confirmar` ya no lanzan.**
   - Con lights en varias carpetas o masters en FITS pasa sola a `sesiones: "auto"` (lo dice en `control.medido`).

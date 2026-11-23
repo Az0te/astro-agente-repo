@@ -40,7 +40,7 @@ Si ya lo tienes, haz doble clic en `instalar\Instalar.cmd`. El script:
 - busca PixInsight, Siril y SASpro;
 - descarga o actualiza el repositorio en la carpeta que elijas (con Git o con el ZIP);
 - comprueba Node.js y, si falta, lo instala con `winget`;
-- **te guía para instalar la IA** que elijas, una o varias: **Claude** (Claude Desktop y Claude Code), **Codex**, **local con Ollama** (propone el modelo Qwen según la memoria de tu gráfica) o **Gemini** (abre la página de la clave gratuita y la guarda);
+- **te guía para instalar la IA** que elijas, una o varias: **Claude** (la app Claude Desktop, que vale con una cuenta gratis, y Claude Code si tienes suscripción), **Codex**, **local con Ollama** (propone el modelo Qwen según la memoria de tu gráfica) o **Gemini** (abre la página de la clave gratuita y la guarda);
 - configura los servidores MCP en Claude Desktop, Claude Code y Codex, la carpeta de scripts de Siril y los lanzadores de SASpro.
 
 Antes de tocar un fichero de configuración guarda una copia `.antes-astropilot`, y con `-Simular` dice lo que haría sin cambiar nada. Para actualizar más adelante, vuelve a ejecutarlo. Opciones y detalles en [`instalar/README.md`](instalar/README.md).
@@ -73,6 +73,7 @@ Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía 
 
 | IA | Coste | Qué necesitas | Dónde funciona | Fiabilidad con la guía |
 |---|---|---|---|---|
+| **Claude Desktop** (Anthropic, app) | **gratis** con cuenta de claude.ai, cuota pequeña | la app y los servidores MCP en su configuración (el instalador lo hace) | PixInsight, Siril y SASpro hablando con Claude en la app (no el Lite, el módulo ni los chats) | la mejor, mientras dure la cuota |
 | **Claude Code** (Anthropic) | suscripción o API de pago | Claude Code instalado y con sesión | todas; procesa solo con MCP | la mejor (referencia de la guía) |
 | **Codex** (OpenAI) | suscripción de ChatGPT o API | `npm install -g @openai/codex` y `codex login` | todas; procesa solo con MCP (en Lite propone las llamadas) | buena |
 | **Local con Ollama** (p. ej. Qwen) | gratis | una gráfica con VRAM suficiente (unos 16–24 GB para Qwen de 27–32B) | todas | buena con los modelos grandes; sin enviar nada fuera del PC |
@@ -80,6 +81,26 @@ Todas las partes (Lite, módulo, chats de Siril y SASpro) siguen la misma guía 
 | **OpenRouter / Groq** (API) | nivel gratuito con límites | una clave de su web | chats de Siril y SASpro; plantillas en el módulo | **menor**; sin probar a fondo |
 
 > **Las APIs gratuitas no son tan fiables como la IA local o las de pago.** Sirven para probar el asistente sin gráfica ni suscripción, pero eligen peor y se saltan reglas. En la prueba del 18 nov 2026 (IC 1396, Siril, «Hasta el final»), Gemini Flash-Lite hizo de principio a fin la parte lineal casi como en el procesado de referencia, pero en la no lineal dejó la nebulosa con un tono lavanda, las estrellas casi apagadas y sin contraste, e inventó tiempos en el informe. Úsalas con **«Elegir yo»** marcado y revisa cada paso. Además, en el nivel gratuito el proveedor puede usar lo que se envía (las medidas y las miniaturas de tus imágenes) para mejorar sus modelos.
+
+### Claude Desktop (gratis)
+
+Para quien no tiene suscripción: **Claude Code no tiene plan gratuito** (si escribes `claude` en una terminal te pedirá suscripción o clave de API), pero la app **Claude Desktop** sí funciona con una cuenta gratis de claude.ai y habla con PixInsight, Siril y SASpro por MCP.
+
+1. Instala [Claude Desktop](https://claude.ai/download) e inicia sesión (o usa el [instalador](#instalación-rápida-en-windows), opción 1, y responde que no tienes suscripción).
+2. Registra los servidores en `%APPDATA%\Claude\claude_desktop_config.json` (el instalador lo hace solo y guarda una copia `.antes-astropilot`):
+
+   ```json
+   {
+     "mcpServers": {
+       "piastropilot": { "command": "node", "args": ["C:/Users/<tu_usuario>/astro-agente-repo/mcp/dist/piastropilot-mcp.mjs"] }
+     }
+   }
+   ```
+
+   Para Siril y SASpro, igual con `sirilastropilot` (`siril/mcp/dist/sirilastropilot-mcp.mjs`) y `setiastropilot` (`sas/mcp/dist/setiastropilot-mcp.mjs`). Cierra la app del todo (también en la bandeja) y ábrela otra vez.
+3. En el chat, pulsa **+**, elige el conector del programa y añade `SKILL.md` para cargar la guía. Luego pide el paso que quieras con el programa abierto.
+
+> **La cuota gratuita es pequeña y puede agotarse a mitad de un procesado**: cada paso manda medidas y miniaturas, y un procesado completo usa muchos mensajes. Cuando se agota hay que esperar unas horas. Para trabajar sin cortes, sigue con [Gemini](#gemini-gratis-con-clave) (gratis con clave, menos fiable) o con [Qwen local](#local-con-ollama) si tu gráfica da, o pasa a una suscripción.
 
 ### Claude Code
 

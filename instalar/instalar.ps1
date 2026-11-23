@@ -252,19 +252,40 @@ function VramGB {
   return $max
 }
 
+# Claude Desktop: instalación clásica (AnthropicClaude), paquete MSIX (Packages\Claude_*) o ya configurado (%APPDATA%\Claude).
+function HayClaudeDesktop {
+  if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "AnthropicClaude")) { return $true }
+  if (Test-Path -LiteralPath (Join-Path $env:APPDATA "Claude")) { return $true }
+  return [bool](Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA "Packages") -Directory -Filter "Claude_*" -ErrorAction SilentlyContinue | Select-Object -First 1)
+}
+
 function IaClaude {
-  Info (T "Claude (Anthropic): la mejor con la guía. Necesita suscripción Pro/Max o clave de API de pago." `
-          "Claude (Anthropic): the best with the guide. Needs a Pro/Max subscription or a paid API key.")
-  $desk = (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "AnthropicClaude")) -or (Test-Path -LiteralPath (Join-Path $env:APPDATA "Claude"))
+  Info (T "Claude (Anthropic): la mejor con la guía. Hay dos formas de usarla:" "Claude (Anthropic): the best with the guide. There are two ways to use it:")
+  Info (T "  - La app Claude Desktop con una cuenta GRATIS de claude.ai: habla con PixInsight, Siril y SASpro por MCP." `
+          "  - The Claude Desktop app with a FREE claude.ai account: talks to PixInsight, Siril and SASpro through MCP.")
+  Info (T "    La cuota gratis es pequeña y puede agotarse a mitad de un procesado; entonces hay que esperar unas horas." `
+          "    The free quota is small and can run out halfway through a processing session; then you have to wait a few hours.")
+  Info (T "  - Claude Code (el comando claude de la terminal): NO tiene plan gratis, pide suscripción Pro/Max o clave de API." `
+          "  - Claude Code (the claude command in the terminal): has NO free plan, it asks for a Pro/Max subscription or an API key.")
+  Info (T "    Lo usan el Lite, el módulo y los chats de Siril y SASpro con el proveedor Claude." `
+          "    The Lite, the module and the Siril and SASpro chats use it with the Claude provider.")
   $code = (Comando "claude") -or (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ".local\bin\claude.exe"))
-  if ($desk) { Ok (T "Claude Desktop ya está instalado" "Claude Desktop is already installed") }
-  elseif (Preguntar (T "¿Instalar Claude Desktop (la app, para usar el MCP desde ella)?" "Install Claude Desktop (the app, to use the MCP from it)?") $true) {
+  if (HayClaudeDesktop) { Ok (T "Claude Desktop ya está instalado" "Claude Desktop is already installed") }
+  elseif (Preguntar (T "¿Instalar Claude Desktop (la app; vale la cuenta gratis)?" "Install Claude Desktop (the app; a free account is enough)?") $true) {
     if ($Simular) { Haria "winget install Anthropic.Claude" }
-    elseif (Winget "Anthropic.Claude") { Ok (T "Claude Desktop instalado: ábrelo e inicia sesión." "Claude Desktop installed: open it and sign in.") }
+    elseif (Winget "Anthropic.Claude") { Ok (T "Claude Desktop instalado: ábrelo e inicia sesión (o crea una cuenta gratis)." "Claude Desktop installed: open it and sign in (or create a free account).") }
     else { Aviso (T "Descarga Claude Desktop de https://claude.ai/download" "Download Claude Desktop from https://claude.ai/download"); Start-Process "https://claude.ai/download" }
   }
-  if ($code) { Ok (T "Claude Code ya está instalado" "Claude Code is already installed") }
-  elseif (Preguntar (T "¿Instalar Claude Code (lo usan el Lite, el módulo y los chats de Siril y SASpro)?" "Install Claude Code (used by the Lite, the module and the Siril and SASpro chats)?") $true) {
+  if ((HayClaudeDesktop) -or $Simular) { Nota (T "Claude Desktop: inicia sesión en la app (la cuenta gratis vale). Para cargar la guía, en el chat pulsa + y añade SKILL.md del conector piastropilot (o sirilastropilot / setiastropilot). Si se agota la cuota gratis, sigue con Gemini (gratis con clave) o con Qwen local (Ollama)." `
+          "Claude Desktop: sign in in the app (a free account is enough). To load the guide, press + in the chat and add SKILL.md from the piastropilot connector (or sirilastropilot / setiastropilot). If the free quota runs out, carry on with Gemini (free with a key) or local Qwen (Ollama).") }
+  if ($code) { Ok (T "Claude Code ya está instalado" "Claude Code is already installed"); return }
+  if (-not (Preguntar (T "¿Tienes suscripción Pro/Max o clave de API de Anthropic? (sin ella Claude Code no funciona; con la cuenta gratis basta Claude Desktop)" `
+                         "Do you have a Pro/Max subscription or an Anthropic API key? (without one Claude Code does not work; with a free account Claude Desktop is enough)") $false)) {
+    Nota (T "Claude Code no instalado: con cuenta gratis no escribas claude en la terminal (pide suscripción); usa la app Claude Desktop." `
+            "Claude Code not installed: with a free account do not type claude in the terminal (it asks for a subscription); use the Claude Desktop app.")
+    return
+  }
+  if (Preguntar (T "¿Instalar Claude Code (lo usan el Lite, el módulo y los chats de Siril y SASpro)?" "Install Claude Code (used by the Lite, the module and the Siril and SASpro chats)?") $true) {
     if ($Simular) { Haria "irm https://claude.ai/install.ps1 | iex" }
     else {
       Invoke-RestMethod "https://claude.ai/install.ps1" | Invoke-Expression
@@ -272,7 +293,7 @@ function IaClaude {
       $env:Path += ";" + (Join-Path $env:USERPROFILE ".local\bin")
       Ok (T "Claude Code instalado." "Claude Code installed.")
     }
-    Nota (T "Claude Code: abre una terminal, escribe claude e inicia sesión una vez." "Claude Code: open a terminal, type claude and sign in once.")
+    Nota (T "Claude Code: abre una terminal, escribe claude e inicia sesión una vez con tu suscripción o clave de API." "Claude Code: open a terminal, type claude and sign in once with your subscription or API key.")
   }
 }
 
@@ -348,7 +369,8 @@ function IaGemini {
 
 Titulo (T "Inteligencia artificial" "Artificial intelligence")
 Info (T "¿Qué IA vas a usar? Puedes elegir varias, separadas por comas:" "Which AI will you use? You can pick several, separated by commas:")
-Info (T "  1 = Claude (la mejor, de pago)   2 = Codex (OpenAI, de pago)" "  1 = Claude (the best, paid)   2 = Codex (OpenAI, paid)")
+Info (T "  1 = Claude (la mejor; app Claude Desktop con cuenta gratis, o de pago)   2 = Codex (OpenAI, de pago)" `
+        "  1 = Claude (the best; Claude Desktop app with a free account, or paid)   2 = Codex (OpenAI, paid)")
 Info (T "  3 = Local con Ollama (gratis, necesita gráfica potente)   4 = Gemini (gratis con clave, menos fiable)" `
         "  3 = Local with Ollama (free, needs a powerful graphics card)   4 = Gemini (free with a key, less reliable)")
 Info (T "  0 o Intro = ninguna ahora" "  0 or Enter = none for now")
@@ -409,10 +431,35 @@ for (const k of Object.keys(srv)) {
 if (!simular) fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + "\n", "utf8");
 '@
 
+# Carpetas donde Claude Desktop lee claude_desktop_config.json: %APPDATA%\Claude y, si existe, la copia virtualizada
+# del paquete MSIX. Recién instalado y sin abrir aún no hay carpeta: se crea %APPDATA%\Claude.
+function CarpetasClaudeDesktop {
+  $dirs = New-Object System.Collections.Generic.List[string]
+  $normal = Join-Path $env:APPDATA "Claude"
+  if ((Test-Path -LiteralPath $normal) -or (HayClaudeDesktop)) { $dirs.Add($normal) }
+  foreach ($p in (Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA "Packages") -Directory -Filter "Claude_*" -ErrorAction SilentlyContinue)) {
+    $v = Join-Path $p.FullName "LocalCache\Roaming\Claude"
+    if (Test-Path -LiteralPath $v) { $dirs.Add($v) }
+  }
+  return ,$dirs
+}
+
 function ConfigurarClaudeDesktop {
-  $dir = Join-Path $env:APPDATA "Claude"
-  if (-not (Test-Path -LiteralPath $dir)) { Info (T "Claude Desktop: no está instalado." "Claude Desktop: not installed."); return }
+  $dirs = CarpetasClaudeDesktop
+  if ($dirs.Count -eq 0) { Info (T "Claude Desktop: no está instalado." "Claude Desktop: not installed."); return }
   if (-not $node) { Aviso (T "Claude Desktop: sin Node.js no puedo editar su configuración." "Claude Desktop: without Node.js its settings cannot be edited."); return }
+  foreach ($dir in $dirs) { ConfigurarClaudeDesktopEn $dir }
+  if (-not $Simular -and (Get-Process -Name "claude" -ErrorAction SilentlyContinue)) {
+    Aviso (T "Claude Desktop está abierto: ciérralo del todo (también en la bandeja) y vuelve a abrirlo para que vea los servidores." `
+             "Claude Desktop is open: quit it completely (also from the tray) and reopen it so it sees the servers.")
+  }
+}
+
+function ConfigurarClaudeDesktopEn($dir) {
+  $msix = if ($dir -like "*\Packages\Claude_*") { " (MSIX)" } else { "" }
+  if (-not (Test-Path -LiteralPath $dir)) {
+    if ($Simular) { Haria ((T "crear" "create") + " $dir") } else { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  }
   $cfg = Join-Path $dir "claude_desktop_config.json"
   $srv = [ordered]@{}
   foreach ($k in $servidores.Keys) { $srv[$k] = @{ command = "node"; args = @((Barras $servidores[$k])) } }
@@ -443,15 +490,11 @@ function ConfigurarClaudeDesktop {
       else { Aviso (T "Claude Desktop: su configuración estaba rota (JSON incompleto); la he reparado (copia en $cfg$SUFIJO)." "Claude Desktop: its settings were broken (incomplete JSON); repaired (backup in $cfg$SUFIJO).") }
     }
     elseif ($l.StartsWith("QUITADO ")) {
-      $t = (T "Claude Desktop: quitado el servidor viejo" "Claude Desktop: removed the old server") + " $($l.Substring(8)) " + (T "(su fichero ya no existe)" "(its file no longer exists)")
+      $t = (T "Claude Desktop${msix}: quitado el servidor viejo" "Claude Desktop${msix}: removed the old server") + " $($l.Substring(8)) " + (T "(su fichero ya no existe)" "(its file no longer exists)")
       if ($Simular) { Haria $t } else { Ok $t }
     }
-    elseif ($l.StartsWith("PUESTO ")) { $t = (T "Claude Desktop: servidor" "Claude Desktop: server") + " $($l.Substring(7))"; if ($Simular) { Haria $t } else { Ok $t } }
-    elseif ($l.StartsWith("IGUAL ")) { Info ("Claude Desktop: $($l.Substring(6)) " + (T "ya estaba bien" "already correct")) }
-  }
-  if (-not $Simular -and (Get-Process -Name "claude" -ErrorAction SilentlyContinue)) {
-    Aviso (T "Claude Desktop está abierto: ciérralo del todo (también en la bandeja) y vuelve a abrirlo para que vea los servidores." `
-             "Claude Desktop is open: quit it completely (also from the tray) and reopen it so it sees the servers.")
+    elseif ($l.StartsWith("PUESTO ")) { $t = (T "Claude Desktop${msix}: servidor" "Claude Desktop${msix}: server") + " $($l.Substring(7))"; if ($Simular) { Haria $t } else { Ok $t } }
+    elseif ($l.StartsWith("IGUAL ")) { Info ("Claude Desktop${msix}: $($l.Substring(6)) " + (T "ya estaba bien" "already correct")) }
   }
 }
 
