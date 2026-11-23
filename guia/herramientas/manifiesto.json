@@ -960,7 +960,7 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") en una vista nueva. La capa de estrellas NO se estira aquí: queda lineal para el Paso 8 (estirarEstrellasCandidatos, justo antes de recombinar); si se pasa, el resultado la devuelve en estrellas_pendientes. Se niega si la starless aún tiene estrellas o si starless y estrellas son la misma vista, y dice qué falta de la fase lineal (gradiente → astrometría → color → deconvolución → separarEstrellas); { conEstrellas: true } para estirar a propósito una imagen con estrellas. En campos llenos de nebulosa (> 60 % de celdas con señal) el punto de simetría del GHS va a la señal débil (r.simetria). { estirarEstrellas: true } = modo antiguo (estira también las estrellas).",
+   "descripcion": "Paso 1 no lineal: estira la starless \"al fallo\" (pasadas cortas de GHS, cielo 0,10; en galaxias tipo: \"galaxia\") en una vista nueva, sólo después de estirarCandidatos sobre esa misma starless (si no, se niega y dice la llamada; forzar sólo si el usuario pide este método). La capa de estrellas NO se estira aquí: queda lineal para el Paso 8 (estirarEstrellasCandidatos, justo antes de recombinar); si se pasa, el resultado la devuelve en estrellas_pendientes. Se niega si la starless aún tiene estrellas o si starless y estrellas son la misma vista, y dice qué falta de la fase lineal (gradiente → astrometría → color → deconvolución → separarEstrellas); { conEstrellas: true } para estirar a propósito una imagen con estrellas. En campos llenos de nebulosa (> 60 % de celdas con señal) el punto de simetría del GHS va a la señal débil (r.simetria). { estirarEstrellas: true } = modo antiguo (estira también las estrellas).",
    "resumen": "Paso 1 no lineal: estira la starless al fallo en una vista nueva. Las estrellas se estiran en el Paso 8 (estirarEstrellasCandidatos).",
    "paso": "no-lineal/01-estirado.md",
    "params": {
@@ -989,7 +989,7 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 1800,
-   "descripcion": "Paso 1 no lineal: compara GHS al fallo (con la simetría en el cielo y en la señal débil), MultiscaleAdaptiveStretch, ArcsinhStretch y un estirado hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante; devuelve la tabla de la comparación. Preferible a estirarStarless con un solo método. Se niega si la vista aún tiene estrellas (no es la starless de separarEstrellas) y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
+   "descripcion": "Paso 1 no lineal: compara GHS al fallo (con la simetría en el cielo y en la señal débil), MultiscaleAdaptiveStretch, ArcsinhStretch y un estirado hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo, y se queda con el que más separa la señal débil del fondo (en ruidos) sin fallos de ruido, recorte ni dominante ni la señal demasiado arriba (mediana de la señal > 0,25, opciones.senalMax; si todos la superan, el que la deja más baja, con aviso); devuelve la tabla de la comparación y aplica el ganador (r.vista). Va SIEMPRE antes de estirarCapas o estirarStarless, que se niegan sin una comparación previa. Se niega si la vista aún tiene estrellas (no es la starless de separarEstrellas) y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
    "resumen": "Paso 1 no lineal: compara GHS, MAS, Arcsinh e hiperbólico sobre la starless lineal con el mismo cielo y elige. Preferible a estirarStarless.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
@@ -1014,7 +1014,7 @@
    "fichero": "estirado.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 1 no lineal: solo la starless, \"al fallo\". Se niega si la vista aún tiene estrellas y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
+   "descripcion": "Paso 1 no lineal: solo la starless, \"al fallo\". Para repetir el método ya elegido por estirarCandidatos (p. ej. en cada raya de una paleta): se niega si no hay ninguna comparación en las últimas 24 h. Se niega si la vista aún tiene estrellas y dice qué falta de la fase lineal; { conEstrellas: true } para estirar a propósito una imagen con estrellas.",
    "paso": "no-lineal/01-estirado.md",
    "params": {
     "type": "object",
@@ -1466,7 +1466,7 @@
    "fichero": "recombinacion.js",
    "nivel": "copias",
    "timeout_s": 300,
-   "descripcion": "Paso 9 no lineal: recombina starless y estrellas YA estiradas (screen) en una vista nueva, con controles.",
+   "descripcion": "Paso 9 no lineal: recombina starless y estrellas YA estiradas (screen) en una vista nueva, con controles. Con la capa de estrellas a cero, una subida del fondo hasta 0,01 + 0,002·aporte (máx. 0,03) es normal en campos densos: va en avisos, no en no_cumple, y no se repite prepararEstrellas por ella.",
    "paso": "no-lineal/09-recombinacion.md",
    "params": {
     "type": "object",

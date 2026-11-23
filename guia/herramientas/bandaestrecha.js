@@ -509,7 +509,7 @@ function componerPaleta(capas, o) {
     v.image.resetSelections();
     med[k] = +v.image.median().toFixed(4);
     if (med[k] < 0.02) throw new Error(k + " (" + ids[k] + ") parece lineal (mediana " + med[k] + "): sepárale las estrellas (separarEstrellas) y estira cada " +
-                                      "raya starless con el mismo cielo, estirarStarless(id, { cielo: 0.10 }), antes de componer la paleta");
+                                      "raya starless con el mismo cielo (estirarCandidatos en una raya y estirarStarless(id, { cielo: 0.10 }) en las demás), antes de componer la paleta");
   }
   // Igualar las rayas al Hα (como _igualar de Siril y SASpro): mismo cielo y mismo recorrido cielo→p99. Sin esto la mezcla
   // depende de cómo quedó cada estirado: en IC 1396 (15 nov 2026) la misma Natural salió turquesa en una pasada y roja,

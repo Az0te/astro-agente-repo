@@ -257,7 +257,11 @@ function esCheck(view) {
   for (var q = 0; q < n; q += 17) all.push(L[q]);
   all.sort(function (a, b) { return a - b; });
   function pc(p) { return all[Math.floor(p * (all.length - 1))]; }
+  // Mediana de la SEÑAL (píxeles más de 5 ruidos sobre el cielo): el nivel de la nebulosa o de la galaxia, no del cielo.
+  var umbralS = cielo + 5 * ruido, sen = all.filter(function (x) { return x > umbralS; });
+  var medSen = sen.length >= 0.05 * all.length ? sen[sen.length >> 1] : null;
   return { cielo: +cielo.toFixed(4), ruido_rel: +(ruido / Math.max(cielo, 1e-6)).toFixed(3),
+           mediana_senal: medSen === null ? null : +medSen.toFixed(4), senal_pct: +(100 * sen.length / all.length).toFixed(1),
            mediana: +pc(0.5).toFixed(4), p90: +pc(0.9).toFixed(4), p99: +pc(0.99).toFixed(4), p999: +pc(0.999).toFixed(4),
            cero_pct: +(100 * cero / (n * nc)).toFixed(4), alto_pct: +(100 * alto / (n * nc)).toFixed(4) };
 }
@@ -355,9 +359,33 @@ function esNivelDebil(view, rects) {
   return med.length ? med[med.length >> 1] : null;
 }
 
+// ---------------------------------------------------------------------------------------------------
+// «Comparar siempre» en el estirado (Rafael, 23 nov 2026; pasada C1-d4: Qwen estiró con estirarCapas, un solo método, y la
+// nebulosa se quemó). estirarCandidatos anota la vista que compara (registro en la carpeta temporal: el MCP arranca un
+// script nuevo en cada llamada). estirarCapas se niega si esa starless no se ha comparado; estirarStarless, si no hay
+// ninguna comparación en las últimas 24 h (en la ruta de paleta se estira cada raya con el método ya elegido).
+function esRutaComparados() { return File.systemTempDirectory + "/piastropilot-comparados.json"; }
+function esComparados() { try { var f = esRutaComparados(); return File.exists(f) ? JSON.parse(File.readTextFile(f)) : {}; } catch (e) { return {}; } }
+function esAnotarComparado(id) {
+  var t = esComparados(), ahora = Date.now();
+  for (var k in t) if (ahora - t[k] > 86400000) delete t[k];
+  t[String(id)] = ahora;
+  try { File.writeTextFile(esRutaComparados(), JSON.stringify(t)); } catch (e) { }
+}
+function esExigirComparacion(id, o, cualquiera) {
+  if (o._sinComprobar || o.forzar) return;
+  var t = esComparados(), ahora = Date.now(), hay = false;
+  for (var k in t) if (ahora - t[k] <= 86400000 && (cualquiera || k === String(id))) hay = true;
+  if (!hay) throw new Error("Primero compara los métodos de estirado (regla de la guía: comparar siempre): estirarCandidatos { vista: \"" + id +
+                            "\", opciones: { tipo } }. Aplica él solo el que gana (r.vista); no hace falta estirar otra vez." +
+                            (cualquiera ? "" : " estirarCapas sólo después de comparar esta misma starless.") +
+                            " opciones.forzar: true sólo si el usuario pide un método concreto.");
+}
+
 function estirarStarless(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
+  esExigirComparacion(viewId, o, true);
   if (o.modo === "fondo") return estirarAFondo(viewId, o);
   var cielo = o.cielo || 0.10, D = o.paso || 1.0, canal = o.canal || "RGB";
   var lim = { ruido: o.ruidoMax || 0.15, cero: o.ceroMax || 0.05, alto: o.altoMax || 0.05 };
@@ -535,6 +563,7 @@ function estirarCandidatos(viewId, o) {
   if (med0 > 0.05) throw new Error("La imagen parece ya estirada (mediana " + med0.toFixed(4) + "): estirarCandidatos es para la starless lineal");
   if (!o._sinComprobar) {
     esComprobarStarless(viewId, o);
+    esAnotarComparado(viewId);
     var oc = {}; for (var kc in o) oc[kc] = o[kc]; oc._sinComprobar = true; o = oc;
     var neuC = esNeutralizarStarless(viewId, o);
     if (neuC) {   // se compara sobre la starless con el cielo igualado en lineal; los nombres siguen siendo los de la original
@@ -584,6 +613,11 @@ function estirarCandidatos(viewId, o) {
     // GHS simetría débil con el cielo en 0,024 dio 3208 frente a 172 y la paleta salió con el centro blanco).
     if (Math.abs(c.cielo - cielo) > 0.3 * cielo)
       f.push("cielo " + (+c.cielo.toFixed(4)) + " lejos del objetivo " + cielo + ": la separación no es comparable");
+    // Señal demasiado arriba (23 nov 2026, IC 405 con Qwen, pasada C1-d4: GHS al fallo con la simetría en la señal débil
+    // dejó la mediana de la nebulosa en ~0,39 en R y, con contraste, saturación y nitidez, el centro salió blanco). No
+    // cambia el cielo objetivo (0,10 / 0,07): limita cuánto sube la nebulosa por encima.
+    var senalMax = o.senalMax || 0.25;
+    if (c.mediana_senal !== null && c.mediana_senal > senalMax) f.push("señal demasiado arriba: mediana de la señal " + c.mediana_senal + " > " + senalMax);
     var ruidoAbs = Math.max(c.ruido_rel * c.cielo, 1e-6);
     cands.push({ etiqueta: etiqueta, clave: clave, vista: v.id, medidas: c, dominante_cielo_pct: sd.dominante_pct, fallos: f,
                  senal_debil_en_ruidos: +((c.p90 - c.cielo) / ruidoAbs).toFixed(2), extra: extra,
@@ -660,11 +694,19 @@ function estirarCandidatos(viewId, o) {
   }
   var ok = cands.filter(function (c) { return c.medidas && !c.fallos.length; });
   var lista = ok.length ? ok : cands.filter(function (c) { return c.medidas; });
+  var esSenal = function (x) { return /^señal demasiado arriba/.test(x); };
+  var otros = function (c) { return c.fallos.filter(function (x) { return !esSenal(x); }).length; };
+  var avisoSenal = null;
   var best = lista.reduce(function (a, c) {
     if (a === null) return c;
-    if (!ok.length && c.fallos.length !== a.fallos.length) return c.fallos.length < a.fallos.length ? c : a;
+    if (!ok.length && otros(c) !== otros(a)) return otros(c) < otros(a) ? c : a;
+    // Si todos fallan (también) por la señal alta, se queda el que la deja más baja.
+    if (!ok.length && c.fallos.some(esSenal) && a.fallos.some(esSenal)) return c.medidas.mediana_senal < a.medidas.mediana_senal ? c : a;
     return c.senal_debil_en_ruidos > a.senal_debil_en_ruidos ? c : a;
   }, null);
+  if (best && !ok.length && best.fallos.some(esSenal))
+    avisoSenal = "Todos los métodos dejan la señal por encima de " + (o.senalMax || 0.25) + ": se queda el que la deja más baja (" + best.etiqueta +
+                 ", " + best.medidas.mediana_senal + "). Con contraste, saturación y nitidez suaves, y mirar si el centro se quema.";
   var nombre = (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_st"), vista = null;
   cands.forEach(function (c) {
     if (!c.vista) return;
@@ -681,7 +723,7 @@ function estirarCandidatos(viewId, o) {
     return { metodo: c.etiqueta, clave: c.clave, cielo: c.medidas.cielo, ruido_cielo_rel: c.medidas.ruido_rel, p90: c.medidas.p90, p99: c.medidas.p99,
              separacion: c.senal_debil_en_ruidos, senal_debil_en_ruidos: c.senal_debil_en_ruidos,   // alias antiguo, se quitará
              sombras_a_0_pct: c.medidas.cero_pct, luces_095_pct: c.medidas.alto_pct,
-             dominante_cielo_pct: c.dominante_cielo_pct, cumple: !c.fallos.length, segundos: c.segundos, elegido: c === best,
+             mediana_senal: c.medidas.mediana_senal, dominante_cielo_pct: c.dominante_cielo_pct, cumple: !c.fallos.length, segundos: c.segundos, elegido: c === best,
              previa: c.previa || undefined };
   });
   return {
@@ -691,7 +733,7 @@ function estirarCandidatos(viewId, o) {
             (best.fallos.length ? "Ninguno cumple: se queda el de menos fallos (" + best.etiqueta + "): " + best.fallos.join("; ") :
              best.etiqueta + ": con el cielo en " + cielo + ", separa la señal débil " + best.senal_debil_en_ruidos +
              " ruidos del fondo, más que los demás, sin fallos de ruido, recorte ni dominante."),
-    no_cumple: best ? best.fallos : ["ningún método se pudo aplicar"],
+    no_cumple: best ? best.fallos : ["ningún método se pudo aplicar"], aviso: avisoSenal || undefined,
     detalle: best ? best.extra : null,
     segundos: Math.round((Date.now() - t0) / 1000),
     control: {
@@ -970,6 +1012,7 @@ function estirarCapas(starlessId, starsId, o) {
   if (starlessId && typeof starlessId === "object") starlessId = (starlessId.id !== undefined) ? starlessId.id : (typeof starlessId.vista === "string" ? starlessId.vista : starlessId);   // también vale la View o el resultado de otra función ({ vista: ... })
   if (starsId && typeof starsId === "object") starsId = (starsId.id !== undefined) ? starsId.id : (typeof starsId.vista === "string" ? starsId.vista : starsId);   // también vale la View o el resultado de otra función ({ vista: ... })
   o = o || {};
+  esExigirComparacion(starlessId, o, false);
   var t = ES_TIPOS[String(o.tipo || "").toLowerCase()];
   if (t) { var o2 = {}; for (var k in o) o2[k] = o[k]; for (var k2 in t) if (o2[k2] === undefined) o2[k2] = t[k2]; o = o2; }
   // Una imagen con estrellas como starless (Qwen, 7 nov 2026) la para esComprobarStarless, que mide si quedan estrellas.

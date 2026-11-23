@@ -14,6 +14,8 @@ Ficha: [no-lineal/01-estirado.md](../../no-lineal/01-estirado.md)
 
 **Centro quemado en una nebulosa** (nov 2026): `estirarStarless` con `{"cielo": 0.1, "simetria": "debil", "altoMax": 0.002}` sobre cada raya repite el GHS al fallo con la simetría en la señal débil, parando cuando más del 0,002 % de los píxeles pasa de 0,95 (por defecto 0,05 %). Mismo método en las tres rayas para no cambiar la paleta.
 
+**Siempre comparar primero** (23 nov 2026): `estirarCapas` se niega si esa starless no ha pasado antes por `estirarCandidatos`, y `estirarStarless` si no hay ninguna comparación en las últimas 24 h (sirve para repetir en cada raya el método ya elegido). `estirarCandidatos` marca además como fallo la variante que deja la mediana de la señal (píxeles a más de 5 ruidos del cielo) por encima de 0,25 (`senalMax`); si todas la superan, se queda la más baja y lo avisa. No cambia el cielo objetivo (0,10 / 0,07): limita cuánto sube la nebulosa.
+
 **Comparar métodos** (`estirarCandidatos(starless, { cielo })`, mismo fichero): prueba sobre copias GHS al fallo (con la simetría en el cielo y en la señal débil, `ghs_debil`), MultiscaleAdaptiveStretch (sin su saturación, que va después) y ArcsinhStretch (factor por bisección y punto negro bajo el cielo del canal más bajo), y los lleva todos al mismo cielo para comparar en igualdad. Gana, entre los que no fallan (ruido del cielo, recortes, dominante), el que más separa la señal débil del fondo: `senal_debil_en_ruidos` = (p90 − cielo) / ruido del cielo. La tabla va en `comparados`; con `cerrar: false` se conservan todos para mirarlos. La capa de estrellas va en el Paso 8.
 
 ```json

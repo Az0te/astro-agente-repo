@@ -4,6 +4,8 @@
 
 Primer paso de la sesión no lineal: leer antes `estado.md` (Paso 17 lineal). Aquí se estira **sólo la starless**. La capa de estrellas se queda **lineal** y se estira en el [Paso 8](08-estrellas.md), justo antes de recombinar, donde el usuario elige entre tres candidatos (Rafael, 11 nov 2026). No cerrar ni retocar la starless estirada que sale de aquí ni la capa de estrellas lineal: el Paso 8 las necesita tal cual. Irreversible: lo que no se limpió en lineal queda amplificado.
 
+**Siempre se comparan métodos** con la herramienta de comparación del estirado; estirar con un solo método sólo para repetir el ya elegido (p. ej. en cada raya de una paleta). La comparación descarta también el estirado que deja la nebulosa demasiado arriba (mediana de la señal > 0,25): en una prueba, un GHS al fallo con la simetría en la señal débil la dejó en ~0,39 y, con contraste, saturación y nitidez, el centro se quemó.
+
 **Cielo objetivo** (estirado al fallo, el método por defecto): **0,10 en nebulosas y cúmulos; 0,07 en galaxias**.
 En una galaxia con mucho cielo alrededor, 0,10 deja el fondo gris: una galaxia grande OSC (7 nov 2026) quedó mucho mejor con cielo 0,07 y límite de ruido del cielo 0,12 (las estrellas, con el mismo estirado y saturación 1,3: ver el Paso 8). Es el nivel de las zonas más oscuras de la imagen (`cielo`), no la mediana: en una nebulosa que llena el campo la mediana sale sola por encima (nebulosa dual band: 0,14 con cielo 0,10). Con cielo 0,15 la nebulosa queda algo pasada (prueba de nov 2026), y en una nebulosa oscura el fondo sale gris, sin zonas oscuras: en nebulosas oscuras, cielo 0,12 (las pasadas siguientes suben el polvo sin mover el cielo). El perfil puede fijar otro.
 

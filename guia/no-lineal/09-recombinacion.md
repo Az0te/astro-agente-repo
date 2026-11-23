@@ -15,6 +15,8 @@
 
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-09); en Siril, [Anexo I](../anexos/I-siril.md).
 
+**Subida del fondo en campos densos.** Si la capa de estrellas tiene el fondo a cero (mediana ≤ 0,002) y aun así el fondo sube algo al recombinar, es el screen de miles de estrellas débiles, no un halo: se admite hasta 0,01 + 0,002 · aporte de estrellas (como mucho 0,03) y se dice como aviso. En una prueba, por no admitirlo, se repitió 14 veces la preparación de estrellas con el mismo resultado. Con la capa de estrellas sin el fondo a cero, el límite sigue en 0,01 y se vuelve al Paso 8.
+
 **Las estrellas tienen que verse.** `aporte_estrellas_pct` es el % de píxeles que suben más de 0,01 al recombinar. Por debajo del 2 % `no_cumple` avisa: la final saldrá casi sin estrellas. Bien procesadas salen 6–10 % (galaxia grande 5,9 %, nebulosa oscura 10 %). Con la capa del estirado propio de estrellas suave (Star Stretch amount 2) salió 0,19 % en una galaxia grande y 0,8 % en una nebulosa oscura, y las dos finales quedaron casi sin estrellas. Que el fondo no suba ni baje no basta: se vuelve al Paso 8 con el arcsinh por defecto (en galaxias, el mismo estirado que la starless) o se elige un candidato con estrellas más grandes, y se repite el Paso 9. Umbral calibrado con un solo caso; en un campo con muy pocas estrellas puede ser normal, y se dice.
 
 **Control.** "Residuo (Original − Final) ≈ ruido"; zoom 200–400 % en zonas brillantes; halos residuales → máscara/reducción en la capa de estrellas; agujeros en la starless → ensanchar máscara o reextraer. "Con estrellas de otra cámara/filtro/exposición: color equilibrado (SPCC), sin dominante, sin estrellas demasiado grandes ni halos de combinación, sin perder las débiles."

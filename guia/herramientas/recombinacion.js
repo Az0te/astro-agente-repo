@@ -107,7 +107,19 @@ function recombinarEstrellas(starlessId, starsId, o) {
   var aporte = Math.max.apply(null, dif.map(function (d) { return d.pct_sube_mas_de_001; })), noCumple = [];
   var recNuevo = clipFin.map(function (c, i) { return c - clipSl[i]; });
   if (!nuncaBaja) noCumple.push("el fondo baja respecto a la starless en algunos píxeles: las capas no son coherentes (el screen nunca oscurece)");
-  if (fondoSube.some(function (s) { return Math.abs(s) >= 0.01; })) noCumple.push("el fondo sube " + fondoSube.join(" / ") + ": la capa de estrellas no tiene el fondo a cero; volver al Paso 8");
+  // Subida del fondo (23 nov 2026, IC 405 con Qwen, pasada C1-d4: 14 vueltas prepararEstrellas → recombinarEstrellas con
+  // «el fondo sube 0,0135» y la capa de estrellas con la mediana a 0 en los tres canales). En un campo denso, el screen de
+  // miles de estrellas débiles mueve la mediana aunque la capa tenga el fondo a cero. Con la capa a cero (mediana ≤ 0,002)
+  // el límite crece con el aporte: 0,01 + 0,002 · aporte_estrellas_pct, como mucho 0,03; con la capa sin fondo a cero
+  // (halos, fondo levantado), 0,01 como siempre.
+  var capaACero = medSt.every(function (m) { return m <= 0.002; });
+  var limFondo = capaACero ? Math.min(0.03, 0.01 + 0.002 * aporte) : 0.01, avisos = [];
+  if (fondoSube.some(function (s) { return Math.abs(s) >= limFondo; }))
+    noCumple.push("el fondo sube " + fondoSube.join(" / ") + " (límite " + limFondo.toFixed(3) + "): " +
+                  (capaACero ? "demasiado incluso para un campo denso; revisar halos en la capa de estrellas (Paso 8)" : "la capa de estrellas no tiene el fondo a cero; volver al Paso 8"));
+  else if (fondoSube.some(function (s) { return Math.abs(s) >= 0.01; }))
+    avisos.push("el fondo sube " + fondoSube.join(" / ") + " con la capa de estrellas a cero: normal en un campo denso (aporte " + aporte +
+                " %, límite " + limFondo.toFixed(3) + "). No repetir prepararEstrellas por esto.");
   if (recNuevo.some(function (c) { return c > 0.00005 * fin.image.width * fin.image.height; })) noCumple.push("recorte nuevo de " + recNuevo.join(" / ") + " px a 0,99: bajar el máximo de la capa de estrellas o usar k < 1");
   if (aporte < 2)
     noCumple.push("LAS ESTRELLAS CASI NO APORTAN: sólo el " + aporte + " % de los píxeles sube más de 0,01 (umbral 2 %; bien procesadas, 6–10 %). La imagen " +
@@ -117,12 +129,12 @@ function recombinarEstrellas(starlessId, starsId, o) {
     vista: id, starless: starlessId, estrellas: starsId, metodo: usado,
     fondo: { starless: medSl, estrellas: medSt, final: medFin, subida: fondoSube },
     recorte: { pix_099_starless: clipSl, pix_099_final: clipFin },
-    aporte_estrellas: dif, aporte_estrellas_pct: aporte, no_cumple: noCumple,
+    aporte_estrellas: dif, aporte_estrellas_pct: aporte, no_cumple: noCumple, avisos: avisos, limite_subida_fondo: +limFondo.toFixed(3),
     control: {
       medido: {
         estrellas_aportan: aporte >= 2,
         nunca_baja_respecto_a_starless: nuncaBaja,
-        fondo_casi_igual: fondoSube.every(function (s) { return Math.abs(s) < 0.01; }),
+        fondo_casi_igual: fondoSube.every(function (s) { return Math.abs(s) < limFondo; }),
         sin_recorte_nuevo: clipFin.every(function (c, i) { return c <= clipSl[i]; }),
         recorte_nuevo_px: clipFin.map(function (c, i) { return c - clipSl[i]; }),
         recorte_nuevo_despreciable: clipFin.every(function (c, i) { return c - clipSl[i] <= 0.00005 * fin.image.width * fin.image.height; })
@@ -130,8 +142,8 @@ function recombinarEstrellas(starlessId, starsId, o) {
       revisar_a_ojo: ["zoom 200–400 % en zonas brillantes: halos de combinación o bordes de residuos de SXT",
                       "agujeros oscuros alrededor de estrellas (starless mal extraída)",
                       "color de las estrellas equilibrado, sin estrellas demasiado grandes ni pérdida de las débiles"],
-      nota: "Si nunca_baja es false hay un error en las capas (el screen nunca oscurece). Una subida de fondo > 0,01 indica " +
-            "que la capa de estrellas no tiene el fondo a cero: volver al Paso 8. recorte_nuevo_px son píxeles que llegan a 0,99 " +
+      nota: "Si nunca_baja es false hay un error en las capas (el screen nunca oscurece). Una subida de fondo > 0,01 con la capa de estrellas sin el fondo a cero indica " +
+            "halos o fondo levantado: volver al Paso 8; con la capa a cero se admite hasta 0,01 + 0,002·aporte (máx. 0,03), normal en campos densos. recorte_nuevo_px son píxeles que llegan a 0,99 " +
             "sólo tras recombinar (núcleos de estrellas brillantes): unos pocos cientos son normales (despreciable = menos del " +
             "0,005 % de la imagen); muchos más, bajar el máximo de la capa de estrellas o usar k < 1. " +
             "Lo de revisar_a_ojo no lo mide esta función."
