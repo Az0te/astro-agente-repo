@@ -220,7 +220,7 @@ def prompt_sistema(funcs, internet, idioma="es"):
         "→ gradienteCandidatos → calibrarColor → separarEstrellas → ruidoCandidatos (de la starless, en lineal) →",
         "estirarCandidatos (de la starless; neutraliza el cielo) → (galaxias) nucleoCandidatos → contrasteCandidatos →",
         "saturacionCandidatos → estirarEstrellas (de la vista de estrellas) → reducirEstrellasCandidatos (en campos con muchas",
-        "estrellas, p. ej. la Vía Láctea: en IC 405 sin reducir taparon el polvo oscuro) → recombinarEstrellas → quitarVerde si queda verde",
+        "estrellas, p. ej. la Vía Láctea: en una nebulosa de emisión y reflexión, sin reducir, taparon el polvo oscuro) → recombinarEstrellas → quitarVerde si queda verde",
         "→ exportarFinal. fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) va justo después de montar la paleta o de",
         "estirar la starless, ANTES de contraste y saturación: con el cielo teñido la saturación se bloquea por la dominante. Con VARIOS masters (RGB + dual band o banda estrecha), USA TODOS: alinearMasters →",
         "desmezclarDualBand de cada dual band → unirCapas de las capas de la misma raya → gradienteCandidatos de CADA capa",

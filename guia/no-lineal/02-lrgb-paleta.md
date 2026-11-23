@@ -21,7 +21,7 @@
 4. El Hα de un dual band OSC sale de la desmezcla (Paso 7 lineal) con el continuo restado (Paso 16 lineal). Alternativa: la inyección en tres partes de aescaffre (R condicional + realce de luminancia + capa de detalle) con máscara de nebulosa derivada del Hα (clipLow 0,04, blur 8; fuerza ~0,65, umbral 0,3).
 5. Blancos y azules de reflexión, nebulosidad de fondo en Hα y compresión de altas luces: Anexo E. Curvas y saturación: Paso 5. NXT tras los realces: Paso 6.
 6. Ajustar el nivel del fondo al final con una curva K (el valor objetivo está en el perfil).
-7. El OIII de un dual band en una nebulosa sin OIII sólo aporta continuo de reflexión y ruido: medirlo y descartarlo si no añade señal (NOVA descarta la paleta bicolor si Hα/OIII > 20). Una nebulosa de reflexión captada con dual band no pasa por una paleta: su color es continuo de banda ancha (RGB). Lo mismo una nebulosa de **emisión y reflexión** (IC 405, M20, M78): Hα inyectado en el RGB, no paleta, aunque la banda estrecha tenga más horas; la paleta pierde el azul de reflexión (IC 405, 19 nov 2026).
+7. El OIII de un dual band en una nebulosa sin OIII sólo aporta continuo de reflexión y ruido: medirlo y descartarlo si no añade señal (NOVA descarta la paleta bicolor si Hα/OIII > 20). Una nebulosa de reflexión captada con dual band no pasa por una paleta: su color es continuo de banda ancha (RGB). Lo mismo una nebulosa de **emisión y reflexión** (polvo azul junto a estrellas brillantes): Hα inyectado en el RGB, no paleta, aunque la banda estrecha tenga más horas; la paleta pierde el azul de reflexión (nebulosa de emisión y reflexión, 19 nov 2026).
 
 **Paleta: cuándo y cómo se elige**
 
@@ -41,7 +41,7 @@
 | HOO con límite al OIII (NOVA) | `O = min(OIII, 0,85·Hα)`, R = Hα, G = 0,15·Hα + 0,90·O, B = O |
 | Natural (cuatro rayas) | R = 0,85·Hα + 0,15·SII; G = 0,6·OIII + 0,25·Hβ + 0,15·Hα; B = 0,7·OIII + 0,3·Hβ. Sin Hβ: G = 0,85·OIII + 0,15·Hα, B = OIII; sin SII, R = Hα |
 
-**Usar todas las rayas.** Con varios masters de banda estrecha o dual band (p. ej. HaO3 + SII/Hβ + SII/OIII), **todas** entran en la paleta: cada dual band se desmezcla (Paso 7 lineal), las capas de la misma raya se unen pesando por ruido (OIII de HaO3 + SO3, SII de SHb + SO3) y el Hβ del SII/Hβ entra en la Natural, que es la que más señal aprovecha cuando el Hα domina: el Hβ es el mismo gas que el Hα, ~3 veces más débil, y da señal limpia al turquesa donde el OIII es flojo (IC 1396, 26 oct 2026: la mejor versión hasta hoy, 20,7 h). Dejar un master sin usar es tirar señal: decirlo si se hace.
+**Usar todas las rayas.** Con varios masters de banda estrecha o dual band (p. ej. HaO3 + SII/Hβ + SII/OIII), **todas** entran en la paleta: cada dual band se desmezcla (Paso 7 lineal), las capas de la misma raya se unen pesando por ruido (OIII de HaO3 + SO3, SII de SHb + SO3) y el Hβ del SII/Hβ entra en la Natural, que es la que más señal aprovecha cuando el Hα domina: el Hβ es el mismo gas que el Hα, ~3 veces más débil, y da señal limpia al turquesa donde el OIII es flojo (nebulosa de emisión, 26 oct 2026: la mejor versión hasta hoy, 20,7 h). Dejar un master sin usar es tirar señal: decirlo si se hace.
 
 con `~x = 1 − x`, `o = p(O)`, `ho = p(H·O)`, `p(x) = x^~x`.
 
