@@ -3679,9 +3679,61 @@ function plPruebaPanel(png, chat) {
    d.execute();
 }
 
+// Prueba de la clave de Gemini:  -r=<Lite>,--clave,<captura.png>
+// Abre el diálogo con Ollama, elige Gemini en el combo como si fuera el usuario y, si sale la ventana de la clave,
+// la captura (<captura>_ventana.png) y la cancela; luego captura el diálogo. No escribe la clave ni guarda ajustes;
+// el .json dice si había clave (sin mostrarla) y qué se vio.
+function plPruebaClave(png) {
+   var aj = new PLAjustes(); aj.cargar(); aj.guardar = function () {};
+   aj.proveedor = "ollama";
+   var out = { hayClave: plClaveGemini(aj).length > 0, claveEnAjustes: String(aj.claveGemini || "").length > 0 };
+   var base = png.replace(/\.png$/i, ""), vista = null, D = PLDialogoClave;
+   // La ventana de la clave se cierra sola (cancelar) tras capturarla.
+   PLDialogoClave = class extends D {
+      constructor(hay) {
+         super(hay);
+         var self = this, t = new Timer; t.interval = 1.5; t.periodic = false;
+         t.onTimeout = function () {
+            vista = { hay: hay, titulo: self.windowTitle };
+            try { self.render().save(base + "_ventana.png"); vista.captura = base + "_ventana.png"; } catch (e) { vista.error = String(e.message || e); }
+            self.cancel();
+         };
+         t.start();
+      }
+   };
+   var d = new PLDialogo(aj), tm = new Timer;
+   tm.interval = 2; tm.periodic = false;
+   tm.onTimeout = function () {
+      try {
+         var i = ["ollama", "claude", "codex", "gemini", "rdna"].indexOf("gemini");
+         // Primero como si no hubiera clave (aunque la haya), para que salga la ventana.
+         var leer = plClaveGemini;
+         plClaveGemini = function () { return ""; };
+         d.cProv.currentItem = i; d.cProv.onItemSelected(i);
+         out.proveedor = aj.proveedor;
+         out.ventanaClave = vista;   // null = no se pidió
+         out.botonSinClave = { visible: d.bClave.visible, texto: d.bClave.text };
+         plClaveGemini = leer;
+         d.pintarClave();
+         out.boton = { visible: d.bClave.visible, texto: d.bClave.text };
+         out.estado = d.estadoLbl.text;
+         d.tabs.currentPageIndex = 1;
+         d.render().save(base + "_dialogo.png"); out.capturaDialogo = base + "_dialogo.png";
+         // Y otra vez con Ollama: el botón debe ocultarse.
+         d.cProv.currentItem = 0; d.cProv.onItemSelected(0);
+         out.botonConOllama = d.bClave.visible;
+      } catch (e) { out.error = String(e.message || e); }
+      File.writeTextFile(base + ".json", JSON.stringify(out, null, 1));
+      d.ok();
+   };
+   tm.start();
+   d.execute();
+}
+
 function plMain() {
    var args = (typeof Runtime !== "undefined" && Runtime.jsArguments) ? Runtime.jsArguments :
               (typeof jsArguments !== "undefined") ? jsArguments : [];
+   if (args.length >= 2 && String(args[0]) == "--clave") { plPruebaClave(String(args[1])); return; }
    // Llamadas de la guía sin chat (mismo validador y runner que el chat):  -r=<Lite>,--llamadas,<llamadas.json>,<salida.txt>
    if (args.length >= 3 && String(args[0]) == "--llamadas") {
       var ajL = new PLAjustes(); ajL.cargar(); ajL.guardar = function () {};
