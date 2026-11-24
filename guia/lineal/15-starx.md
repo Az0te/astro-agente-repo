@@ -50,6 +50,8 @@ Canales mono (Hα, OIII, SII, L). En RGB, el modelo de ML puede rechazar imágen
 
 **Sin ML (no hay modelo o el programa no lo tiene):** NXT solo, denoise 0,95 (en Hα 0,85 puntuó algo más: 79,2 frente a 78,6), detail 0,15, iterations 2. Con señal fuerte (Hα), sin NXT: ML 1,0 solo. Sin ML ni NXT: reducción de ruido por variación total multiescala (8 escalas, fuerza 0,6; no con los valores por defecto, que dejan mucho ruido grueso) o la reducción de ruido propia del programa, comparada. Borra más detalle que el híbrido y que NXT 0,95 (ver [detalle](../detalle/lineal-15-denoise-mldenoise.md)).
 
+**En las herramientas** (24 nov 2026): `reducirRuido` sobre una capa mono **lineal y sin estrellas** (marca de `separarEstrellas`) usa NXT 0,95 si no se le da `denoise`, y si el ruido baja menos del 50 % es `no_cumple` cuando se le pidió un NXT por debajo de 0,75 (con 0,75 o más, aviso: en un recorte del Hα de IC 1396, NXT 0,50 / 0,75 / 0,95 bajaron un 27 / 38 / 44 %, así que con NXT solo el 50 % no siempre se alcanza); `ruidoCandidatos` compara ahí 0,50 / 0,75 / 0,95. Motivo: en las pasadas de paleta de IC 1396 con Qwen se aplicó el NXT 0,50 por defecto a cada capa (Hα bajó un 28 %, OIII/SII/Hβ ~47 %) y tras el estirado al fallo las capas débiles llegaron con el doble de grano que el Natural de Rafael (NXT Hα 0,5, OIII 0,75, SII 0,8, Hβ 0,75 sobre datos con más señal). Con `principal: false` no se aplica.
+
 | Parámetro NXT (variantes) | Valor |
 |---|---|
 | Separación de color (RGB) | croma > luminancia (nebulosa oscura: croma 0,90, luminancia 0,40, detail 0,25); 0,75 por igual dio aspecto plástico |

@@ -372,20 +372,24 @@ function estirarEstrellasCandidatos(viewId, o) {
       }
     } catch (e1) { avisos.push("no se pudo repetir el estirado de la starless (" + (e1.message || e1) + "): se usa arcsinh k 3000"); est = null; }
   }
-  if (!est) est = estirarEstrellas(viewId, { nuevaVista: stUnico(base + "_est"), k: o.k, amount: o.amount,
+  // k del arcsinh: el pedido, el del tipo (nebulosa: 1000) o el de estirarEstrellas (3000).
+  var kBase = o.k || tt.kEstrellas || undefined;
+  if (!est) est = estirarEstrellas(viewId, { nuevaVista: stUnico(base + "_est"), k: kBase, amount: o.amount,
                                              metodo: metodo === "starstretch" ? "starstretch" : undefined, saturacion: satEst });
   var estV = View.viewById(est.vista), rect = stRectEstrellas(estV);
 
   // 2. Candidatos.
+  // Más discretas: el mismo arcsinh con k más bajo (sube menos las estrellas débiles y las deja más pequeñas). Campos
+  // densos de la Vía Láctea: con k 3000 la capa de IC 405 cubría el 11,7 % de los píxeles y las estrellas tapaban la
+  // nebulosa (19 nov 2026); la referencia de Opus usó k 1000. El Natural de IC 1396 de Rafael, k 120.
+  var kRef = (metodo === "extraer" || metodo === "starstretch") ? 3000 : (est.k || kBase || 3000);
+  var kDisc = [1000, 300, 120].filter(function (k) { return k < 0.8 * kRef; }).slice(0, 2);
   var variantes = o.variantes || [
     { etiqueta: "recomendada", tamano: 1, saturacion: 1 },
     { etiqueta: "estrellas +20 % de tamaño y +10 % de saturación", tamano: 1.2, saturacion: 1.1 },
-    { etiqueta: "estrellas +50 % de tamaño y +20 % de saturación", tamano: 1.5, saturacion: 1.2 },
-    // Más discretas: el mismo arcsinh con k más bajo (sube menos las estrellas débiles). Campos densos de la Vía Láctea:
-    // con k 3000 la capa de IC 405 cubría el 11,7 % de los píxeles y las estrellas tapaban la nebulosa (19 nov 2026);
-    // la referencia de Opus usó k 1000.
-    { etiqueta: "estrellas más discretas (arcsinh k 1000)", k: 1000, saturacion: 1 },
-    { etiqueta: "estrellas muy discretas (arcsinh k 300)", k: 300, saturacion: 1 }];
+    { etiqueta: "estrellas +50 % de tamaño y +20 % de saturación", tamano: 1.5, saturacion: 1.2 }].concat(
+    kDisc.map(function (k, j) { return { etiqueta: "estrellas " + (j ? "muy " : "más ") + "discretas (arcsinh k " + k + ")", k: k, saturacion: 1, discreta: true }; }),
+    kRef < 3000 ? [{ etiqueta: "estrellas más brillantes (arcsinh k 3000)", k: 3000, saturacion: 1 }] : []);
   var cands = [], ref = null;
   for (var i = 0; i < variantes.length; ++i) {
     var vr = variantes[i], c = { etiqueta: vr.etiqueta || ("candidato " + (i + 1)), tamano_pedido: vr.tamano || 1, saturacion_pedida: vr.saturacion || 1 };
@@ -396,6 +400,7 @@ function estirarEstrellasCandidatos(viewId, o) {
         estK = estirarEstrellas(viewId, { nuevaVista: stUnico(base + "_k" + vr.k), k: vr.k, saturacion: satEst });
         c.k = vr.k;
       }
+      if (vr.discreta) c.discreta = true;
       var fuente = estK ? View.viewById(estK.vista) : estV;
       tmp.mainView.beginProcess(); tmp.mainView.image.assign(fuente.image); tmp.mainView.endProcess();
       if (estK) fuente.window.forceClose();
@@ -433,7 +438,7 @@ function estirarEstrellasCandidatos(viewId, o) {
   // baje de ese 8 % (o la más discreta). IC 405: k 3000 11,7 %, k 1000 6,6 % (el de la referencia de Opus), k 300 3,4 %.
   var iRec = 0;
   if (cands[0] && cands[0].pix_estrella_pct > 8) {
-    var disc = cands.filter(function (c) { return c.k && !c.error; });
+    var disc = cands.filter(function (c) { return (c.discreta || (c.k && c.k < kRef)) && !c.error; });
     var bajo = disc.filter(function (c) { return c.pix_estrella_pct <= 8; });
     var elegido = bajo.length ? bajo[0] : disc[disc.length - 1];
     if (elegido) {

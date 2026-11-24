@@ -378,6 +378,58 @@ function rzMedidasContraste(view) {
            ruido_cielo: +(dif[dif.length >> 1] / (0.6745 * Math.SQRT2)).toFixed(6), quemados_pct: +(100 * alto / total).toFixed(4) };
 }
 
+// Contraste de escala grande (propio, el mismo que «grande_suave/grande_fuerte» de SirilAstroPilot y SetiAstroPilot):
+// realza sólo la banda de 16–256 px de la luminancia (pilares, bordes, nubes), pesada por la señal suavizada (0 en el
+// cielo), sin tocar el grano fino. Es lo que da el relieve del Natural de IC 1396 (contraste de 32–256 px 0,139 frente a
+// 0,096 de la pasada de paleta de Qwen, 24 nov 2026; el Natural lo sacó con una curva en S, no con LHE ni USM).
+function rzCaja(a, W, H, r) {
+  var t = new Float32Array(W * H), o = new Float32Array(W * H), x, y, s, n, b;
+  for (y = 0; y < H; y++) { s = 0; n = 0; b = y * W;
+    for (x = 0; x < Math.min(r, W); x++) { s += a[b + x]; n++; }
+    for (x = 0; x < W; x++) { if (x + r < W) { s += a[b + x + r]; n++; } if (x - r - 1 >= 0) { s -= a[b + x - r - 1]; n--; } t[b + x] = s / n; } }
+  for (x = 0; x < W; x++) { s = 0; n = 0;
+    for (y = 0; y < Math.min(r, H); y++) { s += t[y * W + x]; n++; }
+    for (y = 0; y < H; y++) { if (y + r < H) { s += t[(y + r) * W + x]; n++; } if (y - r - 1 >= 0) { s -= t[(y - r - 1) * W + x]; n--; } o[y * W + x] = s / n; } }
+  return o;
+}
+function rzSuave(a, W, H, r) { var k = Math.max(1, Math.round(r / 2)); return rzCaja(rzCaja(rzCaja(a, W, H, k), W, H, k), W, H, k); }
+function rzEscalaGrande(view, cantidad, fino, grueso) {
+  fino = fino || 16; grueso = grueso || 256;
+  var im = view.image, W = im.width, H = im.height, nc = im.numberOfChannels, n = W * H, R = new Rect(0, 0, W, H);
+  var ch = [], L = new Float32Array(n), i;
+  for (var c = 0; c < nc; ++c) { var b = new Float32Array(n); im.getSamples(b, R, c); ch.push(b); for (i = 0; i < n; ++i) L[i] += b[i] / nc; }
+  var sf = rzSuave(L, W, H, fino), sg = rzSuave(L, W, H, grueso), s32 = rzSuave(L, W, H, 32), mu = [];
+  for (var y = 0; y < H; y += 8) for (var x = 0; x < W; x += 8) mu.push(s32[y * W + x]);
+  mu.sort(function (p, q) { return p - q; });
+  var cielo = mu[Math.floor(0.10 * (mu.length - 1))], rango = Math.max(mu[Math.floor(0.60 * (mu.length - 1))] - cielo, 1e-4);
+  var f = new Float32Array(n);
+  for (i = 0; i < n; ++i) {
+    var w = Math.min(1, Math.max(0, (s32[i] - cielo) / rango)); w = w * w * (3 - 2 * w);
+    var L1 = Math.max(L[i] + cantidad * (sf[i] - sg[i]) * w, 0.6 * L[i]);
+    f[i] = L1 / Math.max(L[i], 1e-6);
+  }
+  view.beginProcess();
+  if (nc === 1) { for (i = 0; i < n; ++i) ch[0][i] = Math.min(1, Math.max(0, ch[0][i] * f[i])); im.setSamples(ch[0], R, 0); }
+  else {
+    for (i = 0; i < n; ++i) {
+      var mx = 0; for (var c2 = 0; c2 < nc; ++c2) { ch[c2][i] *= f[i]; if (ch[c2][i] > mx) mx = ch[c2][i]; }
+      if (mx > 1) for (var c3 = 0; c3 < nc; ++c3) ch[c3][i] /= mx;
+      for (var c4 = 0; c4 < nc; ++c4) ch[c4][i] = Math.max(0, Math.min(1, ch[c4][i]));
+    }
+    for (var c5 = 0; c5 < nc; ++c5) im.setSamples(ch[c5], R, c5);
+  }
+  view.endProcess();
+}
+
+// LHE: Qwen pasó slopeLimit 0,1 (paleta de IC 1396, 24 nov 2026) y el proceso falló. Fuera de rango se lleva al límite.
+function rzLheValido(p, notas) {
+  var q = { radius: Math.round(+p.radius || 64), slopeLimit: +p.slopeLimit || 1.5, amount: (p.amount !== undefined) ? +p.amount : 0.35 };
+  if (q.radius < 8 || q.radius > 512) { notas.push("LHE radius " + p.radius + " fuera de 8–512: se usa " + Math.min(512, Math.max(8, q.radius))); q.radius = Math.min(512, Math.max(8, q.radius)); }
+  if (!(q.slopeLimit >= 1 && q.slopeLimit <= 64)) { var sl = q.slopeLimit < 1 ? 1.5 : 64; notas.push("LHE slopeLimit " + p.slopeLimit + " fuera de 1–64 (1 = no hace nada; lo normal 1,5–3): se usa " + sl); q.slopeLimit = sl; }
+  if (!(q.amount > 0 && q.amount <= 1)) { var am = q.amount > 1 ? 1 : 0.35; notas.push("LHE amount " + p.amount + " fuera de 0–1: se usa " + am); q.amount = am; }
+  return q;
+}
+
 function contrasteCandidatos(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
   o = o || {};
@@ -385,7 +437,12 @@ function contrasteCandidatos(viewId, o) {
   if (rzMedian(src) < 0.05) throw new Error("La imagen parece lineal (mediana " + rzMedian(src).toFixed(4) + "): el contraste local va después del estirado");
   // Imagen grande (> 8 MP): comparar en un recorte con cielo y señal (rdElegirRecorte, ruido.js) y aplicar sólo el ganador
   // a la imagen entera, con sus mismos parámetros (los radios de LHE son en píxeles: valen igual en el recorte).
-  var nLhe = (o.lhe || [1, 2]).length + (o.hdrmt !== false ? 1 : 0) + (o.dse !== false ? 1 : 0);
+  var notasParam = [];
+  var lheLista = (o.lhe || [{ radius: 64, slopeLimit: 1.5, amount: 0.35 }, { radius: 128, slopeLimit: 2.0, amount: 0.35 }]);
+  if (!(lheLista instanceof Array)) lheLista = [lheLista];
+  lheLista = lheLista.map(function (p) { return rzLheValido(p, notasParam); });
+  var grandes = (o.grande === false) ? [] : (o.grande instanceof Array ? o.grande : (typeof o.grande === "number" ? [o.grande] : [0.5, 1.0]));
+  var nLhe = lheLista.length + grandes.length + (o.hdrmt !== false ? 1 : 0) + (o.dse !== false ? 1 : 0);
   if (o.recorte !== false && nLhe > 1 && src.image.width * src.image.height > (o.recorteMP || 8) * 1e6 && typeof rdElegirRecorte === "function") {
     var rc = rdElegirRecorte(src, o.ladoRecorte || 2000);
     var wr = new ImageWindow(rc.width, rc.height, src.image.numberOfChannels, 32, true, src.image.isColor, viewId + "_rec");
@@ -400,8 +457,10 @@ function contrasteCandidatos(viewId, o) {
     var oF = {}; for (var kf in o) oF[kf] = o[kf];
     oF.recorte = false; oF.lhe = gana.sel.lhe || []; oF.hdrmt = gana.sel.hdrmt === undefined ? false : gana.sel.hdrmt;
     oF.dse = gana.sel.dse === undefined ? false : gana.sel.dse;
+    oF.grande = gana.sel.grande === undefined ? false : [gana.sel.grande];
     var tF = Date.now(), fin = contrasteCandidatos(viewId, oF);
     fin.comparados = enRec.comparados;
+    if (enRec.parametros_corregidos) fin.parametros_corregidos = enRec.parametros_corregidos;
     fin.comparado_en = { recorte: [rc.x0, rc.y0, rc.x1, rc.y1], nota: "métodos comparados en un recorte de " + rc.width + "×" + rc.height +
                          " px; el ganador (" + gana.metodo + ") se aplicó a la imagen entera en " + Math.round((Date.now() - tF) / 1000) + " s" };
     fin.motivo = "En el recorte: " + enRec.motivo + " En la imagen entera: " + fin.motivo;
@@ -420,7 +479,7 @@ function contrasteCandidatos(viewId, o) {
                  segundos: Math.round((Date.now() - t1) / 1000),
                  previa: typeof pxPrevia === "function" ? pxPrevia(w.mainView.id, "lc_" + w.mainView.id, { estirar: false }) : null });
   }
-  (o.lhe || [{ radius: 64, slopeLimit: 1.5, amount: 0.35 }, { radius: 128, slopeLimit: 2.0, amount: 0.35 }]).forEach(function (p, i) {
+  lheLista.forEach(function (p, i) {
     var t1 = Date.now();
     try {
       var w = copia("_lhe" + p.radius);
@@ -429,6 +488,15 @@ function contrasteCandidatos(viewId, o) {
       rzMust(P.executeOn(w.mainView), "LocalHistogramEqualization");
       medir("LHE radio " + p.radius + ", pendiente " + p.slopeLimit + ", amount " + p.amount, w, t1, { lhe: [p] });
     } catch (e) { cands.push({ etiqueta: "LHE radio " + p.radius, error: String(e && e.message ? e.message : e) }); }
+  });
+  grandes.forEach(function (cg) {
+    var tg = Date.now();
+    try {
+      cg = Math.min(2, Math.max(0.1, +cg || 0.5));
+      var wg = copia("_grande" + Math.round(100 * cg));
+      rzEscalaGrande(wg.mainView, cg, 16, 256);
+      medir("Escala grande 16–256 px × " + (1 + cg) + " (con peso de señal, sin tocar el grano)", wg, tg, { grande: cg });
+    } catch (e) { cands.push({ etiqueta: "Escala grande " + cg, error: String(e && e.message ? e.message : e) }); }
   });
   if (o.hdrmt !== false) {
     var t2 = Date.now();
@@ -478,6 +546,7 @@ function contrasteCandidatos(viewId, o) {
   }
   return {
     vista: vista, original: viewId, entrada: base, cielo_restaurado: cieloRestaurado || undefined,
+    parametros_corregidos: notasParam.length ? notasParam : undefined,
     comparados: cands.map(function (c) {
       if (!c.medidas) return { metodo: c.etiqueta, error: c.error, elegido: false };
       return { metodo: c.etiqueta, sel: c.sel, contraste_ganado_pct: +(100 * (c.contraste_x - 1)).toFixed(1), ruido_rel: c.ruido_x,
@@ -507,7 +576,7 @@ function contrasteCandidatos(viewId, o) {
 // mueve el cielo ni quema; si ninguno cumple, no aplicar («casi siempre basta con lo que hizo la deconvolución»). Valores
 // de partida sin calibrar con casos: el usuario elige mirando el recorte al 100 %.
 //   var r = nitidezCandidatos("Starless_nxt");
-function rzDetalleFino(view) {
+function rzDetalleFino(view, celdas) {
   var im = view.image, W = im.width, H = im.height, nc = im.numberOfChannels, n = W * H, R = new Rect(0, 0, W, H);
   var L = new Float32Array(n), b = new Float32Array(n);
   for (var c = 0; c < nc; ++c) { im.getSamples(b, R, c); for (var i = 0; i < n; ++i) L[i] += b[i] / nc; }
@@ -517,16 +586,22 @@ function rzDetalleFino(view) {
     cells.push({ x: x0, y: y0, m: s / k });
   }
   cells.sort(function (a, b2) { return b2.m - a.m; });
-  var top = cells.slice(0, Math.max(5, Math.floor(cells.length * 0.3))), v = [];
+  var top = celdas || cells.slice(0, Math.max(5, Math.floor(cells.length * 0.3))), v = [], g = [], d = [];
+  // grano = |L − caja 3×3| (1 px: casi todo ruido); estructura = |caja 3×3 − caja 9×9| (2–8 px: el detalle que se quiere
+  // realzar). Con la laplaciana sola, «detalle ×1,31» de la pasada de paleta de IC 1396 (24 nov 2026) era grano.
+  function caja(p, r) { var s2 = 0; for (var yy = -r; yy <= r; ++yy) for (var xx = -r; xx <= r; ++xx) s2 += L[p + yy * W + xx]; return s2 / ((2 * r + 1) * (2 * r + 1)); }
   top.forEach(function (cc) {
     for (var y = cc.y; y < cc.y + S; y += 2) for (var x = cc.x; x < cc.x + S; x += 2) {
       var p = y * W + x; v.push(Math.abs(4 * L[p] - L[p - 1] - L[p + 1] - L[p - W] - L[p + W]));
+      if (((x - cc.x) & 6) === 0 && ((y - cc.y) & 6) === 0 && x >= 4 && y >= 4 && x + 4 < W && y + 4 < H) {
+        var c3 = caja(p, 1); g.push(Math.abs(L[p] - c3)); d.push(Math.abs(c3 - caja(p, 4)));
+      }
     }
   });
-  v.sort(function (a, b2) { return a - b2; });
+  function med(a) { a.sort(function (p1, p2) { return p1 - p2; }); return a.length ? a[a.length >> 1] : 0; }
   var cx = top[0].x + S / 2, cy = top[0].y + S / 2, h = Math.min(400, W >> 1, H >> 1);
   var x1 = Math.max(0, Math.min(W - 2 * h, cx - h)), y1 = Math.max(0, Math.min(H - 2 * h, cy - h));
-  return { detalle_fino: v.length ? v[v.length >> 1] : 0, rect: [x1, y1, x1 + 2 * h, y1 + 2 * h] };
+  return { detalle_fino: med(v), grano: med(g), estructura: med(d), celdas: top, rect: [x1, y1, x1 + 2 * h, y1 + 2 * h] };
 }
 
 function nitidezCandidatos(viewId, o) {
@@ -534,9 +609,20 @@ function nitidezCandidatos(viewId, o) {
   o = o || {};
   var src = rzView(viewId), t0 = Date.now();
   if (rzMedian(src) < 0.05) throw new Error("La imagen parece lineal: la nitidez va sobre la starless estirada (Paso 7 no lineal)");
+  // Paso 6 antes del 7 (24 nov 2026): las paletas de IC 1396 se saltaron la reducción de ruido no lineal y el USM sacó el
+  // grano. Si el último estirado comparado (estirarCandidatos) es posterior a la última reducción de ruido sobre una
+  // imagen estirada, se para. forzar: true sólo si el usuario lo pide.
+  if (!o.forzar && typeof esComparados === "function" && typeof rdUltimoNoLineal === "function") {
+    var tc = esComparados(), ue = 0, ahora = Date.now();
+    for (var kc in tc) if (ahora - tc[kc] <= 86400000 && tc[kc] > ue) ue = tc[kc];
+    if (ue && rdUltimoNoLineal() < ue)
+      throw new Error("Falta el Paso 6 (reducción de ruido no lineal) desde el último estirado: ruidoCandidatos(\"" + viewId + "\") primero " +
+                      "(compara NXT 0,15/0,30/0,45 y TGV sobre la estirada) y la nitidez sobre su resultado. Si el usuario no quiere el Paso 6, " +
+                      "opciones.forzar: true.");
+  }
   var niveles = o.niveles || [{ etiqueta: "suave", sigma: 1.5, amount: 0.3 }, { etiqueta: "equilibrado", sigma: 2.0, amount: 0.5 },
                               { etiqueta: "acentuado", sigma: 2.5, amount: 0.7 }];
-  var ruidoMax = o.ruidoMax || 1.10, base = rzMedidasContraste(src), df0 = rzDetalleFino(src), cands = [];
+  var ruidoMax = o.ruidoMax || 1.10, granoMax = o.granoMax || 1.10, base = rzMedidasContraste(src), df0 = rzDetalleFino(src), cands = [];
   var masc = (o.mascara !== false && typeof bsMascara === "function") ? bsMascara(src) : null;
   function previaRec(id) {
     if (typeof PIASTROPILOT_PREVIAS !== "string" || !PIASTROPILOT_PREVIAS || typeof pprPrevia !== "function") return null;
@@ -554,16 +640,20 @@ function nitidezCandidatos(viewId, o) {
       var ok = U.executeOn(w.mainView);
       if (masc) w.removeMask();
       rzMust(ok, "UnsharpMask");
-      var m = rzMedidasContraste(w.mainView), df = rzDetalleFino(w.mainView), f = [];
+      var m = rzMedidasContraste(w.mainView), df = rzDetalleFino(w.mainView, df0.celdas), f = [];
       var gr = m.ruido_cielo / Math.max(base.ruido_cielo, 1e-9);
+      var gx = df.grano / Math.max(df0.grano, 1e-9), ex = df.estructura / Math.max(df0.estructura, 1e-9);
       if (gr > ruidoMax) f.push("sube el ruido del cielo ×" + gr.toFixed(2) + " (máx. ×" + ruidoMax + ")");
+      // La máscara protege el cielo, no el objeto: el grano de la nebulosa lo amplifica igual (Natural de IC 1396: sin USM).
+      if (gx > granoMax) f.push("sube el grano del objeto ×" + gx.toFixed(2) + " (máx. ×" + granoMax + "; la estructura de 2–8 px sólo ×" + ex.toFixed(2) + ")");
       if (Math.abs(m.cielo - base.cielo) > 0.01) f.push("mueve el cielo de " + base.cielo + " a " + m.cielo);
       if (m.quemados_pct - base.quemados_pct > 0.02) f.push("quema " + (m.quemados_pct - base.quemados_pct).toFixed(3) + " % más de píxeles");
       c.vista = id; c.detalle_x = +(df.detalle_fino / Math.max(df0.detalle_fino, 1e-9)).toFixed(2); c.ruido_x = +gr.toFixed(3);
+      c.grano_x = +gx.toFixed(3); c.estructura_x = +ex.toFixed(3);
       c.cielo = m.cielo; c.fallos = f; c.cumple = !f.length; c.fuerza = nv.amount;
       c.previa = typeof pxPrevia === "function" ? pxPrevia(id, id, { estirar: false }) : null;
       c.previa_recorte = previaRec(id);
-      c.resumen = "detalle ×" + c.detalle_x + ", ruido ×" + c.ruido_x + (f.length ? " · NO CUMPLE: " + f.join("; ") : "");
+      c.resumen = "estructura ×" + c.estructura_x + ", grano del objeto ×" + c.grano_x + ", ruido del cielo ×" + c.ruido_x + (f.length ? " · NO CUMPLE: " + f.join("; ") : "");
     } catch (e) { c.error = String(e && e.message ? e.message : e); }
     cands.push(c);
   });
@@ -573,14 +663,18 @@ function nitidezCandidatos(viewId, o) {
   cands.forEach(function (c) { c.recomendado = c === best; c.elegido = c === best; });
   return {
     vista: best ? best.vista : null, original: viewId, candidatos: cands, recomendado: best ? best.etiqueta : "no aplicar nitidez",
-    entrada: { ruido_cielo: base.ruido_cielo, cielo: base.cielo, detalle_fino: +df0.detalle_fino.toPrecision(3) },
+    entrada: { ruido_cielo: base.ruido_cielo, cielo: base.cielo, detalle_fino: +df0.detalle_fino.toPrecision(3),
+               grano: +df0.grano.toPrecision(3), estructura: +df0.estructura.toPrecision(3),
+               suavidad: +(df0.estructura / Math.max(df0.grano, 1e-9)).toFixed(2) },
     recorte_previa: df0.rect, no_cumple: [], segundos: Math.round((Date.now() - t0) / 1000),
     siguiente: "El usuario elige uno (o ninguno: la original sigue siendo válida) mirando el recorte al 100 %; seguir con esa vista y cerrar las demás.",
     control: {
       revisar_a_ojo: ["bordes 'ilustrados' o halos claros en los bordes de la nebulosa", "grano del fondo amplificado al 100–200 %",
                       "comparar con la original: más microcontraste no es más resolución"],
       nota: "Sobre la starless: las estrellas no se enfocan (se recombinan en el Paso 9). detalle_x = laplaciana mediana en el 30 % de celdas " +
-            "más brillantes frente a la original. Niveles sin calibrar con varios casos. Lo de revisar_a_ojo no lo mide esta función."
+            "más brillantes frente a la original (mezcla grano y detalle); grano_x = |L − caja 3×3| (1 px) y estructura_x = |caja 3×3 − caja 9×9| " +
+            "(2–8 px) en esas mismas celdas. No cumple si el grano del objeto sube más de granoMax (1,10). Si ninguno cumple, lo que falta " +
+            "suele ser relieve de escala grande (contrasteCandidatos, «Escala grande»), no enfoque. Niveles sin calibrar con varios casos. Lo de revisar_a_ojo no lo mide esta función."
     }
   };
 }

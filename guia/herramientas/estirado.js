@@ -1036,7 +1036,12 @@ function estirarEstrellasExtraer(starlessLinId, starsLinId, starlessStId, o) {
 // máscara, 0,051). Sin calibrar con más casos. Estrellas con starStretch, nunca "extraer".
 var ES_TIPOS = {
   galaxia: { cielo: 0.07, ruidoMax: 0.12, saturacion: 1.3, estrellas: "extraer" },
-  nebulosa_oscura: { cielo: 0.12, ruidoMax: 0.20 }   // estrellas con arcsinh k 3000 (con starStretch amount 2, aporte 0,7–0,8 %)
+  nebulosa_oscura: { cielo: 0.12, ruidoMax: 0.20 },   // estrellas con arcsinh k 3000 (con starStretch amount 2, aporte 0,7–0,8 %)
+  // Nebulosa de emisión: sólo cambia el estirado de la capa de estrellas (estirarEstrellasCandidatos), arcsinh k 1000 en vez
+  // de 3000 (24 nov 2026). Con k 3000 la FWHM de las estrellas de las paletas de IC 1396 era 7,3–7,5 px frente a 6,4 del
+  // Natural de Rafael (k 120); en la capa de estrellas de IC 1396, k 3000 → 4,8 px, k 1000 → 4,1, k 300 → 3,6, k 120 → 3,5.
+  // La referencia de Opus de IC 405 también usó k 1000.
+  nebulosa: { kEstrellas: 1000 }
 };
 
 // Paso 1: la starless. Desde el 11 nov 2026 (Rafael) la capa de estrellas NO se estira aquí: queda lineal y se estira en

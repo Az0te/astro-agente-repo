@@ -816,7 +816,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodo: \"nxt\" | \"mascara\" (NXT fuerte sólo donde hay poca señal) | \"hibrido\" | \"ml\" | \"tgv\", denoise: 0.5, detail: 0.15, iterations: 2, croma, frecuencias: { hf, lf, hfColor, lfColor, escala } (NXT con separación de color y de frecuencias), amount (ml), strength (tgv), modelo: .xmlm, nuevaVista }"
+      "description": "Opcional. { metodo: \"nxt\" | \"mascara\" (NXT fuerte sólo donde hay poca señal) | \"hibrido\" | \"ml\" | \"tgv\", denoise: 0.5, detail: 0.15, iterations: 2, croma, frecuencias: { hf, lf, hfColor, lfColor, escala } (NXT con separación de color y de frecuencias), amount (ml), principal (por defecto, en una capa mono lineal sin estrellas: NXT 0,95 sin denoise dado y no_cumple si baja menos del 50 %; false para no), strength (tgv), modelo: .xmlm, nuevaVista }"
      }
     },
     "required": [
@@ -841,7 +841,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodos: [\"nxt\", \"frecuencias\", \"mascara\", \"ml\", \"tgv\", \"hibrido\", \"syqon\"] (syqon = SyQon Prism, solo lineal; si no está o la imagen es no lineal va en omitidos), niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %), nuevaVista, cerrar: false para conservar las demás }"
+      "description": "Opcional. { metodos: [\"nxt\", \"frecuencias\", \"mascara\", \"ml\", \"tgv\", \"hibrido\", \"syqon\"] (syqon = SyQon Prism, solo lineal; si no está o la imagen es no lineal va en omitidos), niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %; en una capa mono lineal sin estrellas va solo y compara NXT 0,50/0,75/0,95; principal: false para no), nuevaVista, cerrar: false para conservar las demás }"
      }
     },
     "required": [
@@ -1441,7 +1441,7 @@
    "fichero": "estrellas.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 8 no lineal: estira la capa de estrellas LINEAL justo antes de recombinar y saca tres candidatos para que el usuario elija: recomendada (galaxias: mismo estirado que la starless; resto: arcsinh k 3000; + prepararEstrellas), estrellas +20 % de tamaño y +10 % de saturación, y +50 % de tamaño y +20 % de saturación. Más grandes = sube las alas débiles hasta que el área de estrellas crece ×1,2 o ×1,5 (sin dilatar). Con starlessActual, cada uno se combina por screen para la miniatura, un recorte al 100 % y el aporte de estrellas.",
+   "descripcion": "Paso 8 no lineal: estira la capa de estrellas LINEAL justo antes de recombinar y saca tres candidatos para que el usuario elija: recomendada (galaxias: mismo estirado que la starless; tipo \"nebulosa\": arcsinh k 1000; resto: k 3000; + prepararEstrellas), estrellas +20 % de tamaño y +10 % de saturación, y +50 % de tamaño y +20 % de saturación, más dos más discretas con k más bajo (y una con k 3000 si la base es menor). Más grandes = sube las alas débiles hasta que el área de estrellas crece ×1,2 o ×1,5 (sin dilatar). Con starlessActual, cada uno se combina por screen para la miniatura, un recorte al 100 % y el aporte de estrellas.",
    "resumen": "Paso 8 no lineal: estira las estrellas y saca 3 candidatos (recomendada, +20 %/+10 %, +50 %/+20 %) con miniaturas para elegir.",
    "paso": "no-lineal/08-estrellas.md",
    "params": {
@@ -1602,7 +1602,7 @@
    "fichero": "realces.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Contraste local de la starless estirada: compara LocalHistogramEqualization (radio 64 y 128), HDRMultiscaleTransform (6 capas, mezcla 50 %) y DarkStructureEnhance sobre copias, y se queda con el que más sube el contraste local sin subir el ruido del cielo más de un 25 %, sin mover el cielo ni quemar; si ninguno cumple, recomienda no tocarla. Devuelve la tabla de la comparación.",
+   "descripcion": "Contraste local de la starless estirada: compara LocalHistogramEqualization (radio 64 y 128; slopeLimit 1-64 y amount 0-1, fuera de rango se corrige), escala grande (banda de 16-256 px ×1,5 y ×2, sin tocar el grano), HDRMultiscaleTransform (6 capas, mezcla 50 %) y DarkStructureEnhance sobre copias, y se queda con el que más sube el contraste local sin subir el ruido del cielo más de un 25 %, sin mover el cielo ni quemar; si ninguno cumple, recomienda no tocarla. Devuelve la tabla de la comparación.",
    "resumen": "Paso 5 no lineal: compara LHE, HDRMT y DarkStructureEnhance sobre la starless estirada; si ninguno cumple, recomienda no tocarla.",
    "paso": "no-lineal/05-boost.md",
    "params": {
@@ -1614,7 +1614,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { lhe: [{ radius, slopeLimit, amount }], hdrmt: { capas, mezcla } | false, dse: { median } | false, ruidoMax: 1.25, nuevaVista, cerrar: false para conservar los demás }"
+      "description": "Opcional. { lhe: [{ radius, slopeLimit, amount }], hdrmt: { capas, mezcla } | false, dse: { median } | false, grande: [0.5, 1.0] | false, ruidoMax: 1.25, nuevaVista, cerrar: false para conservar los demás }"
      }
     },
     "required": [
@@ -1627,7 +1627,7 @@
    "fichero": "realces.js",
    "nivel": "copias",
    "timeout_s": 600,
-   "descripcion": "Paso 7 no lineal: nitidez para elegir sobre la starless estirada, con máscara de luminancia que protege el cielo: máscara de enfoque suave, equilibrada y acentuada. Mide detalle fino, ruido y nivel del cielo y quemados, con miniatura y recorte al 100 %. Recomienda la más fuerte que no sube el ruido del cielo más de un 10 %; si ninguna cumple, no aplicar.",
+   "descripcion": "Paso 7 no lineal: nitidez para elegir sobre la starless estirada, con máscara de luminancia que protege el cielo: máscara de enfoque suave, equilibrada y acentuada. Mide estructura (2-8 px) y grano (1 px) del objeto, ruido y nivel del cielo y quemados, con miniatura y recorte al 100 %. Recomienda la más fuerte que no sube el ruido del cielo ni el grano del objeto más de un 10 %; si ninguna cumple, no aplicar. Se niega si desde el último estirarCandidatos no hubo reducción de ruido no lineal (Paso 6: ruidoCandidatos primero).",
    "resumen": "Paso 7 no lineal: tres niveles de nitidez con máscara sobre la starless para elegir; si ninguno cumple, no aplicar.",
    "paso": "no-lineal/07-nitidez.md",
    "params": {
@@ -1639,7 +1639,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { niveles: [{ etiqueta, sigma, amount }], ruidoMax: 1.10, mascara: false (sin máscara) }"
+      "description": "Opcional. { niveles: [{ etiqueta, sigma, amount }], ruidoMax: 1.10, granoMax: 1.10, mascara: false (sin máscara), forzar: true (sin Paso 6, sólo si el usuario lo pide) }"
      }
     },
     "required": [
