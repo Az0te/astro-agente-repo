@@ -354,7 +354,7 @@
    "fichero": "alineado.js",
    "nivel": "disco",
    "timeout_s": 1800,
-   "descripcion": "Paso 5 lineal: registra los masters (ficheros, carpeta o vistas) sobre la referencia con StarAlignment (reescala si la escala difiere > 3 %), recorta todos a la zona común con datos (también franjas de borde con menos cobertura) y guarda <nombre>_alin.xisf en 'salida' (por defecto 'alineados' junto a los masters). Abre las vistas _alin y resuelve/copia la astrometría.",
+   "descripcion": "Paso 5 lineal: registra los masters (ficheros, carpeta o vistas) sobre la referencia con StarAlignment (reescala si la escala difiere > 3 %), recorta todos a la zona común con datos (también franjas de borde con menos cobertura) y guarda <nombre>_alin.xisf en 'salida' (por defecto 'alineados' junto a los masters). Abre las vistas _alin y resuelve/copia la astrometría. Devuelve ruta_paso10: minutos de banda ancha y estrecha y la ruta del Paso 10 (con la estrecha ≥ 4 veces la ancha, \"paleta\": en nebulosas no se inyecta en la RGB).",
    "resumen": "Paso 5 lineal: registra los masters sobre la referencia, reescala si hace falta, recorta a la zona común y guarda <nombre>_alin.xisf.",
    "paso": "lineal/05-staralignment-crop.md",
    "params": {
@@ -655,7 +655,7 @@
    "fichero": "combinacion.js",
    "nivel": "copias",
    "timeout_s": 600,
-   "descripcion": "Paso 10 lineal, que se EJECUTA TRAS EL PASO 16: inyecta Hα (lineal, alineado, SIN estrellas y con el continuo restado: la vista _CS de restarContinuo) en el rojo de la RGB calibrada SIN estrellas (starless de separarEstrellas) bajo máscara de nebulosa, y con opciones.oiii la capa OIII en verde y azul a partes iguales. Nebulosas: modo \"senal\" (suma la señal del Hα ajustada al R, sube la nebulosa ≈ α·100 %). Galaxias: modo \"suma\" (sólo el exceso de Hα sobre R). Se niega si la RGB lleva FILTER de banda estrecha (sería el propio dual band) y si la RGB, el Hα o el OIII tienen estrellas o si el Hα o el OIII no vienen de restarContinuo (el OIII con canal 1, el G); el error dice la llamada siguiente.",
+   "descripcion": "Paso 10 lineal, que se EJECUTA TRAS EL PASO 16: inyecta Hα (lineal, alineado, SIN estrellas y con el continuo restado: la vista _CS de restarContinuo) en el rojo de la RGB calibrada SIN estrellas (starless de separarEstrellas) bajo máscara de nebulosa, y con opciones.oiii la capa OIII en verde y azul a partes iguales. Nebulosas: modo \"senal\" (suma la señal del Hα ajustada al R, sube la nebulosa ≈ α·100 %). Galaxias: modo \"suma\" (sólo el exceso de Hα sobre R). Se niega si la RGB lleva FILTER de banda estrecha (sería el propio dual band) y si la RGB, el Hα o el OIII tienen estrellas o si el Hα o el OIII no vienen de restarContinuo (el OIII con canal 1, el G); el error dice la llamada siguiente. En nebulosas se niega también si alinearMasters midió la ruta de paleta (banda estrecha ≥ 4 veces la RGB): la nebulosa sale como paleta (previsualizarPaletas → componerPaleta) y la RGB sólo da las estrellas; opciones.motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
    "paso": "lineal/10-combinacion-rgb-nb.md",
    "params": {
     "type": "object",
@@ -670,7 +670,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", modo: \"senal\" | \"suma\" | \"mezcla\", alfa, oiii: \"<vista OIII>\", alfaOIII, clipLow, suavizado, nuevaVista, forzar: true (saltarse la guarda del orden: SÓLO si el usuario lo pide) }"
+      "description": "Opcional. { tipo: \"nebulosa\" | \"galaxia\", modo: \"senal\" | \"suma\" | \"mezcla\", alfa, oiii: \"<vista OIII>\", alfaOIII, clipLow, suavizado, nuevaVista, motivo: \"<por qué se inyecta aunque toque paleta>\" (emisión y reflexión, o el usuario pide color RGB), forzar: true (saltarse las guardas: SÓLO si el usuario lo pide) }"
      }
     },
     "required": [

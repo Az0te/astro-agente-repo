@@ -201,7 +201,7 @@ function combinarMasters(lista, o) {
                                               oiii: (por.OIII && o.oiii !== false && o.tipo != "galaxia") ? por.OIII[0] : null });
     } catch (e) {
       // La guarda del orden del Paso 10 no tumba el resto de la combinación: se dice y se sigue sin inyectar.
-      if (!/va DESPUÉS del Paso 16/.test(String(e.message || e))) throw e;
+      if (!/va DESPUÉS del Paso 16|Ruta de paleta/.test(String(e.message || e))) throw e;
       r.control.medido.push("Inyección de Hα NO hecha: " + (e.message || e));
     }
   }
@@ -334,6 +334,18 @@ function inyectarHa(rgb, ha, o) {
   o = o || {};
   var vr = cbView(rgb), vh = cbView(ha);
   if (!o.forzar) cbGuardaOrden(vr, vh, o.oiii ? cbView(o.oiii) : null);
+  // Ruta de paleta (24 nov 2026): con mucha más banda estrecha que RGB, en una nebulosa no se inyecta (ver alRuta en
+  // alineado.js, que anota la proporción al alinear). opciones.motivo (p. ej. «emisión y reflexión») la salta.
+  if (!o.forzar && !o.motivo && o.tipo != "galaxia" && typeof alRutaReciente === "function") {
+    var ru = alRutaReciente();
+    if (ru && ru.ruta == "paleta")
+      throw new Error("Ruta de paleta (SKILL.md, Paso 10): al alinear había " + ru.estrecha_min + " min de banda estrecha frente a " +
+                      ru.ancha_min + " min de RGB (×" + ru.proporcion + "). En una nebulosa de emisión NO se inyecta: la nebulosa sale de " +
+                      "las capas de banda estrecha como paleta (cada capa sin estrellas → ruido → el mismo estirado → " +
+                      "previsualizarPaletas en el Paso 2 no lineal → componerPaleta) y la RGB sólo da las estrellas. Si es una " +
+                      "nebulosa de emisión Y reflexión (polvo azul que sólo da la RGB) o el usuario pidió color RGB, repite con " +
+                      "opciones.motivo: «<por qué>».");
+  }
   if (vr.image.numberOfChannels < 3) throw new Error(vr.id + " no es RGB");
   if (vr.image.width != vh.image.width || vr.image.height != vh.image.height)
     throw new Error("Tamaños distintos: alinear y recortar antes (Paso 5, alinearMasters)");

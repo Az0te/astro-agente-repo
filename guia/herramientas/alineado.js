@@ -258,8 +258,70 @@ function alScale(path) {
     if (isFinite(px) && isFinite(fl) && fl > 0) s = 206.265 * px / fl;
   }
   r.escala = isFinite(s) ? +s.toFixed(4) : null;
+  // Tiempo total y filtro, para la ruta del Paso 10 (alRuta).
+  r.exposicion_s = alExposicionTotal(w);
+  r.filtro = "";
+  try { var kf = w.keywords; for (var j = 0; j < kf.length; ++j) if (kf[j].name == "FILTER") r.filtro = kf[j].strippedValue; } catch (e) { }
   w.forceClose();
   return r;
+}
+
+// Segundos de integración de un master: PCL:TotalExposureTime (ImageIntegration, uno por canal: la media) o EXPTIME × NCOMBINE.
+function alExposicionTotal(w) {
+  try {
+    var v = w.mainView.propertyValue("PCL:TotalExposureTime");
+    if (v !== undefined && v !== null) {
+      if (typeof v === "number") { if (v > 0) return v; }
+      else { var s = 0, n = 0; for (var i = 0; i < v.length; ++i) if (v.at(i) > 0) { s += v.at(i); ++n; } if (n) return s / n; }
+    }
+  } catch (e) { }
+  var exp = NaN, nc = NaN, tot = NaN;
+  try { var k = w.keywords; for (var i = 0; i < k.length; ++i) {
+    var nm = k[i].name, x = parseFloat(k[i].strippedValue);
+    if ((nm == "EXPTIME" || nm == "EXPOSURE") && isFinite(x)) exp = x;
+    if (nm == "NCOMBINE" && isFinite(x)) nc = x;
+    if ((nm == "TOTALEXP" || nm == "TOTEXP") && isFinite(x)) tot = x;
+  } } catch (e) { }
+  if (isFinite(tot) && tot > 0) return tot;
+  return (isFinite(exp) && isFinite(nc) && exp > 0 && nc > 0) ? exp * nc : null;
+}
+
+// Ruta del Paso 10 (24 nov 2026, IC 1396 con Qwen: 4 h de banda estrecha y 23 min de RGB; la guía pide la ruta de paleta y
+// Qwen inyectó el Hα y el OIII en la RGB: salió roja y rosa, sin el turquesa del OIII). Con la banda estrecha ≥ 4 veces
+// la ancha, la nebulosa sale de las capas como paleta y la RGB sólo da las estrellas. Se anota en la carpeta temporal
+// (el MCP arranca un script nuevo en cada llamada) y inyectarHa lo consulta.
+var AL_RATIO_PALETA = 4;
+function alRutaFichero() { return File.systemTempDirectory + "/piastropilot-ruta.json"; }
+function alEsEstrecho(f) {
+  f = String(f || "");
+  if (/\bRGB\b/i.test(f)) return false;
+  return /dual|duo|tri.?band|quad|extreme|enhance|ultimate|\d+(\.\d+)?\s*nm\b|\b(ha|h-?alpha|o3|oiii|s2|sii|hb|h-?beta)\b/i.test(f);
+}
+function alRuta(info) {
+  var ancha = 0, estrecha = 0, desconocido = [], det = [];
+  for (var f in info) {
+    var e = info[f].exposicion_s, nb = alEsEstrecho(info[f].filtro || File.extractName(f));
+    det.push({ fichero: File.extractName(f), filtro: info[f].filtro || null, banda: nb ? "estrecha" : "ancha", minutos: e ? +(e / 60).toFixed(1) : null });
+    if (!e) { desconocido.push(File.extractName(f)); continue; }
+    if (nb) estrecha += e; else ancha += e;
+  }
+  var r = { ancha_min: +(ancha / 60).toFixed(1), estrecha_min: +(estrecha / 60).toFixed(1), masters: det };
+  if (ancha > 0 && estrecha > 0) {
+    r.proporcion = +(estrecha / ancha).toFixed(1);
+    r.ruta = r.proporcion >= AL_RATIO_PALETA ? "paleta" : "inyectar";
+    r.nota = r.ruta == "paleta"
+      ? "Banda estrecha ×" + r.proporcion + " la ancha: en una nebulosa de emisión, RUTA DE PALETA (SKILL.md, Paso 10). No se inyecta: " +
+        "cada capa de banda estrecha → gradiente → estrellas fuera → ruido → el mismo estirado → previsualizarPaletas → componerPaleta; " +
+        "la RGB (con SPCC) sólo da las estrellas. Inyectar en la RGB sólo si es nebulosa de emisión Y reflexión (inyectarHa con opciones.motivo)."
+      : "Banda ancha suficiente (banda estrecha ×" + r.proporcion + "): Hα (y OIII) inyectados en la RGB tras el Paso 16, o paleta si el usuario la pide.";
+  } else r.ruta = null;
+  if (desconocido.length) r.sin_tiempo = desconocido;
+  try { File.writeTextFile(alRutaFichero(), JSON.stringify({ t: Date.now(), ruta: r.ruta, proporcion: r.proporcion, ancha_min: r.ancha_min, estrecha_min: r.estrecha_min })); } catch (e) { }
+  return r;
+}
+function alRutaReciente() {
+  try { if (File.exists(alRutaFichero())) { var x = JSON.parse(File.readTextFile(alRutaFichero())); if (Date.now() - x.t < 86400000) return x; } } catch (e) { }
+  return null;
 }
 
 function alinearMasters(lista, o) {
@@ -332,6 +394,7 @@ function alinearMasters(lista, o) {
   var tmp = salida + "/_tmp_alin";
   if (!File.directoryExists(tmp)) File.createDirectory(tmp, true);
   var r = { referencia: ref, salida: salida, ficheros: [], no_cumple: [], control: { medido: [], revisar_a_ojo: [] } };
+  try { r.ruta_paso10 = alRuta(info); if (r.ruta_paso10.nota) r.control.medido.push(r.ruta_paso10.nota); } catch (e) { }
 
   // 1. Escalas y reescalado previo si hace falta.
   var sRef = info[ref].escala, aRegistrar = [];

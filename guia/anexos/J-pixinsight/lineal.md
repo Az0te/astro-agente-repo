@@ -312,6 +312,8 @@ Ficha: [lineal/10-combinacion-rgb-nb.md](../../lineal/10-combinacion-rgb-nb.md)
 
 **Guarda del orden** (23 nov 2026): `inyectarHa` se niega, y dice la llamada que falta, si la RGB, el Hα o el OIII tienen estrellas o si el Hα o el OIII no vienen de `restarContinuo` (el OIII, con `canal: 1`, el G). Lo sabe por las marcas que ponen `separarEstrellas` y `restarContinuo` en la vista, que heredan las copias de `reducirRuido`, `ruidoCandidatos` y `neutralizarCielo`; sin marca, cuenta las estrellas con StarDetector. `combinarMasters` con RGB + Hα sin esas marcas junta lo demás y no inyecta. `forzar: true` sólo si el usuario lo pide.
 
+**Guarda de la ruta de paleta** (24 nov 2026): `alinearMasters` lee el tiempo total de cada master (`PCL:TotalExposureTime` o EXPTIME × NCOMBINE) y su filtro, y devuelve `ruta_paso10` (`ancha_min`, `estrecha_min`, `proporcion`, `ruta`). Con la banda estrecha ≥ 4 veces la ancha, `ruta: "paleta"`: `inyectarHa` (y la inyección de `combinarMasters`) se niega en nebulosas y dice la secuencia de la paleta (cada capa sin estrellas → ruido → el mismo estirado → `previsualizarPaletas` → `componerPaleta`; la RGB sólo da las estrellas). `opciones.motivo` (p. ej. «emisión y reflexión: polvo azul que sólo da la RGB») la salta. En IC 1396 había 468 min de banda estrecha y 23 de RGB (×20).
+
 **En una llamada, con todos los masters** (`herramientas/combinacion.js`): `combinarMasters(carpeta o lista, { tipo })` trabaja con 2 a 8 masters alineados (Paso 5); LRGB son 4.
 - Abre cada master y lo clasifica por su filtro (`FILTER` o el nombre): L, R, G, B, Hα, OIII, SII, Hβ o RGB (color). Si no reconoce un filtro, se le indica en `clases`.
 - Combina lo que toca en lineal:
