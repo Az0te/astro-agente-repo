@@ -1231,15 +1231,25 @@ def _es_oiii(nombre):
     return bool(re.search(r"(^|[^a-z0-9])o3([^a-z]|$)", s, re.I)) and not re.search(r"(ha|sii|s2|si)[^a-z]*o3", s, re.I)
 
 
+def _num_canal(c):
+    """Canal como número o como texto («G», «verde», «1»…); un texto que no se entiende es un error, no el R."""
+    m = {"0": 0, "r": 0, "rojo": 0, "red": 0, "1": 1, "g": 1, "verde": 1, "green": 1, "2": 2, "b": 2, "azul": 2, "blue": 2}
+    k = str(int(c)) if isinstance(c, (int, float)) and not isinstance(c, bool) and float(c).is_integer() else str(c).strip().lower()
+    if k not in m:
+        raise ValueError(f"canal {c!r} no se entiende: 0 (R), 1 (G) o 2 (B)")
+    return m[k]
+
+
 def _canal_continuo(nombre, canal, forzar):
     """Canal del continuo: con OIII el G (1) por defecto y nunca el R salvo forzar (el B lleva Hβ); el resto, el R (0)."""
     oiii = _es_oiii(nombre)
     if canal is None:
         return 1 if oiii else 0
-    if oiii and int(canal) == 0 and not forzar:
+    canal = _num_canal(canal)
+    if oiii and canal == 0 and not forzar:
         raise ValueError(f"'{nombre}' es OIII: su continuo se mide y se resta con el G (canal 1), no con el R; el B lleva Hβ. "
                          "Quita canal (con OIII ya es 1) o pon canal 1.")
-    return int(canal)
+    return canal
 
 
 def medirContinuo(ctx, nb, continuo, canal=None, forzar=False):

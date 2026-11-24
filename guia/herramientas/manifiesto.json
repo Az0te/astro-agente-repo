@@ -893,7 +893,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { canal (por defecto 0 = R; con una raya OIII, 1 = G, y se niega con 0), maxEstrellas, picoMax, forzar: true (medir aunque la vista parezca starless: sólo si el usuario lo pide) }"
+      "description": "Opcional. { canal (0/«R», 1/«G» o 2/«B»; por defecto 0 = R; con una raya OIII —id con «OIII» u «O3» suelto—, 1 = G, y se niega con 0), maxEstrellas, picoMax, forzar: true (medir aunque la vista parezca starless: sólo si el usuario lo pide) }"
      }
     },
     "required": [

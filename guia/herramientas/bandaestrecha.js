@@ -209,16 +209,26 @@ function beEsOIII(v, id) {
   var s = String(id || "");
   if (/(^|[^a-z])oiii/i.test(s)) return true;
   if (/^(ha|h_?alpha|sii|s2|hb|hbeta|l|r|g|b|rgb)([^a-z]|$)/i.test(s)) return false;
+  // «O3» suelto en el id («O3_raw», «master_O3»), pero no un dual band («HaO3», «S2O3»: letra o cifra pegada delante).
+  if (/(^|[^a-z0-9])o3([^a-z0-9]|$)/i.test(s)) return true;
   // Sin pista en el id: el filtro de la raya (no un dual band que lleve O3 junto a Hα o SII).
   var t = "";
   try { var k = v.window.keywords; for (var i = 0; i < k.length; ++i) if (k[i].name == "FILTER") t += " " + k[i].strippedValue; } catch (e) { }
   try { var f = v.propertyValue("Instrument:Filter:Name"); if (f) t += " " + f; } catch (e) { }
   return /(^|[^a-z])(oiii|o3)([^a-z]|$)/i.test(t) && !/(ha|h-?alpha|sii|s2)[^a-z]*o3|o3[^a-z]*(ha|sii|s2)/i.test(t);
 }
+// Canal como número o como texto («G», «verde», «1»…): un texto que no se entiende es un error, no el R.
+function beNumCanal(c) {
+  if (typeof c === "number" && (c === 0 || c === 1 || c === 2)) return c;
+  var m = { "0": 0, r: 0, rojo: 0, red: 0, "1": 1, g: 1, verde: 1, green: 1, "2": 2, b: 2, azul: 2, blue: 2 }[String(c).trim().toLowerCase()];
+  if (m === undefined) throw new Error("canal " + JSON.stringify(c) + " no se entiende: 0 (R), 1 (G) o 2 (B)");
+  return m;
+}
 function beCanal(v, id, o) {
   var oiii = beEsOIII(v, id);
-  if (o.canal === undefined) return oiii ? 1 : 0;
-  if (oiii && +o.canal === 0 && !o.forzar)
+  if (o.canal === undefined || o.canal === null) return oiii ? 1 : 0;
+  o.canal = beNumCanal(o.canal);
+  if (oiii && o.canal === 0 && !o.forzar)
     throw new Error(id + " es OIII: el continuo del OIII se mide y se resta con el G (opciones.canal: 1), no con el R; el B lleva Hβ. " +
                     "Quita canal (por defecto ya es 1 con OIII) o pon canal: 1. opciones.forzar: true sólo si el usuario lo pide.");
   return o.canal;
