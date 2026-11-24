@@ -426,6 +426,17 @@ def _sexa(v, horas):
     return signo * g * (15.0 if horas else 1.0)
 
 
+def _normalizar_centro(centro):
+    """'5h28m36s,+33d59m49s', '5h58m +44°', '5:28:36 +33:59:49' → '5:28:36,+33:59:49' (lo que entiende platesolve)."""
+    c = str(centro).strip().replace("′", "'").replace("″", '"').replace("º", "°")
+    c = re.sub(r"(\d)\s*[hd°]\s*", r"\1:", c, flags=re.I)
+    c = re.sub(r"(\d)\s*(?:m|'(?!'))\s*", r"\1:", c, flags=re.I)
+    c = re.sub(r"(\d(?:\.\d+)?)\s*(?:s|\"|'')", r"\1", c, flags=re.I)
+    c = re.sub(r":+(?=[\s,]|$)", "", c)
+    c = re.sub(r"\s*,\s*|\s+", ",", c.strip())
+    return c
+
+
 def _distancia_grados(a1, d1, a2, d2):
     a1, d1, a2, d2 = map(np.radians, (a1, d1, a2, d2))
     c = np.sin(d1) * np.sin(d2) + np.cos(d1) * np.cos(d2) * np.cos(a1 - a2)
@@ -485,9 +496,13 @@ def resolverAstrometria(siril, forzar=False, focal=None, pixel=None, centro=None
         ar_cab = de_cab = None
     aviso_centro = None
     if centro:
-        c = str(centro).replace(" ", ",")
+        c = _normalizar_centro(centro)
         if not all(ch.isdigit() or ch in ".,:+-" for ch in c) or c.count(",") != 1:
-            raise ValueError("centro: 'AR,Dec' en grados o 'hh:mm:ss,+dd:mm:ss' (o no lo pases: se usa el de la cabecera).")
+            # IC 405 (20–21 nov 2026): Qwen pasó «5h58m,+44d» y «5h28m36s,+33:59:49»; con la cabecera se sigue sin él.
+            if ar_cab is None:
+                raise ValueError("centro: 'AR,Dec' en grados o 'hh:mm:ss,+dd:mm:ss' (o no lo pases: se usa el de la cabecera).")
+            aviso_centro = f"Centro {centro} no se entiende ('AR,Dec' en grados o 'hh:mm:ss,+dd:mm:ss'): se usa el de la cabecera."
+            c = ""
         ar, de = c.split(",")
         if de and de[0] not in "+-":                    # Siril 1.4.5 rechazó "324.7,57.5" (sin signo en la Dec)
             c = f"{ar},+{de}"
@@ -1823,7 +1838,8 @@ def _punto_negro(siril, info, c, cielo, por_canal=False):
 
 def _ghs_al_fallo(siril, info, crudo, cielo, lim, maxp=25):
     m0 = float(np.median(_lum(_pantalla(crudo, info))))
-    siril.cmd("ght", "-D=2.5", "-B=12", f"-SP={max(m0, 1e-5):.6f}", "-LP=0", "-HP=0.95", "-even")
+    modo = lim.get("modo", "-even")
+    siril.cmd("ght", "-D=2.5", "-B=12", f"-SP={max(m0, 1e-5):.6f}", "-LP=0", "-HP=0.95", modo)
     c = _medir(siril, info)
     pasadas = [{"n": 1, "D": 2.5, "B": 12, "SP": _r(m0, 5), "cielo": c["cielo"], "ruido_rel": c["ruido_rel"]}]
     D, motivo, desc = 1.0, "máximo de pasadas", 0
@@ -1832,7 +1848,7 @@ def _ghs_al_fallo(siril, info, crudo, cielo, lim, maxp=25):
         sp = c["cielo"]
         if lim.get("celdas_debil") is not None:          # variante «señal débil»: SP en el nivel del disco débil
             sp = _nivel_debil(_pantalla(prev, info), lim["celdas_debil"]) or sp
-        siril.cmd("ght", f"-D={D:.3f}", "-B=6", f"-SP={max(sp, 1e-5):.6f}", "-LP=0", "-HP=0.92", "-even")
+        siril.cmd("ght", f"-D={D:.3f}", "-B=6", f"-SP={max(sp, 1e-5):.6f}", "-LP=0", "-HP=0.92", modo)
         c1 = _medir(siril, info)
         bp, c1 = _punto_negro(siril, info, c1, cielo, lim.get("por_canal"))
         f = _fallos(c1, lim)
@@ -1947,6 +1963,22 @@ def _nivel_debil(q, celdas):
 def _ghs_debil(siril, info, crudo, cielo, lim):
     """GHS por pasadas con el punto de simetría en el nivel de la señal débil (más contraste en los brazos)."""
     return _ghs_al_fallo(siril, info, crudo, cielo, lim)
+
+
+def _ghs_canal(siril, info, crudo, cielo, lim):
+    """GHS al fallo con la misma curva en R, G y B (ght -independent), como el estirado enlazado de PixInsight (STF, MAS)
+    o el estadístico de SASpro. IC 405 (20 nov 2026): con GHS en luminancia (-even) el R/G del objeto pasó del lineal al
+    estirado sin cambiar (4,05 → 4,09) y la saturación lo llevó a 7: núcleo rojo. En PixInsight el MAS lo bajó de 2,84 a
+    1,89 y en SASpro de 3,80 a 2,37: una curva por canal comprime las diferencias de color en las luces medias."""
+    return _ghs_al_fallo(siril, info, crudo, cielo, dict(lim, modo="-independent"))
+
+
+def _rg_sobre_cielo(q, m, bg):
+    """R/G del objeto sobre el cielo: mediana de cada canal en la máscara del objeto menos la del cielo."""
+    if q.shape[0] != 3 or not m.any() or not bg.any():
+        return None
+    R, G = (float(np.median(q[k][m])) - float(np.median(q[k][bg])) for k in (0, 1))
+    return _r(R / G, 2) if G > 1e-6 else None
 
 
 def _ghs_parcial(fraccion):
@@ -2100,7 +2132,8 @@ def _dominante_aditiva(p, celdas_px=None, S=64):
 
 
 def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
-                      metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "asinh", "escalas", "autostretch", "hiperbolico"),
+                      metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "ghs_canal", "asinh", "escalas", "autostretch",
+                               "hiperbolico"),
                       negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True, senal_max=0.25):
     """Paso 1 no lineal: compara GHS al fallo, arcsinh, estirado por escalas y autostretch con el cielo en el mismo
     objetivo. No cambia la imagen.
@@ -2139,6 +2172,12 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
     lim = {"ruido": float(ruido_max or r_def), "cero": 0.05, "alto": 0.05, "por_canal": bool(negro_por_canal)}
     huella = _huella(crudo_original)          # aplicarCandidato comprueba contra la imagen cargada (la original)
     debiles = _celdas_debiles(p)
+    # Máscara fija del objeto (3 % más brillante de la starless de partida, suavizada) y del cielo, para el R/G del objeto.
+    if info["canales"] == 3:
+        Lm = _caja(_lum(p), 2)
+        m_obj, m_cielo = Lm >= np.percentile(Lm[::3, ::3], 97), Lm <= np.percentile(Lm[::3, ::3], 20)
+    else:
+        m_obj = m_cielo = None
     grupo = "estirado"
     _limpiar_grupo(grupo)
     ln = _con_luces_neutras if luces_neutras else (lambda f: f)
@@ -2146,6 +2185,7 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
              "ghs_medio": ("GHS medio (80 % del ruido límite)", ln(_ghs_parcial(0.8))),
              "ghs": ("GHS al fallo", ln(_ghs_al_fallo)),
              "ghs_debil": ("GHS al fallo, simetría en la señal débil", ln(_ghs_debil)),
+             "ghs_canal": ("GHS al fallo por canal (misma curva en R, G y B, como PixInsight), simetría en la señal débil", _ghs_canal),
              "asinh": ("arcsinh al fallo", ln(_asinh_al_fallo)),
              "escalas": ("por escalas (base comprimida, detalle conservado)", _escalas),
              "autostretch": ("autostretch enlazado", _autostretch),
@@ -2167,7 +2207,7 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
             t0 = time.perf_counter()
             try:
                 _restaurar(siril, crudo)
-                c, detalle = fn(siril, info, crudo, cielo, dict(lim, celdas_debil=debiles) if m == "ghs_debil" else lim)
+                c, detalle = fn(siril, info, crudo, cielo, dict(lim, celdas_debil=debiles) if m in ("ghs_debil", "ghs_canal") else lim)
                 res = _crudo(siril)
                 sep = (c["p90"] - c["cielo"]) / max(c["ruido_rel"] * c["cielo"], 1e-6)
                 pp = H._pixeles(siril, info)
@@ -2202,6 +2242,7 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
                                         "dominante_cielo_pct": _r(dom, 1), "tinte_cielo_pct": tinte,
                                         "color_propio_fondo_pct": propio,
                                         "nucleo": _sat_nucleo(pp) if info["canales"] == 3 else None,
+                                        "objeto_rg": _rg_sobre_cielo(pp, m_obj, m_cielo) if m_obj is not None else None,
                                         "no_cumple": fal, "detalle": detalle,
                                         "segundos": _r(time.perf_counter() - t0, 1)})
             except Exception as e:
@@ -2225,17 +2266,32 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
         # 2026, «suave» ganó por 0,2 de separación y dejó los brazos apagados). En galaxias decide siempre la señal débil.
         cerca = pool if str(tipo or "") == "galaxia" else [x for x in pool if (x["separacion"] or 0) >= 0.97 * smax]
         mejor = max(cerca, key=lambda x: (x.get("senal_debil") if x.get("senal_debil") is not None else -1, x["separacion"] or 0))
+    extra_color = ""
+    if mejor and str(tipo or "nebulosa") == "nebulosa":
+        # En nebulosas, el color del objeto como en PixInsight: si el recomendado (en luminancia) deja el R/G del objeto
+        # un 30 % por encima del GHS por canal, y éste separa casi igual (≥ 85 %) o levanta igual la señal débil, gana el
+        # GHS por canal (IC 405, 20 nov 2026: el núcleo salió rojo en Siril con R/G 4 tras estirar frente a 1,9 en
+        # PixInsight; con la starless de aquella pasada el GHS por canal deja 2,55 y separa 10,2 frente a 11,6).
+        canal = next((x for x in pool if x["metodo"].startswith("GHS al fallo por canal")), None)
+        if canal and canal is not mejor and canal.get("objeto_rg") and mejor.get("objeto_rg")                 and mejor["objeto_rg"] > 1.3 * canal["objeto_rg"]                 and ((canal["separacion"] or 0) >= 0.85 * (mejor["separacion"] or 0)
+                     or (canal.get("senal_debil") or 0) >= (mejor.get("senal_debil") or 0)):
+            extra_color = (f" Elegido por el color: {mejor['metodo']} dejaba el R/G del objeto en {mejor['objeto_rg']} y éste "
+                           f"en {canal['objeto_rg']} (el estirado en luminancia conserva las proporciones lineales y la "
+                           "nebulosa sale roja; PixInsight y SASpro estiran cada canal con la misma curva).")
+            mejor = canal
     if mejor:
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: señal débil del objeto {mejor.get('senal_debil')} sobre el cielo, separa "
                        f"{mejor['separacion']} ruidos, cielo en {mejor['medidas']['cielo']}"
-                       + ("" if ok else " (NINGUNO cumple: revisar no_cumple)") + ".")
+                       + ("" if ok else " (NINGUNO cumple: revisar no_cumple)") + "." + extra_color)
     r["leyenda"] = ("separacion = (p90 − cielo) / ruido del cielo: más es mejor. senal_debil = nivel de la zona débil del "
                     "objeto (celdas entre los percentiles 60 y 85 de la imagen de partida: brazos, disco exterior) sobre el cielo: "
                     "más = más se ve. En galaxias, y en empates de separación, decide la señal débil, siempre dentro de los límites. "
                     "tinte_cielo_pct: parte aditiva de la dominante en las celdas oscuras y planas (un tinte: falla a partir del 5 %); "
                     "color_propio_fondo_pct: la que crece con la señal (polvo, Vía Láctea, nebulosa: no es un fallo). "
                     "nucleo: color del 0,1 % más brillante (saturación y R/G; con luces neutras el núcleo no sale salmón). "
+                    "objeto_rg: R/G del 3 % más brillante sobre el cielo; en nebulosas, si el recomendado lo deja un 30 % por "
+                    "encima del GHS por canal, se recomienda éste (color como PixInsight). "
                     "La imagen NO ha cambiado: aplicarCandidato(id). "
                     "Mira el recomendado con previa antes de seguir.")
     _asegurar_restaurado(siril, crudo_original, huella, r)
@@ -3374,7 +3430,9 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
     info = H._info(siril)
     ruta = H._ruta(fichero)
     if not ruta.is_file():
-        raise FileNotFoundError(f"No existe: {ruta}")
+        # La capa de estrellas es el starmask_*.fit que devuelve separarEstrellas (IC 405, 20 nov 2026: Qwen probó siete
+        # nombres inventados seguidos).
+        raise H.no_existe(ruta, "starmask_*")
     if metodo not in ("screen", "suma"):
         raise ValueError("metodo: screen o suma.")
     k = float(factor)
@@ -3541,7 +3599,7 @@ def compararFinales(siril, ficheros=None):
     for f in ficheros or []:
         ruta = H._ruta(f)
         if not ruta.is_file():
-            raise FileNotFoundError(f"No existe: {ruta}")
+            raise H.no_existe(ruta)
         fuentes.append((ruta.name, ruta))
     filas, errores = [], []
     for nombre, ruta in fuentes:

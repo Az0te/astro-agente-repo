@@ -38,7 +38,7 @@ Siril tiene una sola imagen cargada: ninguna herramienta lleva `vista`. Coordena
 | L11/L13 Deconvolución | `nitidezLineal` | IA de RC Astro por su CLI (`rc-astro bxt`), solo corregir o completa; FWHM antes y después |
 | L15 Estrellas | `separarEstrellas` | starnet de Siril o, si falla, StarNet2 (2.5+) directo |
 | L15 Estrellas | `estrellasCandidatos` → `aplicarCandidato` | StarNet2 frente a StarX (`rc-astro sxt`): restos de estrellas, agujeros, objeto quitado |
-| NL1 Estirado | `estirarCandidatos` → `aplicarCandidato` | GHS al fallo (ght + linstretch; también con la simetría en la señal débil), arcsinh al fallo, por escalas, autostretch; punto negro en lineal y altas luces hacia neutro |
+| NL1 Estirado | `estirarCandidatos` → `aplicarCandidato` | GHS al fallo (ght + linstretch; también con la simetría en la señal débil, y por canal como PixInsight), arcsinh al fallo, por escalas, autostretch; punto negro en lineal y altas luces hacia neutro |
 | NL5 Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | comprimir el bulbo con máscara suave (`nucleo.py`): meseta, anillos, brillo |
 | NL5 Contraste | `contrasteCandidatos` → `aplicarCandidato` | CLAHE, ondículas, máscara de enfoque |
 | NL3 SCNR | `quitarVerde` | rmgreen |

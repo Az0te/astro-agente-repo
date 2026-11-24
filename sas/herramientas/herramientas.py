@@ -384,6 +384,12 @@ def previa(ctx, vista=None, lado=1600, rect=None, enlazado=None, fichero=None, c
     """JPG para ver la imagen sin tocarla: autoestirado (STF) si es lineal, tal cual si ya está estirada.
     enlazado: por defecto por canal si es lineal (un master sin calibrar sale con dominante con el estirado enlazado).
     Con candidato=<id>, la previa del candidato de la última comparación en vez de la vista."""
+    if fichero and Path(str(fichero)).suffix.lower() not in (".jpg", ".jpeg"):
+        # IC 405 con Qwen (RDNA, 21 nov 2026): previa(fichero=<capa SII .fit>) para «ver» esa capa escribió el JPG encima
+        # del .fit (92 MB → 37 KB) y la capa se perdió; luego abrirImagen falló una y otra vez. fichero es la SALIDA.
+        raise ValueError(f"fichero es el JPG de SALIDA de la previa (.jpg), no la imagen que quieres ver: '{Path(str(fichero)).name}' "
+                         "no se toca. La previa es de una vista abierta (vista): para ver otro fichero, abrirImagen con él y luego "
+                         "previa con esa vista, sin fichero.")
     if candidato:
         p = _p(_cargar_candidato(candidato)[0])
         base = f"candidato_{candidato}"
@@ -499,11 +505,38 @@ def registro(ctx, n=40, solo_errores=False, filtro=None, panel=None):
 
 # --- Herramientas: disco -----------------------------------------------------------------------------------
 
+def no_existe(p, patron=None):
+    """FileNotFoundError con los ficheros que sí hay y más se parecen. IC 405 con Qwen (20–21 nov 2026, en Siril): el
+    modelo se inventaba nombres y repetía el mismo fallo hasta que la herramienta se bloqueaba."""
+    import difflib
+    p = Path(p)
+    carpeta = p.parent if p.parent.is_dir() else None
+    ext = {".fit", ".fits", ".fts", ".xisf", ".tif", ".tiff", ".png", ".jpg", ".jpeg"}
+    hay = []
+    if carpeta:
+        try:
+            hay = [f for f in carpeta.iterdir() if f.is_file() and f.suffix.lower() in ext]
+        except OSError:
+            hay = []
+    elegidos = []
+    if patron:
+        elegidos = sorted((f for f in hay if f.match(patron)), key=lambda f: f.stat().st_mtime, reverse=True)[:8]
+    if not elegidos:
+        nombres = {f.name: f for f in hay}
+        elegidos = [nombres[n] for n in difflib.get_close_matches(p.name, list(nombres), n=6, cutoff=0.5)]
+    msj = f"No existe: {p}"
+    if elegidos:
+        msj += ". En esa carpeta hay: " + "; ".join(f.name for f in elegidos) + ". Usa uno de esos nombres tal cual."
+    elif carpeta is None:
+        msj += ". Tampoco existe la carpeta."
+    return FileNotFoundError(msj)
+
+
 def abrirImagen(ctx, fichero):
     """Abre un fichero (FITS, XISF, TIFF…) en una vista nueva de SASpro y la deja activa."""
     p = _ruta(fichero)
     if not p.exists():
-        raise FileNotFoundError(f"No existe {p}")
+        raise no_existe(p)
     dm = getattr(ctx.app, "doc_manager", None)
     if dm is None:
         raise RuntimeError("SASpro no expone doc_manager.")

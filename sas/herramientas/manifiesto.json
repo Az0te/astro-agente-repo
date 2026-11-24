@@ -147,7 +147,7 @@
      },
      "fichero": {
       "type": "string",
-      "description": "Ruta absoluta del JPG (opcional)."
+      "description": "SALIDA: ruta absoluta del JPG (opcional). No es la imagen que se mira: la previa es de la vista; para ver otro fichero, abrirImagen primero."
      },
      "candidato": {
       "type": "string",

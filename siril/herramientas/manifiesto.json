@@ -80,7 +80,7 @@
      },
      "fichero": {
       "type": "string",
-      "description": "Ruta .jpg absoluta. Por defecto ~/.sirilastropilot/previas/<nombre>[_x0_y0].jpg."
+      "description": "SALIDA: ruta .jpg absoluta donde guardar la previa (por defecto ~/.sirilastropilot/previas/<nombre>[_x0_y0].jpg). No es la imagen que se mira: la previa es siempre de la imagen cargada; para ver otro fichero, abrirImagen primero."
      }
     }
    }
@@ -822,7 +822,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/01-estirado.md",
-   "descripcion": "Paso 1 no lineal: compara GHS por pasadas cortas en tres intensidades (suave y medio paran al 60 y 80 % del ruido límite; fuerte, al fallo), arcsinh al fallo, autostretch enlazado y un hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo (0,10 nebulosas y cúmulos, 0,07 galaxias, 0,12 nebulosas oscuras), y recomienda el que más separa la señal débil del fondo sin fallos de ruido, recorte ni dominante. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También GHS con el punto de simetría en la señal débil (brazos). Mide senal_debil (zona débil del objeto sobre el cielo); en galaxias, y en empates de separación, recomienda el que más la levanta. Topes: p99 ≤ 0,80, p999 ≤ 0,92 y que estire (p99 al menos 0,10 sobre el cielo); GHS en modo que conserva el color. También un estirado por escalas (base comprimida, detalle conservado), con el mismo cielo y topes. Antes de estirar quita el pedestal del cielo en lineal (un mismo resto en los tres canales: sale el color real), y en GHS y arcsinh las altas luces van hacia neutro (sin núcleo salmón). Sólo falla por dominante si es un tinte (aditivo en las celdas oscuras y planas), no por el color propio de polvo o nebulosa. Marca como no_cumple el estirado que deja la mediana de la señal (píxeles a más de 5 ruidos del cielo) por encima de 0,25 (senal_max); si todos la superan, recomienda el que la deja más baja.",
+   "descripcion": "Paso 1 no lineal: compara GHS por pasadas cortas en tres intensidades (suave y medio paran al 60 y 80 % del ruido límite; fuerte, al fallo), arcsinh al fallo, autostretch enlazado y un hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo (0,10 nebulosas y cúmulos, 0,07 galaxias, 0,12 nebulosas oscuras), y recomienda el que más separa la señal débil del fondo sin fallos de ruido, recorte ni dominante. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También GHS con el punto de simetría en la señal débil (brazos). Mide senal_debil (zona débil del objeto sobre el cielo); en galaxias, y en empates de separación, recomienda el que más la levanta. Topes: p99 ≤ 0,80, p999 ≤ 0,92 y que estire (p99 al menos 0,10 sobre el cielo); GHS en modo que conserva el color. También un estirado por escalas (base comprimida, detalle conservado), con el mismo cielo y topes. Antes de estirar quita el pedestal del cielo en lineal (un mismo resto en los tres canales: sale el color real), y en GHS y arcsinh las altas luces van hacia neutro (sin núcleo salmón). Sólo falla por dominante si es un tinte (aditivo en las celdas oscuras y planas), no por el color propio de polvo o nebulosa. Marca como no_cumple el estirado que deja la mediana de la señal (píxeles a más de 5 ruidos del cielo) por encima de 0,25 (senal_max); si todos la superan, recomienda el que la deja más baja. También GHS al fallo por canal (la misma curva en R, G y B, como el estirado enlazado de PixInsight y SASpro) y objeto_rg (R/G del objeto sobre el cielo) en cada candidato: en nebulosas, si el recomendado deja objeto_rg un 30 % por encima del GHS por canal y éste separa casi igual (≥ 85 %) o levanta igual la señal débil, se recomienda el GHS por canal (IC 405: en luminancia la nebulosa salía roja).",
    "resumen": "Paso 1 NL: compara GHS, arcsinh, por escalas, autostretch e hiperbólico con el mismo cielo; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -854,13 +854,14 @@
         "ghs_medio",
         "ghs",
         "ghs_debil",
+        "ghs_canal",
         "asinh",
         "escalas",
         "autostretch",
         "hiperbolico"
        ]
       },
-      "description": "Métodos a comparar (por defecto todos: GHS suave, medio y al fallo, arcsinh, por escalas, autostretch e hiperbólico)."
+      "description": "Métodos a comparar (por defecto todos: GHS suave, medio y al fallo, GHS por canal, arcsinh, por escalas, autostretch e hiperbólico)."
      },
      "negro_lineal": {
       "type": "boolean",

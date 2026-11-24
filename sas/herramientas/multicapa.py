@@ -199,7 +199,7 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
         raise ValueError("alinearMasters necesita al menos dos ficheros.")
     for f in fs:
         if not f.is_file():
-            raise FileNotFoundError(f"No existe {f}.")
+            raise H.no_existe(f)
     destino = H._ruta(carpeta) if carpeta else fs[0].parent / "alineados_sas"
     destino.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()

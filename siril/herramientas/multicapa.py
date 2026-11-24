@@ -82,7 +82,7 @@ def alinearMasters(siril, ficheros, carpeta=None, referencia=1):
         raise ValueError("alinearMasters necesita al menos dos ficheros.")
     for f in fs:
         if not f.is_file():
-            raise FileNotFoundError(f"No existe {f}.")
+            raise H.no_existe(f)
     destino = H._ruta(carpeta, "carpeta") if carpeta else fs[0].parent / "alineados"
     destino.mkdir(parents=True, exist_ok=True)
     trabajo = ALINEADO / time.strftime("%Y%m%d_%H%M%S")

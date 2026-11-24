@@ -203,6 +203,12 @@ def previa(siril, lado=1600, rect=None, enlazado=None, fichero=None):
     enlazado: por defecto, por canal si la imagen es lineal (un master sin calibrar sale azul o verde con el estirado
     enlazado: M31, 10 nov 2026) y enlazado si ya está estirada (para ver el color real)."""
     from PIL import Image
+    if fichero and Path(str(fichero)).suffix.lower() not in (".jpg", ".jpeg"):
+        # IC 405 con Qwen (RDNA, 21 nov 2026): previa(fichero=<capa SII .fit>) para «ver» esa capa escribió el JPG encima
+        # del .fit (92 MB → 37 KB) y la capa se perdió; luego abrirImagen falló una y otra vez. fichero es la SALIDA.
+        raise ValueError(f"fichero es el JPG de SALIDA de la previa (.jpg), no la imagen que quieres ver: '{Path(str(fichero)).name}' "
+                         "no se toca. La previa es de la imagen CARGADA: para ver otro fichero, abrirImagen con él y luego previa "
+                         "sin fichero.")
     info = _info(siril)
     w, h = info["ancho"], info["alto"]
     if enlazado is None:
@@ -467,11 +473,38 @@ def _a_32_bits(siril, info):
     return r
 
 
+def no_existe(p, patron=None):
+    """FileNotFoundError con los ficheros que sí hay y más se parecen. IC 405 con Qwen (20–21 nov 2026): el modelo se
+    inventaba nombres («starx_estrellas.fit», «…_SII_2.fit») y repetía el mismo fallo hasta que la herramienta se bloqueaba
+    (abrirImagen 5 veces seguidas, y después previa); con la lista corrige a la primera."""
+    import difflib
+    p = Path(p)
+    carpeta = p.parent if p.parent.is_dir() else None
+    hay = []
+    if carpeta:
+        try:
+            hay = [f for f in carpeta.iterdir() if f.is_file() and f.suffix.lower() in EXT_ABRIR]
+        except OSError:
+            hay = []
+    elegidos = []
+    if patron:
+        elegidos = sorted((f for f in hay if f.match(patron)), key=lambda f: f.stat().st_mtime, reverse=True)[:8]
+    if not elegidos:
+        nombres = {f.name: f for f in hay}
+        elegidos = [nombres[n] for n in difflib.get_close_matches(p.name, list(nombres), n=6, cutoff=0.5)]
+    msj = f"No existe: {p}"
+    if elegidos:
+        msj += ". En esa carpeta hay: " + "; ".join(f.name for f in elegidos) + ". Usa uno de esos nombres tal cual."
+    elif carpeta is None:
+        msj += ". Tampoco existe la carpeta."
+    return FileNotFoundError(msj)
+
+
 def abrirImagen(siril, fichero):
     """Carga un fichero en Siril (sustituye la imagen cargada). Devuelve sus datos."""
     p = _ruta(fichero)
     if not p.is_file():
-        raise FileNotFoundError(f"No existe: {p}")
+        raise no_existe(p)
     if p.suffix.lower() not in EXT_ABRIR:
         raise ValueError(f"Extensión no admitida: {p.suffix}")
     original = p
