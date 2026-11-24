@@ -874,6 +874,10 @@
      "negro_por_canal": {
       "type": "boolean",
       "description": "Punto negro por canal para que el cielo de cada canal quede en el objetivo (por defecto true; false = uno común, que amplifica las dominantes pequeñas del lineal)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Estirar aunque no se haya aplicado una reducción de ruido lineal en las últimas 6 h (por defecto false: la función para y lo pide). Solo si el usuario no quiere ese paso."
      }
     }
    }
@@ -1110,8 +1114,8 @@
    "nivel": "lectura",
    "timeout_s": 600,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Paso 5 no lineal (fondo; después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,065, 0,05 y 0,035, neutro; cada nivel también «+ medios» (curva que devuelve la mediana del objeto a la de antes: el fondo baja sin apagar la nebulosa) y «+ rango» (punto negro + punto blanco lineal, recta por canal con pivote en el cielo: el cielo y el color de la franja no se mueven y el p99 de la luminancia sube a 'blanco', 0,40, con ganancia ×1–×2 y sin quemar más de un 0,05 % nuevo; abre el rango de una imagen oscura y plana). Mide píxeles nuevos a 0, cielo por canal y ruido, y recomienda la «+ rango» más oscura que cumple (si ninguna, la «+ medios»; si no, el punto negro solo, que oscurece también la nebulosa) que no lleva a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro). Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La imagen NO cambia (aplicarCandidato).",
-   "resumen": "Paso 5 NL: fondo más oscuro y neutro (punto negro a 0,08–0,035, con medios o rango); no cambia la imagen.",
+   "descripcion": "Paso 5 no lineal (fondo; después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,05, 0,035, 0,025 y 0,015, neutro (si el cielo ya está en 0,035 o menos no hace nada: no se llama dos veces); cada nivel también «+ medios» (curva que deja la señal sobre el cielo, mediana − cielo, en la de antes o en 0,10 si era menor: el fondo baja sin apagar la nebulosa ni lavarla) y «+ rango» (punto negro + punto blanco lineal, recta por canal con pivote en el cielo: el cielo y el color de la franja no se mueven y el p99 de la luminancia sube a 'blanco', 0,40, con ganancia ×1–×2 y sin quemar más de un 0,05 % nuevo; abre el rango de una imagen oscura y plana). Mide píxeles nuevos a 0, cielo por canal, ruido y señal sobre el cielo, y se queda con el cielo más oscuro que cumple y, a casi igual cielo (±0,005), con la «+ rango», luego la «+ medios», luego el punto negro solo. No cumple si lleva a 0 más de un 5 % de píxeles nuevos (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro y el cielo en 0,013) o si deja la señal sobre el cielo por debajo del 85 % de la de entrada (se come la nebulosa). Lo normal es NO pasar cielos ni ceros_max. Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La imagen NO cambia (aplicarCandidato).",
+   "resumen": "Paso 5 NL: fondo más oscuro y neutro (punto negro a 0,05–0,015, con medios o rango); no cambia la imagen.",
    "params": {
     "type": "object",
     "properties": {
@@ -1120,7 +1124,11 @@
       "items": {
        "type": "number"
       },
-      "description": "Niveles de cielo a probar (por defecto [0.08, 0.065, 0.05, 0.035]; más bajo sólo si la nebulosa sigue brillante)."
+      "description": "Niveles de cielo a probar. Lo normal es NO pasarlo: por defecto [0.05, 0.035, 0.025, 0.015], medidos contra la versión de referencia."
+     },
+     "ceros_max": {
+      "type": "number",
+      "description": "% máximo de píxeles nuevos a 0 (por defecto 5; lo normal es no pasarlo)."
      },
      "rango": {
       "type": "boolean",

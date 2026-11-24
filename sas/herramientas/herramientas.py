@@ -801,13 +801,13 @@ def _anotar_estrellas(ctx, antes, d):
 
 def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
     """Entrega: TIFF de 16 bits + JPG calidad 95 como <nombre>_final, sin sobrescribir (_2, _3…). Exige el cielo entre
-    0,03 y 0,10 (fondo ajustado) salvo forzar."""
+    0,01 y 0,10 (fondo ajustado) salvo forzar."""
     d = _doc(ctx, vista)
     if M.lineal(_p(d.image)[:, ::8, ::8]):
         raise RuntimeError("La imagen parece lineal (mediana < 0,05): estírala antes de exportar.")
     cielo = float(M.cielo(_p(d.image)[:, ::4, ::4])["cielo"])
-    if not forzar and not 0.03 <= cielo <= 0.10:
-        raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,03–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
+    if not forzar and not 0.01 <= cielo <= 0.10:
+        raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,01–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05; sin pasarle cielos) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
     abiertas = {_clave(x) for x in _docs(ctx)}
     sueltas = [v["nombre"] for k, v in _ESTRELLAS.items() if k in abiertas and not v["recombinada"]]
     if sueltas and not any(v["recombinada"] for v in _ESTRELLAS.values()) and not forzar:
@@ -1078,6 +1078,37 @@ def _limpiar_grupo(grupo):
             f.unlink()
         except OSError:
             pass
+
+
+# --- Guarda: reducción de ruido lineal antes de estirar (24 nov 2026, como ruido.js f8d2ee7) -------------------------
+# En la Paleta7 de IC 1396 (PixInsight) el modelo se saltó el denoise lineal, el igualado de rayas (×2,3–3,8) multiplicó el
+# grano y el final quedó con diez veces más grano. Se anota la hora al aplicar un candidato de ruido sobre imagen lineal y
+# estirarCandidatos para si no hay ninguno en las últimas 6 h (forzar=True solo si el usuario no quiere ese paso).
+
+def _ruta_ruido_lineal():
+    return DATOS / "ruido_lineal.json"
+
+
+def _anotar_ruido_lineal():
+    try:
+        DATOS.mkdir(parents=True, exist_ok=True)
+        _ruta_ruido_lineal().write_text(json.dumps({"t": time.time()}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _ultimo_ruido_lineal():
+    try:
+        f = _ruta_ruido_lineal()
+        return float(json.loads(f.read_text(encoding="utf-8")).get("t", 0)) if f.exists() else 0.0
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _exigir_ruido_lineal(funcion_ruido):
+    if time.time() - _ultimo_ruido_lineal() > 6 * 3600:
+        raise RuntimeError(f"Falta la reducción de ruido lineal (pasos 14/15) antes de estirar: {funcion_ruido} sobre la "
+                           "imagen lineal y aplicarCandidato del recomendado. Si el usuario no quiere ese paso, forzar=True.")
 
 
 def _guardar_candidato(grupo, n, a, datos):
@@ -1397,7 +1428,8 @@ LOCALES = {"estirado_mtf": _estirado_mtf, "estirado_sas_directo": _estirado_sas_
            "hiperbolico": lambda p, **op: _hip.estirar(p, **op)[0]}
 
 
-def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True, hiperbolico=True, senal_max=0.25):
+def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=True, hiperbolico=True, senal_max=0.25,
+                      forzar=False):
     """Paso NL1: estirado estadístico de SASpro (enlazado y por canal, varias medianas), GHS, un estirado MTF propio y el
     hiperbólico en luminancia que conserva el color (cielo 0,10 y 0,12),
     medidos con los criterios de la ficha: cielo, ruido relativo, recortes en negro y en blanco. La vista no cambia.
@@ -1407,6 +1439,8 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
     p = _p(d.image)
     if not M.lineal(p[:, ::8, ::8]):
         raise RuntimeError("La imagen ya parece estirada (mediana > 0,05).")
+    if not forzar:
+        _exigir_ruido_lineal("ruidoCandidatos")
     lista = []
     # SASpro 1.24.5: el estirado estadístico sin ventana ya llega a su mediana si se pasa normalize=False (con Normalize
     # reescala para que el máximo sea 1) y acepta el punto negro; antes dejaba la imagen casi negra o se pasaba.
@@ -2119,12 +2153,18 @@ def _mediana_senal(L, cielo, ruido_abs, frac_min=0.05):
     return round(float(np.median(s)), 4) if s.size >= frac_min * v.size else None
 
 
-def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tinte_max=3.0, rango=True,
-                    blanco=0.40, ganancia_max=2.0):
+def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, rango=True,
+                    blanco=0.40, ganancia_max=2.0, senal=0.10):
     """NL5 fondo: punto negro por canal para dejar el cielo en varios niveles (más oscuro = más profundidad y
     contraste) y neutro; mide píxeles nuevos a 0, cielo y ruido, y recomienda el más oscuro que no recorta más del
     ceros_max % de los píxeles. La vista no cambia. IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13
-    salían grises y planos frente a la versión de Rafael (cielo ~0,02 con punto negro y curva)."""
+    salían grises y planos frente a la versión de Rafael (cielo ~0,02 con punto negro y curva).
+    Cielo final (24 nov 2026, como PixInsight b7a04d7): por defecto niveles 0,05–0,015 y hasta un 5 % de píxeles nuevos
+    a 0 (el Natural de referencia de IC 1396 tiene el cielo en 0,013); si el cielo ya está en 0,035 o menos no hace nada.
+    La «+ medios» conserva la señal sobre el cielo (mediana del objeto − cielo) o la sube a 0,10, en vez de devolver la
+    mediana de entrada (con el cielo en 0,05 dejaba la imagen lavada); se descarta la variante que deja esa señal por
+    debajo del 85 % de la de entrada (se come la nebulosa). Gana el cielo más oscuro que cumple; a casi igual cielo
+    (±0,005), «+ rango», luego «+ medios», luego el punto negro solo."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if M.lineal(p[:, ::8, ::8]):
@@ -2136,6 +2176,12 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05, 0.035), ceros_ma
     r0 = float(z["medidas"]["ruido"])
     obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
     m_obj = float(np.median(M.lum(p)[obj_px]))
+    media0 = float(np.mean(s0))
+    if cielos is None and media0 <= 0.035:
+        return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
+                "motivo": f"El cielo ya está oscuro ({_r(media0, 3)} ≤ 0,035): no se toca."}
+    cielos = (0.05, 0.035, 0.025, 0.015) if cielos is None else cielos
+    senal0 = m_obj - media0
 
     def rg(q):                                   # color del objeto: R/G mediano en la zona del objeto
         return float(np.median(q[0][obj_px])) / max(float(np.median(q[1][obj_px])), 1e-6) if q.shape[0] == 3 else 1.0
@@ -2160,8 +2206,10 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05, 0.035), ceros_ma
             continue
         bp = [max(0.0, (s - t) / (1 - t)) for s in s0]
         lista.append((f"cielo a {t:g}", "punto_negro", {"bp": bp}, (lambda q, bp: _punto_negro(q, bp))))
-        lista.append((f"cielo a {t:g} + medios", "punto_negro_medios", {"bp": bp, "t": float(t)},
-                      (lambda q, bp, t: _punto_negro_medios(q, bp, t, obj_px, m_obj))))
+        # Destino de la mediana: la señal sobre el cielo de entrada o 0,10 (no la mediana de entrada: lavaba la imagen).
+        m_dest = float(t) + max(senal0, min(float(senal), m_obj - float(t)))
+        lista.append((f"cielo a {t:g} + medios", "punto_negro_medios", {"bp": bp, "t": float(t), "m_dest": m_dest},
+                      (lambda q, bp, t, m_dest: _punto_negro_medios(q, bp, t, obj_px, m_dest))))
         if rango:
             lista.append((f"cielo a {t:g} + rango", "punto_negro_rango", {"bp": bp},
                           (lambda q, bp: _rango(_punto_negro(q, bp), cel, blanco, ganancia_max)[0])))
@@ -2178,6 +2226,10 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05, 0.035), ceros_ma
         m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)
         x["no_cumple"] = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                           if m["ceros_nuevos_pct"] > ceros_max else [])
+        senal1 = m["objeto_mediana"] - m["cielo"]
+        m["senal_sobre_cielo"] = _r(senal1, 4)
+        if senal0 > 0.01 and senal1 < 0.85 * senal0:
+            x["no_cumple"].append(f"se come la nebulosa: señal sobre el cielo {_r(senal1, 3)} < 85 % de la de entrada ({_r(senal0, 3)})")
         # Un punto negro muy distinto por canal (cielo teñido) cambia el color del OBJETO: IC 405 (20 nov 2026), bp
         # [0,03, 0,12, 0,15] con el cielo cian se comió el verde y el azul de la nebulosa y el rojo salió R/G ×1,5.
         # La «+ medios» frente al punto negro solo del mismo nivel (sólo lo que tiñe la curva); el punto negro solo no se juzga.
@@ -2202,11 +2254,9 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05, 0.035), ceros_ma
     def _nivel(x):
         return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith("+ medios") else 0
     if ok:
-        nmax = max(_nivel(x) for x in ok)
-        ok = [x for x in ok if _nivel(x) == nmax]
-    if ok:
-        # El más oscuro del grupo; a igual cielo, el que conserva los medios del objeto (+ medios).
-        mejor = min(ok, key=lambda x: (x["metricas"]["cielo"], 0 if x["metodo"].endswith("+ medios") else 1))
+        # 24 nov 2026: el cielo más oscuro que cumple; a casi igual cielo (±0,005), «+ rango», «+ medios», punto negro.
+        cmin = min(x["metricas"]["cielo"] for x in ok)
+        mejor = max([x for x in ok if x["metricas"]["cielo"] <= cmin + 0.005], key=lambda x: (_nivel(x), -x["metricas"]["cielo"]))
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}), "
                        f"la mediana del objeto en {mejor['metricas']['objeto_mediana']} (antes {_r(m_obj, 4)}) "
@@ -2303,7 +2353,7 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     r["antes"] = m0
     if m0["dominante_cielo_pct"] >= dominante_max:
         r["aviso"] = (f"El cielo ya tiene una dominante del {m0['dominante_cielo_pct']} %: saturar la amplifica. Corrígela "
-                      "antes con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y vuelve a saturar; tras una paleta la "
+                      "antes con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05) y vuelve a saturar; tras una paleta la "
                       "dominante del cielo es normal y fondoCandidatos la quita (IC 405, 19 nov 2026: sin ese paso no se saturó).")
     return _galeria(r, p)
 
@@ -2562,7 +2612,10 @@ def aplicarCandidato(ctx, id, vista=None):
                                "comparación del mismo tipo sustituye a la anterior. Compara y aplica vista por vista "
                                "(comparación → aplicarCandidato → siguiente vista).")
         raise RuntimeError("La vista ha cambiado desde la comparación (otra imagen o ya se aplicó algo): repite la comparación.")
+    lineal_antes = str(id).startswith("ruido_") and M.lineal(_p(d.image)[:, ::8, ::8])
     d.apply_edit(a.astype(np.float32, copy=False), metadata={}, step_name=f"SetiAstroPilot: {datos.get('nombre', id)}")
+    if lineal_antes:
+        _anotar_ruido_lineal()
     if str(id).startswith("fondo_"):
         _FONDO_PENDIENTE.clear()
     if str(id).startswith(("combinacion_", "paleta_")):

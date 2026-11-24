@@ -85,6 +85,37 @@ def _restaurar(siril, a):
         siril.set_image_pixeldata(a)
 
 
+# --- Guarda: reducción de ruido lineal antes de estirar (24 nov 2026, como ruido.js f8d2ee7) -------------------------
+# En la Paleta7 de IC 1396 (PixInsight) el modelo se saltó el denoise lineal, el igualado de rayas (×2,3–3,8) multiplicó el
+# grano y el final quedó con diez veces más grano. Se anota la hora al aplicar un candidato de ruido sobre imagen lineal y
+# estirarCandidatos para si no hay ninguno en las últimas 6 h (forzar=True solo si el usuario no quiere ese paso).
+
+def _ruta_ruido_lineal():
+    return H.DATOS / "ruido_lineal.json"
+
+
+def _anotar_ruido_lineal():
+    try:
+        H.DATOS.mkdir(parents=True, exist_ok=True)
+        _ruta_ruido_lineal().write_text(json.dumps({"t": time.time()}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _ultimo_ruido_lineal():
+    try:
+        f = _ruta_ruido_lineal()
+        return float(json.loads(f.read_text(encoding="utf-8")).get("t", 0)) if f.exists() else 0.0
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _exigir_ruido_lineal(funcion_ruido):
+    if time.time() - _ultimo_ruido_lineal() > 6 * 3600:
+        raise RuntimeError(f"Falta la reducción de ruido lineal (pasos 14/15) antes de estirar: {funcion_ruido} sobre la "
+                           "imagen lineal y aplicarCandidato del recomendado. Si el usuario no quiere ese paso, forzar=True.")
+
+
 def _guardar_candidato(grupo, n, a, datos):
     TRABAJO.mkdir(parents=True, exist_ok=True)
     cid = f"{grupo}_{n}"
@@ -1087,7 +1118,10 @@ def aplicarCandidato(siril, id):
     if _huella(actual) != datos.get("huella_base"):
         raise RuntimeError("La imagen ha cambiado desde la comparación (otra imagen o ya se aplicó algo): repite la comparación.")
     a = np.load(fn)
+    lineal_antes = cid.startswith("ruido_") and _lineal(_pantalla(actual, H._info(siril)))
     _poner(siril, a, f"SirilAstroPilot: {datos.get('nombre', cid)}")
+    if lineal_antes:
+        _anotar_ruido_lineal()
     info = H._info(siril)
     m = _cielo(H._pixeles(siril, info))
     r = {"aplicado": cid, "metodo": datos.get("nombre"), "comando": datos.get("comando"), "medidas": _sin_privado(m),
@@ -2160,7 +2194,8 @@ def _dominante_aditiva(p, celdas_px=None, S=64):
 def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
                       metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "ghs_canal", "asinh", "escalas", "autostretch",
                                "hiperbolico"),
-                      negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True, senal_max=0.25):
+                      negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True, senal_max=0.25,
+                      forzar=False):
     """Paso 1 no lineal: compara GHS al fallo, arcsinh, estirado por escalas y autostretch con el cielo en el mismo
     objetivo. No cambia la imagen.
     negro_lineal: punto negro por canal en lineal antes de estirar (el pedestal del cielo fuera), ver _negro_lineal.
@@ -2170,6 +2205,8 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
     p = _pantalla(crudo_original, info)
     if not _lineal(p):
         raise RuntimeError("La imagen ya parece estirada (mediana > 0,05): el estirado parte de la starless lineal.")
+    if not forzar:
+        _exigir_ruido_lineal("reducirRuidoCandidatos")
     crudo = crudo_original
     bps_lineal = None
     neutro = None
@@ -2766,7 +2803,7 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     r = {"antes": m0, "candidatos": [], "errores": []}
     if m0["dominante_cielo_pct"] >= dominante_max:
         r["aviso"] = (f"El cielo ya tiene una dominante del {m0['dominante_cielo_pct']} % antes de saturar: saturar la amplifica. "
-                      "Corrígela antes con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y vuelve a saturar; tras una paleta "
+                      "Corrígela antes con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05) y vuelve a saturar; tras una paleta "
                       "la dominante del cielo es normal y fondoCandidatos la quita (IC 405, 19 nov 2026: sin ese paso no se saturó).")
     n = 0
     # Además de satu, la saturación propia de SetiAstroPilot (conserva la luminancia y no satura el cielo: peso de 0 en
@@ -2904,12 +2941,18 @@ def _rango(q, cel, blanco=0.40, gmax=2.0):
     return np.clip(s + (q - s) * g, 0, 1).astype(np.float32), g
 
 
-def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tipo=None, tinte_max=3.0, rango=True,
-                    blanco=0.40, ganancia_max=2.0):
+def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0, rango=True,
+                    blanco=0.40, ganancia_max=2.0, senal=0.10):
     """Paso 5 no lineal (fondo): punto negro por canal para dejar el cielo en varios niveles, neutro; mide píxeles
     nuevos a 0, cielo y ruido y recomienda el más oscuro que no recorta más del ceros_max %. La imagen no cambia.
     IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13 salían grises y planos frente a la versión de
-    Rafael (cielo ~0,02, punto negro y curva). Igual que fondoCandidatos de SetiAstroPilot."""
+    Rafael (cielo ~0,02, punto negro y curva). Igual que fondoCandidatos de SetiAstroPilot.
+    Cielo final (24 nov 2026, como PixInsight b7a04d7): por defecto niveles 0,05–0,015 y hasta un 5 % de píxeles nuevos
+    a 0 (el Natural de referencia de IC 1396 tiene el cielo en 0,013); si el cielo ya está en 0,035 o menos no hace nada.
+    La «+ medios» conserva la señal sobre el cielo (mediana del objeto − cielo) o la sube a 0,10, en vez de devolver la
+    mediana de entrada (con el cielo en 0,05 dejaba la imagen lavada); se descarta la variante que deja esa señal por
+    debajo del 85 % de la de entrada (se come la nebulosa). Gana el cielo más oscuro que cumple; a casi igual cielo
+    (±0,005), «+ rango», luego «+ medios», luego el punto negro solo."""
     info = H._info(siril)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
@@ -2929,6 +2972,13 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tip
     n = 0
     obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
     m_obj = float(np.median(_lum(p)[obj_px]))
+    media0 = float(np.mean(s0))
+    if cielos is None and media0 <= 0.035:
+        r["recomendado"] = None
+        r["motivo"] = f"El cielo ya está oscuro ({_r(media0, 3)} ≤ 0,035): no se toca."
+        return r
+    cielos = (0.05, 0.035, 0.025, 0.015) if cielos is None else cielos
+    senal0 = m_obj - media0
     variantes = []
     for t in sorted(cielos or [], reverse=True):
         variantes += [(float(t), False), (float(t), True)] + ([(float(t), "rango")] if rango else [])
@@ -2945,7 +2995,8 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tip
                 # Curva que deja el cielo en t y devuelve la mediana del objeto a la de antes (MTF sobre t–1): el fondo
                 # baja sin apagar la nebulosa (15 nov 2026: el punto negro solo la oscurecía; la referencia usa curva).
                 m1 = float(np.median(_lum(q)[obj_px]))
-                x, y = (m1 - t) / (1 - t), (m_obj - t) / (1 - t)
+                m_dest = t + max(senal0, min(float(senal), m_obj - t))
+                x, y = (m1 - t) / (1 - t), (m_dest - t) / (1 - t)
                 if 0 < x < y < 1:
                     mt = x * (y - 1) / (2 * x * y - x - y)
                     u = np.clip((q - t) / (1 - t), 0, 1)
@@ -2962,6 +3013,10 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tip
             m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)   # lo que decide (ceros_pct incluye los de antes)
             fal = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                    if m["ceros_nuevos_pct"] > ceros_max else [])
+            senal1 = m["objeto_mediana"] - m["cielo"]
+            m["senal_sobre_cielo"] = _r(senal1, 4)
+            if senal0 > 0.01 and senal1 < 0.85 * senal0:
+                fal.append(f"se come la nebulosa: señal sobre el cielo {_r(senal1, 3)} < 85 % de la de entrada ({_r(senal0, 3)})")
             if es_rango:
                 m["ganancia_rango"] = _r(g_rango, 3)
                 if m["altos_pct"] - rec0["altos_pct"] > 0.05:
@@ -2991,10 +3046,10 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tip
     def _nivel(x):
         return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith("+ medios") else 0
     if ok:
-        nmax = max(_nivel(x) for x in ok)
-        ok = [x for x in ok if _nivel(x) == nmax]
-    if ok:
-        mejor = min(ok, key=lambda x: (x["metricas"]["cielo"], 0 if x["metodo"].endswith("+ medios") else 1))
+        # 24 nov 2026: el cielo más oscuro que cumple (antes, primero el grupo «+ rango»: en PixInsight la Paleta5 se quedó
+        # con el cielo en 0,065); a casi igual cielo (±0,005), «+ rango», luego «+ medios», luego el punto negro solo.
+        cmin = min(x["metricas"]["cielo"] for x in ok)
+        mejor = max([x for x in ok if x["metricas"]["cielo"] <= cmin + 0.005], key=lambda x: (_nivel(x), -x["metricas"]["cielo"]))
         r["recomendado"] = mejor["id"]
         # Qwen leyó «ceros_pct 0,9778» como un 97,78 % y aplicó el más claro (IC 1396, 15 nov 2026): se dice en palabras.
         r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}) y "
@@ -3594,13 +3649,13 @@ def _libre(carpeta, base):
 
 def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False):
     """Paso 10 no lineal: TIFF 16 bits y JPG en 'carpeta' como <nombre>_final.tif/.jpg, sin sobrescribir. Exige el cielo
-    entre 0,03 y 0,10 (fondo ajustado) salvo forzar."""
+    entre 0,01 y 0,10 (fondo ajustado) salvo forzar."""
     info = H._info(siril)
     p0 = H._pixeles(siril, info)
     if not _lineal(p0):
         cielo = float(_cielo(p0[:, ::4, ::4])["cielo"])
-        if not forzar and not 0.03 <= cielo <= 0.10:
-            raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,03–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,05–0,08) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
+        if not forzar and not 0.01 <= cielo <= 0.10:
+            raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,01–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05; sin pasarle cielos) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
     dest = H._ruta(carpeta, "carpeta")
     base = str(nombre or Path(info["fichero"] or "imagen").stem)
     if not re.fullmatch(r"[\w .\-]+", base) or base.strip(". ") == "":
