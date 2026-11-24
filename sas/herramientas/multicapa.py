@@ -995,7 +995,8 @@ def _igualar_difusa(o, ha, cielo_px=None):
     sh = float(np.median(h4)) - mh
     if sh < 0.03:
         return _igualar(o, ha, cielo_px)
-    f = min(2.0, max(0.5, sh / max(float(np.median(o4)) - mo, 1e-4)))
+    # Hasta ×4 (Paleta6 de PixInsight, 24 nov 2026: con el tope en ×2 un OIII poco estirado dejó el final rojizo).
+    f = min(4.0, max(0.5, sh / max(float(np.median(o4)) - mo, 1e-4)))
     p99 = float(np.percentile(o4, 99))
     if p99 > mo:
         f = min(f, (0.95 - mh) / (p99 - mo))

@@ -124,9 +124,10 @@ function exportarFinal(viewId, o) {
   // en PixInsight por saltarse fondo y contraste). forzar: true sólo si el usuario quiere ese cielo.
   var cielo = exCielo(v);
   checks.cielo = cielo === null ? null : +cielo.toFixed(4);
-  if (!o.forzar && cielo !== null && (cielo < 0.03 || cielo > 0.10))
-    throw new Error("Cielo en " + cielo.toFixed(3) + " (fuera de 0,03–0,10): ajusta el fondo antes de exportar (fondo oscuro y neutro, " +
-                    "0,05–0,08, con fondoCandidatos) y repasa contraste y saturación. forzar: true sólo si el usuario quiere ese cielo.");
+  // Suelo en 0,01 (24 nov 2026): el Natural de referencia de IC 1396 tiene el cielo en 0,013 y fondoCandidatos baja hasta 0,015.
+  if (!o.forzar && cielo !== null && (cielo < 0.01 || cielo > 0.10))
+    throw new Error("Cielo en " + cielo.toFixed(3) + " (fuera de 0,01–0,10): ajusta el fondo antes de exportar (fondo oscuro y neutro, " +
+                    "con fondoCandidatos sin pasarle cielos) y repasa contraste y saturación. forzar: true sólo si el usuario quiere ese cielo.");
 
   if (fmts.indexOf("xisf") >= 0) {
     var wx = exCopy(v, "exXISF");

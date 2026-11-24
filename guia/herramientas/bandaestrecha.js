@@ -623,7 +623,9 @@ function componerPaleta(capas, o) {
       var nv = nivel(beView(ids[k])), f;
       if (modoIgual === "mediana") {
         f = (nh.p50 - nh.cielo) / Math.max(nv.p50 - nv.cielo, 1e-4);
-        f = Math.max(0.5, Math.min(2, f));
+        // Hasta ×4 (Paleta6 de IC 1396, 24 nov 2026: OIII estirado con MAS a mediana 0,134 sobre cielo 0,10 pedía ×2,72;
+        // con el tope en ×2 el final salió rojizo, medias 0,189/0,141/0,140). El tope del p99 en 0,95 evita quemarla.
+        f = Math.max(0.5, Math.min(4, f));
         if (nv.p99 > nv.cielo) f = Math.min(f, (0.95 - nh.cielo) / (nv.p99 - nv.cielo));
       } else f = (nh.p99 - nh.cielo) / Math.max(nv.p99 - nv.cielo, 1e-6);
       var tid = beUnique("beIgual_" + k), Q = new PixelMath;
