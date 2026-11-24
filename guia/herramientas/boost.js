@@ -137,7 +137,8 @@ function bsFranja(view, cielo, lo, hi) {
 // negro por canal hasta cielo = t (y neutro), en copias; recomienda el más oscuro que no lleva a 0 más de o.cerosMax %.
 //   fondoCandidatos("Final", { cielos: [0.08, 0.05, 0.03], cerosMax: 2, tinteMax: 0.03 })
 // Cada variante «+ medios»/«+ rango» se descarta si aleja del neutro el color de la franja p10–p30 más de tinteMax o
-// lo acerca al gris más de perdidaColorMax; se prefieren las que dejan la mediana ≥ medianaMin de la de entrada.
+// lo acerca al gris más de perdidaColorMax, y cualquiera si deja la señal sobre el cielo (mediana − cielo) por debajo
+// del 85 % de la de entrada (se come la nebulosa).
 function fondoCandidatos(viewId, o) {
   o = o || {};
   if (viewId && typeof viewId === "object") viewId = viewId.id || viewId.vista;
@@ -147,7 +148,14 @@ function fondoCandidatos(viewId, o) {
   if (esMedian(v0) < 0.05) throw new Error("La imagen parece lineal: el nivel del fondo se ajusta después de estirar (y de recombinar).");
   var sd = esSkyDominance(v0), c0 = esCheck(v0);
   var s0 = sd.canales && sd.canales.length ? sd.canales : [c0.cielo];
-  var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 2, cielos = (o.cielos || [0.08, 0.065, 0.05, 0.035]).slice().sort(function (a, b) { return b - a; });
+  // Cielo final (24 nov 2026, Paleta5 de IC 1396: cielo 0,072 y objeto el doble de brillante que el Natural de Rafael,
+  // con cielo 0,013): niveles 0,05–0,015 y hasta un 5 % de píxeles nuevos a 0 (a 0,035 ya se descartaba por un 2,08 %; el
+  // Natural tiene un 6,6 % de píxeles con algún canal a 0, el polvo oscuro en negro). Si el cielo ya está en 0,035 o menos
+  // (segunda llamada), no hace nada.
+  var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 5, cielos = (o.cielos || [0.05, 0.035, 0.025, 0.015]).slice().sort(function (a, b) { return b - a; });
+  var media00 = s0.reduce(function (a, b) { return a + b; }, 0) / s0.length;
+  if (!o.cielos && media00 <= 0.035) return { vista: viewId, comparados: [], recomendado: null,
+    motivo: "El cielo ya está oscuro (" + media00.toFixed(3) + " ≤ 0,035): no se toca. Sigue con " + viewId + ".", siguiente: "Sigue con " + viewId + "." };
   var cands = [];
   // Mediana de la imagen como medida de la nebulosa (en IC 1396 llena el campo).
   var m0 = esMedian(v0), variantes = [];
@@ -155,8 +163,9 @@ function fondoCandidatos(viewId, o) {
   // con la entrada, no con 1).
   var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0, s0), fPlano = {};
   var perdidaMax = (o.perdidaColorMax !== undefined) ? +o.perdidaColorMax : 0.10;
-  // Mediana mínima frente a la entrada (o.medianaMin, 0,75): por debajo, el fondo se está comiendo la nebulosa.
-  var medianaMin = (o.medianaMin !== undefined) ? +o.medianaMin : 0.75;
+  // Señal sobre el cielo: la «+ medios» la lleva a max(la de entrada, o.senal = 0,10, la del Natural de Rafael) y no a la
+  // mediana de entrada (con cielo 0,12 y mediana 0,20 devolvía la mediana a 0,20 con el cielo en 0,05: imagen lavada).
+  var senalObj = (o.senal !== undefined) ? +o.senal : 0.10, senal0 = esMedian(v0) - media00;
   // «+ rango» (24 nov 2026, Natural de IC 1396 con Qwen frente a la de referencia de Rafael): la curva «+ medios» teñía la
   // franja débil (R/G de 2,3 a 1,6: la curva no lineal sube cada canal distinto), se quedó el punto negro solo y la imagen
   // salió comprimida y oscura (p90 0,16 y p98 0,21 frente a 0,27 y 0,37). «+ rango» es punto negro + punto blanco
@@ -179,7 +188,7 @@ function fondoCandidatos(viewId, o) {
     if (medios) {
       // Curva que deja el cielo en t y devuelve la mediana de la nebulosa a la de antes (MTF sobre el tramo t–1): el
       // fondo baja sin apagar la nebulosa (15 nov 2026: con el punto negro solo la imagen quedaba oscura).
-      var m1 = esMedian(w.mainView), x = (m1 - t) / (1 - t), y = (m0 - t) / (1 - t);
+      var mObj = t + Math.max(senal0, Math.min(senalObj, m0 - t)), m1 = esMedian(w.mainView), x = (m1 - t) / (1 - t), y = (mObj - t) / (1 - t);
       if (x > 0 && x < y && y < 1) {
         var mt = x * (y - 1) / (2 * x * y - x - y), tt = t.toFixed(6), k = (1 - t).toFixed(6);
         var C = new PixelMath;
@@ -222,6 +231,7 @@ function fondoCandidatos(viewId, o) {
       alejado = Math.exp(Math.max(0, dR, dB)) - 1; perdida = Math.exp(Math.max(0, -dR, -dB)) - 1;
     }
     var tine = alejado !== null && alejado > tinteMax, apaga = perdida !== null && perdida > perdidaMax;
+    var senal1 = esMedian(w.mainView) - cielo, come = senal0 > 0.01 && senal1 < 0.85 * senal0;
     cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : "") + (rango ? " + rango" : ""), vista: w.mainView.id, ganancia_rango: gRango === null ? undefined : +gRango.toFixed(3), p99: c.p99, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
                  ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
                  franja_p10_p30: f1, tinte_franja_pct: tinte === null ? null : +(100 * tinte).toFixed(1),
@@ -230,8 +240,10 @@ function fondoCandidatos(viewId, o) {
                  no_cumple: (nuevos > cerosMax ? ["lleva a 0 un " + nuevos.toFixed(2) + " % más de píxeles (máx. " + cerosMax + ")"] : [])
                    .concat(rango && quemaNuevos > 0.05 ? ["el punto blanco quema un " + quemaNuevos.toFixed(3) + " % más de píxeles (≥ 0,95; máx. 0,05 %): baja «blanco»"] : [])
                    .concat(tine ? ["la variante «" + (rango ? "+ rango" : "+ medios") + "» tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " con el punto negro solo (aleja un cociente del neutro un " + (100 * alejado).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : [])
-                   .concat(apaga ? ["la variante «" + (rango ? "+ rango" : "+ medios") + "» apaga el color del fondo débil: R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " (acerca al gris un " + (100 * perdida).toFixed(1) + " % > " + (100 * perdidaMax) + " %)"] : []),
-                 cumple: nuevos <= cerosMax && !tine && !apaga && !(rango && quemaNuevos > 0.05), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
+                   .concat(apaga ? ["la variante «" + (rango ? "+ rango" : "+ medios") + "» apaga el color del fondo débil: R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " (acerca al gris un " + (100 * perdida).toFixed(1) + " % > " + (100 * perdidaMax) + " %)"] : [])
+                   .concat(come ? ["se come la nebulosa: señal sobre el cielo " + senal1.toFixed(3) + " < 85 % de la de entrada (" + senal0.toFixed(3) + ")"] : []),
+                 senal_sobre_cielo: +senal1.toFixed(4),
+                 cumple: nuevos <= cerosMax && !tine && !apaga && !come && !(rango && quemaNuevos > 0.05), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
   });
   if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,
                               motivo: "El cielo ya está en " + (s0.reduce(function (a, b) { return a + b; }, 0) / s0.length).toFixed(3) + ", igual o por debajo de los niveles pedidos." };
@@ -241,10 +253,8 @@ function fondoCandidatos(viewId, o) {
   // comía; la «+ rango» a 0,05 la dejaba en 0,124). Dentro del grupo, el más oscuro; a casi igual cielo (±0,005: la curva
   // sube un poco las celdas de cielo), el que conserva los medios.
   function rangoDe(c) { return /rango$/.test(c.metodo) ? 2 : /medios$/.test(c.metodo) ? 1 : 0; }
-  // Las que conservan la nebulosa (mediana ≥ medianaMin de la de entrada) antes que las que se la comen, si las hay.
-  var conserva = ok.filter(function (c) { return c.mediana_frente_entrada >= medianaMin; });
-  if (conserva.length) ok = conserva;
-  if (ok.length) { var nivelMax = Math.max.apply(null, ok.map(rangoDe)); ok = ok.filter(function (c) { return rangoDe(c) === nivelMax; }); }
+  // 24 nov 2026: primero el cielo más oscuro que cumple (antes, primero el grupo «+ rango», luego «+ medios»: la Paleta5
+  // se quedó con el cielo en 0,065); a casi igual cielo, «+ rango», luego «+ medios», luego el punto negro solo.
   var mejor = ok.length ? ok.reduce(function (a, c) {
     if (Math.abs(c.cielo - a.cielo) <= 0.005) return rangoDe(c) > rangoDe(a) ? c : a;
     return c.cielo < a.cielo ? c : a; }) : null;
