@@ -452,6 +452,21 @@ def _es_alineado(nombre):
     return bool(re.search(r"(?i)_alin", str(nombre or "")))
 
 
+def _a_32_bits(siril, info):
+    """JPG/PNG/TIF de 8 bits: Siril los carga como USHORT con valores 0–255 (bitpix 8) y todas las herramientas
+    dividen entre 65535, así que la imagen salía casi negra (~0,0006) y se tomaba por lineal (24 nov 2026, la Natural
+    de IC 1396 en JPG). Se pasa a float32 0–1 al abrirla, como hace PixInsight."""
+    a = siril.get_image_pixeldata()
+    with siril.image_lock():
+        siril.set_image_pixeldata((a.astype(np.float32) / np.float32(255.0)))
+    r = _info(siril)
+    if r.get("bitpix") in (-32, -64):
+        r["aviso_8_bits"] = "El fichero es de 8 bits: se ha pasado a 32 bits en coma flotante (0–1) al abrirlo."
+    else:
+        raise RuntimeError(f"El fichero es de 8 bits y Siril no lo ha pasado a 32 bits (bitpix {r.get('bitpix')}).")
+    return r
+
+
 def abrirImagen(siril, fichero):
     """Carga un fichero en Siril (sustituye la imagen cargada). Devuelve sus datos."""
     p = _ruta(fichero)
@@ -463,6 +478,8 @@ def abrirImagen(siril, fichero):
     p, aviso = ruta_legible(p)
     siril.cmd("load", _arg_cmd(p))
     r = _info(siril)
+    if r.get("bitpix") == 8:
+        r = _a_32_bits(siril, r)
     if aviso:
         r["aviso"] = aviso
     if (r.get("ancho") or 0) > 1000 and not _es_alineado(original) and _clave(original) not in GUARDADOS \
