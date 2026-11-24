@@ -269,8 +269,13 @@ def alinearMasters(ctx, ficheros, carpeta=None, referencia=1):
         ctx.save_image(np.ascontiguousarray(img), str(dst), original_format="xisf", bit_depth="32-bit floating point",
                        original_header=h, is_mono=(rec.shape[0] == 1))
         salidas.append(str(dst))
-    _anotar_alineados(salidas)
-    r = {"alineados": salidas, "referencia": str(fs[iref]), "metodo": metodo,
+    try:
+        import ruta as _ruta
+        ruta_p10 = _ruta.calcular(fs)
+    except Exception as e:
+        ruta_p10 = {"ruta": None, "error": str(e)}
+    _anotar_alineados(salidas, ruta_p10)
+    r = {"alineados": salidas, "referencia": str(fs[iref]), "metodo": metodo, "ruta_paso10": ruta_p10,
          "desplazamientos": info, "recorte_comun": [x0, y0, x1, y1], "tam_comun": [x1 - x0, y1 - y0],
          "segundos": _r(time.perf_counter() - t0, 1),
          "nota": "Recortados todos al mismo rectángulo con datos en todos. Ábrelos con abrirImagen; el dual band se "
@@ -546,7 +551,25 @@ def _rgb_banda_ancha():
     return None
 
 
+def ruta_paso10():
+    """Ruta del Paso 10 anotada por alinearMasters (ruta.py) en las últimas 24 h, o None."""
+    import time as _t
+    ru = _estado().get("ruta_paso10")
+    return ru if isinstance(ru, dict) and _t.time() - float(ru.get("t") or 0) < 86400 else None
+
+
+def _negar_inyeccion(motivo=None, forzar=False, tipo=None):
+    """Con mucha más banda estrecha que RGB (ruta de paleta), en nebulosas no se inyecta salvo motivo."""
+    ru = ruta_paso10()
+    if ru and ru.get("ruta") == "paleta" and not motivo and not forzar and str(tipo or "").lower() != "galaxia":
+        import ruta as _ruta
+        raise RuntimeError(_ruta.mensaje_inyeccion(ru))
+
+
 def _negar_paleta(forzar, ha=None, oiii=None, vista=None):
+    ru = ruta_paso10()
+    if ru and ru.get("ruta") == "paleta":
+        return                                # 24 nov 2026: banda estrecha >= 4 veces la RGB: paleta obligatoria
     rgb = _rgb_banda_ancha()
     if rgb and not forzar:
         # 21 nov 2026: tras la negativa genérica el modelo rehízo las capas desde cero y exportó el RGB solo. Se le da
@@ -574,10 +597,11 @@ def _raiz(nombre):
     return s.lower()
 
 
-def _anotar_alineados(ficheros):
+def _anotar_alineados(ficheros, ruta_p10=None):
     e = _estado()
     e["alineados"] = [_raiz(f) for f in ficheros]
     e["recorte_ok"] = []                      # alineación nueva: falta revisarRecorte
+    e["ruta_paso10"] = ruta_p10
     _guardar_estado(e)
 
 
@@ -810,9 +834,14 @@ def _capa(ctx, vista, forma):
     return c.astype(np.float32)
 
 
-def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), con_oiii=True, ruido_max=1.25):
+def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), con_oiii=True, ruido_max=1.25,
+                       tipo=None, motivo=None, forzar=False):
     """Paso 10 lineal: compara cómo añadir Hα (y OIII), vistas mono alineadas, al RGB lineal 'vista'. La vista no
-    cambia: aplicarCandidato(id)."""
+    cambia: aplicarCandidato(id).
+    Con la ruta de paleta anotada por alinearMasters (banda estrecha >= 4 veces la RGB) se niega en nebulosas salvo
+    'motivo' (nebulosa de emisión y reflexión, o el usuario pide color RGB): 24 nov 2026, IC 1396.
+    """
+    _negar_inyeccion(motivo, forzar, tipo)
     d = H._doc(ctx, vista)
     p = H._p(d.image)
     if p.shape[0] != 3:

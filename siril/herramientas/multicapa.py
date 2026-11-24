@@ -145,8 +145,13 @@ def alinearMasters(siril, ficheros, carpeta=None, referencia=1):
     info = H._info(siril)
     if (info["ancho"], info["alto"]) != (x1 - x0, y1 - y0):
         raise RuntimeError(f"El recorte común no se aplicó ({info['ancho']}×{info['alto']} en vez de {x1 - x0}×{y1 - y0}).")
-    _anotar_alineados(salidas)
-    return {"alineados": salidas, "referencia": str(fs[int(referencia) - 1]), "transformaciones": tr,
+    try:
+        import ruta as _ruta
+        ruta_p10 = _ruta.calcular(fs)
+    except Exception as e:
+        ruta_p10 = {"ruta": None, "error": str(e)}
+    _anotar_alineados(salidas, ruta_p10)
+    return {"alineados": salidas, "ruta_paso10": ruta_p10, "referencia": str(fs[int(referencia) - 1]), "transformaciones": tr,
             "recorte_comun": {"rect_en_el_alineado": [x0, y0, x1, y1], "quita_px": {"izquierda": x0, "arriba": y0,
                               "derecha": info0["ancho"] - x1, "abajo": info0["alto"] - y1}},
             "tam_comun": [info["ancho"], info["alto"]], "segundos": _r(time.perf_counter() - t0, 1),
@@ -436,7 +441,25 @@ def _rgb_banda_ancha():
     return None
 
 
+def ruta_paso10():
+    """Ruta del Paso 10 anotada por alinearMasters (ruta.py) en las últimas 24 h, o None."""
+    import time as _t
+    ru = _estado().get("ruta_paso10")
+    return ru if isinstance(ru, dict) and _t.time() - float(ru.get("t") or 0) < 86400 else None
+
+
+def _negar_inyeccion(motivo=None, forzar=False, tipo=None):
+    """Con mucha más banda estrecha que RGB (ruta de paleta), en nebulosas no se inyecta salvo motivo."""
+    ru = ruta_paso10()
+    if ru and ru.get("ruta") == "paleta" and not motivo and not forzar and str(tipo or "").lower() != "galaxia":
+        import ruta as _ruta
+        raise RuntimeError(_ruta.mensaje_inyeccion(ru))
+
+
 def _negar_paleta(forzar, ha=None, oiii=None, vista=None):
+    ru = ruta_paso10()
+    if ru and ru.get("ruta") == "paleta":
+        return                                # 24 nov 2026: banda estrecha >= 4 veces la RGB: paleta obligatoria
     rgb = _rgb_banda_ancha()
     if rgb and not forzar:
         # 21 nov 2026: tras la negativa genérica el modelo rehízo las capas desde cero y exportó el RGB solo. Se le da
@@ -449,11 +472,12 @@ def _negar_paleta(forzar, ha=None, oiii=None, vista=None):
                            "luego estrellas, fondo y exportar. forzar: true sólo si el usuario ha pedido una paleta.")
 
 
-def _anotar_alineados(ficheros):
+def _anotar_alineados(ficheros, ruta_p10=None):
     try:
         e = _estado()
         e["alineados"] = [_raiz(f) for f in ficheros]
         e["recorte_ok"] = []                  # alineación nueva: falta revisarRecorte
+        e["ruta_paso10"] = ruta_p10
         _guardar_estado(e)
     except Exception:
         pass
@@ -673,8 +697,13 @@ def _excesos_estrellas(base, nb, cielo_px, estrellas_px, obj_px):
                 "tope": _r(tope, 3)}
 
 
-def combinarCandidatos(siril, ha, oiii=None, intensidades=(0.5, 1.0), con_oiii=True, ruido_max=1.25, tipo=None):
-    """Paso 10 lineal: compara cómo añadir Hα (y OIII) al RGB lineal cargado. La imagen no cambia: aplicarCandidato(id)."""
+def combinarCandidatos(siril, ha, oiii=None, intensidades=(0.5, 1.0), con_oiii=True, ruido_max=1.25, tipo=None,
+                       motivo=None, forzar=False):
+    """Paso 10 lineal: compara cómo añadir Hα (y OIII) al RGB lineal cargado. La imagen no cambia: aplicarCandidato(id).
+    Con la ruta de paleta anotada por alinearMasters (banda estrecha >= 4 veces la RGB) se niega en nebulosas salvo
+    'motivo' (nebulosa de emisión y reflexión, o el usuario pide color RGB): 24 nov 2026, IC 1396.
+    """
+    _negar_inyeccion(motivo, forzar, tipo)
     info = H._info(siril)
     if info["canales"] != 3:
         raise RuntimeError("combinarCandidatos necesita el RGB en color cargado.")

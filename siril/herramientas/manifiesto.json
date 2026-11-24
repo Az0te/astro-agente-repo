@@ -1395,7 +1395,7 @@
    "nivel": "disco",
    "timeout_s": 900,
    "paso": "lineal/05-staralignment-crop.md",
-   "descripcion": "Paso 5 lineal: alinea varios masters del mismo objeto (otra noche u otro filtro, p. ej. un RGB y un dual band) contra el primero, con los comandos de secuencia de Siril, y los recorta TODOS al mismo rectángulo con datos en todos (sin las cuñas de cada apilado): después no hace falta recortarBordes. Deja copias <nombre>_alin.fit en 'carpeta' (los originales no se tocan) y carga la primera. Devuelve el desplazamiento y el giro de cada uno.",
+   "descripcion": "Paso 5 lineal: alinea varios masters del mismo objeto (otra noche u otro filtro, p. ej. un RGB y un dual band) contra el primero, con los comandos de secuencia de Siril, y los recorta TODOS al mismo rectángulo con datos en todos (sin las cuñas de cada apilado): después no hace falta recortarBordes. Deja copias <nombre>_alin.fit en 'carpeta' (los originales no se tocan) y carga la primera. Devuelve el desplazamiento y el giro de cada uno. Devuelve ruta_paso10: minutos de banda ancha y estrecha (de la cabecera: tiempo total y FILTER) y la ruta del Paso 10; con la estrecha >= 4 veces la ancha, \"paleta\": en nebulosas la nebulosa sale de las capas con paletasCandidatos (ya no se niega) y combinarCandidatos se niega salvo motivo.",
    "resumen": "Paso 5: alinea varios masters contra el primero y los recorta a la zona común.",
    "params": {
     "type": "object",
@@ -1516,7 +1516,7 @@
    "nivel": "vista",
    "timeout_s": 600,
    "paso": "lineal/10-combinacion-rgb-nb.md",
-   "descripcion": "Paso 10 lineal: con el RGB lineal cargado (alineado, con gradiente y color hechos), compara añadirle el exceso de Hα en el rojo (y el de OIII en azul y verde) a varias intensidades; las estrellas se quedan las del RGB. La escala sale de las estrellas (continuo) y el exceso se limita para que ×1 como mucho duplique la nebulosa. Si lo cargado parece el propio dual band, se niega. Mide la nebulosa ganada en Hα y OIII, el ruido y la dominante del cielo y el color de las estrellas, y recomienda. La imagen no cambia: aplicarCandidato(id).",
+   "descripcion": "Paso 10 lineal: con el RGB lineal cargado (alineado, con gradiente y color hechos), compara añadirle el exceso de Hα en el rojo (y el de OIII en azul y verde) a varias intensidades; las estrellas se quedan las del RGB. La escala sale de las estrellas (continuo) y el exceso se limita para que ×1 como mucho duplique la nebulosa. Si lo cargado parece el propio dual band, se niega. Mide la nebulosa ganada en Hα y OIII, el ruido y la dominante del cielo y el color de las estrellas, y recomienda. La imagen no cambia: aplicarCandidato(id). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
    "resumen": "Paso 10: compara añadir Hα (y OIII) al RGB lineal y recomienda; aplicarCandidato(id).",
    "params": {
     "type": "object",
@@ -1528,6 +1528,15 @@
      "oiii": {
       "type": "string",
       "description": "Fichero de la capa OIII (opcional)."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": ["nebulosa", "cumulo", "galaxia", "nebulosa_oscura"],
+      "description": "Tipo de objeto: en galaxias no se aplica la ruta de paleta."
+     },
+     "motivo": {
+      "type": "string",
+      "description": "Por qué se inyecta aunque toque paleta (nebulosa de emisión y reflexión, o el usuario pide color RGB)."
      },
      "intensidades": {
       "type": "array",

@@ -662,9 +662,32 @@ def _alineados_por_tipo():
     return ancha, estrecha
 
 
+def _mensaje_falta_inyeccion(llamada):
+    """Con la ruta de paleta (banda estrecha >= 4 veces la RGB, 24 nov 2026) lo que falta es la paleta, no la inyección."""
+    try:
+        import multicapa
+        ru = multicapa.ruta_paso10() or {}
+    except Exception:
+        ru = {}
+    if ru.get("ruta") == "paleta":
+        return (f"Ruta de paleta (×{ru.get('proporcion')} de banda estrecha frente a la RGB) y no se ha aplicado ninguna "
+                "paleta: el final saldría sin la nebulosa de banda estrecha. Llama a paletasCandidatos con las capas "
+                "estiradas sin estrellas, aplica la recomendada (aplicarCandidato), recombina las estrellas de la RGB y "
+                "exporta después. forzar: true sólo si el usuario quiere el RGB solo.")
+    return ("Hay masters de banda estrecha alineados junto a un RGB de banda ancha y no se ha aplicado "
+            "ninguna inyección: el final saldría sin la señal de Hα y OIII. Llama a " + llamada + ", aplica el recomendado "
+            "(aplicarCandidato) y exporta después. forzar: true sólo si el usuario quiere el RGB solo.")
+
+
 def _falta_inyeccion():
     ancha, estrecha = _alineados_por_tipo()
-    return bool(ancha and estrecha and not _INYECCION["hecha"])
+    try:                                      # o por los tiempos y filtros de la cabecera (ruta.py; nombres sin FILTER-)
+        import multicapa
+        ru = multicapa.ruta_paso10() or {}
+    except Exception:
+        ru = {}
+    hay = bool(ancha and estrecha) or ru.get("ruta") in ("paleta", "inyectar")
+    return bool(hay and not _INYECCION["hecha"])
 
 
 # Guardas de la entrega (20 nov 2026: una pasada de SASpro exportó sin recombinar las estrellas que había separado, con
@@ -760,8 +783,7 @@ def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
                            "final sale sin estrellas (con huecos donde estaban). forzar: true sólo si el usuario pide una "
                            "versión sin estrellas.")
     if _falta_inyeccion() and not forzar:
-        raise RuntimeError("Hay masters de banda estrecha alineados junto a un RGB de banda ancha y no se ha aplicado "
-                           "ninguna inyección: el final saldría sin la señal de Hα y OIII. Llama a combinarCandidatos(ha=<capa Hα estirada>, oiii=<capa OIII estirada>, vista=<la RGB, ya estirada y con sus estrellas>), aplica el recomendado (aplicarCandidato) y exporta después. forzar: true sólo si el usuario quiere el RGB solo.")
+        raise RuntimeError(_mensaje_falta_inyeccion("combinarCandidatos(ha=<capa Hα estirada>, oiii=<capa OIII estirada>, vista=<la RGB, ya estirada y con sus estrellas>)"))
     aviso_color = _control_color(_p(d.image), forzar)
     fich = _meta(d).get("file_path")
     c = _ruta(carpeta, "carpeta") if carpeta else (Path(fich).parent if fich else DATOS / "exportado")

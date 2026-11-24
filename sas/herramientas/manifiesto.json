@@ -537,7 +537,7 @@
    "nivel": "disco",
    "timeout_s": 1800,
    "paso": "lineal/05-staralignment-crop.md",
-   "descripcion": "L5 varios masters (noches o filtros distintos): los alinea contra el de referencia por su ASTROMETRÍA (los de WBPP vienen resueltos; si no, resolverAstrometria antes), los recorta a la zona común con datos en todos y los guarda como <nombre>_alin.xisf en una carpeta nueva. No abre vistas ni toca los originales: ábrelos después con abrirImagen.",
+   "descripcion": "L5 varios masters (noches o filtros distintos): los alinea contra el de referencia por su ASTROMETRÍA (los de WBPP vienen resueltos; si no, resolverAstrometria antes), los recorta a la zona común con datos en todos y los guarda como <nombre>_alin.xisf en una carpeta nueva. No abre vistas ni toca los originales: ábrelos después con abrirImagen. Devuelve ruta_paso10: minutos de banda ancha y estrecha (de la cabecera: tiempo total y FILTER) y la ruta del Paso 10; con la estrecha >= 4 veces la ancha, \"paleta\": en nebulosas la nebulosa sale de las capas con paletasCandidatos (ya no se niega) y combinarCandidatos se niega salvo motivo.",
    "resumen": "L5: alinea masters por astrometría y recorta a la zona común.",
    "params": {
     "type": "object",
@@ -710,7 +710,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "lineal/10-combinacion-rgb-nb.md",
-   "descripcion": "L10 combinar banda estrecha con el RGB: sobre la vista RGB lineal (ya con gradiente y color), compara añadir el exceso de Hα al rojo (y de OIII a verde y azul) a varias intensidades, escalado por las estrellas; mide nebulosa ganada, ruido y dominante del cielo y color de las estrellas, y recomienda. Las capas deben estar alineadas (mismo tamaño). La vista NO cambia (aplicarCandidato).",
+   "descripcion": "L10 combinar banda estrecha con el RGB: sobre la vista RGB lineal (ya con gradiente y color), compara añadir el exceso de Hα al rojo (y de OIII a verde y azul) a varias intensidades, escalado por las estrellas; mide nebulosa ganada, ruido y dominante del cielo y color de las estrellas, y recomienda. Las capas deben estar alineadas (mismo tamaño). La vista NO cambia (aplicarCandidato). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
    "resumen": "L10: compara cómo añadir Hα/OIII al RGB; no cambia la vista.",
    "params": {
     "type": "object",
@@ -726,6 +726,15 @@
      "vista": {
       "type": "string",
       "description": "La vista RGB lineal. Sin ella, la activa."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": ["nebulosa", "cumulo", "galaxia", "nebulosa_oscura"],
+      "description": "Tipo de objeto: en galaxias no se aplica la ruta de paleta."
+     },
+     "motivo": {
+      "type": "string",
+      "description": "Por qué se inyecta aunque toque paleta (nebulosa de emisión y reflexión, o el usuario pide color RGB)."
      },
      "intensidades": {
       "type": "array",
