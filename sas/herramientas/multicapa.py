@@ -973,6 +973,35 @@ def _igualar(o, ha, cielo_px=None):
     return np.clip(mh + (o - mo) * (sh / max(so, 1e-6)), 0, 1)
 
 
+def _igualar_difusa(o, ha, cielo_px=None):
+    """Natural (24 nov 2026, como componerPaleta de PixInsight): con la nebulosa llenando el campo (mediana del Hα ≥ cielo
+    + 0,03) la raya se iguala al Hα por la señal difusa (mediana − cielo) y no por el p99, que lo marca el borde brillante
+    del Hα y deja corto el OIII difuso (Paleta4 de IC 1396: final rojizo, medias 0,114/0,093/0,086 frente a
+    0,110/0,140/0,145 del Natural de Rafael; con las rayas del 15 nov el OIII pasa de ×1,0 a ×1,64). Factor entre 0,5 y 2
+    y sin llevar el p99 de la raya por encima de 0,95. Objeto pequeño: el p99, como _igualar.
+    El cielo de cada raya se mide en SUS celdas más oscuras (p5 de las medianas de celdas de 32 px, en la imagen a 1/4):
+    en IC 1396 las celdas oscuras del Hα son de las más brillantes en OIII (cielo 0,206 > mediana 0,200) y el factor salía
+    negativo."""
+    o4, h4 = o[::4, ::4], ha[::4, ::4]
+
+    def _cielo(a):
+        b = 32
+        hh, ww = (a.shape[0] // b) * b, (a.shape[1] // b) * b
+        if hh < b or ww < b:
+            return float(np.percentile(a, 5))
+        return float(np.percentile(np.median(a[:hh, :ww].reshape(hh // b, b, ww // b, b).swapaxes(1, 2).reshape(-1, b * b), axis=1), 5))
+
+    mo, mh = _cielo(o4), _cielo(h4)
+    sh = float(np.median(h4)) - mh
+    if sh < 0.03:
+        return _igualar(o, ha, cielo_px)
+    f = min(2.0, max(0.5, sh / max(float(np.median(o4)) - mo, 1e-4)))
+    p99 = float(np.percentile(o4, 99))
+    if p99 > mo:
+        f = min(f, (0.95 - mh) / (p99 - mo))
+    return np.clip(mh + (o - mo) * f, 0, 1)
+
+
 def _tonos(p, m):
     """Separación de tonos: desviación circular del tono (grados), ponderada por saturación, en la máscara m."""
     R, G, B = p[0][m], p[1][m], p[2][m]
@@ -1022,14 +1051,16 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
                            lambda: (np.clip(0.5 * (Sa + Ha), 0, 1), np.clip(np.sqrt(np.maximum(Ha * Oa, 0)), 0, 1), Oa))
     # Natural (IC 1396, 26 oct 2026, la mejor versión de Rafael): las cuatro rayas con su color aproximado. Hα y SII rojos,
     # OIII y Hβ turquesa (el Hβ da señal limpia donde el OIII es flojo). Sin Hβ, el OIII hace su papel; sin SII, el Hα.
-    Rn = (0.85 * Ha + 0.15 * Sa) if S is not None else Ha
-    Hbn = _igualar(_capa(ctx, hb, forma), Ha, cpx) if hb else None
+    Oan = _igualar_difusa(O, Ha, cpx)
+    San = _igualar_difusa(S, Ha, cpx) if S is not None else None
+    Rn = (0.85 * Ha + 0.15 * San) if S is not None else Ha
+    Hbn = _igualar_difusa(_capa(ctx, hb, forma), Ha, cpx) if hb else None
     if Hbn is not None:
         todas["Natural"] = ("Natural (R = 0,85·Hα + 0,15·SII; G = 0,6·OIII + 0,25·Hβ + 0,15·Hα; B = 0,7·OIII + 0,3·Hβ)",
-                            lambda: (Rn, 0.6 * Oa + 0.25 * Hbn + 0.15 * Ha, 0.7 * Oa + 0.3 * Hbn))
+                            lambda: (Rn, 0.6 * Oan + 0.25 * Hbn + 0.15 * Ha, 0.7 * Oan + 0.3 * Hbn))
     else:
         todas["Natural"] = ("Natural sin Hβ (R = 0,85·Hα + 0,15·SII; G = 0,85·OIII + 0,15·Hα; B = OIII)",
-                            lambda: (Rn, 0.85 * Oa + 0.15 * Ha, Oa))
+                            lambda: (Rn, 0.85 * Oan + 0.15 * Ha, Oan))
     elegir = [k for k in (paletas or list(todas)) if k in todas]
     # Qwen pasa a menudo la lista entera de paletas que conoce: la Natural, con Hβ, entra siempre (IC 1396, 15 nov 2026:
     # el enum del manifiesto no la tenía y la lista de Qwen la dejaba fuera).
