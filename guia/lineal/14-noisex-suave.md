@@ -26,6 +26,8 @@
 
 **Comparar en vez de fijar el valor.** Probar sobre la misma entrada varias fuerzas (0,30 / 0,50 / 0,70), la separación de frecuencias (en color), un denoise fuerte **sólo donde hay poca señal** (máscara que protege lo brillante, que ya tiene buena relación señal/ruido; Jon Rista) y algún método distinto, con las mismas medidas (`ruido_rel` del cielo, contraste de la zona débil, estructura de la residual, moteado de color), y quedarse con el que más baja el ruido sin pasar del 80 % entre los que cumplen. En una nebulosa de emisión y reflexión sin calibrar (8 nov 2026) ganó la fuerza 0,70 (−57 %): los que quitaban más ruido subían el moteado de color más de 0,3.
 
+**Obligatoria antes de estirar.** Esta pasada es opcional, pero alguna reducción de ruido lineal (esta o el denoise principal de la starless, paso 15) no: `estirarCandidatos` para si no ha habido un `reducirRuido` sobre imagen lineal en las últimas 6 h (`forzar: true` solo si el usuario no quiere ese paso). En una paleta Natural (24 nov 2026) el modelo se saltó el denoise lineal, el igualado de rayas (×2,3–3,8) multiplicó el grano y el final quedó con diez veces más grano que la pasada anterior.
+
 **SyQon Prism** (si está SyQon Studio) entra en la comparación de ruido, solo en lineal ([Anexo L](../anexos/L-syqon.md)).
 
 **Control.** σ del cielo baja poco (es una pasada suave), contraste de una zona débil no baja más de ~5 %, la imagen diferencia (antes − después) debe ser **sólo ruido**. Si aparece aspecto de cera, se ha pasado: bajar denoise o dejarlo para la starless.

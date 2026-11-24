@@ -563,6 +563,13 @@ function estirarCandidatos(viewId, o) {
   o = o || {};
   if (o._sinComprobar) return esEstirarCandidatosBase(viewId, o);
   var w0 = ImageWindow.windowById(viewId);
+  // Sin reducción de ruido lineal no se estira (Paleta7 de IC 1396, 24 nov 2026: sin NXT lineal, grano ×10 en el final).
+  // Se exige un reducirRuido sobre imagen lineal en las últimas 6 h. forzar: true sólo si el usuario no quiere ese paso.
+  if (!o.forzar && !w0.isNull && w0.mainView.image.median() < 0.05 && typeof rdUltimoLineal === "function" &&
+      Date.now() - rdUltimoLineal() > 6 * 3600000)
+    throw new Error("Falta la reducción de ruido lineal (Pasos 14/15) antes de estirar: reducirRuido(\"" + viewId + "\", { metodo: \"nxt\" }) " +
+                    "(o ruidoCandidatos sobre la starless lineal) y estira su resultado. Sin ella, el estirado al fallo y el igualado de " +
+                    "rayas multiplican el grano. Si el usuario no quiere ese paso, opciones.forzar: true.");
   var mono = !w0.isNull && w0.mainView.image.numberOfChannels === 1, prev = null;
   // Aunque se pasen metodos: en la segunda pasada de IC 1396 (24 nov 2026) Qwen pasó la lista completa en cada raya y
   // cada una volvió a ganar un método distinto. Sólo { mismoMetodo: false } compara de nuevo.

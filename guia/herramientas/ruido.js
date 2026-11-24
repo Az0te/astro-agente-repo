@@ -246,6 +246,14 @@ function rdModeloML(o) {
 // paletas de IC 1396 se saltaron el Paso 6 y el USM sacó el grano).
 function rdRutaNoLineal() { return File.systemTempDirectory + "/piastropilot-ruido-nolineal.json"; }
 function rdAnotarNoLineal() { try { File.writeTextFile(rdRutaNoLineal(), JSON.stringify({ t: Date.now() })); } catch (e) { } }
+// Lo mismo para la reducción de ruido LINEAL (Pasos 14/15): estirarCandidatos la exige en las últimas 6 h (Paleta7 de IC 1396,
+// 24 nov 2026: Qwen se saltó el NXT lineal, el igualado de rayas ×2,3–3,8 multiplicó el grano y el final quedó con grano
+// 0,168 frente a 0,017 de la Paleta6).
+function rdRutaLineal() { return File.systemTempDirectory + "/piastropilot-ruido-lineal.json"; }
+function rdAnotarLineal() { try { File.writeTextFile(rdRutaLineal(), JSON.stringify({ t: Date.now() })); } catch (e) { } }
+function rdUltimoLineal() {
+  try { var f = rdRutaLineal(); return File.exists(f) ? (JSON.parse(File.readTextFile(f)).t || 0) : 0; } catch (e) { return 0; }
+}
 function rdUltimoNoLineal() {
   try { var f = rdRutaNoLineal(); return File.exists(f) ? (JSON.parse(File.readTextFile(f)).t || 0) : 0; } catch (e) { return 0; }
 }
@@ -407,7 +415,7 @@ function reducirRuido(viewId, o) {
                              : "no aplicar este NXT"));
   // Las marcas de la entrada (sin estrellas, continuo restado) siguen valiendo tras el denoise; NXT y compañía pueden borrarlas.
   try { rdCopiarMarcas(View.viewById(viewId), v); } catch (e) { }
-  if (!linealPre) rdAnotarNoLineal();
+  if (!linealPre) rdAnotarNoLineal(); else rdAnotarLineal();
   return {
     vista: v.id, original: viewId,
     metodo: { nxt: o.frecuencias ? "NoiseXTerminator con separación de color y de frecuencias" : "NoiseXTerminator",
