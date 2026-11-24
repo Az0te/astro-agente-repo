@@ -798,7 +798,7 @@ function plPromptSistema(aj) {
    "final del último mensaje y es la única vigente; las de mensajes anteriores ya no valen.";
 }
 
-// Lista de vistas que se añade al final de la última petición (no se guarda en el historial).
+// Lista de vistas que se añade al final de la última petición (se guarda en ese mensaje; ver plPreguntar).
 function plVistasAhora() {
    return "\n\n[Vistas abiertas ahora en PixInsight (id: tamaño, canales, mediana):\n" + plListaVentanas() +
           "\nIds exactos: " + plResumenVistas() + "]";
@@ -1181,22 +1181,34 @@ function plRecortarViejo(m) {
 // Recorte en BLOQUE (20 nov 2026): antes se quitaba un poco del principio en cada petición y el prefijo cambiaba siempre,
 // así que el servidor (llama-server, Ollama) no podía reutilizar su caché y releía todo el historial. Ahora el punto de
 // corte se guarda en el propio array (mensajes._desde) y sólo se mueve cuando el historial se pasa del presupuesto: de una
-// vez, hasta dejarlo en el 60 %. plRecortarViejo no rompe la caché: un mensaje se compacta cuando deja de ser el último y
-// ya no cambia (sólo se relee desde él, al final del historial).
-var PL_RECORTE_BLOQUE = 0.6;
+// vez, hasta dejarlo en el 40 % (antes el 60 %, ver abajo).
+// 24 nov 2026 (pasada Paleta3 de IC 1396 en RDNA-FAST): compactar al dejar de ser el último SÍ rompía la caché: el mensaje
+// cambiaba en la petición siguiente y llama-server releía desde él (5 veces ~11 000 tokens). Ahora los resultados grandes
+// van enteros hasta que el historial se pasa del presupuesto; entonces se compactan de una vez, guardado en el propio
+// mensaje, a la vez que el corte en bloque (las dos cosas rompen la caché, mejor juntas). En el mismo momento se quitan las
+// listas de vistas viejas (plPreguntar las deja en cada mensaje, ver allí).
+// El corte deja el 40 % (antes el 60 %): con la sesión de Paleta3 simulada, la relectura total (prefill) baja de ~880 000
+// a ~500 000 caracteres; con el 60 % los cortes llegan más a menudo y cada uno relee todo el historial.
+var PL_RECORTE_BLOQUE = 0.4;
 function plRecortarHistorial(mensajes, presupuesto) {
-   var tope = presupuesto || PL_PRESUPUESTO_HISTORIAL, desde = mensajes._desde || 0;
+   var tope = presupuesto || PL_PRESUPUESTO_HISTORIAL, desde = mensajes._desde || 0, total = 0, i;
    if (desde >= mensajes.length) desde = 0;   // historial vaciado o rehecho
-   var out = [], total = 0;
-   for (var i = desde; i < mensajes.length; ++i) {
-      var mi = (i < mensajes.length - 1 && !plEsPeticion(mensajes[i])) ? plRecortarViejo(mensajes[i]) : mensajes[i];
-      out.push(mi);
-      total += mi.content.length;
-   }
+   for (i = desde; i < mensajes.length; ++i) total += mensajes[i].content.length;
    if (total > tope) {
-      while (out.length > 1 && total > tope * PL_RECORTE_BLOQUE) { total -= out[0].content.length; out.shift(); ++desde; }
+      for (i = desde; i < mensajes.length - 1; ++i) {
+         var v = mensajes[i]._vistas;
+         if (v && mensajes[i].content.slice(-v.length) == v) {
+            mensajes[i].content = mensajes[i].content.slice(0, -v.length); total -= v.length;
+         }
+         delete mensajes[i]._vistas;
+         if (plEsPeticion(mensajes[i])) continue;
+         var c = plRecortarViejo(mensajes[i]);
+         if (c !== mensajes[i]) { total -= mensajes[i].content.length - c.content.length; mensajes[i].content = c.content; }
+      }
+      while (mensajes.length - desde > 1 && total > tope * PL_RECORTE_BLOQUE) { total -= mensajes[desde].content.length; ++desde; }
       try { mensajes._desde = desde; } catch (e) {}
    }
+   var out = mensajes.slice(desde);
    while (out.length > 1 && out[0].role != "user") out.shift();
    // La última petición del usuario (no un resultado, una corrección ni «sigue») no se pierde nunca: con resultados
    // grandes (seleccionarSubs) el recorte la dejaba fuera y el modelo olvidaba rutas y objetivo (13 nov 2026).
@@ -1216,12 +1228,13 @@ function plEsPeticion(m) {
 // paso = clave del paso de la guía elegido en la pestaña Prompt ("" = prompt libre); decide el modelo con pesos N.
 // Devuelve { texto, modelo, porque }.
 function plPreguntar(aj, mensajes, estado, paso) {
+   // Recordatorio de las vistas al final de la última petición (los modelos locales atienden más a lo último que leen).
+   // Se GUARDA en el mensaje (24 nov 2026): antes se añadía sólo al enviarlo y en la petición siguiente ese mensaje ya no
+   // lo llevaba; el prefijo cambiaba en cada turno y llama-server (Qwen3.8 híbrido, con checkpoints) releía los dos últimos
+   // turnos cada vez. Las listas viejas se quitan en el corte en bloque (plRecortarHistorial).
+   var ult = mensajes.length ? mensajes[mensajes.length - 1] : null;
+   if (ult && ult.role == "user" && !ult._vistas) { ult._vistas = plVistasAhora(); ult.content += ult._vistas; }
    var sistema = plPromptSistema(aj), m = plRecortarHistorial(mensajes, plPresupuestoHistorial(aj)), e = plElegirModelo(aj, paso || ""), t;
-   // Recordatorio al final de la última petición (los modelos locales atienden más a lo último que leen); no se guarda.
-   if (m.length && m[m.length - 1].role == "user") {
-      m = m.slice();
-      m[m.length - 1] = { role: "user", content: m[m.length - 1].content + plVistasAhora() };
-   }
    if (aj.proveedor == "claude") t = plClaudeChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "codex") t = plCodexChat(aj, sistema, m, estado, e.modelo);
    else if (aj.proveedor == "gemini") t = plGeminiChat(aj, sistema, m, estado, e.modelo);
@@ -3100,7 +3113,7 @@ function plConstruirDialogo(aj) {
       if (resp === null) {   // la pregunta no obtuvo respuesta: no queda en el historial
          var q = this.mensajes.pop();
          // Si era la interpretación, el resultado de las llamadas sí se queda para el turno siguiente.
-         if (interpretando && q) this.mensajes.push({ role: "user", content: q.content }, { role: "assistant", content: "Visto." });
+         if (interpretando && q) this.mensajes.push({ role: "user", content: q.content, _vistas: q._vistas }, { role: "assistant", content: "Visto." });
          return;
       }
       this.mensajes.push({ role: "assistant", content: resp });
@@ -3484,6 +3497,29 @@ function plPrueba(salida, cli) {
       return r.texto.substring(0, 160);
    });
    paso("prompt", function () { var s = plPromptSistema(aj); return { caracteres: s.length, inicioVentanas: plVistasAhora() }; });
+   // Caché de prompts (24 nov 2026): entre peticiones el prefijo no cambia hasta el corte en bloque, y el corte compacta y
+   // quita las listas de vistas viejas.
+   paso("historialEstable", function () {
+      var M = [], prev = "", cortes = 0, enCorte = 0, roturas = [], grande = new Array(20001).join("x");
+      function plano(o) { return o.map(function (x) { return x.role + "|" + x.content; }).join("\n"); }
+      for (var k = 0; k < 30; ++k) {
+         var u = { role: "user", content: (k ? "Resultado de tus llamadas:\n" + (k % 3 ? "corto " + k : grande) : "Procesa IC 1396.") };
+         M.push(u);
+         u._vistas = "\n\n[Vistas abiertas ahora en PixInsight: v" + k + "]"; u.content += u._vistas;
+         var d0 = M._desde || 0, s = plano(plRecortarHistorial(M, 120000));
+         if ((M._desde || 0) != d0) { ++cortes; enCorte = M.length; }
+         else if (prev && s.indexOf(prev) != 0) roturas.push(k);
+         prev = s;
+         M.push({ role: "assistant", content: "Visto " + k + "." });
+         prev += "\nassistant|Visto " + k + ".";
+      }
+      if (roturas.length) throw new Error("el prefijo cambió sin corte en las peticiones " + roturas.join(", "));
+      if (!cortes) throw new Error("no hubo corte en bloque");
+      var viejas = 0;
+      for (var i = M._desde; i < enCorte - 1; ++i) if (/\[Vistas abiertas ahora/.test(M[i].content)) ++viejas;
+      if (viejas) throw new Error(viejas + " listas de vistas viejas siguen tras el corte");
+      return { cortes: cortes, desde: M._desde, mensajes: M.length, caracteres: plano(plRecortarHistorial(M, 120000)).length };
+   });
    paso("ollamaModelos", function () { return plOllamaModelos(aj); });
    var respuesta = null;
    paso("ollamaChat", function () {
