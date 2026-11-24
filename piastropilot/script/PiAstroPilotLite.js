@@ -743,7 +743,8 @@ function plPromptSistema(aj) {
    "- Pasos en los que ELIGE EL USUARIO (Rafael, 11 nov 2026): estirarEstrellasCandidatos (Paso 8: la capa de estrellas se estira AQUÍ, justo " +
    "antes de recombinar, nunca en el Paso 1; tres candidatos: recomendada, +20 % de tamaño y +10 % de saturación, +50 % y +20 %), " +
    "colorCandidatos (Paso 5: saturación, equilibrio y contraste) y nitidezCandidatos (Paso 7). Enseña la tabla con la recomendada, " +
-   "para con «PARO:» y sigue con la vista que elija el usuario; cierra las demás con cerrarVista.\n" +
+   "para con «PARO:» y sigue con la vista que elija el usuario; cierra las demás con cerrarVista. Si el usuario dijo «no " +
+   "preguntes», «decide tú» o «sin preguntar», NO pares: sigue con la recomendada y di cuál.\n" +
    "- WBPP (Rafael, 16 nov 2026): lanzarWBPP sin confirmar devuelve el PLAN y no lanza nada. Enséñalo (noches, lights, flat de cada " +
    "noche y filtro, darks, salida) y para con «PARO:» hasta que el usuario dé el visto bueno; entonces repite la llamada con " +
    "confirmar: true. Sin parar sólo si el usuario pidió el procesado completo hasta el final.\n" +
@@ -3173,6 +3174,11 @@ function plConstruirDialogo(aj) {
       // «sigue» continúa la misma serie (mismo objetivo y cuenta de pasos).
       // «Con los subs aprobados»: lo recuerda la conversación entera (la respuesta «lánzalo» no lo repite).
       if (/sub\w*\s+(aprobad|seleccionad|buen)|aprobados/i.test(t)) this.pideAprobados = true;
+      // «No preguntes: decide tú» (24 nov 2026, Paleta4 de IC 1396: paró dos veces en colorCandidatos y en
+      // estirarEstrellasCandidatos aunque la petición lo decía): las elecciones entre candidatos las hace el modelo con la
+      // recomendada y sigue. Lo recuerda la conversación entera; «pregúntame» lo quita.
+      if (/no (me )?preguntes|decide t[uú]|sin preguntar|elige t[uú]/i.test(t)) this.decideModelo = true;
+      if (/preg[uú]ntame|d[ée]jame elegir|elijo yo/i.test(t)) this.decideModelo = false;
       if (/todos los (subs|lights)|sin selecci/i.test(t)) this.pideAprobados = false;
       // Sólo el apilado (16-11-2026: tras WBPP siguió con alineado, gradiente, BXT, StarX y ruido sin pedirlo). «lánzalo»
       // o «sigue» no lo cambian; pedir el procesado lo quita.
@@ -3249,9 +3255,14 @@ function plConstruirDialogo(aj) {
                 "GUÍA, con los ids de vista que acaba de devolver este resultado) en un único bloque ```json: se ejecutarán sin " +
                 "esperar al usuario, así que no le preguntes si sigue. Si un no_cumple ya dice el arreglo de la guía (aplicar una " +
                 "función o volver a un paso anterior), pídelo tú en el bloque ```json SIN parar ni preguntar. Si ya están hechos " +
-                "todos los pasos pedidos, o hay una decisión que es del usuario (tipo de objeto dudoso, paleta, elegir entre los " +
-                "candidatos de estirarEstrellasCandidatos, colorCandidatos o nitidezCandidatos, un arreglo de la " +
-                "guía que ya falló dos veces), NO pidas llamadas: escribe una línea que empiece por «PARO:» con el motivo."
+                (this.decideModelo
+                  ? "todos los pasos pedidos, o un arreglo de la guía ya falló dos veces, NO pidas llamadas: escribe una línea que " +
+                    "empiece por «PARO:» con el motivo. El usuario pidió que decidas tú: NO pares para elegir entre candidatos " +
+                    "(estirarEstrellasCandidatos, colorCandidatos, nitidezCandidatos, paleta...): sigue con la recomendada (o la que " +
+                    "mejor cumpla según las métricas), di en una línea cuál y por qué, y cierra las demás con cerrarVista."
+                  : "todos los pasos pedidos, o hay una decisión que es del usuario (tipo de objeto dudoso, paleta, elegir entre los " +
+                    "candidatos de estirarEstrellasCandidatos, colorCandidatos o nitidezCandidatos, un arreglo de la " +
+                    "guía que ya falló dos veces), NO pidas llamadas: escribe una línea que empiece por «PARO:» con el motivo.")
               : "\nAhora, sin pedir ninguna llamada, interpreta estos datos según la guía y da el resumen del paso. No inventes " +
                 "datos que no estén en el resultado. Separa los controles en dos listas: «Medido» (sólo lo que el resultado " +
                 "demuestra, con su valor) y «Revisar a ojo» (lo que el resultado no mide); nunca des por bueno algo de la segunda.\n" +

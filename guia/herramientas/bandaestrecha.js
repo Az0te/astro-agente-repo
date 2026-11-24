@@ -601,19 +601,31 @@ function componerPaleta(capas, o) {
   // Igualar las rayas al Hα (como _igualar de Siril y SASpro): mismo cielo y mismo recorrido cielo→p99. Sin esto la mezcla
   // depende de cómo quedó cada estirado: en IC 1396 (15 nov 2026) la misma Natural salió turquesa en una pasada y roja,
   // con el OIII apagado, en la siguiente. Por defecto en la NATURAL; { igualar: true/false } en cualquiera.
-  var temporales = [], igualadas = {};
-  if (o.igualar === true || (o.igualar !== false && nombre === "NATURAL")) {
+  // Medida (24 nov 2026, Paleta4 de IC 1396: final rojizo, medias RGB 0,114/0,093/0,086 frente a 0,110/0,140/0,145 del
+  // Natural de Rafael): con el p99 manda el borde brillante del Hα y el OIII difuso queda corto. Si la nebulosa llena el
+  // campo (mediana del Hα ≥ cielo + 0,03), se iguala la señal difusa (mediana − cielo), como el Natural de Rafael (cada
+  // raya estirada a mediana 0,20); con las rayas de esa versión la señal sobre el cielo da G/R 1,08 y B/R 1,18 (Rafael
+  // 1,20 y 1,26; con el p99, 0,78 y 0,81). Factor entre 0,5 y 2 y sin llevar el p99 de la raya por encima de 0,95.
+  // Objeto pequeño (mediana ≈ cielo): el p99, como antes. { igualar: "p99" } lo fuerza.
+  var temporales = [], igualadas = {}, modoIgual = null;
+  if (o.igualar === true || o.igualar === "p99" || o.igualar === "mediana" || (o.igualar !== false && nombre === "NATURAL")) {
     var nivel = function (vw) {
       var imx = vw.image, n = imx.width * imx.height, buf = new Float32Array(n);
       imx.getSamples(buf, new Rect(0, 0, imx.width, imx.height), 0);
       var s = []; for (var i = 0; i < n; i += 37) s.push(buf[i]);
       s.sort(function (a, b) { return a - b; });
-      return { cielo: esCheck(vw).cielo, p99: s[Math.floor(0.99 * (s.length - 1))] };
+      return { cielo: esCheck(vw).cielo, p50: s[Math.floor(0.5 * (s.length - 1))], p99: s[Math.floor(0.99 * (s.length - 1))] };
     };
     var nh = nivel(ref);
+    modoIgual = (o.igualar === "p99") ? "p99" : (o.igualar === "mediana" || nh.p50 - nh.cielo >= 0.03) ? "mediana" : "p99";
     ["S", "O", "B"].forEach(function (k) {
       if (!ids[k]) return;
-      var nv = nivel(beView(ids[k])), sh = nh.p99 - nh.cielo, so = Math.max(nv.p99 - nv.cielo, 1e-6), f = sh / so;
+      var nv = nivel(beView(ids[k])), f;
+      if (modoIgual === "mediana") {
+        f = (nh.p50 - nh.cielo) / Math.max(nv.p50 - nv.cielo, 1e-4);
+        f = Math.max(0.5, Math.min(2, f));
+        if (nv.p99 > nv.cielo) f = Math.min(f, (0.95 - nh.cielo) / (nv.p99 - nv.cielo));
+      } else f = (nh.p99 - nh.cielo) / Math.max(nv.p99 - nv.cielo, 1e-6);
       var tid = beUnique("beIgual_" + k), Q = new PixelMath;
       Q.expression = nh.cielo.toFixed(6) + " + ($T - " + nv.cielo.toFixed(6) + ") * " + f.toFixed(6);
       Q.useSingleExpression = true; Q.createNewImage = true; Q.newImageId = tid; Q.showNewImage = false;
@@ -622,7 +634,7 @@ function componerPaleta(capas, o) {
       Q.truncate = true; Q.truncateLower = 0; Q.truncateUpper = 1;
       if (!Q.executeOn(beView(ids[k]))) throw new Error("No se pudo igualar " + k + " al Hα");
       temporales.push(tid);
-      igualadas[k] = { factor: +f.toFixed(3), cielo_antes: +nv.cielo.toFixed(4), p99_antes: +nv.p99.toFixed(4) };
+      igualadas[k] = { factor: +f.toFixed(3), cielo_antes: +nv.cielo.toFixed(4), mediana_antes: +nv.p50.toFixed(4), p99_antes: +nv.p99.toFixed(4) };
       ids[k] = tid;
     });
   }
@@ -644,7 +656,7 @@ function componerPaleta(capas, o) {
   temporales.forEach(function (t) { var wt = ImageWindow.windowById(t); if (!wt.isNull) wt.forceClose(); });
   if (!okP) throw new Error("PixelMath de la paleta falló");
   var w = ImageWindow.windowById(id), hecho = [def.d + (pseudo ? " (pseudo: sin SII real)" : "")];
-  if (temporales.length) hecho.push("rayas igualadas al Hα (mismo cielo y recorrido hasta el p99) antes de mezclar: " + JSON.stringify(igualadas));
+  if (temporales.length) hecho.push("rayas igualadas al Hα (mismo cielo y " + (modoIgual === "mediana" ? "misma señal difusa, mediana − cielo" : "recorrido hasta el p99") + ") antes de mezclar: " + JSON.stringify(igualadas));
   w.keywords = ref.window.keywords;
   if (ref.window.hasAstrometricSolution) try { w.copyAstrometricSolution(ref.window); } catch (x) { }
   var noCumple = [];

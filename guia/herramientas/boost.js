@@ -136,7 +136,8 @@ function bsFranja(view, cielo, lo, hi) {
 // salían grises y planos (0,12) frente a la versión de Rafael (~0,02, con el 3 % del polvo más oscuro en negro). Punto
 // negro por canal hasta cielo = t (y neutro), en copias; recomienda el más oscuro que no lleva a 0 más de o.cerosMax %.
 //   fondoCandidatos("Final", { cielos: [0.08, 0.05, 0.03], cerosMax: 2, tinteMax: 0.03 })
-// Cada variante (también la «+ medios») se descarta si tiñe la franja p10–p30 más de tinteMax frente a la entrada.
+// Cada variante «+ medios»/«+ rango» se descarta si aleja del neutro el color de la franja p10–p30 más de tinteMax o
+// lo acerca al gris más de perdidaColorMax; se prefieren las que dejan la mediana ≥ medianaMin de la de entrada.
 function fondoCandidatos(viewId, o) {
   o = o || {};
   if (viewId && typeof viewId === "object") viewId = viewId.id || viewId.vista;
@@ -153,6 +154,9 @@ function fondoCandidatos(viewId, o) {
   // Tinte permitido en la franja p10–p30 frente a la entrada (la franja puede ser nebulosa con color propio: se compara
   // con la entrada, no con 1).
   var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0, s0), fPlano = {};
+  var perdidaMax = (o.perdidaColorMax !== undefined) ? +o.perdidaColorMax : 0.10;
+  // Mediana mínima frente a la entrada (o.medianaMin, 0,75): por debajo, el fondo se está comiendo la nebulosa.
+  var medianaMin = (o.medianaMin !== undefined) ? +o.medianaMin : 0.75;
   // «+ rango» (24 nov 2026, Natural de IC 1396 con Qwen frente a la de referencia de Rafael): la curva «+ medios» teñía la
   // franja débil (R/G de 2,3 a 1,6: la curva no lineal sube cada canal distinto), se quedó el punto negro solo y la imagen
   // salió comprimida y oscura (p90 0,16 y p98 0,21 frente a 0,27 y 0,37). «+ rango» es punto negro + punto blanco
@@ -207,14 +211,27 @@ function fondoCandidatos(viewId, o) {
     if (!medios && !rango) fPlano[t] = f1;
     var quemaNuevos = c.alto_pct - c0.alto_pct;
     var fRef = (medios || rango) ? fPlano[t] : null;
-    if (fRef && f1) tinte = Math.max(Math.abs(f1.R_G / fRef.R_G - 1), Math.abs(f1.B_G / fRef.B_G - 1));
+    // 24 nov 2026 (Paleta4 de IC 1396): las «+ rango» acercaban la franja al neutro (R/G 3,49 → 3,30; B/G 0,373 → 0,397),
+    // es decir, le quitaban algo de color, y se descartaban todas por «tinte»: se quedó el punto negro solo a 0,035 y el
+    // final salió oscuro (mediana 0,089 frente a 0,169). Ahora sólo es tinte lo que ALEJA un cociente del neutro (más de
+    // tinteMax); acercarlo es pérdida de color, que la saturación devuelve, y se admite hasta o.perdidaColorMax (10 %).
+    var alejado = null, perdida = null;
+    if (fRef && f1) {
+      tinte = Math.max(Math.abs(f1.R_G / fRef.R_G - 1), Math.abs(f1.B_G / fRef.B_G - 1));
+      var dR = Math.abs(Math.log(f1.R_G)) - Math.abs(Math.log(fRef.R_G)), dB = Math.abs(Math.log(f1.B_G)) - Math.abs(Math.log(fRef.B_G));
+      alejado = Math.exp(Math.max(0, dR, dB)) - 1; perdida = Math.exp(Math.max(0, -dR, -dB)) - 1;
+    }
+    var tine = alejado !== null && alejado > tinteMax, apaga = perdida !== null && perdida > perdidaMax;
     cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : "") + (rango ? " + rango" : ""), vista: w.mainView.id, ganancia_rango: gRango === null ? undefined : +gRango.toFixed(3), p99: c.p99, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
                  ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
                  franja_p10_p30: f1, tinte_franja_pct: tinte === null ? null : +(100 * tinte).toFixed(1),
+                 tinte_alejado_pct: alejado === null ? null : +(100 * alejado).toFixed(1), perdida_color_pct: perdida === null ? null : +(100 * perdida).toFixed(1),
+                 mediana_frente_entrada: +(esMedian(w.mainView) / m0).toFixed(3),
                  no_cumple: (nuevos > cerosMax ? ["lleva a 0 un " + nuevos.toFixed(2) + " % más de píxeles (máx. " + cerosMax + ")"] : [])
                    .concat(rango && quemaNuevos > 0.05 ? ["el punto blanco quema un " + quemaNuevos.toFixed(3) + " % más de píxeles (≥ 0,95; máx. 0,05 %): baja «blanco»"] : [])
-                   .concat(tinte !== null && tinte > tinteMax ? ["la variante «" + (rango ? "+ rango" : "+ medios") + "» tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " con el punto negro solo (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
-                 cumple: nuevos <= cerosMax && !(tinte !== null && tinte > tinteMax) && !(rango && quemaNuevos > 0.05), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
+                   .concat(tine ? ["la variante «" + (rango ? "+ rango" : "+ medios") + "» tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " con el punto negro solo (aleja un cociente del neutro un " + (100 * alejado).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : [])
+                   .concat(apaga ? ["la variante «" + (rango ? "+ rango" : "+ medios") + "» apaga el color del fondo débil: R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " (acerca al gris un " + (100 * perdida).toFixed(1) + " % > " + (100 * perdidaMax) + " %)"] : []),
+                 cumple: nuevos <= cerosMax && !tine && !apaga && !(rango && quemaNuevos > 0.05), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
   });
   if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,
                               motivo: "El cielo ya está en " + (s0.reduce(function (a, b) { return a + b; }, 0) / s0.length).toFixed(3) + ", igual o por debajo de los niveles pedidos." };
@@ -224,6 +241,9 @@ function fondoCandidatos(viewId, o) {
   // comía; la «+ rango» a 0,05 la dejaba en 0,124). Dentro del grupo, el más oscuro; a casi igual cielo (±0,005: la curva
   // sube un poco las celdas de cielo), el que conserva los medios.
   function rangoDe(c) { return /rango$/.test(c.metodo) ? 2 : /medios$/.test(c.metodo) ? 1 : 0; }
+  // Las que conservan la nebulosa (mediana ≥ medianaMin de la de entrada) antes que las que se la comen, si las hay.
+  var conserva = ok.filter(function (c) { return c.mediana_frente_entrada >= medianaMin; });
+  if (conserva.length) ok = conserva;
   if (ok.length) { var nivelMax = Math.max.apply(null, ok.map(rangoDe)); ok = ok.filter(function (c) { return rangoDe(c) === nivelMax; }); }
   var mejor = ok.length ? ok.reduce(function (a, c) {
     if (Math.abs(c.cielo - a.cielo) <= 0.005) return rangoDe(c) > rangoDe(a) ? c : a;
@@ -234,7 +254,7 @@ function fondoCandidatos(viewId, o) {
     comparados: cands.map(function (c) { var x = {}; for (var k in c) x[k] = c[k]; x.elegido = c === mejor; return x; }),
     recomendado: mejor ? mejor.metodo : null,
     motivo: mejor ? mejor.metodo + ": el cielo más oscuro (" + mejor.cielo + ") y neutro sin llevar a 0 más de un " + cerosMax +
-                    " % de los píxeles ni teñir el fondo débil (franja p10–p30, tinte " + mejor.tinte_franja_pct + " % ≤ " + (100 * tinteMax) + " %). Un fondo demasiado negro se come la nebulosa débil: mira la previa." :
+                    " % de los píxeles, sin teñir ni apagar el fondo débil (franja p10–p30) y con la mediana a " + mejor.mediana_frente_entrada + " de la de entrada. Un fondo demasiado negro se come la nebulosa débil: mira la previa." :
                     "Ninguno cumple (llevan a 0 demasiados píxeles o tiñen el fondo débil: ver no_cumple de cada uno): deja el fondo como está o pide otros niveles (cielos).",
     siguiente: "Sigue con " + (mejor ? mejor.vista : viewId) + " (exportarFinal)."
   };
