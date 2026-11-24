@@ -1346,6 +1346,17 @@ def _calibrar_pcc(siril, info, p, limitmag, catalogo):
     return r
 
 
+# ignorar_perfil se recuerda (12 h, sólo en la misma carpeta de trabajo o sus subcarpetas): IC 405 con Qwen (24 nov 2026, v7) lo pasó dos veces, le faltó el sensor, y a la
+# tercera llamó sin él: salió SPCC con el IMX571 del perfil sobre datos de SetiAstro (otra cámara).
+_IGNORAR_PERFIL = {"t": 0.0, "carpeta": ""}
+
+
+def _misma_obra(a, b):
+    """Dos carpetas de la misma pasada: iguales, o una dentro de la otra (…/siril y …/siril/capas)."""
+    a, b = os.path.normcase(os.path.normpath(a or "")), os.path.normcase(os.path.normpath(b or ""))
+    return bool(a and b) and (a == b or a.startswith(b + os.sep) or b.startswith(a + os.sep))
+
+
 def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=None, lpf=None, filtros_rgb=None, blanco=None,
                   limitmag=None, catalogo=None, banda_estrecha=None, ignorar_perfil=False, fotometrica=False):
     """Paso 12 lineal: SPCC sobre la imagen cargada (lineal y con astrometría), con el cielo por canal antes y después.
@@ -1363,6 +1374,12 @@ def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=No
     # Argumentos comprobados antes de lanzar spcc (Siril sólo responde «Argument error»).
     if limitmag is not None and not re.fullmatch(r"[+-]?\d+(\.\d+)?", str(limitmag).strip()):
         raise ValueError("limitmag: un número (magnitud límite, p. ej. 12) o un ajuste relativo con signo (+1, -1).")
+    recordado = False
+    carpeta = os.path.dirname(str(info.get("fichero") or ""))
+    if ignorar_perfil:
+        _IGNORAR_PERFIL.update(t=time.time(), carpeta=carpeta)
+    elif not sensor and time.time() - _IGNORAR_PERFIL["t"] < 12 * 3600 and _misma_obra(carpeta, _IGNORAR_PERFIL["carpeta"]):
+        ignorar_perfil, recordado = True, True
     if fotometrica:
         return _calibrar_pcc(siril, info, p, limitmag, catalogo)
     origen_sensor = "pedido"
@@ -1378,6 +1395,15 @@ def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=No
             raise ValueError(f"La cámara es una DSLR ({dslr}) que no está en la base de SPCC de Siril (sólo trae algunas "
                              "Canon y Nikon). No uses otra parecida: o calibrarColor con fotometrica: true (PCC, sin curvas "
                              "de sensor), o un sensor exacto de listaSPCC(oscsensor) que el usuario confirme como equivalente.")
+        if not sensor and ignorar_perfil:
+            # Otro equipo y cámara desconocida: no hay sensor que el modelo pueda saber; PCC directamente (antes el error
+            # lo decía y el modelo repetía la llamada igual o quitaba ignorar_perfil y salía el sensor del perfil).
+            r = _calibrar_pcc(siril, info, p, limitmag, catalogo)
+            r["aviso"] = ((r.get("aviso") + " ") if r.get("aviso") else "") + (
+                "Sin sensor conocido (la cabecera no lo dice y la foto no es del equipo del perfil"
+                + (", recordado de una llamada anterior" if recordado else "") + "): hecho PCC, sin curvas de sensor. "
+                "Si el usuario sabe la cámara, repite con sensor de listaSPCC(oscsensor).")
+            return r
         if not sensor:
             raise ValueError("Falta el sensor de la cámara: la cabecera no lo dice"
                              + (" y se pidió ignorar el perfil" if ignorar_perfil else "")

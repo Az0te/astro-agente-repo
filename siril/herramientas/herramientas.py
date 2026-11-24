@@ -500,6 +500,62 @@ def no_existe(p, patron=None):
     return FileNotFoundError(msj)
 
 
+# Parámetros que son ficheros de ENTRADA (los de salida, como guardarImagen.fichero o previa.fichero, no se tocan).
+CLAVES_ENTRADA = {"fichero", "ficheros", "ha", "oiii", "sii", "hb", "rgb", "l", "estrellas", "starless", "referencia",
+                  "mascara", "capa", "capas", "imagen", "base"}
+NO_RESOLVER = {"guardarImagen", "exportarFinal", "previa"}
+_EXT_FITS = (".fit", ".fits", ".fts")
+
+
+def _alternativa(p: Path):
+    """El único fichero que existe y es «el mismo» que p salvo la extensión FITS (.fit/.fits/.fts) o las mayúsculas.
+    IC 405 con Qwen (24 nov 2026, v7): pedía «…_gradiente.fit» cuando se había guardado «…_gradiente.fits», o el nombre
+    en minúsculas; abrirImagen daba la lista, pero combinarCandidatos y unirCapas pasaban la ruta a Siril, que sólo
+    contestaba «file does not exist or is not accessible» (8 de los 23 errores de la pasada)."""
+    carpeta = p.parent
+    if not carpeta.is_dir():
+        return None
+    base, ext = p.stem.lower(), p.suffix.lower()
+    exts = _EXT_FITS if ext in _EXT_FITS else (ext,)
+    try:
+        cand = [f for f in carpeta.iterdir() if f.is_file() and f.stem.lower() == base and f.suffix.lower() in exts]
+    except OSError:
+        return None
+    return cand[0] if len(cand) == 1 else None
+
+
+def resolver_rutas(nombre, args):
+    """Antes de ejecutar una herramienta: las rutas de entrada que no existen se cambian por su única alternativa
+    (extensión FITS o mayúsculas); si no hay ninguna, error con los nombres parecidos (no_existe) en lugar del error
+    opaco de Siril. Devuelve (args, correcciones)."""
+    if nombre in NO_RESOLVER or not isinstance(args, dict):
+        return args, []
+    fuera, corregidas = dict(args), []
+
+    def una(v):
+        if not isinstance(v, str) or not v.strip():
+            return v
+        p = Path(os.path.expanduser(v.strip()))
+        if not p.is_absolute() or p.suffix.lower() not in EXT_ABRIR or p.exists():
+            return v
+        alt = _alternativa(p)
+        if alt is None:
+            raise no_existe(p)
+        corregidas.append(f"{p.name} → {alt.name}")
+        return str(alt)
+
+    for k, v in args.items():
+        if k not in CLAVES_ENTRADA:
+            continue
+        if isinstance(v, list):
+            fuera[k] = [una(x) for x in v]
+        elif isinstance(v, str) and ";" in v and k == "ficheros":
+            fuera[k] = ";".join(una(x.strip()) for x in v.split(";") if x.strip())
+        else:
+            fuera[k] = una(v)
+    return fuera, corregidas
+
+
 def abrirImagen(siril, fichero):
     """Carga un fichero en Siril (sustituye la imagen cargada). Devuelve sus datos."""
     p = _ruta(fichero)
@@ -737,3 +793,22 @@ LISTA.update(LISTA_MULTICAPA)
 # Núcleo de galaxias (nucleo.py): comprimir el bulbo tras estirar, antes de saturar.
 from nucleo import LISTA_NUCLEO  # noqa: E402
 LISTA.update(LISTA_NUCLEO)
+
+
+# Rutas de entrada mal escritas (.fit/.fits, mayúsculas): se resuelven en todas las herramientas antes de llamar a
+# Siril (resolver_rutas). Va aquí, envolviendo la lista, para que la recarga en caliente del puente lo recoja sin
+# reiniciarlo; functools.wraps conserva la firma que lee _filtrar_args.
+def _con_rutas(nombre, fn):
+    import functools
+
+    @functools.wraps(fn)
+    def envuelta(siril, **args):
+        args, corregidas = resolver_rutas(nombre, args)
+        r = fn(siril, **args)
+        if corregidas and isinstance(r, dict):
+            r["rutas_corregidas"] = corregidas + ["usa estos nombres tal cual a partir de ahora"]
+        return r
+    return envuelta
+
+
+LISTA = {k: _con_rutas(k, f) for k, f in LISTA.items()}
