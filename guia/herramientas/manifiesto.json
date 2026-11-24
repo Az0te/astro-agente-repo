@@ -1001,7 +1001,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { cielo: 0.10, metodos: [\"ghs\", \"ghs_debil\", \"mas\", \"arcsinh\", \"hiperbolico\"], hiperbolico: { proteccion: 1.5, color: 1.0 }, ruidoMax: 0.15, mas: { parámetros de MAS }, nuevaVista, cerrar: false para conservar los demás, mismoMetodo: false (por defecto, en una raya mono después de otra ya comparada, repite su método y cielo para que todas las rayas de la paleta lleven el mismo estirado) }"
+      "description": "Opcional. { cielo: 0.10, metodos: [\"ghs\", \"ghs_debil\", \"mas\", \"arcsinh\", \"hiperbolico\"], hiperbolico: { proteccion: 1.5, color: 1.0 }, ruidoMax: 0.15, mas: { parámetros de MAS }, nuevaVista, cerrar: false para conservar los demás, mismoMetodo: false (por defecto, en una raya mono después de otra ya comparada, repite su método y cielo, aunque se pasen metodos, para que todas las rayas de la paleta lleven el mismo estirado) }"
      }
     },
     "required": [

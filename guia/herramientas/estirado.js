@@ -556,7 +556,7 @@ function esArcsinh(view, stretch, bp) {
 // Ruta de paleta: el MISMO estirado en todas las rayas (23 nov 2026, IC 1396 con Qwen: estirarCandidatos en cada raya por
 // separado eligió un método distinto en cada una, la relación entre canales cambió y la paleta salió apagada). La primera
 // raya (mono) que se compara fija el método y el cielo; en las demás rayas mono, estirarCandidatos aplica ese mismo método
-// sin volver a comparar y lo dice (mismo_metodo_que). { mismoMetodo: false } o metodos explícitos para comparar de nuevo.
+// sin volver a comparar y lo dice (mismo_metodo_que). Sólo { mismoMetodo: false } compara de nuevo.
 function esRutaRaya() { return File.systemTempDirectory + "/piastropilot-raya.json"; }
 function estirarCandidatos(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);
@@ -564,7 +564,9 @@ function estirarCandidatos(viewId, o) {
   if (o._sinComprobar) return esEstirarCandidatosBase(viewId, o);
   var w0 = ImageWindow.windowById(viewId);
   var mono = !w0.isNull && w0.mainView.image.numberOfChannels === 1, prev = null;
-  if (mono && !o.metodos && o.mismoMetodo !== false) {
+  // Aunque se pasen metodos: en la segunda pasada de IC 1396 (24 nov 2026) Qwen pasó la lista completa en cada raya y
+  // cada una volvió a ganar un método distinto. Sólo { mismoMetodo: false } compara de nuevo.
+  if (mono && o.mismoMetodo !== false) {
     try { if (File.exists(esRutaRaya())) prev = JSON.parse(File.readTextFile(esRutaRaya())); } catch (e) { prev = null; }
     if (prev && (Date.now() - prev.t > 6 * 3600000 || prev.vista === String(viewId) || !prev.clave)) prev = null;
   }
