@@ -146,20 +146,26 @@ function fondoCandidatos(viewId, o) {
   if (esMedian(v0) < 0.05) throw new Error("La imagen parece lineal: el nivel del fondo se ajusta después de estirar (y de recombinar).");
   var sd = esSkyDominance(v0), c0 = esCheck(v0);
   var s0 = sd.canales && sd.canales.length ? sd.canales : [c0.cielo];
-  var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 2, cielos = (o.cielos || [0.08, 0.065, 0.05]).slice().sort(function (a, b) { return b - a; });
+  var cerosMax = (o.cerosMax !== undefined) ? +o.cerosMax : 2, cielos = (o.cielos || [0.08, 0.065, 0.05, 0.035]).slice().sort(function (a, b) { return b - a; });
   var cands = [];
   // Mediana de la imagen como medida de la nebulosa (en IC 1396 llena el campo).
   var m0 = esMedian(v0), variantes = [];
   // Tinte permitido en la franja p10–p30 frente a la entrada (la franja puede ser nebulosa con color propio: se compara
   // con la entrada, no con 1).
   var tinteMax = (o.tinteMax !== undefined) ? +o.tinteMax : 0.03, f0 = bsFranja(v0, s0), fPlano = {};
-  cielos.forEach(function (t) { variantes.push([t, false]); variantes.push([t, true]); });
+  // «+ rango» (24 nov 2026, Natural de IC 1396 con Qwen frente a la de referencia de Rafael): la curva «+ medios» teñía la
+  // franja débil (R/G de 2,3 a 1,6: la curva no lineal sube cada canal distinto), se quedó el punto negro solo y la imagen
+  // salió comprimida y oscura (p90 0,16 y p98 0,21 frente a 0,27 y 0,37). «+ rango» es punto negro + punto blanco
+  // lineal sobre el cielo, sin curva: el cielo queda en t, el p99 de la luminancia sube a o.blanco (0,40) con ganancia
+  // ×1–×2 (o.gananciaMax) y, al ser lineal, no cambia el color de la franja; no debe quemar más de un 0,05 % nuevo.
+  var blanco = (o.blanco !== undefined) ? +o.blanco : 0.40, rangoOn = o.rango !== false, gMax = (o.gananciaMax !== undefined) ? +o.gananciaMax : 2;
+  cielos.forEach(function (t) { variantes.push([t, false]); variantes.push([t, true]); if (rangoOn) variantes.push([t, "rango"]); });
   variantes.forEach(function (vt) {
-    var t = vt[0], medios = vt[1];
+    var t = vt[0], rango = vt[1] === "rango", medios = vt[1] === true, gRango = null;
     var media0 = s0.reduce(function (a, b) { return a + b; }, 0) / s0.length;
     if (media0 <= t) return;   // un canal ya por debajo no se toca (bp 0)
     var bp = s0.map(function (s) { return Math.max(0, (s - t) / (1 - t)); });
-    var w = esCopy(viewId, viewId + "_fondo" + String(t).replace(".", "") + (medios ? "m" : ""));
+    var w = esCopy(viewId, viewId + "_fondo" + String(t).replace(".", "") + (rango ? "r" : medios ? "m" : ""));
     var P = new PixelMath;
     var e = bp.map(function (b) { return "($T - " + b.toFixed(6) + ") / " + (1 - b).toFixed(6); });
     P.useSingleExpression = (e.length === 1); P.expression = e[0];
@@ -178,28 +184,49 @@ function fondoCandidatos(viewId, o) {
         if (!C.executeOn(w.mainView)) { w.forceClose(); throw new Error("PixelMath de la curva de medios falló"); }
       }
     }
+    if (rango) {
+      var cR = esCheck(w.mainView);
+      gRango = (cR.p99 > t + 0.02) ? Math.min(gMax, Math.max(1, (blanco - t) / (cR.p99 - t))) : 1;
+      if (gRango > 1.02) {
+        // Pivote en el cielo de cada canal y en toda la imagen (sin iif): con un pivote común y sólo por encima de t, el
+        // codo en t cambiaba el color de la franja p10–p30 (un 6,6 % en la prueba); así es una recta por canal.
+        var sR = esSkyDominance(w.mainView), piv = (sR.canales && sR.canales.length) ? sR.canales : [t], Gw = new PixelMath;
+        var eG = piv.map(function (sc) { return sc.toFixed(6) + " + ($T - " + sc.toFixed(6) + ") * " + gRango.toFixed(4); });
+        Gw.useSingleExpression = (eG.length === 1); Gw.expression = eG[0];
+        if (eG.length === 3) { Gw.expression1 = eG[1]; Gw.expression2 = eG[2]; }
+        Gw.createNewImage = false; Gw.truncate = true; Gw.truncateLower = 0; Gw.truncateUpper = 1;
+        if (!Gw.executeOn(w.mainView)) { w.forceClose(); throw new Error("PixelMath del punto blanco falló"); }
+      } else { w.forceClose(); return; }   // ya llega al blanco: sería igual que el punto negro solo
+    }
     var c = esCheck(w.mainView), s1 = esSkyDominance(w.mainView);
     var cielo = s1.canales && s1.canales.length ? (s1.canales[0] + s1.canales[1] + s1.canales[2]) / 3 : c.cielo;
     var nuevos = c.cero_pct - c0.cero_pct, f1 = bsFranja(w.mainView, s1.canales), tinte = null;
     // La «+ medios» se compara con el punto negro solo del mismo nivel: así se mide sólo lo que tiñe la curva (en una
     // paleta de IC 1396, 23 nov 2026, el punto negro solo daba 5,5 % frente a la entrada por recortar a 0 parte de la
     // franja en un canal, sin teñir nada). El punto negro solo no se juzga por tinte.
-    if (!medios) fPlano[t] = f1;
-    var fRef = medios ? fPlano[t] : null;
+    if (!medios && !rango) fPlano[t] = f1;
+    var quemaNuevos = c.alto_pct - c0.alto_pct;
+    var fRef = (medios || rango) ? fPlano[t] : null;
     if (fRef && f1) tinte = Math.max(Math.abs(f1.R_G / fRef.R_G - 1), Math.abs(f1.B_G / fRef.B_G - 1));
-    cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : ""), vista: w.mainView.id, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
+    cands.push({ metodo: "cielo a " + t + (medios ? " + medios" : "") + (rango ? " + rango" : ""), vista: w.mainView.id, ganancia_rango: gRango === null ? undefined : +gRango.toFixed(3), p99: c.p99, cielo: +cielo.toFixed(4), mediana: +esMedian(w.mainView).toFixed(4), cielo_rgb: (s1.canales || []).map(function (x) { return +x.toFixed(4); }),
                  ceros_pct: +c.cero_pct.toFixed(3), ceros_nuevos_pct: +nuevos.toFixed(3), punto_negro: bp.map(function (b) { return +b.toFixed(5); }),
                  franja_p10_p30: f1, tinte_franja_pct: tinte === null ? null : +(100 * tinte).toFixed(1),
                  no_cumple: (nuevos > cerosMax ? ["lleva a 0 un " + nuevos.toFixed(2) + " % más de píxeles (máx. " + cerosMax + ")"] : [])
-                   .concat(tinte !== null && tinte > tinteMax ? ["la curva «+ medios» tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " con el punto negro solo (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
-                 cumple: nuevos <= cerosMax && !(tinte !== null && tinte > tinteMax), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
+                   .concat(rango && quemaNuevos > 0.05 ? ["el punto blanco quema un " + quemaNuevos.toFixed(3) + " % más de píxeles (≥ 0,95; máx. 0,05 %): baja «blanco»"] : [])
+                   .concat(tinte !== null && tinte > tinteMax ? ["la variante «" + (rango ? "+ rango" : "+ medios") + "» tiñe el fondo débil (franja p10–p30, color sobre el cielo): R/G " + f1.R_G + " y B/G " + f1.B_G + " frente a " + fRef.R_G + " y " + fRef.B_G + " con el punto negro solo (" + (100 * tinte).toFixed(1) + " % > " + (100 * tinteMax) + " %)"] : []),
+                 cumple: nuevos <= cerosMax && !(tinte !== null && tinte > tinteMax) && !(rango && quemaNuevos > 0.05), previa: pxPrevia(w.mainView.id, "fondo_" + w.mainView.id, { estirar: false }) });
   });
   if (!cands.length) return { vista: viewId, comparados: [], recomendado: null,
                               motivo: "El cielo ya está en " + (s0.reduce(function (a, b) { return a + b; }, 0) / s0.length).toFixed(3) + ", igual o por debajo de los niveles pedidos." };
   var ok = cands.filter(function (c) { return c.cumple; });
-  // El más oscuro; a casi igual cielo (±0,005: la curva sube un poco las celdas de cielo), el que conserva los medios.
+  // Primero las «+ rango» que cumplen; si no hay, las «+ medios»; si no, el punto negro solo (en la prueba del 24 nov 2026
+  // el punto negro solo a 0,035 era el más oscuro, pero dejaba la mediana de la nebulosa en 0,072 frente a 0,148: se la
+  // comía; la «+ rango» a 0,05 la dejaba en 0,124). Dentro del grupo, el más oscuro; a casi igual cielo (±0,005: la curva
+  // sube un poco las celdas de cielo), el que conserva los medios.
+  function rangoDe(c) { return /rango$/.test(c.metodo) ? 2 : /medios$/.test(c.metodo) ? 1 : 0; }
+  if (ok.length) { var nivelMax = Math.max.apply(null, ok.map(rangoDe)); ok = ok.filter(function (c) { return rangoDe(c) === nivelMax; }); }
   var mejor = ok.length ? ok.reduce(function (a, c) {
-    if (Math.abs(c.cielo - a.cielo) <= 0.005) return /medios$/.test(c.metodo) ? c : a;
+    if (Math.abs(c.cielo - a.cielo) <= 0.005) return rangoDe(c) > rangoDe(a) ? c : a;
     return c.cielo < a.cielo ? c : a; }) : null;
   cands.forEach(function (c) { if (c !== mejor && o.cerrar !== false) { var ww = ImageWindow.windowById(c.vista); if (!ww.isNull) ww.forceClose(); } });
   return {

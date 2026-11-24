@@ -2002,6 +2002,20 @@ def _punto_negro(p, bp):
     return np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
 
 
+def _rango(q, cel, blanco=0.40, gmax=2.0):
+    """«+ rango» (24 nov 2026, Natural de IC 1396 con Qwen frente a la de referencia de Rafael; igual que fondoCandidatos
+    de PixInsight): la «+ medios» teñía la franja débil (la curva sube cada canal distinto), quedaba el punto negro solo
+    y la imagen salía comprimida y oscura (p90 0,16 y p98 0,21 frente a 0,27 y 0,37). Punto blanco lineal, recta por
+    canal con pivote en el cielo de cada canal: el cielo no se mueve, el color de la franja tampoco, y el p99 de la
+    luminancia sube a «blanco» con ganancia ×1–×gmax. Devuelve (imagen, ganancia)."""
+    rgb = M.cielo_por_canal(q, cel) if q.shape[0] == 3 else [float(np.median(q))]
+    t = float(np.mean(rgb))
+    p99 = float(np.percentile(M.lum(q)[::2, ::2], 99))
+    g = min(float(gmax), max(1.0, (blanco - t) / (p99 - t))) if p99 > t + 0.02 else 1.0
+    s = np.asarray(rgb, dtype=np.float32).reshape(-1, 1, 1)
+    return np.clip(s + (q - s) * g, 0, 1).astype(np.float32), g
+
+
 def _punto_negro_medios(p, bp, t, obj_px, m_obj):
     """Punto negro y después una curva que deja el cielo en t (lo que está por debajo no cambia) y devuelve la mediana
     del objeto a la de antes (MTF sobre el tramo t–1): el fondo se oscurece sin apagar la nebulosa, como el punto negro
@@ -2050,7 +2064,8 @@ def _mediana_senal(L, cielo, ruido_abs, frac_min=0.05):
     return round(float(np.median(s)), 4) if s.size >= frac_min * v.size else None
 
 
-def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tinte_max=3.0):
+def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tinte_max=3.0, rango=True,
+                    blanco=0.40, ganancia_max=2.0):
     """NL5 fondo: punto negro por canal para dejar el cielo en varios niveles (más oscuro = más profundidad y
     contraste) y neutro; mide píxeles nuevos a 0, cielo y ruido, y recomienda el más oscuro que no recorta más del
     ceros_max % de los píxeles. La vista no cambia. IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13
@@ -2092,6 +2107,9 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, 
         lista.append((f"cielo a {t:g}", "punto_negro", {"bp": bp}, (lambda q, bp: _punto_negro(q, bp))))
         lista.append((f"cielo a {t:g} + medios", "punto_negro_medios", {"bp": bp, "t": float(t)},
                       (lambda q, bp, t: _punto_negro_medios(q, bp, t, obj_px, m_obj))))
+        if rango:
+            lista.append((f"cielo a {t:g} + rango", "punto_negro_rango", {"bp": bp},
+                          (lambda q, bp: _rango(_punto_negro(q, bp), cel, blanco, ganancia_max)[0])))
     if not lista:
         return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
                 "motivo": f"El cielo ya está en {_r(float(np.mean(s0)), 3)}, igual o por debajo de los niveles pedidos."}
@@ -2109,19 +2127,30 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, 
         # [0,03, 0,12, 0,15] con el cielo cian se comió el verde y el azul de la nebulosa y el rojo salió R/G ×1,5.
         # La «+ medios» frente al punto negro solo del mismo nivel (sólo lo que tiñe la curva); el punto negro solo no se juzga.
         m["tinte_franja_pct"] = None
-        if x["metodo"].endswith("+ medios"):
-            plano = next((y for y in r["candidatos"] if y["metodo"] == x["metodo"][:-len(" + medios")]), None)
+        suf = " + medios" if x["metodo"].endswith("+ medios") else " + rango" if x["metodo"].endswith("+ rango") else None
+        if suf:
+            plano = next((y for y in r["candidatos"] if y["metodo"] == x["metodo"][:-len(suf)]), None)
             if plano is not None:
                 m["tinte_franja_pct"] = _tinte_franja(plano["metricas"].get("franja_p10_p30"), m.get("franja_p10_p30"))
         if m.get("tinte_franja_pct") is not None and m["tinte_franja_pct"] > tinte_max:
-            x["no_cumple"].append(f"la curva «+ medios» tiñe el fondo débil (franja p10–p30, color sobre el cielo): "
+            x["no_cumple"].append(f"la variante «{suf.strip()}» tiñe el fondo débil (franja p10–p30, color sobre el cielo): "
                                   f"{m['tinte_franja_pct']} % frente al punto negro solo (máx {tinte_max} %)")
+        if suf == " + rango" and m["altos_pct"] - rec0["altos_pct"] > 0.05:
+            x["no_cumple"].append(f"el punto blanco quema un {_r(m['altos_pct'] - rec0['altos_pct'], 3)} % más de píxeles "
+                                  "(máx 0,05 %): baja «blanco»")
         if abs(m["objeto_rg_x"] - 1) > 0.10:   # 0,15 dejó pasar ×1,146 en la v4 y el rojo se fue con la saturación
             x["no_cumple"].append(f"cambia el color del objeto: R/G ×{m['objeto_rg_x']} (el cielo está teñido: corrige "
                                   "la dominante antes, en lineal, con calibrarColor o neutralizarFondo sobre el cielo)")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    # Primero las «+ rango» que cumplen; si no, las «+ medios»; si no, el punto negro solo, que oscurece también la
+    # nebulosa (24 nov 2026: el más oscuro dejaba la mediana del objeto en la mitad).
+    def _nivel(x):
+        return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith("+ medios") else 0
     if ok:
-        # El más oscuro; a igual cielo, el que conserva los medios del objeto (+ medios).
+        nmax = max(_nivel(x) for x in ok)
+        ok = [x for x in ok if _nivel(x) == nmax]
+    if ok:
+        # El más oscuro del grupo; a igual cielo, el que conserva los medios del objeto (+ medios).
         mejor = min(ok, key=lambda x: (x["metricas"]["cielo"], 0 if x["metodo"].endswith("+ medios") else 1))
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: el cielo más oscuro (de {_r(float(np.mean(s0)), 3)} a {mejor['metricas']['cielo']}), "

@@ -2808,7 +2808,22 @@ def _mediana_senal(L, cielo, ruido_abs, frac_min=0.05):
     return round(float(np.median(s)), 4) if s.size >= frac_min * v.size else None
 
 
-def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None, tinte_max=3.0):
+def _rango(q, cel, blanco=0.40, gmax=2.0):
+    """«+ rango» (24 nov 2026, Natural de IC 1396 con Qwen frente a la de referencia de Rafael; igual que fondoCandidatos
+    de PixInsight): la «+ medios» teñía la franja débil (la curva sube cada canal distinto), quedaba el punto negro solo
+    y la imagen salía comprimida y oscura (p90 0,16 y p98 0,21 frente a 0,27 y 0,37). Punto blanco lineal, recta por
+    canal con pivote en el cielo de cada canal: el cielo no se mueve, el color de la franja tampoco, y el p99 de la
+    luminancia sube a «blanco» con ganancia ×1–×gmax. Devuelve (imagen, ganancia)."""
+    rgb = _cielo_por_canal(q, cel) if q.shape[0] == 3 else [float(np.median(q))]
+    t = float(np.mean(rgb))
+    p99 = float(np.percentile(_lum(q)[::2, ::2], 99))
+    g = min(float(gmax), max(1.0, (blanco - t) / (p99 - t))) if p99 > t + 0.02 else 1.0
+    s = np.asarray(rgb, dtype=np.float32).reshape(-1, 1, 1)
+    return np.clip(s + (q - s) * g, 0, 1).astype(np.float32), g
+
+
+def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05, 0.035), ceros_max=2.0, tipo=None, tinte_max=3.0, rango=True,
+                    blanco=0.40, ganancia_max=2.0):
     """Paso 5 no lineal (fondo): punto negro por canal para dejar el cielo en varios niveles, neutro; mide píxeles
     nuevos a 0, cielo y ruido y recomienda el más oscuro que no recorta más del ceros_max %. La imagen no cambia.
     IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13 salían grises y planos frente a la versión de
@@ -2834,8 +2849,9 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None,
     m_obj = float(np.median(_lum(p)[obj_px]))
     variantes = []
     for t in sorted(cielos or [], reverse=True):
-        variantes += [(float(t), False), (float(t), True)]
-    for t, medios in variantes:
+        variantes += [(float(t), False), (float(t), True)] + ([(float(t), "rango")] if rango else [])
+    for t, var in variantes:
+        medios, es_rango = var is True, var == "rango"
         if float(np.mean(s0)) <= t:   # un canal ya por debajo no se toca (bp 0)
             continue
         n += 1
@@ -2852,6 +2868,11 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None,
                     mt = x * (y - 1) / (2 * x * y - x - y)
                     u = np.clip((q - t) / (1 - t), 0, 1)
                     q = np.where(q > t, t + (1 - t) * ((mt - 1) * u / ((2 * mt - 1) * u - mt)), q).astype(np.float32)
+            g_rango = None
+            if es_rango:
+                q, g_rango = _rango(q, cel, blanco, ganancia_max)
+                if g_rango <= 1.02:
+                    continue   # ya llega al blanco: sería igual que el punto negro solo
             rgb = _cielo_por_canal(q, cel) if q.shape[0] == 3 else [float(np.median(q))]
             m = {"cielo": _r(float(np.mean(rgb)), 4), "cielo_rgb": [_r(x, 4) for x in rgb],
                  "objeto_mediana": _r(float(np.median(_lum(q)[obj_px])), 4),
@@ -2859,25 +2880,37 @@ def fondoCandidatos(siril, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, tipo=None,
             m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)   # lo que decide (ceros_pct incluye los de antes)
             fal = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                    if m["ceros_nuevos_pct"] > ceros_max else [])
+            if es_rango:
+                m["ganancia_rango"] = _r(g_rango, 3)
+                if m["altos_pct"] - rec0["altos_pct"] > 0.05:
+                    fal.append(f"el punto blanco quema un {_r(m['altos_pct'] - rec0['altos_pct'], 3)} % más de píxeles (máx 0,05 %): "
+                               "baja «blanco»")
             f1 = _franja_sobre_cielo(q, rgb)
             # La «+ medios» frente al punto negro solo del mismo nivel (sólo lo que tiñe la curva); el punto negro solo no se
             # juzga: en paletas recortaba parte de la franja a 0 en un canal y parecía teñir.
-            if not medios:
+            if not medios and not es_rango:
                 f_plano[t] = f1
-            m["franja_p10_p30"], m["tinte_franja_pct"] = f1, (_tinte_franja(f_plano.get(t), f1) if medios else None)
+            m["franja_p10_p30"], m["tinte_franja_pct"] = f1, (_tinte_franja(f_plano.get(t), f1) if (medios or es_rango) else None)
             if m["tinte_franja_pct"] is not None and m["tinte_franja_pct"] > tinte_max:
-                fal.append(f"la curva «+ medios» tiñe el fondo débil (franja p10–p30, color sobre el cielo): {m['tinte_franja_pct']} % "
+                fal.append(f"la variante «{'+ rango' if es_rango else '+ medios'}» tiñe el fondo débil (franja p10–p30, color sobre el cielo): {m['tinte_franja_pct']} % "
                            f"frente al punto negro solo (máx {tinte_max} %)")
             res = q if info["top_down"] else q[:, ::-1, :]
             res = _a_siril(res, crudo.dtype).reshape(crudo.shape)
-            nombre = f"cielo a {t:g}" + (" + medios" if medios else "")
-            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"punto negro por canal {bp.ravel().round(4).tolist()}" + (" + curva de medios" if medios else ""),
+            nombre = f"cielo a {t:g}" + (" + medios" if medios else " + rango" if es_rango else "")
+            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"punto negro por canal {bp.ravel().round(4).tolist()}" + (" + curva de medios" if medios else f" + punto blanco ×{g_rango:.2f}" if es_rango else ""),
                                                      "huella_base": huella, "metricas": m})
             r["candidatos"].append({"id": cid, "metodo": nombre, "metricas": m, "no_cumple": fal,
                                     "segundos": _r(time.perf_counter() - t0, 1)})
         except Exception as e:
-            r["errores"].append(f"cielo {t:g}{' + medios' if medios else ''}: {e}")
+            r["errores"].append(f"cielo {t:g}{' + medios' if medios else ' + rango' if es_rango else ''}: {e}")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    # Primero las «+ rango» que cumplen; si no, las «+ medios»; si no, el punto negro solo, que oscurece también la
+    # nebulosa (24 nov 2026: el más oscuro dejaba la mediana del objeto en la mitad).
+    def _nivel(x):
+        return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith("+ medios") else 0
+    if ok:
+        nmax = max(_nivel(x) for x in ok)
+        ok = [x for x in ok if _nivel(x) == nmax]
     if ok:
         mejor = min(ok, key=lambda x: (x["metricas"]["cielo"], 0 if x["metodo"].endswith("+ medios") else 1))
         r["recomendado"] = mejor["id"]

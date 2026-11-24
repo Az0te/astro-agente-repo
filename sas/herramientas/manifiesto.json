@@ -1002,8 +1002,8 @@
    "nivel": "lectura",
    "timeout_s": 600,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "NL5 fondo (después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,065 y 0,05, neutro; cada nivel también «+ medios» (curva que devuelve la mediana del objeto a la de antes: el fondo baja sin apagar la nebulosa), preferido a igual cielo. Mide píxeles nuevos a 0, cielo por canal y ruido, y recomienda el más oscuro que no lleva a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro). Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La vista NO cambia (aplicarCandidato).",
-   "resumen": "NL5: fondo más oscuro y neutro (punto negro a 0,08–0,03); no cambia la vista.",
+   "descripcion": "NL5 fondo (después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,08, 0,065, 0,05 y 0,035, neutro; cada nivel también «+ medios» (curva que devuelve la mediana del objeto a la de antes: el fondo baja sin apagar la nebulosa) y «+ rango» (punto negro + punto blanco lineal, recta por canal con pivote en el cielo: el cielo y el color de la franja no se mueven y el p99 de la luminancia sube a 'blanco', 0,40, con ganancia ×1–×2 y sin quemar más de un 0,05 % nuevo; abre el rango de una imagen oscura y plana). Mide píxeles nuevos a 0, cielo por canal y ruido, y recomienda la «+ rango» más oscura que cumple (si ninguna, la «+ medios»; si no, el punto negro solo, que oscurece también la nebulosa) que no lleva a 0 más de un 2 % de los píxeles (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro). Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La vista NO cambia (aplicarCandidato).",
+   "resumen": "NL5: fondo más oscuro y neutro (punto negro a 0,08–0,035, con medios o rango); no cambia la vista.",
    "params": {
     "type": "object",
     "properties": {
@@ -1016,7 +1016,19 @@
       "items": {
        "type": "number"
       },
-      "description": "Niveles de cielo a probar (por defecto [0.08, 0.065, 0.05]; más bajo sólo si la nebulosa sigue brillante)."
+      "description": "Niveles de cielo a probar (por defecto [0.08, 0.065, 0.05, 0.035]; más bajo sólo si la nebulosa sigue brillante)."
+     },
+     "rango": {
+      "type": "boolean",
+      "description": "Probar la variante «+ rango» (por defecto true)."
+     },
+     "blanco": {
+      "type": "number",
+      "description": "p99 de la luminancia tras «+ rango» (por defecto 0.40)."
+     },
+     "ganancia_max": {
+      "type": "number",
+      "description": "Ganancia máxima del punto blanco (por defecto 2)."
      }
     }
    }
