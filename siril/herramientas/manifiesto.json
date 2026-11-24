@@ -1130,7 +1130,7 @@
    "nivel": "lectura",
    "timeout_s": 900,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5, 0,75, 1 y 1,5 (factor de fondo 1; las paletas de banda estrecha suelen aguantar 1–1,5) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5, 0,75, 1 y 1,5 (factor de fondo 1; las paletas de banda estrecha suelen aguantar 1–1,5), la saturación propia (conserva la luminancia, cielo protegido) y, en nebulosas, la propia a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
    "resumen": "Paso 5 NL: compara satu 0,25/0,5/0,75; saturación objeto/cielo, dominante, recortes; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -1147,7 +1147,14 @@
       "items": {
        "type": "number"
       },
-      "description": "Cantidades de la saturación propia (conserva la luminancia, cielo protegido, sin salir de 0–1; por defecto [1, 1.5, 2, 2.5]). En IC 1396 llegó a la saturación de PixInsight (+2,5) donde satu se quedaba corta."
+      "description": "Cantidades de la saturación propia (conserva la luminancia, cielo protegido, sin salir de 0–1; por defecto [0.25, 0.5, 1, 1.5]). En IC 1396 llegó a la saturación de PixInsight (+2,5) donde satu se quedaba corta."
+     },
+     "con_mascara": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Cantidades de la saturación propia a través de la máscara de luminancia (por defecto [0.5, 1, 1.5, 2, 2.5, 3] en nebulosas; [] para no probarla; en galaxias no se prueba)."
      },
      "fondo": {
       "type": "number",
@@ -1165,7 +1172,7 @@
        "galaxia",
        "nebulosa_oscura"
       ],
-      "description": "Tipo de objeto (se admite; no cambia el resultado)."
+      "description": "Tipo de objeto: en galaxias no se prueba la saturación con máscara (por defecto nebulosa)."
      }
     }
    }

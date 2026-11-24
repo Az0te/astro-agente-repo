@@ -43,7 +43,7 @@ Siril tiene una sola imagen cargada: ninguna herramienta lleva `vista`. Coordena
 | NL5 Contraste | `contrasteCandidatos` → `aplicarCandidato` | CLAHE, ondículas, máscara de enfoque |
 | NL3 SCNR | `quitarVerde` | rmgreen |
 | L14 / NL6 Ruido | `reducirRuidoCandidatos` → `aplicarCandidato` | denoise (fuerza 0,5/0,7/1,0 y DA3D) y, con `ia`, el de RC Astro (`rc-astro nxt`) frente a nada: ruido del cielo y pérdida de detalle (< 10 %) |
-| NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | satu 0,25/0,5/0,75 (fondo 1): saturación en objeto y cielo, dominante del cielo < 5 %, recortes |
+| NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | satu 0,25/0,5/0,75 (fondo 1), saturación propia y, en nebulosas, con máscara de luminancia (la recomendada si cumple): saturación en objeto y cielo, dominante del cielo < 5 %, recortes |
 | NL9 Recombinación | `recombinarEstrellas` | starless cargada + fichero de estrellas, screen o suma con factor; avisa (y estira con arcsinh si se pide) si las estrellas son lineales |
 | NL10 Exportación | `exportarFinal` | savetif (16 bits) + savejpg 95 como `<nombre>_final`, sin sobrescribir (_2, _3…) |
 

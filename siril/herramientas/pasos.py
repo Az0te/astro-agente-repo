@@ -2609,12 +2609,35 @@ def _saturacion(p):
     return np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0).astype(np.float32)
 
 
-def _saturar_propio(p, k, fondo=None):
+def _mascara_luminancia(p):
+    """Máscara de luminancia como la de PixInsight (guia/herramientas/boost.js, bsMascara): luminancia reescalada de
+    mediana − 1,5 σ (0) al máximo (1) y raíz cuadrada. 0 en el cielo, 1 en lo brillante, suave entre medias. En IC 405
+    con Qwen (23 nov 2026) la saturación a través de ella llegó a 0,88 sin fallo; sin máscara paraba en 0,63–0,68 por
+    el ruido de color del cielo y la nebulosa salía plana."""
+    L = _lum(p)
+    s = L[::4, ::4]
+    med = float(np.median(s))
+    sig = 1.4826 * float(np.median(np.abs(s - med)))
+    a = max(0.0, med - 1.5 * sig)
+    b = max(a + 1e-3, float(L.max()))
+    return np.sqrt(np.clip((L - a) / (b - a), 0, 1)).astype(np.float32)
+
+
+def _saturar_propio(p, k, fondo=None, mascara=False):
     """Satura conservando la luminancia: c' = L + (1 + k)·(c − L); con fondo (nivel del cielo) el aumento se reduce en el
-    cielo (peso de 0 en el cielo a 1 en cielo + 0,1). Igual que medidas.saturar de SetiAstroPilot."""
+    cielo (peso de 0 en el cielo a 1 en cielo + 0,1); con mascara=True el peso es además la máscara de luminancia
+    (_mascara_luminancia, como en PixInsight), multiplicada por esa rampa. Igual que medidas.saturar de SetiAstroPilot."""
     L = _lum(p)[None]
     g = 1.0 + float(k)
-    if fondo is not None:
+    # Máscara × rampa del cielo (24 nov 2026, previas Natural y SHO de IC 1396 a igual ganancia del objeto, +35 %): la
+    # máscara sola subía la saturación del cielo un 6–8 % (en el cielo vale ~0,2); la rampa sola, un 1,8 %; las dos
+    # juntas, un 0,9 %, y llevan más saturación a lo brillante.
+    if mascara:
+        w = _mascara_luminancia(p)
+        if fondo is not None:
+            w = w * np.clip((L[0] - fondo) / 0.1, 0, 1)
+        g = 1.0 + float(k) * w[None]
+    elif fondo is not None:
         g = 1.0 + float(k) * np.clip((L - fondo) / 0.1, 0, 1)
     # Tope por píxel: ningún canal sale de 0–1 (a +2,5 el canal débil iba a 0 en el 1,9 % de IC 1396; 15 nov 2026).
     d = p - L
@@ -2625,8 +2648,9 @@ def _saturar_propio(p, k, fondo=None):
 
 
 def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5,
-                         propia=(0.25, 0.5, 1.0, 1.5), sat_max=0.80):
-    """Paso 5 no lineal: compara satu de Siril a varias cantidades; mide saturación en objeto y cielo y recortes."""
+                         propia=(0.25, 0.5, 1.0, 1.5), sat_max=0.80, con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0)):
+    """Paso 5 no lineal: compara satu de Siril, la saturación propia y (en nebulosas) la propia a través de una máscara
+    de luminancia; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
     if info["canales"] != 3:
         raise RuntimeError("La saturación necesita una imagen en color.")
@@ -2667,19 +2691,25 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     # el cielo a 1 en cielo + 0,1). En IC 1396 satu llegaba a 0,34 de saturación del objeto antes de teñir el cielo;
     # PixInsight tiene 0,49 (15 nov 2026).
     cielo_L = float(np.median(_lum(p)[z["cielo_px"]])) if z["cielo_px"].any() else 0.0
-    trabajos = [("satu", float(q)) for q in cantidades] + [("propia", float(k)) for k in (propia or ())]
+    # Nebulosas: también a través de la máscara de luminancia, como en PixInsight (IC 405, 23 nov 2026: sin máscara la
+    # saturación paraba antes por el ruido de color del cielo y la nebulosa salía plana). Galaxias: sólo si se pasa.
+    neb = str(tipo or "nebulosa").lower() != "galaxia"
+    masc = [float(k) for k in (con_mascara or ())] if neb else []
+    trabajos = ([("satu", float(q)) for q in cantidades] + [("propia", float(k)) for k in (propia or ())]
+                + [("mascara", k) for k in masc])
     try:
         for tipo_s, q in trabajos:
             n += 1
             t0 = time.perf_counter()
-            args = ["satu", f"{q:g}", f"{float(fondo):g}"] if tipo_s == "satu" else ["saturación propia", f"+{q:g}"]
+            args = (["satu", f"{q:g}", f"{float(fondo):g}"] if tipo_s == "satu" else
+                    ["saturación propia", f"+{q:g}"] + (["con máscara de luminancia"] if tipo_s == "mascara" else []))
             try:
                 if tipo_s == "satu":
                     siril.cmd(*args)
                     res = _crudo(siril)
                     pq = _pantalla(res, info)
                 else:
-                    pq = _saturar_propio(p, q, cielo_L)
+                    pq = _saturar_propio(p, q, cielo_L, mascara=(tipo_s == "mascara"))
                     x = pq if info["top_down"] else pq[:, ::-1, :]
                     res = _a_siril(x, crudo.dtype).reshape(crudo.shape)
                 m = medir(pq)
@@ -2704,9 +2734,10 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
                 elif gan_cielo > 10.0:
                     fal.append(f"el cielo gana un {_r(gan_cielo, 1)} % de saturación (> 10 %)")
                 texto = " ".join(args)
-                nombre = f"satu {q:g}" if tipo_s == "satu" else f"saturación propia +{q:g} (cielo protegido)"
+                nombre = (f"satu {q:g}" if tipo_s == "satu" else f"saturación propia +{q:g} (cielo protegido)" if tipo_s == "propia"
+                          else f"saturación propia +{q:g} con máscara de luminancia")
                 cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": texto, "huella_base": huella, "metricas": m})
-                r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "metricas": m, "no_cumple": fal,
+                r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "tipo": tipo_s, "metricas": m, "no_cumple": fal,
                                         "segundos": _r(time.perf_counter() - t0, 1)})
             except Exception as e:
                 r["errores"].append(f"{tipo_s} {q:g}: {e}")
@@ -2723,13 +2754,17 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     # pero subía un 46 % y, sumado al punto negro, el rojo salió R/G 4,6. Opus eligió +0,75 (+31 %).
     if any((x["metricas"].get("ganancia_objeto_pct") or 0) <= 35 for x in ok):
         ok = [x for x in ok if (x["metricas"].get("ganancia_objeto_pct") or 0) <= 35]
+    # En nebulosas, la recomendada es la de máscara si alguna cumple (como en PixInsight); las otras, discretas.
+    if neb and any(x.get("tipo") == "mascara" for x in ok):
+        ok = [x for x in ok if x.get("tipo") == "mascara"]
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
         mm = mejor["metricas"]
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: el objeto gana un {mm['ganancia_objeto_pct']} % de saturación, el cielo queda con "
-                       f"dominante {mm['dominante_cielo_pct']} % y sin recortes nuevos. Es la mayor que cumple: mírala con previa "
-                       "(bandas de color, tonos raros, ruido de color) antes de aplicarla.")
+                       f"dominante {mm['dominante_cielo_pct']} % y sin recortes nuevos. Es la mayor que cumple"
+                       + (" (en nebulosas, con máscara de luminancia si alguna cumple)" if neb else "") +
+                       ": mírala con previa (bandas de color, tonos raros, ruido de color) antes de aplicarla.")
     else:
         r["recomendado"] = None
         r["motivo"] = "Ninguna cumple (ver no_cumple): no saturar o resolver antes la dominante del cielo."

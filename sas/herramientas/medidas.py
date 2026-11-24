@@ -522,12 +522,35 @@ def comprimir_nucleo(p, n, k):
     return np.clip(q, 0, 1).astype(np.float32)
 
 
-def saturar(p, k, fondo=None):
+def mascara_luminancia(p):
+    """Máscara de luminancia como la de PixInsight (guia/herramientas/boost.js, bsMascara): luminancia reescalada de
+    mediana − 1,5 σ (0) al máximo (1) y raíz cuadrada. 0 en el cielo, 1 en lo brillante, suave entre medias. En IC 405
+    con Qwen (23 nov 2026) la saturación a través de ella llegó a 0,88 sin fallo; sin máscara paraba en 0,63–0,68 por
+    el ruido de color del cielo y la nebulosa salía plana."""
+    L = lum(p)
+    s = L[::4, ::4]
+    med = float(np.median(s))
+    sig = 1.4826 * float(np.median(np.abs(s - med)))
+    a = max(0.0, med - 1.5 * sig)
+    b = max(a + 1e-3, float(L.max()))
+    return np.sqrt(np.clip((L - a) / (b - a), 0, 1)).astype(np.float32)
+
+
+def saturar(p, k, fondo=None, mascara=False):
     """Satura conservando la luminancia: c' = L + (1 + k)·(c − L). Con fondo (nivel de cielo), el aumento se reduce
-    en el cielo (peso que sube de 0 en el cielo a 1 en cielo + 0,1)."""
+    en el cielo (peso que sube de 0 en el cielo a 1 en cielo + 0,1). Con mascara=True, el peso es la máscara de
+    luminancia (mascara_luminancia, como en PixInsight) por la rampa del cielo."""
     L = lum(p)[None]
     g = 1.0 + float(k)
-    if fondo is not None:
+    # Máscara × rampa del cielo (24 nov 2026, previas Natural y SHO de IC 1396 a igual ganancia del objeto, +35 %): la
+    # máscara sola subía la saturación del cielo un 6–8 % (en el cielo vale ~0,2); la rampa sola, un 1,8 %; las dos
+    # juntas, un 0,9 %, y llevan más saturación a lo brillante.
+    if mascara:
+        w = mascara_luminancia(p)
+        if fondo is not None:
+            w = w * np.clip((L[0] - fondo) / 0.1, 0, 1)
+        g = 1.0 + float(k) * w[None]
+    elif fondo is not None:
         w = np.clip((L - fondo) / 0.1, 0, 1)
         g = 1.0 + float(k) * w
     # Tope por píxel: ningún canal sale de 0–1 (a +2,5 el canal débil iba a 0 en el 1,9 % de IC 1396; 15 nov 2026).

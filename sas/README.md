@@ -56,7 +56,7 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 | NL3 SCNR | `quitarVerde` | Remove Green conservando la luminosidad |
 | Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | compresor del bulbo propio (como en Siril); WaveScale HDR solo si se pide; meseta, anillos, brillo y estructura del bulbo |
 | Contraste local | `contrasteCandidatos` → `aplicarCandidato` | CLAHE (sólo escalas medias, 25/50 %), ondículas y máscara de enfoque, propios; Texture Clarity (claridad) y multiescala de SASpro; contraste ganado por ruido añadido |
-| NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | saturación propia que conserva la luminancia, cielo protegido, y SatChroma de SASpro (croma Lab); dominante < 5 %, sin recortes nuevos |
+| NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | saturación propia que conserva la luminancia, cielo protegido, en nebulosas también con máscara de luminancia (la recomendada si cumple), y SatChroma de SASpro (croma Lab); dominante < 5 %, sin recortes nuevos |
 | L11 / NL7 Nitidez | `nitidezCandidatos` → `aplicarCandidato` | Cosmic Clarity sharpen; detalle ganado y ruido del cielo ≤ ×1,15 |
 | L14 / NL6 Ruido | `ruidoCandidatos` → `aplicarCandidato` | Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator (RC Astro), GraXpert denoise; detalle perdido < 10 % |
 | NL8 Estrellas | `estirarEstrellas` → `aplicarCandidato` | Star Stretch y arcsinh propio sobre la vista de estrellas |

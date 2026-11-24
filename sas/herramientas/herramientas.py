@@ -2138,10 +2138,12 @@ def fondoCandidatos(ctx, vista=None, cielos=(0.08, 0.065, 0.05), ceros_max=2.0, 
 
 
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5), proteger_cielo=True,
-                         dominante_max=5.0, ceros_max=0.5, satchroma=(0.25, 0.5), sat_max=0.80):
-    """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades y con SatChroma de SASpro (croma
-    Lab, ganancia uniforme 1 + k); mide saturación del objeto y del cielo, dominante del cielo y recortes nuevos, y
-    recomienda la mayor que cumple. La vista no cambia."""
+                         dominante_max=5.0, ceros_max=0.5, satchroma=(0.25, 0.5), sat_max=0.80, tipo=None,
+                         con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0)):
+    """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, también a través de una máscara
+    de luminancia (con_mascara; la recomendada en nebulosas), y con SatChroma de SASpro (croma Lab, ganancia uniforme
+    1 + k); mide saturación del objeto y del cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que
+    cumple. La vista no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if p.shape[0] != 3:
@@ -2167,6 +2169,13 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     m0 = medir(p)
     lista = [(f"saturar +{k:g}", "saturar_propio", {"k": float(k), "fondo": fondo},
               (lambda q, k, fondo: M.saturar(q, k, fondo))) for k in (cantidades or [])]
+    # Nebulosas: también a través de la máscara de luminancia, como en PixInsight (IC 405, 23 nov 2026: sin máscara la
+    # saturación paraba antes por el ruido de color del cielo y la nebulosa salía plana; con máscara llegó más lejos y
+    # fue la más vistosa). Galaxias: sólo si se pasa con_mascara explícito.
+    neb = str(tipo or "nebulosa").lower() != "galaxia"
+    masc = list(con_mascara or []) if (neb or tipo is None) else []
+    lista += [(f"saturar +{k:g} con máscara de luminancia", "saturar_mascara", {"k": float(k), "fondo": fondo},
+               (lambda q, k, fondo: M.saturar(q, k, fondo, mascara=True))) for k in masc]
     lista += [(f"SatChroma croma ×{1 + k:g}", "satchroma",
                {"mode": 1, "strength": 1.0,
                 "points": [[i / 6.0, 1.0 + float(k)] for i in range(7)]}) for k in (satchroma or [])]
@@ -2194,13 +2203,17 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     # pero subía un 46 % y, sumado al punto negro, el rojo salió R/G 4,6. Opus eligió +0,75 (+31 %).
     if any((x["metricas"].get("ganancia_objeto_pct") or 0) <= 35 for x in ok):
         ok = [x for x in ok if (x["metricas"].get("ganancia_objeto_pct") or 0) <= 35]
+    # En nebulosas, la recomendada es la de máscara si alguna cumple (como en PixInsight); la sin máscara, discreta.
+    if neb and any(x["proceso"] == "saturar_mascara" for x in ok):
+        ok = [x for x in ok if x["proceso"] == "saturar_mascara"]
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
         mm = mejor["metricas"]
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: el objeto gana un {mm['ganancia_objeto_pct']} % de saturación, el cielo queda "
-                       f"con dominante {mm['dominante_cielo_pct']} % y sin recortes nuevos. Es la mayor que cumple: mírala "
-                       "con previa antes de aplicarla.")
+                       f"con dominante {mm['dominante_cielo_pct']} % y sin recortes nuevos. Es la mayor que cumple"
+                       + (" (en nebulosas, con máscara de luminancia si alguna cumple)" if neb else "") +
+                       ": mírala con previa antes de aplicarla.")
     else:
         r["motivo"] = "Ninguna cumple (ver no_cumple): no satures más o corrige antes la dominante del cielo."
     r["antes"] = m0

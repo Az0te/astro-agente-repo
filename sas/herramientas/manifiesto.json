@@ -1027,7 +1027,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, con el cielo protegido, y con SatChroma de SASpro (croma Lab ×1,25 y ×1,5); mide saturación del objeto y del cielo, dominante del cielo (< 5 %) y recortes nuevos, y recomienda la mayor que cumple. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, con el cielo protegido, también a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; en nebulosas es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana), y con SatChroma de SASpro (croma Lab ×1,25 y ×1,5); mide saturación del objeto y del cielo, dominante del cielo (< 5 %) y recortes nuevos, y recomienda la mayor que cumple. La vista NO cambia (aplicarCandidato).",
    "resumen": "NL5: compara saturaciones; no cambia la vista.",
    "params": {
     "type": "object",
@@ -1051,6 +1051,16 @@
       "type": "array",
       "items": {"type": "number"},
       "description": "Aumentos de croma con SatChroma de SASpro (por defecto [0.25, 0.5]; [] para no probarlo)."
+     },
+     "con_mascara": {
+      "type": "array",
+      "items": {"type": "number"},
+      "description": "Aumentos de la saturación propia a través de la máscara de luminancia (por defecto [0.5, 1, 1.5, 2, 2.5, 3] en nebulosas; [] para no probarla). En galaxias no se prueba salvo que se pase."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": ["nebulosa", "cumulo", "galaxia", "nebulosa_oscura"],
+      "description": "Tipo de objeto: en galaxias no se prueba la máscara por defecto (por defecto nebulosa)."
      }
     }
    }
