@@ -1,0 +1,168 @@
+<meta charset="utf-8">
+<title>[OBJETO] en [PROGRAMA]</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap">
+<style>
+/* Plantilla de dosier de la guía (paso 11 no lineal). Mismo formato que el dosier de IC 1396 en SASpro (25-nov-2026).
+   Layout: one reading column (~68ch) for prose; figures break out to a wider track. Single dark look, chosen so the astro images read correctly. */
+:root{
+  --bg:#0d1114; --panel:#141a1f; --line:#25303a; --fg:#dfe6ea; --muted:#93a2ad;
+  --ha:#d9604c; --oiii:#46b7c4; --accent:#7fd0d9; --warn:#e3b35a; --ok:#7fcf93;
+  --display:"Fraunces",Georgia,serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 80px}
+.prose{max-width:68ch}
+h1,h2,h3{font-family:var(--display);font-weight:600;text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:clamp(2rem,5vw,3.2rem);letter-spacing:-.01em}
+h2{font-size:1.7rem;margin-top:64px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:1.2rem;margin-top:32px;font-family:var(--body);font-weight:600}
+p{margin:12px 0}
+a{color:var(--accent)}
+.eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.15rem;color:var(--fg);max-width:68ch}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 24px;margin:28px 0;padding:18px 20px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.meta div{min-width:0}
+.meta dt{font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.meta dd{margin:2px 0 0;font-variant-numeric:tabular-nums}
+figure{margin:24px 0}
+figure img{display:block;width:100%;height:auto;border-radius:4px;border:1px solid var(--line)}
+figcaption{font-size:.88rem;color:var(--muted);margin-top:8px;max-width:90ch}
+.tbl{overflow-x:auto;margin:18px 0}
+table{border-collapse:collapse;font-size:.92rem;font-variant-numeric:tabular-nums;min-width:520px}
+th,td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-family:var(--mono);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+td.n{text-align:right;font-family:var(--mono)}
+tr.pick td{background:rgba(127,208,217,.08)}
+tr.pick td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.f{font-family:var(--mono);font-size:.92rem;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;overflow-x:auto;white-space:pre;line-height:1.7}
+.f .c{color:var(--muted)}
+code{font-family:var(--mono);font-size:.9em;background:var(--panel);padding:1px 5px;border-radius:3px}
+.ha{color:var(--ha)} .oiii{color:var(--oiii)}
+.note{border:1px solid var(--line);border-left:3px solid var(--warn);padding:12px 16px;border-radius:4px;background:var(--panel);max-width:80ch}
+.steps{list-style:none;padding:0;margin:20px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.steps li{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+.steps b{font-family:var(--mono);color:var(--accent);font-weight:500;margin-right:6px}
+.steps span{display:block;color:var(--muted);font-size:.88rem;margin-top:2px}
+.toc{display:flex;flex-wrap:wrap;gap:6px 16px;margin:16px 0 0;font-size:.9rem}
+.toc a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--line)}
+.toc a:hover,.toc a:focus-visible{color:var(--accent)}
+.full table{font-size:.8rem;min-width:900px}
+.full th,.full td{padding:5px 8px}
+.full td.n{white-space:nowrap}
+.full th{font-size:.66rem;letter-spacing:.04em}
+.full td:nth-child(2){min-width:16ch}
+.full td:last-child{min-width:26ch}
+tr.orig td{color:var(--muted);font-style:italic}
+.tag{font-family:var(--mono);font-size:.68rem;font-weight:500;padding:1px 6px;border-radius:3px;margin-right:4px;white-space:nowrap}
+.tag.ch{background:rgba(127,208,217,.18);color:var(--accent)}
+.tag.tp{background:rgba(227,179,90,.15);color:var(--warn)}
+.ok{color:var(--ok)} .bad{color:#e08a7a} .why{display:block;color:var(--muted);font-size:.76rem;margin-top:2px}
+h4{font-family:var(--body);font-size:1rem;font-weight:600;margin:28px 0 0;color:var(--fg)}
+details.legend{margin:6px 0 14px;max-width:100ch}
+details.legend summary{cursor:pointer;color:var(--accent);font-size:.88rem}
+details.legend dl{display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:4px 16px;margin:10px 0 0;font-size:.85rem}
+details.legend dt{font-family:var(--mono);color:var(--muted);font-size:.78rem}
+details.legend dd{margin:0}
+.howto{margin:20px 0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+
+<!-- Instrucciones (borrar al rellenar):
+  - Una sección por paso de la cadena, en el orden real. Cada número sale de la salida de una herramienta; nada inventado.
+  - Tabla resumen del paso + tabla "full" con TODOS los candidatos y TODAS sus medidas, # igual que la miniatura de la galería.
+  - tr.pick = lo que entró en la final. Etiquetas: <span class="tag tp">tool pick</span> (recomendador) y <span class="tag ch">chosen</span> (elegido tras mirar). Si difieren, decir por qué.
+  - Bajo cada tabla "full", un <details class="legend"> con qué significa cada columna.
+  - Fórmulas y coeficientes en <div class="f">, comentarios en <span class="c">.
+  - Fallos del puente o de la guía: contarlos tal cual (causa medida, arreglo, números antes/después) en una sección propia.
+  - Imágenes: final entera + recortes 1:1 (centro del objeto, zona débil, estrellas). alt descriptivo en todas.
+  - Publicar como artifact y exportar a PDF con el bloque de impresión del final de este archivo.
+-->
+<div class="wrap">
+<header>
+  <div class="eyebrow">Processing dossier · [FECHA]</div>
+  <h1>[OBJETO], [NOMBRE COMÚN], processed end to end in [PROGRAMA]</h1>
+  <p class="lede">[Una o dos frases: qué versión es, con qué programa y cómo se eligió cada paso (comparando candidatos con las mismas medidas).]</p>
+  <dl class="meta">
+    <div><dt>Optics / camera</dt><dd>[telescopio] · [cámara]</dd></div>
+    <div><dt>Scale</dt><dd>[″/px] · [ancho × alto px] after crop</dd></div>
+    <div><dt>Narrowband</dt><dd>[minutos por filtro]</dd></div>
+    <div><dt>Broadband</dt><dd>[minutos, uso]</dd></div>
+    <div><dt>Software</dt><dd>[programa y versión · herramientas externas y versión]</dd></div>
+  </dl>
+  <p class="prose">[Autoría de los datos, quién condujo el procesado y quién aprobó la final. Fallos de las herramientas propias, si los hubo.]</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#final">Final image</a><a href="#flow">Workflow</a><a href="#paso">[Paso]</a><a href="#metrics">Final metrics</a><a href="#open">Open points</a>
+  </nav>
+</header>
+
+<section id="final">
+  <h2>Final image</h2>
+  <figure><img src="final.jpg" alt="[descripción de la final]">
+  <figcaption>[Versión, paleta, cómo se recombinaron las estrellas.]</figcaption></figure>
+  <figure><img src="crop_objeto.jpg" alt="[recorte 1:1 del centro del objeto]">
+  <figcaption>1:1 crop at [zona].</figcaption></figure>
+</section>
+
+<section id="flow">
+  <h2>Workflow</h2>
+  <p class="prose">[Por qué este orden.]</p>
+  <ol class="steps">
+    <li><b>1</b>[Paso]<span>[detalle corto]</span></li>
+    <li><b>2</b>[Paso]<span>[detalle corto]</span></li>
+  </ol>
+  <div class="note howto"><b>How to read the candidate tables.</b> Every step lists all the candidates, with every measurement taken. <b>#</b> matches the number on the gallery thumbnail. <span class="tag tp">tool pick</span> is what the recommender chose from the numbers. <span class="tag ch">chosen</span> is what went into the final, after visual review; where they differ the reason is given. Open “What each column means” under each table for the definitions.</div>
+</section>
+
+<section id="paso">
+  <h2>[Paso]</h2>
+  <p class="prose">[Qué se probó y con qué criterio se eligió.]</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Layer</th><th>Chosen</th><th>[medida]</th><th>[medida]</th></tr></thead>
+    <tbody>
+      <tr><td>[capa]</td><td>[método]</td><td class="n">[0.000]</td><td class="n">[0.000]</td></tr>
+    </tbody></table></div>
+  <div class="f">[fórmula o coeficientes]   <span class="c"># [comentario]</span></div>
+  <h3>All candidates</h3>
+  <div class="tbl full"><table>
+    <thead><tr><th>#</th><th>Method</th><th>[medida]</th><th>[medida]</th><th>Fails</th><th>Pick</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td>[método]</td><td class="n">[0.000]</td><td class="n">[0.000]</td><td><span class="bad">[control]</span><span class="why">[por qué]</span></td><td></td></tr>
+      <tr class="pick"><td class="n">2</td><td>[método]</td><td class="n">[0.000]</td><td class="n">[0.000]</td><td><span class="ok">—</span></td><td><span class="tag tp">tool pick</span><span class="tag ch">chosen</span></td></tr>
+    </tbody></table></div>
+  <details class="legend"><summary>What each column means</summary><dl><dt>[medida]</dt><dd>[definición y qué valor es bueno]</dd></dl></details>
+  <figure><img src="galeria_paso.jpg" alt="[todos los candidatos numerados como en la tabla]"><figcaption>Numbers match the table. Framed = chosen.</figcaption></figure>
+  <div class="note"><b>[Aviso o sugerencia].</b> [texto]</div>
+</section>
+
+<section id="metrics">
+  <h2>Final metrics</h2>
+  <p class="prose">Measured on the final with the same tool used at every step.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Measure</th><th>Final</th></tr></thead>
+    <tbody>
+      <tr><td>Sky level</td><td class="n">[ ]</td></tr>
+      <tr><td>Grain</td><td class="n">[ ]</td></tr>
+      <tr><td>Star FWHM (px)</td><td class="n">[ ]</td></tr>
+    </tbody></table></div>
+</section>
+
+<section id="open">
+  <h2>Open points</h2>
+  <ul class="prose">
+    <li>[Lo que queda y por qué se dejó así.]</li>
+  </ul>
+</section>
+</div>
+
+<!-- Exportar a PDF (página alta, fondo oscuro): copiar el archivo, quitar loading="lazy", poner open en cada <details>,
+     pegar este bloque justo después del primer </style> e imprimir con Chrome:
+     chrome --headless --no-pdf-header-footer --virtual-time-budget=15000 --print-to-pdf="[salida].pdf" [archivo]
+<style>
+@page{size:325mm 460mm;margin:9mm}
+@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+html,body{background:#0d1114!important}
+.tbl,.full{overflow:visible!important} figure,tr,img{break-inside:avoid} h2,h3,h4{break-after:avoid}}
+</style>
+-->

@@ -12,6 +12,15 @@
 - Tiempo de procesado activo (sin esperas), si el perfil lo pide: horas de inicio y fin de cada tramo.
 - Revisión crítica final (aescaffre), puntuando 0–100: credibilidad del detalle (resuelto o sintético/"gusanos"), calidad del fondo, naturalidad del color, integridad de estrellas, equilibrio tonal, separación objeto–fondo, artefactos (anillos, costuras, manchas, textura sobreafilada) y coherencia estética. "Cada pega con una corrección concreta y accionable (proceso y parámetros), nunca 'mejorar el contraste'."
 
+**Formato**
+
+- Página HTML a partir de [`plantillas/dossier.html`](../plantillas/dossier.html): fondo oscuro, cabecera con equipo, escala, tiempos y software, índice, y una sección por paso en el orden real de la cadena.
+- En cada paso: tabla resumen de lo elegido y tabla completa con todos los candidatos y todas sus medidas. El número de cada fila coincide con el de la miniatura de la galería. Marcar qué propuso el recomendador y qué entró en la final, y explicar por qué cuando no coinciden. Debajo, una leyenda plegable con qué significa cada columna.
+- Fórmulas y coeficientes en bloque de código. Final entera y recortes al 100 %, con texto alternativo descriptivo.
+- Los fallos de las herramientas propias se cuentan como fallos: causa medida, arreglo y números de antes y después. Al final, puntos abiertos.
+- Cada número sale de la salida de una herramienta; ninguno se redondea a ojo ni se inventa. Si un texto se corrige después, se vuelven a comprobar las cifras.
+- Se publica como página y se exporta a PDF con el bloque de impresión que trae la plantilla (página alta de 325 × 460 mm, fondo oscuro, leyendas abiertas).
+
 **Historial y revisión**
 
 - Las herramientas de la guía trabajan sobre copias, así que el historial de la imagen final sólo tiene lo aplicado sobre ella: el resto de la cadena sale del resultado de cada herramienta (imagen de entrada, imagen nueva, parámetros y medidas). Reconstruirla con eso y decir de dónde sale cada paso.
