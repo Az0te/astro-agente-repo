@@ -2620,6 +2620,10 @@ def aplicarCandidato(ctx, id, vista=None):
         _FONDO_PENDIENTE.clear()
     if str(id).startswith(("combinacion_", "paleta_")):
         _INYECCION["hecha"] = True
+    if str(id).startswith("paleta_"):
+        # 25 nov 2026 (IC 1396 Natural): una paleta cambia el color a propósito; el control de R/G contra el RGB lineal
+        # negó la primera exportación (0,52 frente a 1,20). Tras una paleta no hay referencia de color.
+        _COLOR_REF.clear()
     m = M.cielo(_p(d.image))
     return {"aplicado": str(id), "metodo": datos.get("nombre"), "proceso": datos.get("proceso"),
             "preset": datos.get("preset"), "vista": _nombre(d), "medidas": M.sin_privado(m),
