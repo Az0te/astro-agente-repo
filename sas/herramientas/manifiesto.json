@@ -523,12 +523,29 @@
    "params": {
     "type": "object",
     "properties": {
-     "ficheros": {"type": "array", "items": {"type": "string"}, "description": "Los masters alineados (todos)."},
-     "carpeta": {"type": "string", "description": "Carpeta de salida (por defecto la de los alineados)."},
-     "aplicar": {"type": "boolean", "description": "Guardar los recortados (por defecto sí)."},
-     "margen": {"type": "integer", "description": "Margen extra en px por lado (por defecto 8)."}
+     "ficheros": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Los masters alineados (todos)."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de salida (por defecto la de los alineados)."
+     },
+     "aplicar": {
+      "type": "boolean",
+      "description": "Guardar los recortados (por defecto sí)."
+     },
+     "margen": {
+      "type": "integer",
+      "description": "Margen extra en px por lado (por defecto 8)."
+     }
     },
-    "required": ["ficheros"]
+    "required": [
+     "ficheros"
+    ]
    }
   },
   {
@@ -574,12 +591,32 @@
    "params": {
     "type": "object",
     "properties": {
-     "nb": {"type": "string", "description": "Vista de banda estrecha con estrellas (Hα, OIII o SII; mono)."},
-     "continuo": {"type": "string", "description": "Vista de banda ancha con estrellas (la RGB lineal, o un canal mono)."},
-     "canal": {"type": "integer", "enum": [0, 1, 2], "description": "Canal del continuo: 0 (R) para Hα y SII, 1 (G) para OIII. Por defecto, 1 si la raya es OIII (por el nombre) y 0 si no; con OIII se niega con 0."},
-     "forzar": {"type": "boolean", "description": "Sólo si el usuario lo pide: medir con el R una raya OIII."}
+     "nb": {
+      "type": "string",
+      "description": "Vista de banda estrecha con estrellas (Hα, OIII o SII; mono)."
+     },
+     "continuo": {
+      "type": "string",
+      "description": "Vista de banda ancha con estrellas (la RGB lineal, o un canal mono)."
+     },
+     "canal": {
+      "type": "integer",
+      "enum": [
+       0,
+       1,
+       2
+      ],
+      "description": "Canal del continuo: 0 (R) para Hα y SII, 1 (G) para OIII. Por defecto, 1 si la raya es OIII (por el nombre) y 0 si no; con OIII se niega con 0."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Sólo si el usuario lo pide: medir con el R una raya OIII."
+     }
     },
-    "required": ["nb", "continuo"]
+    "required": [
+     "nb",
+     "continuo"
+    ]
    }
   },
   {
@@ -593,15 +630,45 @@
    "params": {
     "type": "object",
     "properties": {
-     "nb": {"type": "string", "description": "Vista de banda estrecha SIN estrellas (mono)."},
-     "continuo": {"type": "string", "description": "Vista de banda ancha SIN estrellas, alineada (la RGB o un canal mono)."},
-     "k": {"type": "number", "description": "Coeficiente de medirContinuo (con las capas con estrellas)."},
-     "canal": {"type": "integer", "enum": [0, 1, 2], "description": "Canal del continuo (el mismo que en medirContinuo). Por defecto, 1 con OIII y 0 si no."},
-     "c": {"type": "number", "description": "Desplazamiento que se resta además (por defecto 0)."},
-     "nombre": {"type": "string", "description": "Nombre de la vista nueva (por defecto <nb>_CS)."},
-     "forzar": {"type": "boolean", "description": "Sólo si el usuario lo pide: un k que no viene de medirContinuo, restar otra vez una vista _CS o el OIII con el R."}
+     "nb": {
+      "type": "string",
+      "description": "Vista de banda estrecha SIN estrellas (mono)."
+     },
+     "continuo": {
+      "type": "string",
+      "description": "Vista de banda ancha SIN estrellas, alineada (la RGB o un canal mono)."
+     },
+     "k": {
+      "type": "number",
+      "description": "Coeficiente de medirContinuo (con las capas con estrellas)."
+     },
+     "canal": {
+      "type": "integer",
+      "enum": [
+       0,
+       1,
+       2
+      ],
+      "description": "Canal del continuo (el mismo que en medirContinuo). Por defecto, 1 con OIII y 0 si no."
+     },
+     "c": {
+      "type": "number",
+      "description": "Desplazamiento que se resta además (por defecto 0)."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre de la vista nueva (por defecto <nb>_CS)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Sólo si el usuario lo pide: un k que no viene de medirContinuo, restar otra vez una vista _CS o el OIII con el R."
+     }
     },
-    "required": ["nb", "continuo", "k"]
+    "required": [
+     "nb",
+     "continuo",
+     "k"
+    ]
    }
   },
   {
@@ -710,7 +777,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "lineal/10-combinacion-rgb-nb.md",
-   "descripcion": "L10 combinar banda estrecha con el RGB: sobre la vista RGB lineal (ya con gradiente y color), compara añadir el exceso de Hα al rojo (y de OIII a verde y azul) a varias intensidades, escalado por las estrellas y limitado a que ×1 como mucho duplique la nebulosa (también con capas sin estrellas); se niega con capas ya estiradas y no cumple si la nebulosa sube más de un 250 % o su R/G cambia más de ×2,5; mide nebulosa ganada, ruido y dominante del cielo y color de las estrellas, y recomienda. Las capas deben estar alineadas (mismo tamaño). La vista NO cambia (aplicarCandidato). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
+   "descripcion": "L10 combinar banda estrecha con el RGB: sobre la vista RGB lineal (ya con gradiente y color), compara añadir el exceso de Hα al rojo (y de OIII a verde y azul) a varias intensidades, escalado por las estrellas y limitado a que ×1 como mucho duplique la nebulosa (también con capas sin estrellas); se niega con capas ya estiradas y no cumple si la nebulosa sube más de un 250 % o su R/G cambia más de ×2,5; mide nebulosa ganada, ruido y dominante del cielo y color de las estrellas, y recomienda. Las capas deben estar alineadas (mismo tamaño). La vista NO cambia (aplicarCandidato). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB). Mide objeto_rg (R/G de la nebulosa) y objeto_rg_x; recomienda solo los que no cambian el R/G del objeto más del margen de su tipo (margen_rg_x: emisión ×1,8, galaxia ×1,3, reflexión y cúmulo ×1,2; pasa tipo).",
    "resumen": "L10: compara cómo añadir Hα/OIII al RGB; no cambia la vista.",
    "params": {
     "type": "object",
@@ -729,7 +796,12 @@
      },
      "tipo": {
       "type": "string",
-      "enum": ["nebulosa", "cumulo", "galaxia", "nebulosa_oscura"],
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
       "description": "Tipo de objeto: en galaxias no se aplica la ruta de paleta."
      },
      "motivo": {
@@ -741,7 +813,7 @@
       "items": {
        "type": "number"
       },
-      "description": "Por defecto [0.5, 1.0]."
+      "description": "Por defecto [0.5, 0.75, 1.0]."
      },
      "con_oiii": {
       "type": "boolean"
@@ -789,7 +861,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/02-lrgb-paleta.md",
-   "descripcion": "NL2 paletas de banda estrecha con capas YA ESTIRADAS y alineadas (vistas mono: ha, oiii y opcionales sii y hb; de desmezclarDualBand/unirCapas y estirarCandidatos de cada una): HOO, HOO suave, HOO con OIII realzado, HOO dinámica, SHO, Foraxx y Natural (las cuatro rayas: Hα y SII en rojo, OIII y Hβ en turquesa; con varios dual band, pasa TODAS las rayas). Mide dominante del cielo, verde residual, saturación y separación de tonos, y recomienda la que más separa los tonos con el cielo neutro (una que sólo falla por verde vale, con quitarVerde forzar: true después). La paleta va en 'vista' (RGB del mismo tamaño) o en una vista nueva «paleta». La vista NO cambia (aplicarCandidato). Si las capas tienen estrellas, la paleta también: no recombines estrellas después.",
+   "descripcion": "NL2 paletas de banda estrecha con capas YA ESTIRADAS y alineadas (vistas mono: ha, oiii y opcionales sii y hb; de desmezclarDualBand/unirCapas y estirarCandidatos de cada una): HOO, HOO suave, HOO con OIII realzado, HOO dinámica, SHO, SHO suave, HSO, Foraxx y Natural (las cuatro rayas: Hα y SII en rojo, OIII y Hβ en turquesa; con varios dual band, pasa TODAS las rayas). Mide dominante del cielo, verde residual, saturación y separación de tonos, y recomienda la que más separa los tonos con el cielo neutro (una que sólo falla por verde vale, con quitarVerde forzar: true después). La paleta va en 'vista' (RGB del mismo tamaño) o en una vista nueva «paleta». La vista NO cambia (aplicarCandidato). Si las capas tienen estrellas, la paleta también: no recombines estrellas después.",
    "resumen": "NL2: compara paletas HOO, SHO, Foraxx y Natural (con Hβ); no cambia la vista. Pasa todas las rayas que haya.",
    "params": {
     "type": "object",
@@ -829,7 +901,9 @@
         "HOO_dinamica",
         "SHO",
         "Foraxx",
-        "Natural"
+        "Natural",
+        "HSO",
+        "SHO_suave"
        ]
       }
      }
@@ -846,7 +920,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/01-estirado.md",
-   "descripcion": "NL1 estirado: compara el estirado estadístico de SASpro (enlazado y por canal, a varias medianas), GHS con el pivote en el cielo, un estirado MTF propio (exacto, como las previas) y un hiperbólico en luminancia que conserva el color de cada píxel (cielo 0,10 y 0,12; necesita el color ya calibrado); mide cielo, ruido relativo, recortes a negro y a blanco y dominante del cielo, y recomienda. Descarta los que no llegan a su mediana objetivo (en SASpro 1.24.2 el estadístico a 0,2–0,3 deja algunas imágenes casi negras). La vista NO cambia (aplicarCandidato). Marca como no_cumple el estirado que deja la mediana de la señal (píxeles a más de 5 ruidos del cielo) por encima de 0,25 (senal_max); si todos la superan, recomienda el que la deja más baja.",
+   "descripcion": "NL1 estirado: compara el estirado estadístico de SASpro (enlazado y por canal, a varias medianas), GHS con el pivote en el cielo, un estirado MTF propio (exacto, como las previas) y un hiperbólico en luminancia que conserva el color de cada píxel (cielo 0,10 y 0,12; necesita el color ya calibrado); mide cielo, ruido relativo, recortes a negro y a blanco y dominante del cielo, y recomienda. Descarta los que no llegan a su mediana objetivo (en SASpro 1.24.2 el estadístico a 0,2–0,3 deja algunas imágenes casi negras). La vista NO cambia (aplicarCandidato). Marca como no_cumple el estirado que deja la mediana de la señal (píxeles a más de 5 ruidos del cielo) por encima de 0,25 (senal_max); si todos la superan, recomienda el que la deja más baja. Desde SASpro 1.24.5 añade el estadístico en luminancia conservando el color y el estadístico con compresión de altas luces (a la mediana más baja).",
    "resumen": "NL1: compara estirado estadístico, GHS, MTF propio e hiperbólico; no cambia la vista.",
    "params": {
     "type": "object",
@@ -887,7 +961,7 @@
    "nivel": "lectura",
    "timeout_s": 3600,
    "paso": "no-lineal/06-noisex.md",
-   "descripcion": "L14/NL6 ruido: compara Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator de RC Astro (si está instalado), SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) y GraXpert denoise si se pide; mide el ruido del cielo frente a antes y el detalle de 2–8 px que se pierde en la parte brillante del objeto (descontando el ruido del cielo). Recomienda el que más ruido quita sin perder más del 2 % de detalle; en no lineal no deja menos de la mitad del ruido (fondo plástico). Si el detalle no se puede medir, propone la pasada moderada (~70 % del ruido) y pide mirar un recorte 1:1. La vista NO cambia (aplicarCandidato). Cosmic Clarity necesita la aceleración de SASpro (PyTorch) instalada.",
+   "descripcion": "L14/NL6 ruido: compara Cosmic Clarity denoise a varias fuerzas y en dos pasadas (0,5×2, 0,7×2), NoiseXTerminator de RC Astro (si está instalado; también ×2), Cosmic Clarity a la fuerza más alta solo en el cielo (máscara de cielo), SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) y GraXpert denoise si se pide; mide el ruido del cielo frente a antes y el detalle de 2–8 px que se pierde en la parte brillante del objeto (descontando el ruido del cielo). Recomienda el que MÁS ruido quita perdiendo menos del 10 % del detalle, sin recortes ni fondo muerto (≥ 25 % del ruido en lineal, ≥ 50 % estirada). Mide también residual_estructura (en la imagen y en el objeto): la estructura de lo que quita el denoise, ~1–2 = solo ruido; por encima de 2 no cumple (se lleva detalle). Es la medida que manda con los denoise por IA (NoiseX), que dejan textura fina y engañan a la de detalle. Si el detalle no se puede medir, propone la pasada moderada (~70 % del ruido) y pide mirar un recorte 1:1. La vista NO cambia (aplicarCandidato). Cosmic Clarity necesita la aceleración de SASpro (PyTorch) instalada. Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "Ruido: compara Cosmic Clarity, NoiseX, SyQon Prism (y GraXpert) denoise; no cambia la vista.",
    "params": {
     "type": "object",
@@ -905,7 +979,7 @@
       "items": {
        "type": "number"
       },
-      "description": "Fuerzas de Cosmic Clarity 0–1 (por defecto [0.3, 0.5, 0.7] en lineal y [0.15, 0.25, 0.35] estirada)."
+      "description": "Fuerzas de Cosmic Clarity 0–1 en una pasada (por defecto [0.3, 0.5, 0.7] en lineal y [0.15, 0.25, 0.35] estirada)."
      },
      "usar_graxpert": {
       "type": "boolean",
@@ -920,7 +994,33 @@
       "items": {
        "type": "number"
       },
-      "description": "Fuerzas de NoiseXTerminator 0–1 (por defecto [0.5, 0.7] en lineal y [0.3, 0.5] estirada)."
+      "description": "Fuerzas de NoiseXTerminator en una pasada (por defecto [0.3, 0.5, 0.7] en lineal y [0.3, 0.5] estirada)."
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
+     },
+     "dobles": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas que se prueban en dos pasadas seguidas, en Cosmic Clarity y NoiseX (por defecto [0.5, 0.7] en lineal y [0.25] estirada; NoiseX 0,3×2 estirada). Mejor dos pasadas medias que una de 0,9."
      }
     }
    }
@@ -931,7 +1031,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Núcleo de galaxia (no lineal, después de estirar y antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo, y recomienda el que baja la meseta sin apagar el bulbo ni crear anillos. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "Núcleo de galaxia (no lineal, después de estirar y antes de saturar): compara comprimir el bulbo (propio, como en Siril) a varias fuerzas y WaveScale HDR de SASpro; mide meseta quemada, anillos, brillo y estructura del bulbo, y recomienda el que baja la meseta sin apagar el bulbo ni crear anillos. La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "Núcleo: compara comprimir el bulbo y WaveScale HDR; no cambia la vista.",
    "params": {
     "type": "object",
@@ -961,6 +1061,25 @@
      "desde": {
       "type": "number",
       "description": "Umbral de brillo desde el que se comprime (por defecto pico − 0,30, entre 0,45 y 0,80)."
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
      }
     }
    }
@@ -971,7 +1090,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Contraste local (no lineal, después del núcleo y antes de saturar): compara CLAHE (25 % y 50 % del detalle de escalas medias, sin levantar el fondo), realce por ondículas de las escalas 2–4, máscara de enfoque y escala grande (propios), y Texture Clarity (claridad 0,25 y 0,5) y la descomposición multiescala de SASpro; mide el contraste local en el objeto, el ruido del cielo (≤ ×1,25; ×1,10 en galaxias), la dominante y los recortes, y recomienda el de más contraste por ruido añadido. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "Contraste local (no lineal, después del núcleo y antes de saturar): compara CLAHE (25 % y 50 % del detalle de escalas medias, sin levantar el fondo), realce por ondículas de las escalas 2–4, máscara de enfoque y escala grande (propios), y Texture Clarity (claridad 0,25 y 0,5) y la descomposición multiescala de SASpro; mide el contraste local en el objeto, el ruido del cielo (≤ ×1,25; ×1,10 en galaxias), la dominante y los recortes, y recomienda el de más contraste por ruido añadido. La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "Contraste local: compara CLAHE, ondículas, enfoque, Texture Clarity y multiescala; no cambia la vista.",
    "params": {
     "type": "object",
@@ -1005,6 +1124,25 @@
      },
      "ruido_max": {
       "type": "number"
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
      }
     }
    }
@@ -1015,7 +1153,7 @@
    "nivel": "lectura",
    "timeout_s": 600,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "NL5 fondo (después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,05, 0,035, 0,025 y 0,015, neutro (si el cielo ya está en 0,035 o menos no hace nada: no se llama dos veces); cada nivel también «+ medios» (curva que deja la señal sobre el cielo, mediana − cielo, en la de antes o en 0,10 si era menor: el fondo baja sin apagar la nebulosa ni lavarla) y «+ rango» (punto negro + punto blanco lineal, recta por canal con pivote en el cielo: el cielo y el color de la franja no se mueven y el p99 de la luminancia sube a 'blanco', 0,40, con ganancia ×1–×2 y sin quemar más de un 0,05 % nuevo; abre el rango de una imagen oscura y plana). Mide píxeles nuevos a 0, cielo por canal, ruido y señal sobre el cielo, y se queda con el cielo más oscuro que cumple y, a casi igual cielo (±0,005), con la «+ rango», luego la «+ medios», luego el punto negro solo. No cumple si lleva a 0 más de un 5 % de píxeles nuevos (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro y el cielo en 0,013) o si deja la señal sobre el cielo por debajo del 85 % de la de entrada (se come la nebulosa). Lo normal es NO pasar cielos ni ceros_max. Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La vista NO cambia (aplicarCandidato).",
+   "descripcion": "NL5 fondo (después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,05, 0,035, 0,025 y 0,015, neutro (si el cielo ya está en 0,035 o menos no hace nada: no se llama dos veces); cada nivel también «+ medios» (curva que deja la señal sobre el cielo, mediana − cielo, en la de antes o en 0,10 si era menor: el fondo baja sin apagar la nebulosa ni lavarla) y «+ rango» (punto negro + punto blanco lineal, recta por canal con pivote en el cielo: el cielo y el color de la franja no se mueven y el p99 de la luminancia sube a 'blanco', 0,40, con ganancia ×1–×2 y sin quemar más de un 0,05 % nuevo; abre el rango de una imagen oscura y plana). Mide píxeles nuevos a 0, cielo por canal, ruido y señal sobre el cielo, y se queda con el cielo más oscuro que cumple y, a casi igual cielo (±0,005), con la «+ rango», luego la «+ medios», luego el punto negro solo. No cumple si lleva a 0 más de un 5 % de píxeles nuevos (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro y el cielo en 0,013) o si deja la señal sobre el cielo por debajo del 85 % de la de entrada (se come la nebulosa). Lo normal es NO pasar cielos ni ceros_max. Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "NL5: fondo más oscuro y neutro (punto negro a 0,08–0,035, con medios o rango); no cambia la vista.",
    "params": {
     "type": "object",
@@ -1046,6 +1184,25 @@
      "ganancia_max": {
       "type": "number",
       "description": "Ganancia máxima del punto blanco (por defecto 2)."
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
      }
     }
    }
@@ -1056,7 +1213,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, con el cielo protegido, también a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; en nebulosas es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana), y con SatChroma de SASpro (croma Lab ×1,25 y ×1,5); mide saturación del objeto y del cielo, dominante del cielo (< 5 %) y recortes nuevos, y recomienda la mayor que cumple. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, con el cielo protegido, también a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; en nebulosas es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana), y con SatChroma de SASpro (croma Lab ×1,25 y ×1,5); mide saturación del objeto y del cielo, dominante del cielo (< 5 %) y recortes nuevos, y recomienda la mayor que cumple. La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca. También «color suave por tonos» (rojo ×0,85, dorado ×1,3, azul ×1,35, conservando la luminancia; suave = cantidades, [] para quitarlo): van en color_suave para enseñarlos con previa junto a la recomendada.",
    "resumen": "NL5: compara saturaciones; no cambia la vista.",
    "params": {
     "type": "object",
@@ -1078,18 +1235,53 @@
      },
      "satchroma": {
       "type": "array",
-      "items": {"type": "number"},
+      "items": {
+       "type": "number"
+      },
       "description": "Aumentos de croma con SatChroma de SASpro (por defecto [0.25, 0.5]; [] para no probarlo)."
      },
      "con_mascara": {
       "type": "array",
-      "items": {"type": "number"},
+      "items": {
+       "type": "number"
+      },
       "description": "Aumentos de la saturación propia a través de la máscara de luminancia (por defecto [0.5, 1, 1.5, 2, 2.5, 3] en nebulosas; [] para no probarla). En galaxias no se prueba salvo que se pase."
      },
      "tipo": {
       "type": "string",
-      "enum": ["nebulosa", "cumulo", "galaxia", "nebulosa_oscura"],
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
       "description": "Tipo de objeto: en galaxias no se prueba la máscara por defecto (por defecto nebulosa)."
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
+     },
+     "suave": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Cantidades del color suave por tonos (por defecto [0, 0.25, 0.5]); [] para no probarlo."
      }
     }
    }
@@ -1100,7 +1292,7 @@
    "nivel": "lectura",
    "timeout_s": 3600,
    "paso": "no-lineal/07-nitidez.md",
-   "descripcion": "L11/NL7 nitidez: compara Cosmic Clarity sharpen de SASpro a varias cantidades; mide el detalle fino ganado en el objeto, el ruido del cielo (≤ ×1,15) y los recortes, y recomienda. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "L11/NL7 nitidez: compara Cosmic Clarity sharpen de SASpro a varias cantidades; mide el detalle fino ganado en el objeto, el ruido del cielo (≤ ×1,15) y los recortes, y recomienda. La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "Nitidez: compara Cosmic Clarity sharpen; no cambia la vista.",
    "params": {
     "type": "object",
@@ -1123,6 +1315,25 @@
        "Stellar Only",
        "Non-Stellar Only"
       ]
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
      }
     }
    }
@@ -1133,7 +1344,7 @@
    "nivel": "lectura",
    "timeout_s": 3600,
    "paso": "lineal/13-bxt-completo.md",
-   "descripcion": "L11/L13 deconvolución en lineal con BlurXTerminator de RC Astro (su programa rc-astro; ver ping): solo corrección y una rejilla de nonstellar según el tipo de campo (como bxtCandidatos de PixInsight) frente a no hacer nada. Mide FWHM de las estrellas, ringing (anillos oscuros alrededor de las brillantes), gusanos (alta frecuencia del cielo frente a BXT con nonstellar 0, máx. 1,3) y contraste fino del objeto; recomienda el nonstellar más alto que cumple. Con SyQon Studio instalado añade SyQon Parallax Nano (corrección + deblur mezclados al 0,5; EXPERIMENTAL: en lineal recorta núcleos a 1,0, así que se mide saturados y se descarta si satura más que la original). Sin BXT compara solo Parallax. Imagen completa: cada variante tarda lo que BXT en toda la imagen. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "L11/L13 deconvolución en lineal con BlurXTerminator de RC Astro (su programa rc-astro; ver ping): solo corrección y una rejilla de nonstellar según el tipo de campo (como bxtCandidatos de PixInsight) frente a no hacer nada. Mide FWHM de las estrellas, ringing (anillos oscuros alrededor de las brillantes), gusanos (alta frecuencia del cielo frente a BXT con nonstellar 0, máx. 1,3) y contraste fino del objeto; recomienda el nonstellar más alto que cumple. Con SyQon Studio instalado añade SyQon Parallax Nano (corrección + deblur mezclados al 0,5; EXPERIMENTAL: en lineal recorta núcleos a 1,0, así que se mide saturados y se descarta si satura más que la original). Sin BXT compara solo Parallax. Imagen completa: cada variante tarda lo que BXT en toda la imagen. La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca. Añade Cosmic Clarity sharpen 0,5 y 0,8 con PSF automática (gratis, de SASpro; cosmic: [] para quitarlo): sin BXT ni SyQon es la alternativa (aviso_bxt) y, si nada más cumple, se recomienda el de menor FWHM sin ringing.",
    "resumen": "Deconvolución: compara BlurXTerminator (solo corrección y nonstellar) y SyQon Parallax (experimental); no cambia la vista.",
    "params": {
     "type": "object",
@@ -1178,6 +1389,32 @@
      "correct_only": {
       "type": "boolean",
       "description": "Incluir BXT solo corrección (por defecto true)."
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
+     },
+     "cosmic": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Cantidades de Cosmic Clarity sharpen (por defecto [0.5, 0.8]); [] para no probarlo."
      }
     }
    }
@@ -1188,20 +1425,87 @@
    "nivel": "vista",
    "timeout_s": 600,
    "paso": "no-lineal/04-mascaras.md",
-   "descripcion": "Paso 4 no lineal: crea una máscara gris 0–1 en una vista nueva y mide su cobertura (media, % > 0,5, media en el cielo y en el objeto). No la aplica. tipo: luminancia (brillo ^ gamma), cielo (1 − luminancia: protege el objeto), estrellas (paso alto > 5σ, crecida), color (por tono, ponderada por saturación) o estructura (estructura difusa de SASpro: nebulosa extensa sin estrellas).",
-   "resumen": "Paso 4: crea una máscara (luminancia, cielo, estrellas, color o estructura) en una vista nueva.",
+   "descripcion": "Paso 4 no lineal: crea una máscara gris 0–1 en una vista nueva y mide su cobertura (media, % > 0,5 y media en el cielo, el objeto y las estrellas). No la aplica. tipo: luminancia (brillo ^ gamma), cielo (1 − luminancia: protege el objeto), estrellas (paso alto > sigma, crecida; las brillantes más), color (por tono, ponderada por saturación), estructura (estructura difusa de SASpro: nebulosa extensa), objeto (estructura sin estrellas), rango (luminancia entre bajo y alto con rampa difuso) o crominancia (dónde hay color, de cualquier tono). Con fuente se calcula sobre otra vista del mismo tamaño (la starless, la capa de Hα…). Úsala en cualquier comparación con el parámetro mascara.",
+   "resumen": "Paso 4: crea una máscara (luminancia, cielo, estrellas, color, estructura, objeto, rango o crominancia) en una vista nueva.",
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string", "description": "Vista de la que sale la máscara. Sin ella, la activa."},
-     "tipo": {"type": "string", "enum": ["luminancia", "cielo", "estrellas", "color", "estructura"]},
-     "gamma": {"type": "number", "description": "Gamma de la máscara (luminancia, cielo, color). >1 la estrecha a lo más brillante. Por defecto 1."},
-     "suavizar": {"type": "integer", "description": "Radio de suavizado en px (por defecto 2)."},
-     "tono": {"type": "string", "description": "Con tipo color: rojo, naranja, amarillo, verde, cian, azul, magenta o grados."},
-     "ancho": {"type": "number", "description": "Con tipo color: ancho en grados (30)."},
-     "crecer": {"type": "integer", "description": "Con tipo estrellas: px que crece cada estrella (2)."},
-     "invertir": {"type": "boolean"},
-     "nombre": {"type": "string", "description": "Nombre de la vista de la máscara (por defecto <vista>_mask_<tipo>)."}
+     "vista": {
+      "type": "string",
+      "description": "Vista de la que sale la máscara. Sin ella, la activa."
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "luminancia",
+       "cielo",
+       "estrellas",
+       "color",
+       "estructura",
+       "objeto",
+       "rango",
+       "crominancia"
+      ]
+     },
+     "gamma": {
+      "type": "number",
+      "description": "Gamma de la máscara (luminancia, cielo, color). >1 la estrecha a lo más brillante. Por defecto 1."
+     },
+     "suavizar": {
+      "type": "integer",
+      "description": "Radio de suavizado en px (por defecto 2)."
+     },
+     "tono": {
+      "type": "string",
+      "description": "Con tipo color: rojo, naranja, amarillo, verde, cian, azul, magenta o grados."
+     },
+     "ancho": {
+      "type": "number",
+      "description": "Con tipo color: ancho en grados (30)."
+     },
+     "crecer": {
+      "type": "integer",
+      "description": "Con tipo estrellas: px que crece cada estrella (2)."
+     },
+     "invertir": {
+      "type": "boolean"
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre de la vista de la máscara (por defecto <vista>_mask_<tipo>)."
+     },
+     "fuente": {
+      "type": "string",
+      "description": "Vista de la que se calcula la máscara (mismo tamaño), p. ej. la starless o la capa de Hα. Sin ella, la propia vista."
+     },
+     "bajo": {
+      "type": "number",
+      "description": "Con tipo rango: luminancia normalizada mínima 0–1 (0,25)."
+     },
+     "alto": {
+      "type": "number",
+      "description": "Con tipo rango: máxima 0–1 (1)."
+     },
+     "difuso": {
+      "type": "number",
+      "description": "Con tipo rango: ancho de la rampa en los bordes (0,05)."
+     },
+     "sigma": {
+      "type": "number",
+      "description": "Con tipo estrellas u objeto: umbral de detección en σ del ruido (5)."
+     },
+     "crecer_brillantes": {
+      "type": "integer",
+      "description": "Con tipo estrellas: px que crecen las estrellas brillantes (por defecto 3 × crecer) para cubrir su halo."
+     },
+     "componente": {
+      "type": "string",
+      "enum": [
+       "luminancia",
+       "maximo"
+      ],
+      "description": "Con tipo rango: sobre la luminancia (por defecto) o sobre el canal más alto (maximo: el Hα rojo saturado cuenta tan brillante como se ve)."
+     }
     }
    }
   },
@@ -1216,15 +1520,137 @@
    "params": {
     "type": "object",
     "properties": {
-     "mascara": {"type": "string", "description": "Vista de la máscara (de crearMascara)."},
-     "vista": {"type": "string", "description": "Vista a cambiar. Sin ella, la activa."},
-     "candidato": {"type": "string", "description": "Id de un candidato (de cualquier comparación sobre esta vista)."},
-     "procesada": {"type": "string", "description": "O bien otra vista con el resultado (mismo tamaño)."},
-     "fuerza": {"type": "number", "description": "0–1 (por defecto 1)."},
-     "invertir": {"type": "boolean"},
-     "objetivo": {"type": "string", "enum": ["fondo", "brillante"], "description": "Para avisar si la máscara parece invertida."}
+     "mascara": {
+      "type": "string",
+      "description": "Vista de la máscara (de crearMascara)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Vista a cambiar. Sin ella, la activa."
+     },
+     "candidato": {
+      "type": "string",
+      "description": "Id de un candidato (de cualquier comparación sobre esta vista)."
+     },
+     "procesada": {
+      "type": "string",
+      "description": "O bien otra vista con el resultado (mismo tamaño)."
+     },
+     "fuerza": {
+      "type": "number",
+      "description": "0–1 (por defecto 1)."
+     },
+     "invertir": {
+      "type": "boolean"
+     },
+     "objetivo": {
+      "type": "string",
+      "enum": [
+       "fondo",
+       "brillante"
+      ],
+      "description": "Para avisar si la máscara parece invertida."
+     }
     },
-    "required": ["mascara"]
+    "required": [
+     "mascara"
+    ]
+   }
+  },
+  {
+   "nombre": "combinarMascaras",
+   "fichero": "mascaras.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "no-lineal/04-mascaras.md",
+   "descripcion": "Paso 4 no lineal: combina dos máscaras del mismo tamaño en una vista nueva. operacion: producto (las dos a la vez), maximo (cualquiera de las dos), minimo, resta (a − b) o a_sin_b (a · (1 − b), p. ej. luminancia sin estrellas). Mide media y cobertura.",
+   "resumen": "Paso 4: combina dos máscaras (producto, máximo, mínimo, resta, a sin b).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "a": {
+      "type": "string",
+      "description": "Primera máscara (vista)."
+     },
+     "b": {
+      "type": "string",
+      "description": "Segunda máscara (vista)."
+     },
+     "operacion": {
+      "type": "string",
+      "enum": [
+       "producto",
+       "maximo",
+       "minimo",
+       "resta",
+       "a_sin_b"
+      ]
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre de la vista nueva."
+     }
+    },
+    "required": [
+     "a",
+     "b"
+    ]
+   }
+  },
+  {
+   "nombre": "ajustarMascara",
+   "fichero": "mascaras.py",
+   "nivel": "vista",
+   "timeout_s": 300,
+   "paso": "no-lineal/04-mascaras.md",
+   "descripcion": "Paso 4 no lineal: retoca una máscara en una vista nueva (la original no cambia), en este orden: umbral (binaria), crecer / encoger px (dilatar / erosionar), niveles bajo–alto, gamma, suavizar px e invertir. Mide media, cobertura y bordes duros.",
+   "resumen": "Paso 4: retoca una máscara (umbral, crecer, encoger, niveles, gamma, suavizar, invertir).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "mascara": {
+      "type": "string",
+      "description": "Máscara (vista)."
+     },
+     "crecer": {
+      "type": "integer",
+      "description": "Dilatar px."
+     },
+     "encoger": {
+      "type": "integer",
+      "description": "Erosionar px."
+     },
+     "suavizar": {
+      "type": "integer",
+      "description": "Suavizado px."
+     },
+     "gamma": {
+      "type": "number",
+      "description": ">1 estrecha a lo más blanco."
+     },
+     "bajo": {
+      "type": "number",
+      "description": "Nivel que pasa a 0."
+     },
+     "alto": {
+      "type": "number",
+      "description": "Nivel que pasa a 1."
+     },
+     "umbral": {
+      "type": "number",
+      "description": "Si se da, máscara binaria (≥ umbral = 1)."
+     },
+     "invertir": {
+      "type": "boolean"
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre de la vista nueva."
+     }
+    },
+    "required": [
+     "mascara"
+    ]
    }
   },
   {
@@ -1237,12 +1663,25 @@
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string"},
-     "expr": {"type": "string"},
-     "expr_r": {"type": "string"},
-     "expr_g": {"type": "string"},
-     "expr_b": {"type": "string"},
-     "nueva": {"type": "string", "description": "Nombre de una vista nueva para el resultado (si no, cambia la vista)."}
+     "vista": {
+      "type": "string"
+     },
+     "expr": {
+      "type": "string"
+     },
+     "expr_r": {
+      "type": "string"
+     },
+     "expr_g": {
+      "type": "string"
+     },
+     "expr_b": {
+      "type": "string"
+     },
+     "nueva": {
+      "type": "string",
+      "description": "Nombre de una vista nueva para el resultado (si no, cambia la vista)."
+     }
     }
    }
   },
@@ -1256,11 +1695,25 @@
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string"},
-     "rect": {"type": "array", "items": {"type": "integer"}, "description": "[x0, y0, x1, y1] en píxeles (x1, y1 excluidos)."},
-     "ancho": {"type": "integer"},
-     "alto": {"type": "integer"},
-     "nombre": {"type": "string"}
+     "vista": {
+      "type": "string"
+     },
+     "rect": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      },
+      "description": "[x0, y0, x1, y1] en píxeles (x1, y1 excluidos)."
+     },
+     "ancho": {
+      "type": "integer"
+     },
+     "alto": {
+      "type": "integer"
+     },
+     "nombre": {
+      "type": "string"
+     }
     }
    }
   },
@@ -1275,10 +1728,21 @@
    "params": {
     "type": "object",
     "properties": {
-     "vistas": {"type": "array", "items": {"type": "string"}, "description": "Vistas a alinear (la referencia puede ir incluida)."},
-     "referencia": {"type": "string", "description": "Vista de referencia (por defecto la primera)."}
+     "vistas": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Vistas a alinear (la referencia puede ir incluida)."
+     },
+     "referencia": {
+      "type": "string",
+      "description": "Vista de referencia (por defecto la primera)."
+     }
     },
-    "required": ["vistas"]
+    "required": [
+     "vistas"
+    ]
    }
   },
   {
@@ -1291,13 +1755,30 @@
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string"},
-     "hot_sigma": {"type": "number"},
-     "cold_sigma": {"type": "number"},
-     "protect_sigma": {"type": "number"},
-     "calientes": {"type": "boolean", "description": "Corregir calientes (true)."},
-     "frios": {"type": "boolean", "description": "Corregir fríos (true)."},
-     "bayer": {"type": "string", "description": "RGGB, BGGR… solo para un master OSC sin debayer."}
+     "vista": {
+      "type": "string"
+     },
+     "hot_sigma": {
+      "type": "number"
+     },
+     "cold_sigma": {
+      "type": "number"
+     },
+     "protect_sigma": {
+      "type": "number"
+     },
+     "calientes": {
+      "type": "boolean",
+      "description": "Corregir calientes (true)."
+     },
+     "frios": {
+      "type": "boolean",
+      "description": "Corregir fríos (true)."
+     },
+     "bayer": {
+      "type": "string",
+      "description": "RGGB, BGGR… solo para un master OSC sin debayer."
+     }
     }
    }
   },
@@ -1311,10 +1792,23 @@
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string"},
-     "modo": {"type": "string", "enum": ["percentile", "min", "first_nonzero"]},
-     "pct": {"type": "number"},
-     "por_canal": {"type": "boolean"}
+     "vista": {
+      "type": "string"
+     },
+     "modo": {
+      "type": "string",
+      "enum": [
+       "percentile",
+       "min",
+       "first_nonzero"
+      ]
+     },
+     "pct": {
+      "type": "number"
+     },
+     "por_canal": {
+      "type": "boolean"
+     }
     }
    }
   },
@@ -1328,8 +1822,13 @@
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string"},
-     "sigma": {"type": "number", "description": "Umbral de detección en σ (5)."}
+     "vista": {
+      "type": "string"
+     },
+     "sigma": {
+      "type": "number",
+      "description": "Umbral de detección en σ (5)."
+     }
     }
    }
   },
@@ -1362,14 +1861,45 @@
    "nivel": "lectura",
    "timeout_s": 900,
    "paso": "no-lineal/09-recombinar-estrellas.md",
-   "descripcion": "NL halos de estrellas: Halo-B-Gon de SASpro (su función de cálculo) solo dentro de una máscara de estrellas crecida 12 px (sin máscara oscurece toda la imagen) a varias reducciones (0–3) frente a no hacer nada. Mide el brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes, la FWHM, los anillos oscuros (corrección pasada) y el cambio del cielo; recomienda la mayor reducción sin anillos oscuros nuevos ni cambio del cielo. La vista no cambia: aplicarCandidato(id).",
+   "descripcion": "NL halos de estrellas: Halo-B-Gon de SASpro (su función de cálculo) solo dentro de una máscara de estrellas crecida 12 px (sin máscara oscurece toda la imagen) a varias reducciones (0–3) frente a no hacer nada. Mide el brillo del halo en un anillo de 3–12 px alrededor de las estrellas brillantes, la FWHM, los anillos oscuros (corrección pasada) y el cambio del cielo; recomienda la mayor reducción sin anillos oscuros nuevos ni cambio del cielo. La vista no cambia: aplicarCandidato(id). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "NL: compara Halo-B-Gon a varias reducciones.",
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string", "description": "La vista (nombre o uid). Sin ella, la activa."},
-     "reducciones": {"type": "array", "items": {"type": "integer"}, "description": "Reducciones a probar, 0–3 (por defecto [1, 2, 3])."},
-     "lineal": {"type": "boolean", "description": "La imagen está en lineal (por defecto no: después de estirar)."}
+     "vista": {
+      "type": "string",
+      "description": "La vista (nombre o uid). Sin ella, la activa."
+     },
+     "reducciones": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      },
+      "description": "Reducciones a probar, 0–3 (por defecto [1, 2, 3])."
+     },
+     "lineal": {
+      "type": "boolean",
+      "description": "La imagen está en lineal (por defecto no: después de estirar)."
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
+     }
     }
    }
   },
@@ -1379,14 +1909,42 @@
    "nivel": "lectura",
    "timeout_s": 600,
    "paso": "no-lineal/09-recombinar-estrellas.md",
-   "descripcion": "NL9: estrellas más pequeñas y discretas (lo que hace BXT en PixInsight) sobre la capa de SOLO estrellas ya estirada, antes de recombinar: erosión 3×3 a varias cantidades y gamma que apaga halos y estrellas débiles. Mide FWHM, % de píxeles de estrella y brillo p90; con fwhm_objetivo / area_objetivo recomienda el más cercano. La vista no cambia: aplicarCandidato(id).",
+   "descripcion": "NL9: estrellas más pequeñas y discretas (lo que hace BXT en PixInsight) sobre la capa de SOLO estrellas ya estirada, antes de recombinar: erosión 3×3 a varias cantidades y gamma que apaga halos y estrellas débiles. Mide FWHM, % de píxeles de estrella y brillo p90; con fwhm_objetivo / area_objetivo recomienda el más cercano. La vista no cambia: aplicarCandidato(id). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "NL9: compara formas de reducir las estrellas (capa de estrellas).",
    "params": {
     "type": "object",
     "properties": {
-     "vista": {"type": "string", "description": "La capa de estrellas estirada (nombre o uid). Sin ella, la activa."},
-     "fwhm_objetivo": {"type": "number", "description": "FWHM objetivo en px (opcional)."},
-     "area_objetivo": {"type": "number", "description": "% de píxeles de estrella objetivo (opcional)."}
+     "vista": {
+      "type": "string",
+      "description": "La capa de estrellas estirada (nombre o uid). Sin ella, la activa."
+     },
+     "fwhm_objetivo": {
+      "type": "number",
+      "description": "FWHM objetivo en px (opcional)."
+     },
+     "area_objetivo": {
+      "type": "number",
+      "description": "% de píxeles de estrella objetivo (opcional)."
+     },
+     "mascara": {
+      "description": "Máscara para la comparación: nombre de una vista de máscara (crearMascara) o un objeto {tipo, gamma, fuente, …} con los parámetros de crearMascara para hacerla al vuelo. Cada candidato se mezcla con la imagen de partida a través de ella (blanco = efecto entero) y se mide ya mezclado.",
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "object"
+       }
+      ]
+     },
+     "mascara_fuerza": {
+      "type": "number",
+      "description": "Fuerza del efecto dentro de la máscara, 0–1 (1)."
+     },
+     "mascara_invertir": {
+      "type": "boolean",
+      "description": "Invertir la máscara (proteger lo blanco)."
+     }
     }
    }
   },
@@ -1588,7 +2146,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/08-estrellas.md",
-   "descripcion": "Estrellas: estira la vista de solo estrellas. Compara Star Stretch de SASpro a varios factores y arcsinh propios que llevan el p90 de las estrellas a 0,05, 0,07 y 0,10 (recomienda ~0,07: más hincha la estrella brillante central); mide brillo de las estrellas y recortes. La vista NO cambia (aplicarCandidato).",
+   "descripcion": "Estrellas: estira la vista de solo estrellas. Compara Star Stretch de SASpro a varios factores, arcsinh propios que llevan el p90 de las estrellas a 0,035, 0,05, 0,07 y 0,10 (recomienda ~0,07) y el arcsinh 0,07 + Halo-B-Gon 1 y 2 (recoge el halo: estrellas más pequeñas); mide brillo, recortes y area_visible_pct (tamaño). mas_pequenas: las tres de menor tamaño sin núcleos quemados, para enseñarlas con previa si las estrellas se ven grandes. La vista NO cambia (aplicarCandidato).",
    "resumen": "Estrellas: compara Star Stretch y arcsinh; no cambia la vista.",
    "params": {
     "type": "object",
@@ -1607,6 +2165,20 @@
      "color": {
       "type": "number",
       "description": "color_boost de Star Stretch, 0–2 (por defecto 1)."
+     },
+     "halos": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      },
+      "description": "Reducciones de Halo-B-Gon tras el arcsinh (por defecto [1, 2]); [] para no probarlo."
+     },
+     "p90_variantes": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Otros p90 del arcsinh (por defecto [0.035, 0.05, 0.10]); más bajo = estrellas más pequeñas."
      }
     },
     "required": [

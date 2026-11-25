@@ -687,3 +687,25 @@ def energia_detalle(L, banda=(1, 4)):
     a, b = banda
     d = _caja(L, a) - _caja(L, b)
     return float(np.mean(np.abs(d)))
+
+
+def residual_estructura(L0, L1, b=16, zona=None):
+    """Estructura de lo que quita un denoise (L0 − L1): dispersión de las medias de bloques de b px frente a la que daría
+    ruido puro (σ/b). ~1–2 = solo ruido; más = se lleva forma del objeto. Con 'zona' (bool), solo los bloques que caen
+    mayoritariamente en ella. No depende de cuánta textura fina deje el denoise (por eso sirve también con NoiseX).
+    (25 nov 2026, escrito para SASpro con la idea de la medida de PixInsight.)"""
+    d = (np.asarray(L0, np.float32) - np.asarray(L1, np.float32))
+    h, w = d.shape[0] // b * b, d.shape[1] // b * b
+    if h == 0 or w == 0:
+        return None
+    blo = d[:h, :w].reshape(h // b, b, w // b, b)
+    medias = blo.mean(axis=(1, 3))
+    sd = float(d[:h:4, :w:4].std())
+    if zona is not None:
+        z = np.asarray(zona, bool)[:h, :w].reshape(h // b, b, w // b, b).mean(axis=(1, 3)) > 0.5
+        if z.sum() < 20:
+            return None
+        medias = medias[z]
+    if sd <= 0:
+        return None
+    return float(medias.std()) / (sd / b)

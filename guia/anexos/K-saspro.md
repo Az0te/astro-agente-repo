@@ -27,10 +27,11 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 | NL1 Estirado | **`estirarCandidatos`** (estadístico, GHS y MTF propio) → `aplicarCandidato` |
 | NL2 Paletas | **`paletasCandidatos`** (capas estiradas; pasa ha, oiii, sii y hb: la Natural usa las cuatro) → `aplicarCandidato` |
 | NL3 Verde | `quitarVerde` (SCNR propio que sólo baja el verde; `metodo: sas` para el de SASpro) |
+| NL4 Máscaras | `crearMascara` (luminancia, cielo, estrellas, color, estructura, objeto, rango, crominancia; `fuente` para sacarla de otra vista), `combinarMascaras`, `ajustarMascara`, `aplicarConMascara`; y el parámetro `mascara` en las comparaciones (ver abajo) |
 | NL5 Realces | **`nucleoCandidatos`** (galaxias), **`contrasteCandidatos`**, **`saturacionCandidatos`** → `aplicarCandidato`, en ese orden |
-| L14 / NL6 Ruido | **`ruidoCandidatos`** (Cosmic Clarity, NoiseX, GraXpert, SyQon Prism en lineal) → `aplicarCandidato` |
+| L14 / NL6 Ruido | **`ruidoCandidatos`** (Cosmic Clarity y NoiseX a 0,3 / 0,5 / 0,7 y en dos pasadas 0,5×2 / 0,7×2; Cosmic Clarity fuerte solo en el cielo, SyQon Prism en lineal, GraXpert si se pide; gana el que más quita con < 10 % de detalle perdido) → `aplicarCandidato` |
 | NL7 Nitidez | **`nitidezCandidatos`** (Cosmic Clarity sharpen) → `aplicarCandidato` |
-| NL8 Estrellas | **`estirarEstrellas`** (de la vista de estrellas) → `aplicarCandidato` |
+| NL8 Estrellas | **`estirarEstrellas`** (de la vista de estrellas; arcsinh a varios p90 y + Halo-B-Gon; `mas_pequenas` si se ven grandes) → `aplicarCandidato` |
 | NL9 Recombinación | `recombinarEstrellas` (starless + vista de estrellas, screen) |
 | NL10 Exportación | `exportarFinal` |
 
@@ -67,3 +68,43 @@ con los rodeos de arriba.
   apilado (Stacking Suite).
 - Los FITS que guarda SASpro van de arriba abajo con `ROWORDER = 'TOP-DOWN'` y el WCS volteado: son coherentes. Un
   programa que no lea ROWORDER los verá volteados.
+
+<a id="mascaras"></a>
+## Máscaras en las comparaciones (25 nov 2026)
+
+Las máscaras sirven en casi todos los pasos no lineales: dejan el efecto donde hace falta y protegen el resto. En SASpro
+cada comparación que la acepta (`ruidoCandidatos`, `nucleoCandidatos`, `contrasteCandidatos`, `saturacionCandidatos`,
+`nitidezCandidatos`, `deconvolucionCandidatos`, `halosCandidatos`, `reducirEstrellasCandidatos`, `fondoCandidatos`)
+lleva tres parámetros:
+
+- `mascara`: el nombre de una vista de máscara (de `crearMascara`, `combinarMascaras` o `ajustarMascara`) o un objeto con
+  los parámetros de `crearMascara` para hacerla al vuelo, p. ej. `{"tipo": "cielo", "gamma": 1.5}`.
+- `mascara_fuerza` (0–1) y `mascara_invertir`.
+
+Cada candidato se mezcla con la imagen de partida a través de la máscara **antes** de medirlo y de guardarlo: lo que se
+compara y lo que pone `aplicarCandidato` es lo mismo. El resultado trae `mascara` con su cobertura (media en el cielo, el
+objeto y las estrellas) para comprobar que protege lo que debe. El estirado y el gradiente no la aceptan (en lineal deja
+saltos al estirar).
+
+Usos típicos, por tipo de efecto (no por objeto):
+
+| Efecto | Máscara | Por qué |
+|---|---|---|
+| Ruido fuerte solo en el fondo | `{"tipo": "cielo"}` | el fondo admite más denoise que el objeto |
+| Contraste y nitidez del objeto | `{"tipo": "objeto"}` o `luminancia` × (1 − estrellas) con `combinarMascaras(a_sin_b)` | sin realzar estrellas ni ruido del cielo |
+| Saturación sin teñir el cielo | `luminancia` o `crominancia` | el color va donde ya hay señal |
+| Un solo tono (OIII, polvo dorado) | `{"tipo": "color", "tono": "cian"}` | sube o baja un tono sin tocar los otros |
+| Núcleo o zonas brillantes | `{"tipo": "rango", "bajo": 0.6}` | solo actúa por encima del nivel, con rampa suave |
+| Halos y estrellas | `{"tipo": "estrellas", "crecer": 3}` (las brillantes crecen ×3) | cubre el halo de las grandes |
+| Desde otra capa | `{"tipo": "luminancia", "fuente": "<starless o Hα>"}` | la máscara sin estrellas o donde hay Hα |
+
+Si la vista tenía una máscara de SASpro activa (de la ventana Mask), la comparación la desactiva mientras dura y la
+vuelve a poner (`aviso_mascara_sas`): los procesos de SASpro la respetarían y los candidatos no serían comparables.
+
+## Novedades de SASpro 1.24.8 que se aprovechan (25 nov 2026)
+
+- Estirado estadístico en luminancia conservando el color y con compresión de altas luces (`estirarCandidatos`).
+- Cosmic Clarity sharpen como deconvolución gratuita en `deconvolucionCandidatos` (alternativa a BXT).
+- `saturacionCandidatos`: «color suave por tonos» (rojo ×0,85, dorado ×1,3, azul ×1,35) para elegir a la vista.
+- `combinarCandidatos`: Hα ×0,5 / 0,75 / 1 y margen de R/G del objeto por tipo (emisión ×1,8, galaxia ×1,3).
+- `paletasCandidatos`: HSO y SHO suave.

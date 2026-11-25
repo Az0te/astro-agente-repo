@@ -1026,10 +1026,11 @@ def ayudaProceso(ctx, proceso=None):
 # y se deshace. La vista queda como estaba (se comprueba con la huella) y aplicarCandidato pone exactamente el array
 # medido, con un paso de deshacer.
 
-def _probar(ctx, doc, proceso, preset):
-    """Lanza un proceso, devuelve el resultado (copia) y deja la vista como estaba."""
+def _probar(ctx, doc, proceso, preset, pasadas=1):
+    """Lanza un proceso (pasadas veces seguidas), devuelve el resultado (copia) y deja la vista como estaba."""
     h0, n0, img0 = M.huella(doc.image), _n_deshacer(doc), doc.image
-    _correr(ctx, doc, proceso, preset)
+    for _ in range(max(1, int(pasadas))):
+        _correr(ctx, doc, proceso, preset)
     if M.huella(doc.image) == h0:
         raise RuntimeError(f"{proceso} no ha cambiado la imagen (¿falta el programa externo o el modelo?).")
     res = np.array(doc.image, dtype=np.float32, copy=True)
@@ -1212,24 +1213,75 @@ def _galeria(r, base_p, modo=None, lado=800, original=True):
     return r
 
 
+# Máscara de la comparación en curso (la pone _con_mascara, la usa _comparar): (m, descripción) o None.
+_MASCARA = {"m": None, "desc": None, "ctx": None, "spec": None}
+
+
+def _mascara_sas_fuera(doc):
+    """Si el usuario dejó una máscara de SASpro activa en la vista, los procesos de SASpro la respetarían y los candidatos
+    no serían comparables: se desactiva mientras dura la comparación. Devuelve el id para reponerla."""
+    mid = getattr(doc, "active_mask_id", None)
+    if mid:
+        try:
+            doc.active_mask_id = None
+        except Exception:
+            return None
+    return mid
+
+
 def _comparar(ctx, doc, grupo, lista, medir):
-    """lista: [(nombre, proceso, preset)]. medir(res_p) -> métricas. Devuelve r con candidatos y errores."""
+    """lista: [(nombre, proceso, preset)]. medir(res_p) -> métricas. Devuelve r con candidatos y errores.
+    Con máscara (parámetro 'mascara' de la *Candidatos), cada candidato se mezcla con la imagen de partida a través de
+    ella antes de medirlo y guardarlo."""
     h0 = M.huella(doc.image)
     _limpiar_grupo(grupo)
     r = {"vista": _nombre(doc), "candidatos": [], "errores": [], "recomendado": None, "motivo": ""}
+    mk = None
+    if _MASCARA["spec"] is not None:
+        import mascaras as _mc
+        mk, r["mascara"] = _mc.mascara_para(_MASCARA["ctx"] or ctx, doc, _MASCARA["spec"], _MASCARA["fuerza"],
+                                            _MASCARA["invertir"])
+    mid = _mascara_sas_fuera(doc)
+    if mid:
+        r["aviso_mascara_sas"] = ("La vista tenía una máscara de SASpro activa: se ha desactivado durante la comparación y se "
+                                  "ha vuelto a poner. Para comparar con máscara usa el parámetro 'mascara'.")
+    try:
+        _comparar_lista(ctx, doc, grupo, lista, medir, h0, r, mk)
+    finally:
+        if mid:
+            try:
+                doc.active_mask_id = mid
+            except Exception:
+                pass
+    return r
+
+
+def _comparar_lista(ctx, doc, grupo, lista, medir, h0, r, mk):
     for n, item in enumerate(lista, 1):
         nombre, proceso, preset = item[:3]
         funcion = item[3] if len(item) > 3 else LOCALES.get(proceso)
+        # '_mascara' en el preset: máscara propia de ese candidato (dict de crearMascara), p. ej. denoise solo en el cielo
+        preset = dict(preset or {})
+        masc_propia = preset.pop("_mascara", None)
+        pasadas = int(preset.pop("_pasadas", 1))
         t0 = time.perf_counter()
         try:
             if funcion is not None:           # cálculo propio en numpy: no toca la vista
-                res = _a_sas(funcion(_p(doc.image), **(preset or {})), doc.image)
+                res = _a_sas(funcion(_p(doc.image), **preset), doc.image)
             else:
-                res = _probar(ctx, doc, proceso, preset)
+                res = _probar(ctx, doc, proceso, preset, pasadas)
+            if masc_propia is not None:
+                import mascaras as _mc
+                mp, _ = _mc.mascara_para(ctx, doc, masc_propia)
+                res = _a_sas(_mc.mezclar(_p(doc.image), _p(res), mp), doc.image)
+            if mk is not None:
+                import mascaras as _mc
+                res = _a_sas(_mc.mezclar(_p(doc.image), _p(res), mk), doc.image)
+                nombre = f"{nombre} (con máscara)"
             m = medir(_p(res))
             cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "proceso": proceso, "preset": preset,
                                                      "huella_base": h0, "uid": getattr(doc, "uid", None),
-                                                     "metricas": m})
+                                                     "metricas": m, "mascara": r.get("mascara")})
             r["candidatos"].append({"id": cid, "metodo": nombre, "proceso": proceso, "preset": preset, "metricas": m,
                                     "segundos": _r(time.perf_counter() - t0, 1)})
         except Exception as e:
@@ -1237,7 +1289,6 @@ def _comparar(ctx, doc, grupo, lista, medir):
                 r.setdefault("omitidos", []).append(f"{nombre}: licencia o modelo no disponible en SyQon (código 4).")
             else:
                 r["errores"].append(f"{nombre}: {e}")
-    return r
 
 
 _HALO_CACHE = {}
@@ -1455,6 +1506,16 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
             lista.append((f"estirado MTF propio enlazado {m}", "estirado_mtf", {"mediana": float(m), "enlazado": True}))
             lista.append((f"estadístico de SASpro, función directa, enlazado {m}", "estirado_sas_directo",
                           {"mediana": float(m), "enlazado": True}))
+    # 25 nov 2026 (opciones del estadístico desde 1.24.5, las mismas de su CLI de 1.24.8): en luminancia conservando
+    # el color (luma_only, mezcla 0,6) y con compresión de altas luces (núcleos de galaxia, estrellas gordas).
+    if nuevo and p.shape[0] == 3 and medianas:
+        m1 = float(min(medianas))
+        lista.append((f"estirado estadístico en luminancia, color conservado {m1:g}", "stat_stretch",
+                      {"target_median": m1, "linked": True, **extra, "luma_only": True, "luma_mode": "rec709",
+                       "luma_blend": 0.6}))
+        lista.append((f"estirado estadístico enlazado {m1:g} + compresión de altas luces", "stat_stretch",
+                      {"target_median": m1, "linked": True, **extra, "hdr_compress": True, "hdr_amount": 0.15,
+                       "hdr_knee": 0.75}))
     if ghs:
         c = M.cielo(p)
         sp = float(c["cielo"])
@@ -1516,14 +1577,23 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
     return _galeria(r, p)
 
 
-def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt=None, nxt_fuerzas=None, syqon=None):
+RESIDUAL_MAX = 2.0     # residual_estructura: ~1–2 solo ruido (como en PixInsight)
+
+
+def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt=None, nxt_fuerzas=None, syqon=None,
+                    dobles=None):
     """Pasos L14/NL6: Cosmic Clarity denoise a varias fuerzas, NoiseXTerminator (RC Astro, si está), GraXpert denoise y
-    SyQon Prism Essential (solo lineal, si está) frente a no hacer nada: ruido del cielo y detalle que se pierde (< 10 %). La vista no cambia."""
+    SyQon Prism Essential (solo lineal, si está) frente a no hacer nada: ruido del cielo y detalle que se pierde. Gana el
+    que MÁS ruido quita perdiendo < 10 % del detalle (regla de Rafael, 25 nov 2026), sin dejar el fondo muerto. La vista
+    no cambia."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     lineal = M.lineal(p[:, ::8, ::8])
     if fuerzas is None:                     # en no lineal, más suave (como en Siril)
         fuerzas = (0.3, 0.5, 0.7) if lineal else (0.15, 0.25, 0.35)
+    # Rafael (25 nov 2026): mejor dos pasadas de 0,5 o 0,7 que una de 0,9 (y en Siril/PixInsight ya se probaba 0,3×2, 0,5×2).
+    if dobles is None:
+        dobles = (0.5, 0.7) if lineal else (0.25,)
     c0 = M.cielo(p)
     z = M.zonas_objeto_cielo(p)
     L0 = M.lum(p)
@@ -1542,12 +1612,24 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
     lista = [(f"Cosmic Clarity denoise {f}", "cosmic_clarity",
               {"mode": "denoise", "denoise_luma": float(f), "denoise_color": float(f), "create_new_view": False,
                "gpu": True}) for f in fuerzas or []]
+    lista += [(f"Cosmic Clarity denoise {f} ×2 pasadas", "cosmic_clarity",
+               {"mode": "denoise", "denoise_luma": float(f), "denoise_color": float(f), "create_new_view": False,
+                "gpu": True, "_pasadas": 2}) for f in dobles or []]
     if usar_nxt is None:
         usar_nxt = _rc.hay("nxt")
     if usar_nxt:
         if nxt_fuerzas is None:
-            nxt_fuerzas = (0.5, 0.7) if lineal else (0.3, 0.5)
+            nxt_fuerzas = (0.3, 0.5, 0.7) if lineal else (0.3, 0.5)
         lista += [(f"NoiseXTerminator {f:g}", "rc_nxt", {"denoise": float(f)}) for f in nxt_fuerzas]
+        lista += [(f"NoiseXTerminator {f:g} ×2 pasadas", "rc_nxt", {"denoise": float(f), "_pasadas": 2})
+                  for f in (dobles if lineal else (0.3,)) or []]
+    # Denoise fuerte solo en el cielo (como «NXT solo en zonas de poca señal» de PixInsight): la fuerza más alta de Cosmic
+    # Clarity a través de la máscara de cielo (25 nov 2026).
+    if fuerzas:
+        fmax = float(max(fuerzas))
+        lista.append((f"Cosmic Clarity denoise {fmax:g} solo en el cielo (máscara)", "cosmic_clarity",
+                      {"mode": "denoise", "denoise_luma": fmax, "denoise_color": fmax, "create_new_view": False,
+                       "gpu": True, "_mascara": {"tipo": "cielo", "gamma": 1.0, "suavizar": 4}}))
     if usar_graxpert:
         lista.append(("GraXpert denoise 0,5", "graxpert", {"op": "denoise", "strength": 0.5}))
     # SyQon Prism Essential (22 nov 2026): solo lineal (en no lineal syqon-cli da código 2).
@@ -1562,15 +1644,18 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
         L = M.lum(q)
         e1 = M.energia_brillante(L, zb, cpx) if zb is not None else None
         perd = max(0.0, 100.0 * (1.0 - e1 / e0)) if e0 and e1 is not None else None
+        re_ = M.residual_estructura(L0, L)
+        re_obj = M.residual_estructura(L0, L, zona=z["obj_px"]) if z["obj_px"].any() else None
         return {"ruido_rel": c["ruido_rel"], "ruido_vs_antes": _r(c["ruido"] / max(c0["ruido"], 1e-9), 3),
-                "detalle_perdido_pct": _r(perd, 1), "cielo": c["cielo"], **M.recortes(q)}
+                "detalle_perdido_pct": _r(perd, 1), "residual_estructura": _r(re_, 2),
+                "residual_estructura_objeto": _r(re_obj, 2), "cielo": c["cielo"], **M.recortes(q)}
 
     r = _comparar(ctx, d, "ruido", lista, medir)
     if omitidos:
         r.setdefault("omitidos", []).extend(omitidos)
-    # Recomendación (como en Siril): el que más ruido quita sin perder más del 2 % de detalle ni recortar; si ninguno,
-    # el que menos detalle pierde entre los que bajan el ruido ≥ 20 % y pierden < 10 %. En no lineal no bajar de la mitad
-    # del ruido (fondo plástico); en lineal, del 25 %.
+    # Recomendación (25 nov 2026, Rafael): el que MÁS ruido quita perdiendo < 10 % del detalle y sin recortar. Antes ganaba
+    # el más limpio con ≤ 2 % y en IC 1396 quedó grano ×3 frente a la Natural. En no lineal no bajar de la mitad del ruido
+    # (fondo plástico); en lineal, del 25 %.
     minimo = 0.25 if lineal else 0.5
     rec0 = M.recortes(p)
     for x in r["candidatos"]:
@@ -1582,10 +1667,22 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
         if m["altos_pct"] - rec0["altos_pct"] > 0.01 or m["ceros_pct"] - rec0["ceros_pct"] > 0.01:
             x["no_cumple"].append("recortes nuevos")
     ok = [x for x in r["candidatos"] if not x["no_cumple"] and x["metricas"]["detalle_perdido_pct"] is not None]
-    limpios = [x for x in ok if x["metricas"]["detalle_perdido_pct"] <= 2.0]
-    medios = [x for x in ok if x["metricas"]["detalle_perdido_pct"] < 10 and x["metricas"]["ruido_vs_antes"] <= 0.8]
-    mejor = (min(limpios, key=lambda x: x["metricas"]["ruido_vs_antes"]) if limpios
-             else min(medios, key=lambda x: x["metricas"]["detalle_perdido_pct"]) if medios else None)
+    # Residual (25 nov 2026, Rafael): lo quitado debe ser solo ruido (residual_estructura ≤ 2 en la imagen y en el
+    # objeto). Es la medida que manda: la de detalle de 2–8 px no ve lo que cambia un denoise por IA (NoiseX daba 0 %).
+    def solo_ruido(x):
+        m = x["metricas"]
+        return all(v is None or v <= RESIDUAL_MAX for v in (m.get("residual_estructura"), m.get("residual_estructura_objeto")))
+
+    for x in r["candidatos"]:
+        if not solo_ruido(x):
+            x["no_cumple"].append(f"lo quitado tiene estructura (residual {x['metricas'].get('residual_estructura')}, en el "
+                                  f"objeto {x['metricas'].get('residual_estructura_objeto')}; máx {RESIDUAL_MAX}): se lleva detalle")
+    ok = [x for x in ok if solo_ruido(x)]
+    validos = [x for x in ok if x["metricas"]["detalle_perdido_pct"] < 10]
+    # a igualdad de ruido (±3 %), el que menos detalle pierde
+    mejor = (min(validos, key=lambda x: (round(x["metricas"]["ruido_vs_antes"] / 0.03),
+                                         x["metricas"]["detalle_perdido_pct"])) if validos else None)
+
     if mejor:
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: deja el {round(100 * mejor['metricas']['ruido_vs_antes'])} % del ruido y "
@@ -2271,9 +2368,35 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
     return _galeria(r, p, None)
 
 
+# «Color suave» por tonos (25 nov 2026): lo que hizo la imagen objetivo de Rafael (Opus en SASpro, IC 405): bajar el rojo
+# (×0,85), subir azules (×1,35) y dorados (×1,3), conservando la luminancia. Ganancia de saturación por tono (grados HSV),
+# interpolada; es una opción más para elegir a la vista, no un método fijo.
+_TONOS_SUAVE = [(0, 0.85), (20, 0.95), (40, 1.3), (60, 1.2), (120, 1.0), (180, 1.15), (220, 1.35), (260, 1.3),
+                (300, 1.0), (340, 0.85), (360, 0.85)]
+
+
+def _saturar_tonos(p, k=0.5, fondo=None, tonos=None):
+    """c' = L + g(tono)·(1 + k·w)·(c − L): g por tono (_TONOS_SUAVE), w la rampa del cielo; ningún canal sale de 0–1."""
+    import mascaras as _mc
+    tab = np.asarray(tonos or _TONOS_SUAVE, dtype=np.float32)
+    h, _s = _mc._tono(p)
+    gt = np.interp(h, tab[:, 0], tab[:, 1]).astype(np.float32)
+    L = M.lum(p)[None]
+    w = np.clip((L - fondo) / 0.1, 0, 1) if fondo is not None else 1.0
+    g = (1.0 + (gt[None] * (1.0 + float(k)) - 1.0) * w)
+    d = p - L
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tope = np.where(d < 0, L / np.maximum(-d, 1e-9), np.where(d > 0, (1 - L) / np.maximum(d, 1e-9), np.inf)).min(axis=0)
+    g = np.minimum(g, np.maximum(0.98 * tope, 0.0)[None])
+    return np.clip(L + g * d, 0, 1).astype(np.float32)
+
+
+LOCALES["saturar_tonos"] = _saturar_tonos
+
+
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5), proteger_cielo=True,
                          dominante_max=5.0, ceros_max=0.5, satchroma=(0.25, 0.5), sat_max=0.80, tipo=None,
-                         con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0)):
+                         con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0), suave=(0.0, 0.25, 0.5)):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, también a través de una máscara
     de luminancia (con_mascara; la recomendada en nebulosas), y con SatChroma de SASpro (croma Lab, ganancia uniforme
     1 + k); mide saturación del objeto y del cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que
@@ -2310,6 +2433,9 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     masc = list(con_mascara or []) if (neb or tipo is None) else []
     lista += [(f"saturar +{k:g} con máscara de luminancia", "saturar_mascara", {"k": float(k), "fondo": fondo},
                (lambda q, k, fondo: M.saturar(q, k, fondo, mascara=True))) for k in masc]
+    # Color suave por tonos (rojo ×0,85, dorado ×1,3, azul ×1,35) a varias cantidades: suave=None para quitarlo.
+    lista += [(f"color suave por tonos +{k:g} (rojo ×0,85, dorado ×1,3, azul ×1,35)", "saturar_tonos",
+               {"k": float(k), "fondo": fondo}) for k in (suave or [])]
     lista += [(f"SatChroma croma ×{1 + k:g}", "satchroma",
                {"mode": 1, "strength": 1.0,
                 "points": [[i / 6.0, 1.0 + float(k)] for i in range(7)]}) for k in (satchroma or [])]
@@ -2340,6 +2466,10 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     # En nebulosas, la recomendada es la de máscara si alguna cumple (como en PixInsight); la sin máscara, discreta.
     if neb and any(x["proceso"] == "saturar_mascara" for x in ok):
         ok = [x for x in ok if x["proceso"] == "saturar_mascara"]
+    suaves = [x["id"] for x in r["candidatos"] if x["proceso"] == "saturar_tonos" and not x["no_cumple"]]
+    if suaves:
+        r["color_suave"] = ("Opciones «color suave por tonos» (como la imagen objetivo): " + ", ".join(suaves) +
+                            ". Enséñalas con previa junto a la recomendada para que elija el usuario.")
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["sat_objeto"] or 0)
         mm = mejor["metricas"]
@@ -2358,9 +2488,12 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     return _galeria(r, p)
 
 
-def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.07, p90_variantes=(0.05, 0.10)):
-    """NL estrellas: estira la vista de solo estrellas. Compara Star Stretch de SASpro a varios factores y un arcsinh
-    propio que lleva el p90 de los píxeles de estrella a ~p90_objetivo. La vista no cambia (aplicarCandidato)."""
+def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.07, p90_variantes=(0.035, 0.05, 0.10),
+                     halos=(1, 2)):
+    """NL estrellas: estira la vista de solo estrellas. Compara Star Stretch de SASpro a varios factores, un arcsinh
+    propio que lleva el p90 de los píxeles de estrella a ~p90_objetivo (y variantes más suaves = estrellas más pequeñas)
+    y el arcsinh del objetivo + Halo-B-Gon (reducción 'halos') para recoger el halo. Mide el tamaño (área visible y
+    FWHM medio). La vista no cambia (aplicarCandidato)."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     Lb = M.lum(p)
@@ -2384,12 +2517,19 @@ def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.
     # arcsinh (p90 0,10) hinchaba HD 206267 y daba un 8 % de aporte. Varios arcsinh y el objetivo en 0,07.
     for p90 in sorted({float(p90_objetivo), *[float(x) for x in (p90_variantes or [])]}):
         lista.append((f"arcsinh propio (p90 estrellas {p90:g})", "asinh_propio", {"p90": p90}, asinh))
+    # 25 nov 2026 (IC 1396 Natural en SAS: estrellas de 7,0 px frente a 6,4 de la referencia): arcsinh + Halo-B-Gon.
+    for red in (halos or []):
+        lista.append((f"arcsinh propio (p90 {float(p90_objetivo):g}) + Halo-B-Gon {int(red)}", "asinh_halo",
+                       {"p90": float(p90_objetivo), "red": int(red)},
+                       (lambda q, p90, red: _halo_b_gon_mascara(asinh(q, p90), reduction=red, crecer=6, suavizar=2))))
 
     def medir(q):
         L = M.lum(q)
         v = L[mk]
+        fondo = float(np.median(L[~mk][::7]))
         return {"p50_estrellas": _r(float(np.percentile(v, 50)), 4), "p90_estrellas": _r(float(np.percentile(v, 90)), 4),
-                "fondo": _r(float(np.median(L[~mk][::7])), 5), **M.recortes(q)}
+                "fondo": _r(fondo, 5), "area_visible_pct": _r(100.0 * float((L > fondo + 0.1).mean()), 3),
+                **M.recortes(q)}
 
     r = _comparar(ctx, d, "estrellas", lista, medir)
     if r["candidatos"]:
@@ -2398,7 +2538,14 @@ def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.
         r["recomendado"] = mejor["id"]
         r["motivo"] = (f"{mejor['metodo']}: p90 de las estrellas {mejor['metricas']['p90_estrellas']}, "
                        f"{mejor['metricas']['altos_pct']} % a 1. Mira la previa: estrellas sin halos ni núcleos quemados.")
-    r["leyenda"] = "p50/p90_estrellas: brillo de los píxeles de estrella. fondo: mediana fuera de ellas. La vista NO ha cambiado."
+    if r["candidatos"]:
+        menores = sorted((x for x in r["candidatos"] if (x["metricas"].get("altos_pct") or 0) < 0.05),
+                         key=lambda x: x["metricas"]["area_visible_pct"] or 0)[:3]
+        r["mas_pequenas"] = [x["id"] for x in menores]
+    r["leyenda"] = ("p50/p90_estrellas: brillo de los píxeles de estrella. fondo: mediana fuera de ellas. area_visible_pct: "
+                    "% de la imagen con estrellas visibles (> fondo + 0,1): menos = estrellas más pequeñas. mas_pequenas: "
+                    "las tres de menor tamaño sin núcleos quemados, para enseñarlas con previa si las estrellas se ven "
+                    "grandes. La vista NO ha cambiado.")
     return _galeria(r, p)
 
 
@@ -2494,7 +2641,7 @@ BXT_RANGOS = {"nebulosa": {"stars": 0.30, "ns": (0.25, 0.45, 0.65)},
 
 
 def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, stars=None, halos=0.0,
-                            correct_only=True, syqon=None, syqon_aplicacion=0.5):
+                            correct_only=True, syqon=None, syqon_aplicacion=0.5, cosmic=(0.5, 0.8)):
     """L11/L13 deconvolución con BlurXTerminator (RC Astro, con su programa rc-astro), en lineal: solo corrección y
     una rejilla de nonstellar (rango por tipo de campo, como bxtCandidatos de PixInsight) frente a no hacer nada. Mide
     FWHM de las estrellas, anillos oscuros alrededor de las brillantes (ringing), «gusanos» (alta frecuencia del cielo
@@ -2504,7 +2651,9 @@ def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, s
     if syqon is None:
         syqon = _syqon.hay("parallax-nano")
     hay_bxt = _rc.hay("bxt")
-    if not hay_bxt and not syqon:
+    # 25 nov 2026: sin BXT ni SyQon, al menos Cosmic Clarity sharpen (la deconvolución por IA gratuita de SASpro, con PSF
+    # automática), como candidato más; con BXT también, para comparar.
+    if not hay_bxt and not syqon and not cosmic:
         e = _rc.estado()
         raise RuntimeError("BlurXTerminator no está disponible: " + (
             "no encuentro rc-astro (RC Astro CLI)." if not e.get("exe") else "sin licencia válida en rc-astro."))
@@ -2547,7 +2696,18 @@ def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, s
     if syqon:
         lista.append((f"SyQon Parallax Nano corrección + deblur, aplicación {float(syqon_aplicacion):g} (experimental)",
                       "syqon_parallax", {"aplicacion": float(syqon_aplicacion), "deblur": True}))
+    lista += [(f"Cosmic Clarity sharpen {float(a):g} (PSF automática)", "cosmic_clarity",
+               {"mode": "sharpen", "sharpening_mode": "Both", "auto_psf": True, "stellar_amount": float(a),
+                "nonstellar_amount": float(a), "create_new_view": False}) for a in (cosmic or [])]
+    if not hay_bxt:
+        e = _rc.estado()
+        aviso_bxt = ("BlurXTerminator no está disponible (" + ("no encuentro rc-astro" if not e.get("exe") else
+                     "sin licencia válida en rc-astro") + "): comparo las alternativas de SASpro.")
+    else:
+        aviso_bxt = None
     r = _comparar(ctx, d, "deconv", lista, medir)
+    if aviso_bxt:
+        r["aviso_bxt"] = aviso_bxt
     m0 = medir(p)
     r["antes"] = m0
     ref = next((x for x in r["candidatos"] if x["preset"] == ref_preset), None)
@@ -2571,7 +2731,10 @@ def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, s
     con_ns = [x for x in ok if not x["preset"].get("correct_only") and x["proceso"] == "rc_bxt"]
     if not con_ns:                       # sin BXT (o ningún BXT cumple): Parallax si cumple, antes que solo corrección
         con_ns = [x for x in ok if x["proceso"] == "syqon_parallax"]
-    mejor = (max(con_ns, key=lambda x: x["preset"].get("nonstellar", 0)) if con_ns else
+    if not con_ns:                       # y si no, Cosmic Clarity sharpen: el de menor FWHM sin ringing
+        cc = [x for x in ok if x["proceso"] == "cosmic_clarity"]
+        con_ns = [min(cc, key=lambda x: x["metricas"]["fwhm_px"] or 99)] if cc else []
+    mejor = (max(con_ns, key=lambda x: x["preset"].get("nonstellar", x["preset"].get("stellar_amount", 0))) if con_ns else
              next((x for x in ok if x["preset"].get("correct_only")), None))
     if mejor:
         r["recomendado"] = mejor["id"]
@@ -3045,3 +3208,30 @@ LISTA.update(_mascaras.LISTA_MASCARAS)
 import utilidades as _utilidades  # noqa: E402
 
 LISTA.update(_utilidades.LISTA_UTILIDADES)
+
+
+# --- Máscara en las comparaciones (25 nov 2026) ----------------------------------------------------------------------
+# Las comparaciones no lineales y la deconvolución aceptan 'mascara' (vista o {tipo, ...}), 'mascara_fuerza' (0–1) y
+# 'mascara_invertir'. El estirado y el gradiente no: en lineal, una máscara deja saltos al estirar.
+CON_MASCARA = ("ruidoCandidatos", "nucleoCandidatos", "contrasteCandidatos", "saturacionCandidatos", "nitidezCandidatos",
+               "deconvolucionCandidatos", "halosCandidatos", "reducirEstrellasCandidatos", "fondoCandidatos")
+
+
+def _con_mascara(f):
+    import functools
+
+    @functools.wraps(f)
+    def g(ctx, *a, mascara=None, mascara_fuerza=1.0, mascara_invertir=False, **k):
+        if mascara is None:
+            return f(ctx, *a, **k)
+        _MASCARA.update(spec=mascara, fuerza=mascara_fuerza, invertir=mascara_invertir, ctx=ctx)
+        try:
+            return f(ctx, *a, **k)
+        finally:
+            _MASCARA.update(spec=None, ctx=None)
+    return g
+
+
+for _n in CON_MASCARA:
+    if _n in LISTA:
+        LISTA[_n] = _con_mascara(LISTA[_n])

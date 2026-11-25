@@ -850,7 +850,19 @@ def _capa(ctx, vista, forma):
     return c.astype(np.float32)
 
 
-def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), con_oiii=True, ruido_max=1.25,
+_MARGEN_RG = {"emision": 1.8, "galaxia": 1.3, "reflexion": 1.2, "cumulo": 1.2}
+
+
+def _tipo_amplio(tipo):
+    t = str(tipo or "").lower()
+    for clave, palabras in (("galaxia", ("galax",)), ("reflexion", ("reflex",)), ("cumulo", ("cúmulo", "cumulo")),
+                            ("emision", ("emisi", "hii", "nebulosa", "remanente", "planetaria"))):
+        if any(p in t for p in palabras):
+            return clave
+    return None
+
+
+def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 0.75, 1.0), con_oiii=True, ruido_max=1.25,
                        tipo=None, motivo=None, forzar=False):
     """Paso 10 lineal: compara cómo añadir Hα (y OIII), vistas mono alineadas, al RGB lineal 'vista'. La vista no
     cambia: aplicarCandidato(id).
@@ -948,7 +960,8 @@ def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), 
         x["metricas"] = {"nebulosa_halfa_ganada_pct": _r(gan_h, 1), "nebulosa_oiii_ganada_pct": _r(gan_o, 1),
                          "ruido_cielo_x": _r(ruido_x, 3), "dominante_cielo_pct": m["dominante_cielo_pct"],
                          "color_estrellas_cambio_pct": _r(cambio, 1),
-                         "objeto_rg_x": _r(rg_x, 2) if rg_x is not None else None}
+                         "objeto_rg_x": _r(rg_x, 2) if rg_x is not None else None,
+                         "objeto_rg": _r(m["objeto_rg"], 2) if m.get("objeto_rg") is not None else None}
         x["no_cumple"] = fal
     ok = [x for x in r["candidatos"] if not x["no_cumple"]
           and x["metricas"]["nebulosa_halfa_ganada_pct"] + x["metricas"]["nebulosa_oiii_ganada_pct"] >= 5]
@@ -957,6 +970,16 @@ def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), 
         # Por encima de ×1 se exagera el Hα frente a lo que dicen las estrellas: en IC 405 (19 nov 2026) Qwen eligió
         # ×1,5, la mayor ganancia, y el rojo salió R/G 6 frente a 1,8–2,5 de las referencias. Se recomienda hasta ×1.
         ok = [x for x in ok if fuerza.get(x["id"], 0) <= 1.0]
+    # 25 nov 2026 (IC 405 en SAS, v7b: R/G 2,74, demasiado roja; la imagen objetivo es un color «suave»): margen de
+    # cambio del R/G del objeto por tipo. Por encima se puede elegir, pero no se recomienda.
+    margen = _MARGEN_RG.get(_tipo_amplio(tipo), 1.6)
+    suaves = [x for x in ok if (x["metricas"].get("objeto_rg_x") or 1.0) <= margen]
+    for x in ok:
+        if x not in suaves:
+            x["aviso"] = f"el R/G del objeto cambia ×{x['metricas']['objeto_rg_x']} (margen ×{margen} para este tipo)"
+    if suaves:
+        ok = suaves
+    r["margen_rg_x"] = margen
     if ok:
         mejor = max(ok, key=lambda x: x["metricas"]["nebulosa_halfa_ganada_pct"] + x["metricas"]["nebulosa_oiii_ganada_pct"])
         mm = mejor["metricas"]
@@ -1086,6 +1109,10 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
         todas["SHO"] = ("SHO", lambda: (Sa, Ha, Oa))
         todas["Foraxx"] = ("Foraxx (R = SII+Hα, G = Hα·OIII, B = OIII)",
                            lambda: (np.clip(0.5 * (Sa + Ha), 0, 1), np.clip(np.sqrt(np.maximum(Ha * Oa, 0)), 0, 1), Oa))
+        # 25 nov 2026: dos más de las habituales (Perfect Palette Picker de SASpro las lista): HSO y SHO suave (verde
+        # menos dominante, el dorado sale solo sin SCNR fuerte).
+        todas["HSO"] = ("HSO (R = Hα, G = SII, B = OIII)", lambda: (Ha, Sa, Oa))
+        todas["SHO_suave"] = ("SHO suave (G = 0,7·Hα + 0,3·OIII)", lambda: (Sa, 0.7 * Ha + 0.3 * Oa, Oa))
     # Natural (IC 1396, 26 oct 2026, la mejor versión de Rafael): las cuatro rayas con su color aproximado. Hα y SII rojos,
     # OIII y Hβ turquesa (el Hβ da señal limpia donde el OIII es flojo). Sin Hβ, el OIII hace su papel; sin SII, el Hα.
     Oan = _igualar_difusa(O, Ha, cpx)
