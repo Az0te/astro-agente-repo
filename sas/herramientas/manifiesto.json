@@ -2192,6 +2192,10 @@
      "forzar": {
       "type": "boolean",
       "description": "Separar aunque la vista ya esté sin estrellas (se separó antes o < 0,5 % de píxeles de estrella). Por defecto false: separar otra vez solo saca restos; recombina la capa que ya tienes."
+     },
+     "patron": {
+      "type": "boolean",
+      "description": "Solo con starx: quita antes la malla de 2 px que crece con las estrellas brillantes (capas de dual band). Por defecto true: sin esto StarX deja anillos con malla en las brillantes."
      }
     }
    }

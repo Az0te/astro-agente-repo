@@ -3248,10 +3248,11 @@ def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucio
     return r
 
 
-def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False, forzar=False):
+def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False, forzar=False, patron=True):
     """L15: separa estrellas con StarNet o DarkStar (remove_stars), SyQon (syqon_starless) o StarXTerminator de RC Astro
     (motor starx). Crea la vista de estrellas aparte y deja la starless en la vista. No separa una imagen que ya está
-    sin estrellas (salvo forzar)."""
+    sin estrellas (salvo forzar). Con StarX, patron (por defecto) quita antes la malla de 2 px que crece con las
+    estrellas brillantes; sin eso StarX deja anillos con malla en su sitio."""
     d = _doc(ctx, vista)
     if not forzar:
         # IC 1396 (25 nov 2026): se volvió a pasar StarX sobre la paleta ya sin estrellas; la capa nueva traía solo
@@ -3294,7 +3295,14 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False,
         return r
     if motor in ("starx", "sxt", "starxterminator"):
         t0 = time.perf_counter()
-        sl, est = _rc.correr(_p(d.image), "sxt", unscreen=bool(unscreen))
+        p0 = _p(d.image)
+        # IC 1396 Natural9 (25 nov 2026): en las capas de dual band la malla de 2 px crece con la estrella; StarX la
+        # tomaba por nebulosa y dejaba en cada estrella brillante un disco con malla y anillo (OIII, SII, Hβ; malla ×3–4).
+        # Quitada antes en proporción a la señal, el anillo desaparece. Las estrellas salen del original menos la starless.
+        ent = np.stack([M.patron_2px_relativo(c) for c in p0]) if patron else p0
+        sl, est = _rc.correr(ent, "sxt", unscreen=bool(unscreen))
+        if patron and not unscreen:
+            est = np.clip(p0 - sl, 0.0, 1.0)
         d.apply_edit(_a_sas(sl, d.image), metadata={}, step_name="RC Astro StarXTerminator (sin estrellas)")
         m = dict(_meta(d))
         m.pop("file_path", None)
@@ -3303,6 +3311,7 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False,
         ctx.open_new_document(_a_sas(est, d.image), metadata=m, name=nombre)
         _anotar_estrellas(ctx, antes, d)
         r = {"proceso": "rc_sxt", "vista": _nombre(d), "segundos": _r(time.perf_counter() - t0, 1), "cambio": True,
+             "patron_2px_relativo": bool(patron),
              "estrellas": "pantalla (unscreen)" if unscreen else "original − sin estrellas"}
         r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
         r["vista_activa"] = _reactivar(ctx, d)

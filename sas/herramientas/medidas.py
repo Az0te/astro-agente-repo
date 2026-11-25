@@ -677,6 +677,18 @@ def patron_2px(x, r=12):
     return total
 
 
+def patron_2px_relativo(x, r=3):
+    """x sin el patrón de 2 px proporcional a la señal: alrededor de las estrellas brillantes de una capa de dual band
+    (OSC) la malla crece con la estrella y patron_2px (ventana de 12 px, aditivo) no la ve. Se estima sobre x / fondo
+    suave y se vuelve a multiplicar. Delante de StarX evita los anillos con malla de las estrellas brillantes (IC 1396
+    Natural9, 25 nov 2026: malla ×3–4 alrededor de la estrella → ×1 con esto)."""
+    from scipy.ndimage import gaussian_filter
+    x = np.asarray(x, dtype=np.float32)
+    s = gaussian_filter(x, 2.0) + 1e-5
+    y = x / s
+    return np.clip((y - patron_2px(y, r)) * s, 0.0, 1.0).astype(np.float32)
+
+
 def textura(L, obj, cielo_px=None):
     """Textura del objeto en una imagen estirada, por escalas (lo que hace «suave y con contraste»):
     grano = σ de la escala fina (L − caja 3×3) en el objeto, relativo a su nivel; contraste_medio = σ de la banda 4–32 px;
