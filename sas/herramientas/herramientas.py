@@ -3122,9 +3122,8 @@ def calibrarColor(ctx, vista=None, modo="star", umbral=50.0):
 
 
 def _pct_estrellas(d):
-    """% de píxeles de estrella (picos compactos > 5σ): ~0 en una starless."""
-    p = _p(d.image)[:, ::2, ::2]
-    return float(M.zonas_objeto_cielo(p)["est_px"].mean() * 100.0)
+    """% de píxeles de estrella (grupos de picos > 5σ): < 0,5 en una starless (ver medidas.pct_estrellas)."""
+    return M.pct_estrellas(_p(d.image)[:, ::2, ::2])
 
 
 def _gemelas_con_estrellas(ctx, d):
@@ -3249,10 +3248,24 @@ def resolverAstrometria(ctx, vista=None, ra=None, dec=None, escala=None, solucio
     return r
 
 
-def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False):
+def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False, forzar=False):
     """L15: separa estrellas con StarNet o DarkStar (remove_stars), SyQon (syqon_starless) o StarXTerminator de RC Astro
-    (motor starx). Crea la vista de estrellas aparte y deja la starless en la vista."""
+    (motor starx). Crea la vista de estrellas aparte y deja la starless en la vista. No separa una imagen que ya está
+    sin estrellas (salvo forzar)."""
     d = _doc(ctx, vista)
+    if not forzar:
+        # IC 1396 (25 nov 2026): se volvió a pasar StarX sobre la paleta ya sin estrellas; la capa nueva traía solo
+        # restos y se recombinó en lugar de las estrellas buenas del RGB, y quedaron los anillos de las brillantes.
+        ya = [v["nombre"] for v in _ESTRELLAS.values() if v.get("de") == _nombre(d)]
+        pct = _pct_estrellas(d)
+        if ya or pct < 0.5:
+            capas = [v["nombre"] for v in _ESTRELLAS.values() if not v.get("recombinada")]
+            raise RuntimeError(
+                f"'{_nombre(d)}' ya está sin estrellas (" + (f"se separó antes: {', '.join(ya)}" if ya else
+                f"{pct:.2f} % de píxeles de estrella; una con estrellas da > 1 %") + "). Separar otra vez solo saca "
+                "restos y ruido. Recombina la capa de estrellas que ya tienes" +
+                (f" ({', '.join(capas)})" if capas else "") + " con recombinarEstrellas. forzar: true solo si de verdad "
+                "quedan estrellas enteras.")
     if lineal is None:
         lineal = M.lineal(_p(d.image)[:, ::8, ::8])
     antes = {id(x) for x in _docs(ctx)}

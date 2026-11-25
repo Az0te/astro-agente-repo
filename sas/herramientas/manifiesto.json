@@ -2188,6 +2188,10 @@
      "lineal": {
       "type": "boolean",
       "description": "Si la imagen es lineal (por defecto se detecta)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Separar aunque la vista ya esté sin estrellas (se separó antes o < 0,5 % de píxeles de estrella). Por defecto false: separar otra vez solo saca restos; recombina la capa que ya tienes."
      }
     }
    }

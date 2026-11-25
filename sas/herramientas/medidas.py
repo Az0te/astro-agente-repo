@@ -419,6 +419,19 @@ def zonas_objeto_cielo(p, S=64):
             "est_px": est, "S": S, "a_px": a_px}
 
 
+def pct_estrellas(p):
+    """% de píxeles de estrella para decidir si una imagen es starless: picos > 5σ (o > p99,5 del paso alto) que forman
+    grupo (≥ 3 píxeles en su 3×3). Los picos sueltos de ruido, la rejilla de 2 px y los anillos que deja StarX en lineal
+    no cuentan: en IC 1396 (25 nov 2026) contar todos los picos dio un 2,1 % en una starless (0,18 % así) y
+    recombinarEstrellas rechazó las estrellas buenas. Con estrellas: 2,3–2,4 %."""
+    c = cielo(p)
+    L = lum(p)
+    hp = L - _caja(L, 5)
+    est = hp > max(5 * max(c["ruido"], 1e-6), float(np.percentile(hp.ravel()[::7], 99.5)))
+    est &= _caja(est.astype(np.float32), 1) * 9 >= 2.5
+    return float((_caja(est.astype(np.float32), 2) > 0).mean() * 100.0)
+
+
 def zona_brillante(L, z):
     """Parte brillante del objeto (celdas de objeto entre la mediana y el p97: disco, sin núcleo) sin estrellas. Ahí el
     detalle de 2–8 px domina sobre el ruido (como _zona_brillante de Siril)."""
