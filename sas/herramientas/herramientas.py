@@ -3303,9 +3303,15 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False,
         ent = np.stack([M.patron_2px_relativo(c) for c in p0]) if patron else p0
         sl, est = _rc.correr(ent, "sxt", unscreen=bool(unscreen))
         if patron and not unscreen:
-            # La starless no pasa del original (StarX la sube hasta 2e-4 en algún píxel): así la suma es exacta.
-            sl = np.minimum(sl, p0)
-            est = np.clip(p0 - sl, 0.0, 1.0)
+            # La malla relativa no sale entera en el perfil de una estrella brillante (σ 2 px): StarX la deja en la
+            # starless como un disco de malla fina. Segunda pasada aditiva de ventana 3 sobre la starless, ya plana:
+            # malla del anillo 0,015 → 0,0004 y el grano fino cambia un 1,6 % (OIII de IC 1396, 25 nov 2026).
+            sl = np.clip(np.stack([c - M.patron_2px(c, 3) for c in np.asarray(sl, dtype=np.float32).reshape(ent.shape)]), 0.0, 1.0)
+            # Estrellas = entrada sin malla − starless. NO recortar la starless al original píxel a píxel: el original
+            # aún lleva la malla y el ruido, y min(starless, original) volvía a meter la malla junto a las estrellas
+            # brillantes (0,002 → 0,14–0,22) y oscurecía el fondo (se capaba el 23–34 % del cielo, el 43–48 % del
+            # anillo): anillo oscuro con malla en la paleta final (IC 1396 SASpro, 25 nov 2026).
+            est = np.clip(ent - sl, 0.0, 1.0)
         d.apply_edit(_a_sas(sl, d.image), metadata={}, step_name="RC Astro StarXTerminator (sin estrellas)")
         m = dict(_meta(d))
         m.pop("file_path", None)
@@ -3315,7 +3321,7 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False,
         _anotar_estrellas(ctx, antes, d)
         r = {"proceso": "rc_sxt", "vista": _nombre(d), "segundos": _r(time.perf_counter() - t0, 1), "cambio": True,
              "patron_2px_relativo": bool(patron),
-             "estrellas": "pantalla (unscreen)" if unscreen else "original − sin estrellas"}
+             "estrellas": "pantalla (unscreen)" if unscreen else ("entrada sin malla − sin estrellas" if patron else "original − sin estrellas")}
         r["vistas_nuevas"] = [_nombre(x) for x in _docs(ctx) if id(x) not in antes]
         r["vista_activa"] = _reactivar(ctx, d)
         return r

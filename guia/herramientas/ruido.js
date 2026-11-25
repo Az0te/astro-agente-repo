@@ -835,18 +835,30 @@ function separarEstrellas(viewId, o) {
   var starsId = null;
   ImageWindow.windows.forEach(function (x) { if (before.indexOf(x.mainView.id) < 0) starsId = x.mainView.id; });
   if (!starsId) throw new Error("No se encontró la capa de estrellas que crea StarX");
-  if (patron) {                    // estrellas = original − starless
-    var stV = View.viewById(starsId), imS = stV.image, WS = imS.width, HS = imS.height, RS = new Rect(0, 0, WS, HS);
-    var s0 = new Float32Array(WS * HS), s1 = new Float32Array(WS * HS);
-    // La starless no pasa del original (StarX la sube hasta 2e-4 en algún píxel): así la suma es exacta.
-    stV.beginProcess(); v.beginProcess();
-    for (var cS = 0; cS < imS.numberOfChannels; ++cS) {
-      src.image.getSamples(s0, RS, cS); v.image.getSamples(s1, RS, cS);
-      for (var iS = 0; iS < s0.length; ++iS) { if (s1[iS] > s0[iS]) s1[iS] = s0[iS]; s0[iS] -= s1[iS]; }
-      imS.setSamples(s0, RS, cS); v.image.setSamples(s1, RS, cS);
+  // La malla relativa no sale entera en el perfil de una estrella brillante: StarX la deja en la starless como un disco
+  // de malla fina. Segunda pasada aditiva de ventana 3 sobre la starless, ya plana (malla del anillo 0,015 → 0,0004,
+  // grano fino −1,6 %; OIII de IC 1396 en SASpro, 25 nov 2026). Lo quitado pasa a la capa de estrellas, así que la
+  // suma sigue siendo la entrada sin malla.
+  if (patron && !S.unscreen) {
+    var vS = View.viewById(starsId), imS = vS.image, imL = v.image, W2 = imL.width, H2 = imL.height, R2 = new Rect(0, 0, W2, H2);
+    var bL = new Float32Array(W2 * H2), bS = new Float32Array(W2 * H2);
+    v.beginProcess(); vS.beginProcess();
+    for (var c2 = 0; c2 < imL.numberOfChannels; ++c2) {
+      imL.getSamples(bL, R2, c2); imS.getSamples(bS, R2, Math.min(c2, imS.numberOfChannels - 1));
+      var pt2 = rdPatron2px(bL, W2, H2, 3);
+      for (var j2 = 0; j2 < bL.length; ++j2) {
+        var nl = Math.min(1, Math.max(0, bL[j2] - pt2[j2]));
+        bS[j2] = Math.min(1, Math.max(0, bS[j2] + bL[j2] - nl)); bL[j2] = nl;
+      }
+      imL.setSamples(bL, R2, c2);
+      if (c2 < imS.numberOfChannels) imS.setSamples(bS, R2, c2);
     }
-    v.endProcess(); stV.endProcess();
+    v.endProcess(); vS.endProcess();
   }
+  // Con la malla quitada, la capa de estrellas de StarX ya es entrada sin malla − starless. NO recortar la starless al
+  // original píxel a píxel: el original aún lleva la malla y el ruido, y min(starless, original) volvía a meter la malla
+  // junto a las estrellas brillantes (0,002 → 0,14–0,22) y oscurecía el cielo (anillo oscuro con malla en la paleta
+  // final; IC 1396 SASpro, 25 nov 2026).
   if (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
     ImageWindow.windowById(starsId).mainView.id = o.nuevasEstrellas; starsId = o.nuevasEstrellas;
   }
@@ -858,6 +870,7 @@ function separarEstrellas(viewId, o) {
   // Comprobaciones: suma exacta (lineal) y que la capa de estrellas no se lleve estructura extensa.
   var a = rdLum(src), sl = rdLum(v), st = rdLum(View.viewById(starsId)), maxErr = 0, n = a.L.length;
   for (var i = 0; i < n; i += 3) {
+    if (patron) break;             // la suma reproduce la entrada SIN malla, no el original
     var rec = lineal ? sl.L[i] + st.L[i] : 1 - (1 - sl.L[i]) * (1 - st.L[i]);
     maxErr = Math.max(maxErr, Math.abs(rec - a.L[i]));
   }

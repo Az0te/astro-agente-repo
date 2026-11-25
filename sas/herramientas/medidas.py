@@ -328,9 +328,14 @@ def elegir_gradiente(c, objeto_campo_pct, tipo=None):
     # Nebulosa o polvo que llena el campo (IC 1396, 16 nov 2026): las medidas de cielo de arriba usan celdas que aquí son
     # nebulosa y no ven la diferencia. Lo que más se pareció a SRGC fue SRGC + plano en celdas oscuras y, sin SRGC, el
     # plano en celdas oscuras; si no se comen nada, se prefieren.
+    # Pero no si deja bastante más gradiente que el mejor por medidas: en las capas débiles de IC 1396 (OIII, SII, Hβ,
+    # 25 nov 2026) el plano en celdas oscuras dejaba el 83–123 % del gradiente (más que el original) y el polinomio 1,
+    # sin llevarse nada del objeto, el 15–57 %.
     if extenso and not galaxia:
+        r_mejor = resid(mejor) if mejor else 9
         for nombre in ("SRGC + polinomio celdas oscuras", "Polinomio celdas oscuras"):
-            x = next((x for x in c if x.get("metodo") == nombre and eat(x) <= tope and absc(x) < 0.3), None)
+            x = next((x for x in c if x.get("metodo") == nombre and eat(x) <= tope and absc(x) < 0.3
+                      and resid(x) < 1 and resid(x) <= r_mejor + 0.15), None)
             if x is not None:
                 mejor = x
                 break

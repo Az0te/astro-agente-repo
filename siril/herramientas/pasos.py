@@ -1784,9 +1784,18 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
                     ent = _a_siril(np.stack([_patron_2px_relativo(c) for c in a0]), crudo.dtype).reshape(crudo.shape)
                 out, texto = _rcastro(siril, ent, "sxt", ["--stars"])
                 sl = out.pop("salida")
-                if patron:   # la starless no pasa del original (StarX la sube hasta 2e-4): suma exacta con la capa
-                    sl = _a_siril(np.minimum(_de_siril(sl), _de_siril(crudo)), crudo.dtype).reshape(crudo.shape)
-                st = None if patron else (next(iter(out.values())) if out else None)
+                st = next(iter(out.values())) if out else None
+                if patron:
+                    # La malla relativa no sale entera en el perfil de una estrella brillante: StarX la deja en la
+                    # starless como un disco de malla fina. Segunda pasada aditiva de ventana 3 sobre la starless, ya
+                    # plana: malla del anillo 0,015 → 0,0004, grano fino −1,6 % (OIII de IC 1396 en SASpro, 25 nov 2026).
+                    s0 = _de_siril(sl).reshape(np.shape(_de_siril(ent)))
+                    s0 = np.clip(np.stack([c - _patron_2px(c, 3) for c in s0.reshape(-1, *s0.shape[-2:])]), 0, 1)
+                    sl = _a_siril(s0, crudo.dtype).reshape(crudo.shape)
+                    # estrellas = entrada sin malla − starless. NO recortar la starless al original: el original
+                    # lleva la malla y el ruido, y min(starless, original) volvía a meter la malla junto a las estrellas
+                    # brillantes y oscurecía el cielo (anillo oscuro con malla; IC 1396 SASpro, 25 nov 2026).
+                    st = _a_siril(np.clip(_de_siril(ent) - _de_siril(sl), 0, 1), crudo.dtype).reshape(crudo.shape)
                 nombre = "StarX"
             else:
                 raise ValueError("motor desconocido (starnet, starx, syqon)")
