@@ -15,11 +15,13 @@
 //   metodo      "mascara" (NXT fuerte, lineal 0,80 / estirada 0,45, sólo donde hay poca señal; lo brillante queda igual)
 //               | frecuencias: { hf, lf, hfColor, lfColor, escala } con metodo "nxt" (separación de color y de frecuencias)
 //               | "nxt" (por defecto) | "hibrido" (MLDenoise + NXT 0,95: ML − suave(ML) + suave(NXT), caja de radio 3;
-//               sólo mono y con modelo .xmlm; si no se puede, cae a NXT 0,95 y lo dice) | "ml" (MLDenoise solo, también
+//               sólo mono y con modelo .xmlm; si no se puede, cae a NXT 0,70 × 2 pasadas y lo dice) | "ml" (MLDenoise solo, también
 //               RGB; amount 1,0) | "tgv" (MultiscaleTGVDenoise de PixInsight 1.9.6; strength 0,5)
 //   modelo      .xmlm de MLDenoise; si no se da, la primera ruta .xmlm de perfil.md
 // Para comparar métodos y niveles y quedarse con el mejor: ruidoCandidatos (abajo).
 //   denoise     NXT (0,50 por defecto); detail (0,15); iterations (2)
+//   pasadas     NXT aplicado N veces seguidas (1 por defecto). Rafael (25 nov 2026): mejor dos pasadas de 0,5 o 0,7 que
+//               una de 0,9 o más; por eso el denoise principal mono es 0,70 × 2 y no 0,95.
 //   croma       si se da, separación de color: luminancia = denoise, croma = este valor (p. ej. 0,90 con lum 0,40)
 // Medidas (las de las fichas): ruido del cielo antes/después (debe bajar 50–80 % en el denoise principal, poco en
 // el suave, nunca a cero), contraste de las zonas débiles (no debe bajar más de ~5 %) y estructura en la imagen
@@ -281,21 +283,24 @@ function reducirRuido(viewId, o) {
   // desde el 9 nov; el moteado de color lo vigilan las medidas). Sólo sobre la starless: con estrellas deja puntos negros.
   if (metodo === "hibrido" && (typeof MLDenoise !== "function" || !o.modelo || !File.exists(o.modelo))) {
     aviso = "híbrido no disponible (" + (typeof MLDenoise !== "function" ?
-            "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,95" : "0,50");
+            "MLDenoise no está instalado" : "falta el modelo .xmlm del perfil") + "): se usa NXT " + (mono ? "0,70 × 2 pasadas" : "0,50");
     // RGB: 0,95 deja manchas de color (galaxia grande, 7 nov 2026) y 0,70 tras el NXT suave del Paso 14 subió el moteado
     // de 0,25 a 0,63 (nebulosa oscura, 7 nov 2026): 0,50.
-    metodo = "nxt"; o.denoise = mono ? 0.95 : 0.50;
+    metodo = "nxt"; o.denoise = mono ? 0.70 : 0.50;
+    if (mono && !o.pasadas) o.pasadas = 2;   // Rafael (25 nov 2026): dos pasadas de 0,7 mejor que una de 0,95
   }
   // Denoise principal (Paso 15) de una capa mono sin estrellas (24 nov 2026, paletas de IC 1396 con Qwen): con el NXT 0,50
   // por defecto el Hα bajó el ruido sólo un 28 % y OIII/SII/Hβ ~47 %, y tras el estirado al fallo las capas débiles
   // llegaban con ruido_rel 0,13–0,14 (el Natural de Rafael: NXT Hα 0,5, OIII 0,75, SII 0,8, Hβ 0,75). En mono, sin
   // denoise explícito, NXT 0,95 (lo medido en el Paso 15 para canales mono) y no_cumple si baja menos del 50 %.
+  // 25 nov 2026 (Rafael): en vez de 0,95, dos pasadas de 0,70.
   var linealPre = src.image.median() < 0.05, sinEstr = false;
   try { sinEstr = !!src.propertyValue("PiAstroPilot:SinEstrellas"); } catch (eP) { }
   var principal = linealPre && (o.principal === true || (o.principal !== false && sinEstr));
   if (principal && mono && metodo === "nxt" && o.denoise === undefined && !o.frecuencias) {
-    o.denoise = 0.95;
-    aviso = (aviso ? aviso + "; " : "") + "denoise principal de una capa mono sin estrellas: NXT 0,95 por defecto (Paso 15)";
+    // Rafael (25 nov 2026): mejor dos pasadas de 0,5 o 0,7 que una de 0,9 o más.
+    o.denoise = 0.70; if (!o.pasadas) o.pasadas = 2;
+    aviso = (aviso ? aviso + "; " : "") + "denoise principal de una capa mono sin estrellas: NXT 0,70 × 2 pasadas por defecto (Paso 15)";
   }
   if (metodo === "ml" && !rdModeloML(o)) throw new Error("MLDenoise necesita un modelo .xmlm: pásalo en { modelo } o apunta su ruta en perfil.md");
   if (metodo === "tgv" && typeof MultiscaleTGVDenoise !== "function") throw new Error("MultiscaleTGVDenoise no está disponible (PixInsight 1.9.6 o posterior)");
@@ -312,6 +317,7 @@ function reducirRuido(viewId, o) {
   if (metodo === "syqon") { }
   else if (metodo === "nxt") {
     nxtHechos = rdNXT(v, o);
+    for (var np = 1; np < Math.max(1, Math.min(3, Math.round(o.pasadas || 1))); ++np) rdNXT(v, o);
     if (o.frecuencias && !nxtHechos.some(function (h) { return /low_freq_color|color_low_freq|lf_color|LfColor/.test(h); }))
       aviso = (aviso ? aviso + "; " : "") + "esta versión de NXT no tiene croma de baja frecuencia: se aplicó sin ella (" + nxtHechos.join(", ") + ")";
   }
@@ -384,9 +390,9 @@ function reducirRuido(viewId, o) {
   // con 0,75 o más (o con otro método), aviso.
   if (principal && mono && q.ruido_baja_pct !== null && q.ruido_baja_pct < 50) {
     var dUsado = (metodo === "nxt" && !o.frecuencias) ? ((o.denoise !== undefined) ? o.denoise : 0.50) : null;
-    if (dUsado !== null && dUsado < 0.75)
+    if (dUsado !== null && dUsado < 0.75 && (o.pasadas || 1) < 2)
       noCumple.push("denoise principal (Paso 15) de una capa mono con NXT " + dUsado + ": el ruido baja sólo un " + q.ruido_baja_pct +
-                    " % (se busca 50–80 %); en mono, el híbrido o NXT 0,95 (el Natural de IC 1396 usó OIII 0,75 y SII 0,8). Con poco " +
+                    " % (se busca 50–80 %); en mono, el híbrido o NXT 0,7 × 2 pasadas (el Natural de IC 1396 usó OIII 0,75 y SII 0,8). Con poco " +
                     "denoise lineal, el estirado al fallo saca el grano en las capas débiles (paletas de IC 1396, 24 nov 2026)");
     else
       aviso = (aviso ? aviso + "; " : "") + "el denoise principal baja el ruido sólo un " + q.ruido_baja_pct +
@@ -423,7 +429,7 @@ function reducirRuido(viewId, o) {
               syqon: "SyQon Prism Essential" }[metodo] || "híbrido MLDenoise + NXT",
     parametros: metodo === "nxt" ? (o.frecuencias ? { frecuencias: o.frecuencias, aplicado: nxtHechos } :
                                   { denoise: (o.denoise !== undefined) ? o.denoise : 0.50, detail: (o.detail !== undefined) ? o.detail : 0.15,
-                                    iterations: o.iterations || 2, croma: (o.croma !== undefined) ? o.croma : null }) :
+                                    iterations: o.iterations || 2, pasadas: o.pasadas || 1, croma: (o.croma !== undefined) ? o.croma : null }) :
                 metodo === "mascara" ? { denoise: mascaraInfo.denoise, mascara_cobertura_pct: mascaraInfo.cobertura_pct,
                                          mascara: "1 en cielo y señal débil, 0 desde cielo + 20σ (rampa desde + 3σ), suavizada" } :
                 metodo === "ml" ? { amount: (o.amount !== undefined) ? o.amount : 1.0 } :
@@ -468,9 +474,15 @@ function ruidoCandidatos(viewId, o) {
   // Denoise principal de una capa mono sin estrellas: niveles más altos (ver reducirRuido, 24 nov 2026).
   var principalMono = lineal && !color && (o.principal === true || (o.principal !== false && sinEstrC));
   if (metodos.indexOf("nxt") >= 0)
-    (o.niveles || (principalMono ? [0.50, 0.75, 0.95] : lineal ? [0.30, 0.50, 0.70] : [0.15, 0.30, 0.45])).forEach(function (d) {
-      pruebas.push({ etiqueta: "NXT denoise " + d, op: { metodo: "nxt", denoise: d }, sufijo: "_nxt" + Math.round(100 * d) });
+  {
+    // Rafael (25 nov 2026): sin 0,95; mejor dos pasadas de 0,5 o 0,7 que una de 0,9 (dobles: [] para no probarlas).
+    (o.niveles || (principalMono ? [0.50, 0.75] : lineal ? [0.30, 0.50, 0.70] : [0.15, 0.30, 0.45])).forEach(function (d) {
+      pruebas.push({ etiqueta: "NXT denoise " + d, op: { metodo: "nxt", denoise: d, pasadas: 1 }, sufijo: "_nxt" + Math.round(100 * d) });
     });
+    (o.dobles || (lineal ? [0.50, 0.70] : [0.30])).forEach(function (d) {
+      pruebas.push({ etiqueta: "NXT denoise " + d + " × 2 pasadas", op: { metodo: "nxt", denoise: d, pasadas: 2 }, sufijo: "_nxt" + Math.round(100 * d) + "x2" });
+    });
+  }
   // NXT con separación de color y de frecuencias (manual de RC-Astro): la croma de baja frecuencia al 100 % ataca las
   // manchas de color grandes (moteado) que el NXT normal no quita. Sólo en color. Estirada: intensidad mucho más suave.
   if (metodos.indexOf("frecuencias") >= 0 && color) {
@@ -519,7 +531,7 @@ function ruidoCandidatos(viewId, o) {
   var refPrev = pxPreviaReferencia(base, "ruido_" + base + "_original", { rect: zona, lado: lz });
   pruebas.forEach(function (p, n) {
     var op = {};
-    for (var k in o) if (["metodos", "niveles", "tgv", "nuevaVista", "cerrar", "principal", "recorte", "recorteMP", "ladoRecorte"].indexOf(k) < 0) op[k] = o[k];
+    for (var k in o) if (["metodos", "niveles", "dobles", "tgv", "nuevaVista", "cerrar", "principal", "recorte", "recorteMP", "ladoRecorte"].indexOf(k) < 0) op[k] = o[k];
     for (var k2 in p.op) op[k2] = p.op[k2];
     op.nuevaVista = base + p.sufijo;
     if (principalMono) op.principal = true;   // el recorte no lleva la marca de sin estrellas

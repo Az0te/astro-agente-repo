@@ -2564,7 +2564,9 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     if ia is None:                                        # NoiseX por defecto si está el CLI de RC Astro
         # Lineal: 0,5, 0,3 ×2 y 0,5 ×2. No lineal, mucho más suave (Rafael, 10 nov 2026): 0,3, 0,5 y 0,3 ×2.
         # 0,75 (25 nov 2026): la fuerza de la receta de Rafael para capas débiles.
-        ia = (("0.5", "0.75", "0.3x2", "0.5x2") if lineal else ("0.3", "0.5", "0.3x2")) if _rcastro_exe() else ()
+        # 25 nov 2026 (Rafael): las mismas fuerzas que en PixInsight y SASpro, 0,3/0,5/0,7 y dos pasadas de 0,5 o 0,7 (mejor
+        # que una de 0,9 o más). Se queda 0,75 para la capa débil.
+        ia = (("0.3", "0.5", "0.7", "0.75", "0.5x2", "0.7x2") if lineal else ("0.3", "0.5", "0.3x2")) if _rcastro_exe() else ()
     huella = _huella(crudo)
     grupo = "ruido"
     _limpiar_grupo(grupo)

@@ -983,7 +983,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/06-noisex.md",
-   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril, NoiseX (si está instalado; GraXpert sólo si se pide) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) con no hacer nada. Lineal: denoise 0,5/0,7/1,0, NoiseX 0,5, 0,75, 0,3 ×2 y 0,5 ×2 y Prism. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. Capa débil en lineal (parte brillante del objeto a menos de 15 ruidos del cielo, como OIII/SII/Hβ de un dual band): la medida de detalle cuenta el ruido de fotones y no decide; se recomienda la más fuerte que no deja el fondo muerto (como NXT 0,75–0,8). no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
+   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril, NoiseX (si está instalado; GraXpert sólo si se pide) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) con no hacer nada. Lineal: denoise 0,5/0,7/1,0, NoiseX 0,3, 0,5, 0,7, 0,75, 0,5 ×2 y 0,7 ×2 (mejor dos pasadas de 0,5 o 0,7 que una de 0,9) y Prism. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. Capa débil en lineal (parte brillante del objeto a menos de 15 ruidos del cielo, como OIII/SII/Hβ de un dual band): la medida de detalle cuenta el ruido de fotones y no decide; se recomienda la más fuerte que no deja el fondo muerto (como NXT 0,75–0,8). no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
    "resumen": "Pasos 14 L / 6 NL: compara denoise 0,5/0,7/1,0/DA3D con nada (ruido y detalle); no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -1012,7 +1012,7 @@
       "items": {
        "type": "string"
       },
-      "description": "Candidatos de NoiseX: fuerza y pasadas. Por defecto, si está instalado: en lineal [\"0.5\", \"0.3x2\", \"0.5x2\"]; en no lineal, más suave, [\"0.3\", \"0.5\", \"0.3x2\"]. [] para no probarlo."
+      "description": "Candidatos de NoiseX: fuerza y pasadas. Por defecto, si está instalado: en lineal [\"0.3\", \"0.5\", \"0.7\", \"0.75\", \"0.5x2\", \"0.7x2\"]; en no lineal, más suave, [\"0.3\", \"0.5\", \"0.3x2\"]. [] para no probarlo."
      },
      "graxpert": {
       "type": "array",

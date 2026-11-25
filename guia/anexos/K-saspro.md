@@ -29,7 +29,7 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 | NL3 Verde | `quitarVerde` (SCNR propio que sólo baja el verde; `metodo: sas` para el de SASpro) |
 | NL4 Máscaras | `crearMascara` (luminancia, cielo, estrellas, color, estructura, objeto, rango, crominancia; `fuente` para sacarla de otra vista), `combinarMascaras`, `ajustarMascara`, `aplicarConMascara`; y el parámetro `mascara` en las comparaciones (ver abajo) |
 | NL5 Realces | **`nucleoCandidatos`** (galaxias), **`contrasteCandidatos`**, **`saturacionCandidatos`** → `aplicarCandidato`, en ese orden |
-| L14 / NL6 Ruido | **`ruidoCandidatos`** (Cosmic Clarity y NoiseX a 0,3 / 0,5 / 0,7 y en dos pasadas 0,5×2 / 0,7×2; Cosmic Clarity fuerte solo en el cielo, SyQon Prism en lineal, GraXpert si se pide; gana el que más quita con < 10 % de detalle perdido) → `aplicarCandidato` |
+| L14 / NL6 Ruido | **`ruidoCandidatos`** (Cosmic Clarity y NoiseX a 0,3 / 0,5 / 0,7 y en dos pasadas 0,5×2 / 0,7×2; Cosmic Clarity fuerte solo en el cielo, SyQon Prism en lineal, GraXpert si se pide; gana el que más quita con < 10 % de detalle perdido; en capas débiles, el que deja ~30 % del ruido; ver [criterios](#ruido)) → `aplicarCandidato` |
 | NL7 Nitidez | **`nitidezCandidatos`** (Cosmic Clarity sharpen) → `aplicarCandidato` |
 | NL8 Estrellas | **`estirarEstrellas`** (de la vista de estrellas; arcsinh a varios p90 y + Halo-B-Gon; `mas_pequenas` si se ven grandes) → `aplicarCandidato` |
 | NL9 Recombinación | `recombinarEstrellas` (starless + vista de estrellas, screen) |
@@ -108,3 +108,29 @@ vuelve a poner (`aviso_mascara_sas`): los procesos de SASpro la respetarían y l
 - `saturacionCandidatos`: «color suave por tonos» (rojo ×0,85, dorado ×1,3, azul ×1,35) para elegir a la vista.
 - `combinarCandidatos`: Hα ×0,5 / 0,75 / 1 y margen de R/G del objeto por tipo (emisión ×1,8, galaxia ×1,3).
 - `paletasCandidatos`: HSO y SHO suave.
+
+<a id="ruido"></a>
+## Prueba de las herramientas nuevas en IC 1396 (25 nov 2026)
+
+Recortes de 1500 × 1000 y la Natural completa (HaO3 lineal, OIII y Natural estirada). Lo que salió y lo que se cambió:
+
+- **Criterios de `ruidoCandidatos`.** `residual_estructura` (lo quitado: ~1–2 = solo ruido) es una proporción y no baja
+  al bajar el denoise: en el HaO3 lineal NoiseX 0,3 daba 2,71 y 0,7 daba 1,96. Como filtro duro solo dejaba pasar los
+  fuertes. Ahora, como en PixInsight: es fallo si además se pierde > 3 % del detalle medido; si no, aviso (mirar la
+  diferencia a ojo) y sirve para preferir, entre los que cumplen, los de residual ≤ 2.
+- **Detalle no medible.** En los recortes (y en las capas OIII/SII) el detalle de 2–8 px de la zona brillante no sobresale
+  del ruido del cielo y la pérdida no se mide: se recomienda la pasada moderada (~70 % del ruido) o, en una capa débil
+  lineal (SNR < 8), la que deja ~30 %. El resultado trae `detalle_no_medible` con el motivo.
+- **Natural completa (estirada).** NoiseX 0,3 quita un tercio del ruido sin perder detalle (gana). Cosmic Clarity denoise
+  pierde el 18 % del detalle a 0,15 y el 28 % a 0,25: en imágenes estiradas, mejor NoiseX. Cosmic Clarity solo en el
+  cielo da residual 2,3: en IC 1396 el «cielo» es nebulosa débil y se la lleva.
+- **Cosmic Clarity en lineal** deja recortes nuevos (ceros) en el HaO3 lineal: se descarta solo.
+- **Dos pasadas** de NoiseX ya son dos pasadas de verdad (0,5×2 deja el 35 % del ruido; 0,7×2 el 29 %).
+- **Deconvolución.** BXT no bajó la FWHM en el master HaO3 (3,94 → 4,0–4,15 px). Cosmic Clarity sharpen en lineal satura
+  los núcleos (FWHM falsa de 1,25 px): ahora un candidato que satura más píxeles que la original queda fuera.
+- **Máscaras.** El parámetro `mascara` ya llega a la herramienta (antes el puente lo quitaba). La máscara `objeto` sale de
+  la luminancia suavizada si la de estructura de SASpro queda casi vacía (`aviso`).
+- **Paletas.** `paletasCandidatos` acepta los nombres con espacios o mayúsculas («SHO suave») y avisa de los que no
+  existen.
+- **Pendiente.** GHS no estira en lineal; la máscara de estrellas sacada de una capa de estrellas estirada cubre el 22 %
+  (demasiado): usar `crecer` bajo o umbral más alto.

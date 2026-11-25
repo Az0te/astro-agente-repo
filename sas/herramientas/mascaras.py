@@ -122,6 +122,16 @@ def _construir(p, tipo="luminancia", gamma=1.0, tono=None, ancho=30.0, crecer=2,
     elif tipo == "objeto":
         # estructura difusa sin estrellas: la nebulosa o galaxia sola (para color, contraste, saturación)
         e, info["ajustes_saspro"] = _estructura(p)
+        # 25 nov 2026 (IC 1396 en SAS): la máscara de estructura de SASpro salió vacía en un recorte de 1500×1000 lleno de
+        # nebulosa (media 0) y con un 3 % en la imagen entera (media 0,15 en la zona de objeto). Si cubre < 1 % o deja fuera
+        # la mayor parte del objeto (media < 0,3 en su zona), luminancia suavizada entre el p20 (cielo) y el p99,5.
+        zo = M.zonas_objeto_cielo(p)["obj_px"]
+        if float(e.mean()) < 0.01 or (zo.any() and float(e[zo].mean()) < 0.3):
+            Ls = M.suave(L.astype(np.float32), 8)
+            lo, hi = float(np.percentile(Ls[::4, ::4], 20)), float(np.percentile(Ls[::4, ::4], 99.5))
+            e = np.clip((Ls - lo) / max(hi - lo, 1e-6), 0, 1)
+            info["aviso"] = ("La máscara de estructura de SASpro salió casi vacía o deja fuera la mayor parte del objeto: uso la luminancia suavizada (p20–p99,5) "
+                             "como objeto.")
         est = _estrellas(L, max(int(crecer), 2), float(sigma))
         m = e * (1.0 - M.suave(est, 4))
     elif tipo == "rango":

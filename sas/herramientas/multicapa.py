@@ -1125,7 +1125,16 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     else:
         todas["Natural"] = ("Natural sin Hβ (R = 0,85·Hα + 0,15·SII; G = 0,85·OIII + 0,15·Hα; B = OIII)",
                             lambda: (Rn, 0.85 * Oan + 0.15 * Ha, Oan))
-    elegir = [k for k in (paletas or list(todas)) if k in todas]
+    # Nombres flexibles (25 nov 2026: «SHO suave» con espacio se perdía en silencio): sin distinguir mayúsculas, con
+    # espacio o guion como «_»; los que no existen se dicen en el resultado.
+    claves = {k.lower(): k for k in todas}
+    elegir, desconocidas = [], []
+    for k in (paletas or list(todas)):
+        kk = claves.get(str(k).strip().lower().replace(" ", "_").replace("-", "_"))
+        if kk and kk not in elegir:
+            elegir.append(kk)
+        elif not kk:
+            desconocidas.append(str(k))
     # Qwen pasa a menudo la lista entera de paletas que conoce: la Natural, con Hβ, entra siempre (IC 1396, 15 nov 2026:
     # el enum del manifiesto no la tenía y la lista de Qwen la dejaba fuera).
     if hb and "Natural" in todas and "Natural" not in elegir:
@@ -1191,6 +1200,9 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
                        + (" — después quitarVerde (forzar: true) por el verde residual" if solo_verde(mejor) else "")
                        + ". Una paleta es una convención, no el color real: la elección es estética; mírala en la galería.")
     r["vista_paleta"] = H._nombre(d)
+    if desconocidas:
+        r["paletas_desconocidas"] = (f"No existen: {', '.join(desconocidas)}. Disponibles: "
+                                     f"{', '.join(todas)}.")
     r["leyenda"] = ("separacion_tonos_grados: variedad de tonos en el objeto (más = más zonas distinguibles). "
                     "verde_residual_pct: verde por encima de rojo y azul en el objeto. dominante_cielo_pct: el cielo debe "
                     "quedar neutro (cada candidato ya lleva el cielo neutralizado por canal; dominante_cielo_antes_pct es "

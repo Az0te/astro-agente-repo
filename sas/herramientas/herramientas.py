@@ -1267,7 +1267,11 @@ def _comparar_lista(ctx, doc, grupo, lista, medir, h0, r, mk):
         t0 = time.perf_counter()
         try:
             if funcion is not None:           # cálculo propio en numpy: no toca la vista
-                res = _a_sas(funcion(_p(doc.image), **preset), doc.image)
+                # '_pasadas' también aquí: NoiseXTerminator ×2 (rc_nxt es local) salía igual que una pasada (25 nov 2026)
+                q = _p(doc.image)
+                for _ in range(max(1, pasadas)):
+                    q = _p(_a_sas(funcion(q, **preset), doc.image))
+                res = _a_sas(q, doc.image)
             else:
                 res = _probar(ctx, doc, proceso, preset, pasadas)
             if masc_propia is not None:
@@ -1578,6 +1582,7 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
 
 
 RESIDUAL_MAX = 2.0     # residual_estructura: ~1–2 solo ruido (como en PixInsight)
+SNR_DEBIL = 8.0        # SNR del objeto por debajo: capa débil (OIII/SII/Hβ de IC 1396: 2,7–4,6; Hα 39)
 
 
 def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt=None, nxt_fuerzas=None, syqon=None,
@@ -1602,13 +1607,28 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
     zb = M.zona_brillante(L0, z)
     cpx = z["cielo_px"]
     e0 = M.energia_brillante(L0, zb, cpx) if zb is not None else None
+    # por qué no se mide (para el informe: zona, contraste con el cielo o señal pegada al ruido)
+    sin_detalle = (None if e0 is not None else
+                   f"no hay zona brillante del objeto ≥ 2000 px sin estrellas (objeto {int(z['obj_px'].sum())} px)")
     if e0 is not None and e0 <= 0:
+        sin_detalle = "la energía de 2–8 px de la zona brillante no supera la del cielo"
         e0 = None
     # Capas débiles (OIII, SII, Hβ de dual band; IC 1396, 14 nov 2026): si el detalle de la zona brillante apenas sobresale
     # del ruido del cielo en la misma escala, la «pérdida» es sobre todo ruido quitado y no se aplicaba ningún denoise
     # (35–73 %): la paleta salía granulosa. Entonces no se mide y se recomienda la pasada moderada (como en Siril).
     if e0 is not None and cpx.any() and e0 < 0.5 * M.energia_brillante(L0, cpx):
+        sin_detalle = (f"el detalle de 2–8 px de la zona brillante ({e0:.3g}, ya sin el ruido) es menos de la mitad del "
+                       f"ruido del cielo en esa escala ({M.energia_brillante(L0, cpx):.3g})")
         e0 = None
+    # Capa débil por SNR (25 nov 2026, IC 1396 Natural en SAS): OIII, SII, Hβ (SNR 2,7–4,6) salían del denoise con ~70 %
+    # de su ruido, la paleta nacía con grano 0,048 (Rafael 0,029) y el cielo no podía bajar de 0,031. La receta de Rafael:
+    # NXT 0,75–0,8 en esas capas. Se detecta por SNR del objeto y se recomienda la limpieza que deja un 25–35 % del ruido.
+    snr = None
+    if lineal and c0["ruido"] > 0:
+        # sin zona de objeto detectable (capa casi vacía): el percentil 95 hace de objeto
+        sen = float(np.median(L0[z["obj_px"]])) if z["obj_px"].any() else float(np.percentile(L0[::4, ::4], 95))
+        snr = (sen - float(c0["cielo"])) / float(c0["ruido"])
+    debil = lineal and snr is not None and snr < SNR_DEBIL
     lista = [(f"Cosmic Clarity denoise {f}", "cosmic_clarity",
               {"mode": "denoise", "denoise_luma": float(f), "denoise_color": float(f), "create_new_view": False,
                "gpu": True}) for f in fuerzas or []]
@@ -1619,7 +1639,7 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
         usar_nxt = _rc.hay("nxt")
     if usar_nxt:
         if nxt_fuerzas is None:
-            nxt_fuerzas = (0.3, 0.5, 0.7) if lineal else (0.3, 0.5)
+            nxt_fuerzas = ((0.3, 0.5, 0.7) + ((0.8,) if debil else ())) if lineal else (0.3, 0.5)
         lista += [(f"NoiseXTerminator {f:g}", "rc_nxt", {"denoise": float(f)}) for f in nxt_fuerzas]
         lista += [(f"NoiseXTerminator {f:g} ×2 pasadas", "rc_nxt", {"denoise": float(f), "_pasadas": 2})
                   for f in (dobles if lineal else (0.3,)) or []]
@@ -1666,19 +1686,34 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
                                   f"{round(100 * minimo)} %)")
         if m["altos_pct"] - rec0["altos_pct"] > 0.01 or m["ceros_pct"] - rec0["ceros_pct"] > 0.01:
             x["no_cumple"].append("recortes nuevos")
-    ok = [x for x in r["candidatos"] if not x["no_cumple"] and x["metricas"]["detalle_perdido_pct"] is not None]
     # Residual (25 nov 2026, Rafael): lo quitado debe ser solo ruido (residual_estructura ≤ 2 en la imagen y en el
-    # objeto). Es la medida que manda: la de detalle de 2–8 px no ve lo que cambia un denoise por IA (NoiseX daba 0 %).
+    # objeto). Pero es una proporción (bloques frente al ruido de la propia residual) y NO baja al bajar el denoise: en la
+    # prueba de IC 1396 HaO3 (25 nov) NoiseX 0,3 daba 2,71 y 0,7 daba 1,96, así que como filtro duro dejaba pasar solo los
+    # fuertes. Como en PixInsight (ruido.js, 8 nov): es fallo solo si además se pierde detalle medible (> 3 %); si no, aviso y
+    # se usa para preferir entre los que cumplen.
     def solo_ruido(x):
         m = x["metricas"]
         return all(v is None or v <= RESIDUAL_MAX for v in (m.get("residual_estructura"), m.get("residual_estructura_objeto")))
 
     for x in r["candidatos"]:
-        if not solo_ruido(x):
-            x["no_cumple"].append(f"lo quitado tiene estructura (residual {x['metricas'].get('residual_estructura')}, en el "
-                                  f"objeto {x['metricas'].get('residual_estructura_objeto')}; máx {RESIDUAL_MAX}): se lleva detalle")
-    ok = [x for x in ok if solo_ruido(x)]
-    validos = [x for x in ok if x["metricas"]["detalle_perdido_pct"] < 10]
+        if solo_ruido(x):
+            continue
+        m = x["metricas"]
+        txt = (f"residual {m.get('residual_estructura')}, en el objeto {m.get('residual_estructura_objeto')}; "
+               f"máx {RESIDUAL_MAX}")
+        if m["detalle_perdido_pct"] is not None and m["detalle_perdido_pct"] > 3:
+            x["no_cumple"].append(f"lo quitado tiene estructura ({txt}) y se pierde el {m['detalle_perdido_pct']} % del "
+                                  "detalle: se lleva señal")
+        else:
+            x["aviso"] = (f"lo quitado tiene algo de estructura ({txt}) sin pérdida de detalle medible: mira la diferencia "
+                          "a ojo; no es fallo solo por esta medida (no baja al bajar el denoise)")
+
+    def preferir(lista):
+        """Los de residual solo ruido si hay alguno (como en PixInsight, Tarántula 12 nov); si no, todos."""
+        return [x for x in lista if solo_ruido(x)] or lista
+
+    ok = [x for x in r["candidatos"] if not x["no_cumple"] and x["metricas"]["detalle_perdido_pct"] is not None]
+    validos = preferir([x for x in ok if x["metricas"]["detalle_perdido_pct"] < 10])
     # a igualdad de ruido (±3 %), el que menos detalle pierde
     mejor = (min(validos, key=lambda x: (round(x["metricas"]["ruido_vs_antes"] / 0.03),
                                          x["metricas"]["detalle_perdido_pct"])) if validos else None)
@@ -1690,10 +1725,26 @@ def ruidoCandidatos(ctx, vista=None, fuerzas=None, usar_graxpert=False, usar_nxt
     else:
         r["motivo"] = ("Ningún candidato baja el ruido sin perder ≥ 10 % del detalle ni dejar el fondo muerto: mejor no "
                        "aplicar o probar más suave.")
-    if e0 is None:
+    if debil:
+        # En una capa débil la medida de detalle cuenta el ruido de fotones como detalle: no se usa. Gana el que deja entre
+        # el 25 y el 35 % del ruido (lo más cerca del 30 %) con la residual solo ruido y sin recortes.
+        # vale todo lo que no deja el fondo muerto ni recorta (la residual se usa para preferir, no para descartar)
+        cand = [x for x in r["candidatos"] if not x["no_cumple"]]
+        limpios = [x for x in cand if (x["metricas"].get("residual_estructura") or 0) <= RESIDUAL_MAX + 1.0]
+        elegir = limpios or cand
+        if elegir:
+            mejor = min(elegir, key=lambda x: abs((x["metricas"]["ruido_vs_antes"] or 1) - 0.30))
+            r["recomendado"] = mejor["id"]
+            r["motivo"] = (f"Capa débil (SNR del objeto {_r(snr, 1)} < {SNR_DEBIL}): {mejor['metodo']} deja el "
+                           f"{round(100 * mejor['metricas']['ruido_vs_antes'])} % del ruido (se busca ~30 %, como NXT "
+                           "0,75–0,8 en la receta de Rafael). La medida de detalle no vale aquí: cuenta el ruido de "
+                           "fotones como detalle. Mira un recorte 1:1 con previa(candidato).")
+        r["capa_debil"] = {"snr": _r(snr, 1), "umbral": SNR_DEBIL}
+    elif e0 is None:
         r["aviso"] = ("En la parte brillante del objeto no hay detalle de 2–8 px por encima del ruido del cielo (o no hay "
                       "zona brillante): la pérdida de detalle no se puede medir. Mira un recorte 1:1 con previa(candidato).")
-        sin_medida = [x for x in r["candidatos"] if not x["no_cumple"]]
+        r["detalle_no_medible"] = sin_detalle
+        sin_medida = preferir([x for x in r["candidatos"] if not x["no_cumple"]])
         if sin_medida:                     # la pasada moderada: la que deja más cerca del 70 % del ruido
             mejor = min(sin_medida, key=lambda x: abs((x["metricas"]["ruido_vs_antes"] or 1) - 0.7))
             r["recomendado"] = mejor["id"]
@@ -2277,7 +2328,8 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
     if cielos is None and media0 <= 0.035:
         return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
                 "motivo": f"El cielo ya está oscuro ({_r(media0, 3)} ≤ 0,035): no se toca."}
-    cielos = (0.05, 0.035, 0.025, 0.015) if cielos is None else cielos
+    # escalón 0,02 (25 nov 2026, como en Siril ee64e45): entre 0,025 y 0,015 el fondo elegía 0,025 o se pasaba de ceros
+    cielos = (0.05, 0.035, 0.025, 0.02, 0.015) if cielos is None else cielos
     senal0 = m_obj - media0
 
     def rg(q):                                   # color del objeto: R/G mediano en la zona del objeto
@@ -2726,6 +2778,11 @@ def deconvolucionCandidatos(ctx, vista=None, tipo="nebulosa", nonstellar=None, s
         if x["proceso"] == "syqon_parallax" and m["saturados"] > m0["saturados"] + max(10, m0["saturados"] // 20):
             fal.append(f"satura {m['saturados']} píxeles (la original {m0['saturados']}): Parallax recorta núcleos a 1,0 "
                        "en lineal; experimental, descartado")
+        # 25 nov 2026 (prueba en IC 1396 HaO3): Cosmic Clarity sharpen en lineal recortó 1458 píxeles a 1,0 (la original
+        # 0) y la FWHM «bajó» de 3,94 a 1,25 px porque los núcleos planos engañan a la medida: descartado igual.
+        elif x["proceso"] != "syqon_parallax" and m["saturados"] > m0["saturados"] + max(100, m0["saturados"] // 10):
+            fal.append(f"satura {m['saturados']} píxeles (la original {m0['saturados']}): núcleos recortados a 1,0, la "
+                       "FWHM medida no es fiable")
         x["no_cumple"] = fal
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
     con_ns = [x for x in ok if not x["preset"].get("correct_only") and x["proceso"] == "rc_bxt"]
@@ -3229,6 +3286,18 @@ def _con_mascara(f):
             return f(ctx, *a, **k)
         finally:
             _MASCARA.update(spec=None, ctx=None)
+
+    # functools.wraps deja __wrapped__ y inspect.signature (el filtro de parámetros del puente) vería la firma de f,
+    # sin 'mascara': se ignoraba con aviso. La firma de g es la de f más los tres parámetros de la máscara.
+    import inspect
+    sig = inspect.signature(f)
+    ps = [p for p in sig.parameters.values() if p.kind != p.VAR_KEYWORD]
+    extra = [inspect.Parameter(n, inspect.Parameter.KEYWORD_ONLY, default=d)
+             for n, d in (("mascara", None), ("mascara_fuerza", 1.0), ("mascara_invertir", False))
+             if n not in sig.parameters]
+    var_kw = [p for p in sig.parameters.values() if p.kind == p.VAR_KEYWORD]
+    ps = [p for p in ps if p.kind != p.VAR_POSITIONAL] + extra + var_kw
+    g.__signature__ = sig.replace(parameters=ps)
     return g
 
 

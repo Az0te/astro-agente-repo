@@ -816,7 +816,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodo: \"nxt\" | \"mascara\" (NXT fuerte sólo donde hay poca señal) | \"hibrido\" | \"ml\" | \"tgv\", denoise: 0.5, detail: 0.15, iterations: 2, croma, frecuencias: { hf, lf, hfColor, lfColor, escala } (NXT con separación de color y de frecuencias), amount (ml), principal (por defecto, en una capa mono lineal sin estrellas: NXT 0,95 sin denoise dado y no_cumple si baja menos del 50 %; false para no), strength (tgv), modelo: .xmlm, nuevaVista }"
+      "description": "Opcional. { metodo: \"nxt\" | \"mascara\" (NXT fuerte sólo donde hay poca señal) | \"hibrido\" | \"ml\" | \"tgv\", denoise: 0.5, detail: 0.15, iterations: 2, croma, frecuencias: { hf, lf, hfColor, lfColor, escala } (NXT con separación de color y de frecuencias), amount (ml), pasadas: 2 (NXT aplicado dos veces; mejor dos pasadas de 0,5 o 0,7 que una de 0,9), principal (por defecto, en una capa mono lineal sin estrellas: NXT 0,70 × 2 pasadas sin denoise dado y no_cumple si baja menos del 50 %; false para no), strength (tgv), modelo: .xmlm, nuevaVista }"
      }
     },
     "required": [
@@ -841,7 +841,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodos: [\"nxt\", \"frecuencias\", \"mascara\", \"ml\", \"tgv\", \"hibrido\", \"syqon\"] (syqon = SyQon Prism, solo lineal; si no está o la imagen es no lineal va en omitidos), niveles: [0.3, 0.5, 0.7] (NXT), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %; en una capa mono lineal sin estrellas va solo y compara NXT 0,50/0,75/0,95; principal: false para no), nuevaVista, cerrar: false para conservar las demás }"
+      "description": "Opcional. { metodos: [\"nxt\", \"frecuencias\", \"mascara\", \"ml\", \"tgv\", \"hibrido\", \"syqon\"] (syqon = SyQon Prism, solo lineal; si no está o la imagen es no lineal va en omitidos), niveles: [0.3, 0.5, 0.7] (NXT), dobles: [0.5, 0.7] (NXT en dos pasadas; estirada [0.3]; [] para no), tgv: [0.5, 1.0], amount: 1.0 (ML), modelo: .xmlm, recorte: false (por defecto, en imágenes de más de 8 MP compara en un recorte de 2000 px y aplica el ganador a la entera), detail: 0.15, iterations: 2, principal: true (busca bajar el ruido 50-80 %; en una capa mono lineal sin estrellas va solo y compara NXT 0,50/0,75 y 0,50×2/0,70×2; principal: false para no), nuevaVista, cerrar: false para conservar las demás }"
      }
     },
     "required": [
