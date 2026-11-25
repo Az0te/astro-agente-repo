@@ -1551,11 +1551,13 @@ def _separar_starnet2(siril, info, crudo, lineal, upscale, timeout=1800):
     return sl, st, texto
 
 
-def separarEstrellas(siril, estirar=None, upscale=False, motor="auto"):
+def separarEstrellas(siril, estirar=None, upscale=False, motor="auto", forzar=False):
     """Paso 15 lineal: StarNet. Deja la starless cargada y la capa de estrellas en un fichero.
-    motor: siril (comando starnet), starnet2 (ejecutable StarNet2 2.5+ directo) o auto (Siril y, si falla, starnet2)."""
+    motor: siril (comando starnet), starnet2 (ejecutable StarNet2 2.5+ directo) o auto (Siril y, si falla, starnet2).
+    No separa una imagen que ya está sin estrellas (salvo forzar)."""
     info = H._info(siril)
     p = H._pixeles(siril, info)
+    _no_separar_dos_veces(p, forzar)
     lineal = _lineal(p)
     forzado = False
     if estirar is None:
@@ -1734,13 +1736,15 @@ def _medir_starless(base, z, sl, est):
             "capa_estrellas_media": _r(float(_lum(est).mean()), 6) if est is not None else None}
 
 
-def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None):
+def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=False, patron=True):
     """Paso 15 lineal: quita las estrellas con StarNet y con StarX (los que estén instalados) y, sobre imagen ESTIRADA,
     también con SyQon Axiom Mini; mide y recomienda. La imagen no cambia: aplicarCandidato(id) pone la starless elegida y
-    devuelve su capa de estrellas."""
+    devuelve su capa de estrellas. No separa una imagen que ya está sin estrellas (salvo forzar). patron (por defecto
+    true): con StarX quita antes la malla de 2 px que crece con las estrellas brillantes (anillos con malla en dual band)."""
     info = H._info(siril)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
+    _no_separar_dos_veces(p, forzar)
     lineal = _lineal(p)
     z = _zonas(p)
     huella = _huella(crudo)
@@ -1771,9 +1775,16 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None):
                 sl, st, texto = _separar_starnet2(siril, info, crudo, lineal, False)
                 nombre = "StarNet2"
             elif m == "starx":
-                out, texto = _rcastro(siril, crudo, "sxt", ["--stars"])
+                # IC 1396 (25 nov 2026): en las capas de dual band la malla de 2 px crece con las estrellas brillantes y
+                # StarX deja un disco con malla y un anillo. Se quita antes (relativa a la señal) y las estrellas salen
+                # como original − starless.
+                ent = crudo
+                if patron:
+                    a0 = _de_siril(crudo)
+                    ent = _a_siril(np.stack([_patron_2px_relativo(c) for c in a0]), crudo.dtype).reshape(crudo.shape)
+                out, texto = _rcastro(siril, ent, "sxt", ["--stars"])
                 sl = out.pop("salida")
-                st = next(iter(out.values())) if out else None
+                st = None if patron else (next(iter(out.values())) if out else None)
                 nombre = "StarX"
             else:
                 raise ValueError("motor desconocido (starnet, starx, syqon)")
@@ -3197,6 +3208,59 @@ def _patron_2px(x, r=12):
             d = x - 0.5 * (np.roll(x, 1, eje) + np.roll(x, -1, eje))
         total += _suave(d * m, 2 * r) * 0.5 * m
     return total
+
+
+def _gauss(x, s=2.0):
+    """Gaussiana separable de σ s (núcleo ±3σ, bordes por repetición), sin scipy."""
+    x = np.asarray(x, dtype=np.float32)
+    k = int(np.ceil(3 * s))
+    w = np.exp(-0.5 * (np.arange(-k, k + 1) / s) ** 2).astype(np.float32)
+    w /= w.sum()
+    for eje in (0, 1):
+        pad = [(0, 0), (0, 0)]
+        pad[eje] = (k, k)
+        xp = np.pad(x, pad, mode="edge")
+        n = x.shape[eje]
+        x = sum(w[i] * (xp[i:i + n] if eje == 0 else xp[:, i:i + n]) for i in range(2 * k + 1)).astype(np.float32)
+    return x
+
+
+def _patron_2px_relativo(x, r=3):
+    """x sin la malla de 2 px que crece con la señal (igual que medidas.patron_2px_relativo de SetiAstroPilot). Alrededor
+    de las estrellas brillantes de una capa de dual band (OSC) la malla sube con la estrella y _patron_2px (aditivo,
+    ventana de 12 px) no la ve; StarX la toma por nebulosa y deja un disco con malla y un anillo. Se estima sobre
+    x / fondo suave y se vuelve a multiplicar (IC 1396, 25 nov 2026: anillo 0,03–0,18 → 0,01–0,02)."""
+    x = np.asarray(x, dtype=np.float32)
+    s = _gauss(x, 2.0) + 1e-5
+    y = x / s
+    return np.clip((y - _patron_2px(y, r)) * s, 0.0, 1.0).astype(np.float32)
+
+
+def _pct_estrellas(p):
+    """% de píxeles de estrella para saber si la imagen ya está sin estrellas (igual que medidas.pct_estrellas de
+    SetiAstroPilot): picos del paso alto > 5σ (o > p99,5) que forman grupo (≥ 3 píxeles en su 3×3). Los picos sueltos de
+    ruido, la malla de 2 px y los anillos de StarX no cuentan. IC 1396: 0,18 % en una starless, 2,3 % con estrellas."""
+    q = p[:, ::2, ::2]
+    c = _cielo(q)
+    ruido = max(float(c["ruido_rel"]) * float(c["cielo"]), 1e-6)
+    L = _lum(q)
+    hp = L - _caja(L, 5)
+    est = hp > max(5 * ruido, float(np.percentile(hp.ravel()[::7], 99.5)))
+    est &= _caja(est.astype(np.float32), 1) * 9 >= 2.5
+    return float((_caja(est.astype(np.float32), 2) > 0).mean() * 100.0)
+
+
+def _no_separar_dos_veces(p, forzar):
+    """IC 1396 (25 nov 2026, SetiAstroPilot): se volvió a quitar estrellas a la paleta ya sin estrellas; la capa nueva
+    solo traía restos y se recombinó en lugar de las estrellas buenas del RGB. Se para salvo forzar."""
+    if forzar:
+        return
+    pct = _pct_estrellas(p)
+    if pct < 0.5:
+        raise RuntimeError(
+            f"La imagen cargada ya parece sin estrellas ({pct:.2f} % de píxeles de estrella; una con estrellas da > 1 %). "
+            "Separar otra vez solo saca restos y ruido. Recombina la capa de estrellas que ya tienes (starmask_*.fit de la "
+            "separación anterior) con recombinarEstrellas. forzar: true solo si de verdad quedan estrellas enteras.")
 
 
 def _textura(L, obj):

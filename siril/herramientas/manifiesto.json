@@ -791,7 +791,7 @@
    "nivel": "vista",
    "timeout_s": 1200,
    "paso": "lineal/15-starx.md",
-   "descripcion": "Paso 15 lineal: StarNet desde Siril (instalado y configurado en Preferencias de Siril). Deja la starless cargada y la capa de estrellas como fichero starmask en la carpeta de trabajo de Siril. Con imagen lineal usa -stretch. Guardar la starless con guardarImagen.",
+   "descripcion": "Paso 15 lineal: StarNet desde Siril (instalado y configurado en Preferencias de Siril). Deja la starless cargada y la capa de estrellas como fichero starmask en la carpeta de trabajo de Siril. Con imagen lineal usa -stretch. Guardar la starless con guardarImagen. No separa una imagen que ya está sin estrellas (salvo forzar): recombina la capa que ya tienes.",
    "resumen": "Paso 15: StarNet; starless cargada y estrellas en fichero.",
    "params": {
     "type": "object",
@@ -812,6 +812,10 @@
        "starnet2"
       ],
       "description": "auto (por defecto): comando starnet de Siril y, si falla, el ejecutable starnet2 (StarNet2 2.5+) directo con --linear si la imagen es lineal."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Separar aunque la imagen ya parezca sin estrellas (< 0,5 % de píxeles de estrella). Solo si de verdad quedan estrellas enteras: separar dos veces saca restos y ruido, y esa capa no sirve para recombinar."
      }
     }
    }
@@ -1044,7 +1048,7 @@
    "nivel": "lectura",
    "timeout_s": 2400,
    "paso": "lineal/15-starx.md",
-   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y, solo si la imagen ya está ESTIRADA, también con SyQon Axiom Mini (syqon-cli; en lineal sale rota y va en omitidos), y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y, solo si la imagen ya está ESTIRADA, también con SyQon Axiom Mini (syqon-cli; en lineal sale rota y va en omitidos), y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Con StarX quita antes la malla de 2 px proporcional a la señal (anillos con malla en las brillantes de dual band). No separa una imagen que ya está sin estrellas (salvo forzar).",
    "resumen": "Paso 15: StarNet2 frente a StarX (restos, agujeros, objeto quitado); no cambia la imagen (aplicarCandidato devuelve la capa de estrellas).",
    "params": {
     "type": "object",
@@ -1074,6 +1078,14 @@
        "nebulosa_oscura"
       ],
       "description": "Tipo de objeto (se admite en todas las comparativas)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Separar aunque la imagen ya parezca sin estrellas (< 0,5 % de píxeles de estrella). Solo si de verdad quedan estrellas enteras: separar dos veces saca restos y ruido, y esa capa no sirve para recombinar."
+     },
+     "patron": {
+      "type": "boolean",
+      "description": "Solo con starx: quita antes la malla de 2 px que crece con las estrellas brillantes (capas de dual band) y saca las estrellas como original − starless. Por defecto true: sin esto StarX deja anillos con malla en las brillantes."
      }
     }
    }

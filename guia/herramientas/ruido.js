@@ -647,6 +647,137 @@ function rdElegirRecorte(view, lado) {
   return best || new Rect(Math.floor((W - L) / 2), Math.floor((H - L) / 2), Math.floor((W + L) / 2), Math.floor((H + L) / 2));
 }
 
+// --- Malla de 2 px y conteo de estrellas (como medidas.py de SetiAstroPilot y pasos.py de Siril, 25 nov 2026) -----------
+// Funciones sobre Float32Array (fila a fila, y·W + x), sin PixInsight: se prueban con node.
+
+// Media en caja (2r+1)² separable, bordes por repetición. Las columnas se suman fila a fila (rápido en memoria).
+function rdCaja(x, W, H, r) {
+  if (r <= 0) return new Float32Array(x);
+  var t = new Float32Array(W * H), o = new Float32Array(W * H), k = 2 * r + 1, inv = 1 / k, i, s, f, y;
+  for (y = 0; y < H; ++y) {
+    f = y * W;
+    s = 0; for (i = -r; i <= r; ++i) s += x[f + (i < 0 ? 0 : i >= W ? W - 1 : i)];
+    for (i = 0; i < W; ++i) {
+      t[f + i] = s * inv;
+      var a = i + r + 1, b = i - r;
+      s += x[f + (a >= W ? W - 1 : a)] - x[f + (b < 0 ? 0 : b)];
+    }
+  }
+  var acc = new Float64Array(W);
+  for (i = -r; i <= r; ++i) { f = (i < 0 ? 0 : i >= H ? H - 1 : i) * W; for (var c = 0; c < W; ++c) acc[c] += t[f + c]; }
+  for (y = 0; y < H; ++y) {
+    f = y * W;
+    for (c = 0; c < W; ++c) o[f + c] = acc[c] * inv;
+    var fa = (y + r + 1 >= H ? H - 1 : y + r + 1) * W, fb = (y - r < 0 ? 0 : y - r) * W;
+    for (c = 0; c < W; ++c) acc[c] += t[fa + c] - t[fb + c];
+  }
+  return o;
+}
+
+// Desenfoque casi gaussiano: tres cajas de radio r/2 (medidas.suave).
+function rdSuave(x, W, H, r) {
+  var k = Math.max(1, Math.round(r / 2));
+  return rdCaja(rdCaja(rdCaja(x, W, H, k), W, H, k), W, H, k);
+}
+
+// Gaussiana separable de σ s (núcleo ±3σ, bordes por repetición).
+function rdGauss(x, W, H, s) {
+  var k = Math.ceil(3 * s), w = [], sw = 0, i, j, y, a, f;
+  for (i = -k; i <= k; ++i) { w.push(Math.exp(-0.5 * (i / s) * (i / s))); sw += w[w.length - 1]; }
+  for (i = 0; i < w.length; ++i) w[i] /= sw;
+  var t = new Float32Array(W * H), o = new Float32Array(W * H), fila = new Float32Array(W + 2 * k);
+  for (y = 0; y < H; ++y) {
+    f = y * W;
+    for (i = 0; i < W + 2 * k; ++i) { var q = i - k; fila[i] = x[f + (q < 0 ? 0 : q >= W ? W - 1 : q)]; }
+    for (i = 0; i < W; ++i) { a = 0; for (j = 0; j <= 2 * k; ++j) a += w[j] * fila[i + j]; t[f + i] = a; }
+  }
+  for (y = 0; y < H; ++y) {
+    f = y * W;
+    for (j = 0; j <= 2 * k; ++j) {
+      var yy = y + j - k, g = (yy < 0 ? 0 : yy >= H ? H - 1 : yy) * W, wj = w[j];
+      for (i = 0; i < W; ++i) o[f + i] += wj * t[g + i];
+    }
+  }
+  return o;
+}
+
+// Patrón fijo de periodo 2 px (resto de la matriz Bayer de un OSC): segunda diferencia por filas, columnas y diagonal,
+// con su signo alterno, promediada en una ventana (medidas.patron_2px). Se resta.
+function rdPatron2px(x, W, H, r) {
+  var tot = new Float32Array(W * H), d = new Float32Array(W * H), y, i, q, m, f, fp, fn;
+  for (var modo = 0; modo < 3; ++modo) {
+    for (y = 0; y < H; ++y) {
+      f = y * W; fp = (y > 0 ? y - 1 : 0) * W; fn = (y < H - 1 ? y + 1 : H - 1) * W;
+      for (i = 0; i < W; ++i) {
+        q = f + i;
+        var il = i > 0 ? i - 1 : 0, ir = i < W - 1 ? i + 1 : W - 1, v;
+        if (modo === 0) { v = x[q] - 0.5 * (x[f + il] + x[f + ir]); m = i & 1 ? -1 : 1; }
+        else if (modo === 1) { v = x[q] - 0.5 * (x[fp + i] + x[fn + i]); m = y & 1 ? -1 : 1; }
+        else { v = x[q] - 0.25 * (x[fp + i] + x[fn + i] + x[f + il] + x[f + ir]); m = (i + y) & 1 ? -1 : 1; }
+        d[q] = v * m;
+      }
+    }
+    var sv = rdSuave(d, W, H, 2 * r);
+    for (y = 0; y < H; ++y) {
+      f = y * W;
+      for (i = 0; i < W; ++i) {
+        m = modo === 0 ? (i & 1 ? -1 : 1) : modo === 1 ? (y & 1 ? -1 : 1) : ((i + y) & 1 ? -1 : 1);
+        tot[f + i] += sv[f + i] * 0.5 * m;
+      }
+    }
+  }
+  return tot;
+}
+
+// x sin la malla de 2 px que crece con la señal (medidas.patron_2px_relativo). Alrededor de las estrellas brillantes de
+// una capa de dual band (OSC) la malla sube con la estrella; StarX la toma por nebulosa y deja un disco con malla y un
+// anillo. Se estima sobre x / fondo suave y se vuelve a multiplicar (IC 1396, 25 nov 2026: anillo 0,03–0,18 → 0,01–0,02).
+function rdPatron2pxRelativo(x, W, H, r) {
+  r = r || 3;
+  var s = rdGauss(x, W, H, 2.0), n = W * H, y = new Float32Array(n), i;
+  for (i = 0; i < n; ++i) { s[i] += 1e-5; y[i] = x[i] / s[i]; }
+  var pt = rdPatron2px(y, W, H, r), o = new Float32Array(n);
+  for (i = 0; i < n; ++i) o[i] = Math.min(1, Math.max(0, (y[i] - pt[i]) * s[i]));
+  return o;
+}
+
+// % de píxeles de estrella (medidas.pct_estrellas): picos del paso alto > 5σ (o > p99,5) que forman grupo (≥ 3 píxeles
+// en su 3×3). Los picos sueltos de ruido, la malla de 2 px y los anillos de StarX no cuentan. IC 1396: 0,13 % en una
+// starless, 2,3 % con estrellas. L: luminancia submuestrada 1 de cada 2 (rdLum2).
+function rdPctEstrellas(L, W, H) {
+  var S = 64, cel = [], y0, x0, y, x, i;
+  for (y0 = 0; y0 + S <= H; y0 += S) for (x0 = 0; x0 + S <= W; x0 += S) {
+    var v = [];
+    for (y = y0; y < y0 + S; y += 2) for (x = x0; x < x0 + S; x += 2) v.push(L[y * W + x]);
+    v.sort(function (p, q) { return p - q; });
+    if (v[v.length >> 1] > 1e-6) cel.push({ y: y0, x: x0, m: v[v.length >> 1] });
+  }
+  cel.sort(function (p, q) { return p.m - q.m; });
+  var k = Math.max(Math.min(5, cel.length), Math.floor(cel.length * 0.10)), dif = [];
+  for (var j = 0; j < k; ++j) for (y = cel[j].y; y < cel[j].y + S; ++y) for (x = cel[j].x; x + 1 < cel[j].x + S; x += 2)
+    dif.push(Math.abs(L[y * W + x + 1] - L[y * W + x]));
+  dif.sort(function (p, q) { return p - q; });
+  var ruido = dif.length ? dif[dif.length >> 1] / (0.6745 * Math.SQRT2) : 0;
+  var cj = rdCaja(L, W, H, 5), n = W * H, hp = new Float32Array(n), mu = [];
+  for (i = 0; i < n; ++i) { hp[i] = L[i] - cj[i]; if (i % 7 === 0) mu.push(hp[i]); }
+  mu.sort(function (p, q) { return p - q; });
+  var umbral = Math.max(5 * Math.max(ruido, 1e-6), mu[Math.floor(0.995 * (mu.length - 1))]);
+  var est = new Float32Array(n);
+  for (i = 0; i < n; ++i) est[i] = hp[i] > umbral ? 1 : 0;
+  var g = rdCaja(est, W, H, 1);
+  for (i = 0; i < n; ++i) est[i] = (est[i] && g[i] * 9 >= 2.5) ? 1 : 0;
+  var dil = rdCaja(est, W, H, 2), c = 0;
+  for (i = 0; i < n; ++i) if (dil[i] > 0) ++c;
+  return 100 * c / n;
+}
+
+// Luminancia de una vista submuestreada 1 de cada 2 (para rdPctEstrellas).
+function rdLum2(view) {
+  var a = rdLum(view), W = a.W >> 1, H = a.H >> 1, L = new Float32Array(W * H);
+  for (var y = 0; y < H; ++y) for (var x = 0; x < W; ++x) L[y * W + x] = a.L[(2 * y) * a.W + 2 * x];
+  return { L: L, W: W, H: H };
+}
+
 // StarXTerminator en lineal sobre una copia: starless + capa de estrellas, con las comprobaciones de la ficha.
 function separarEstrellas(viewId, o) {
   if (viewId && typeof viewId === "object") viewId = (viewId.id !== undefined) ? viewId.id : (typeof viewId.vista === "string" ? viewId.vista : viewId);   // también vale la View o el resultado de otra función ({ vista: ... })
@@ -654,6 +785,17 @@ function separarEstrellas(viewId, o) {
   var src = View.viewById(viewId);
   if (!src || src.isNull) throw new Error("No existe la vista " + viewId);
   src.image.resetSelections();
+  // No separar dos veces (IC 1396 en SetiAstroPilot, 25 nov 2026): se volvió a pasar StarX sobre la paleta ya sin
+  // estrellas; la capa nueva solo traía restos y se recombinó en lugar de las estrellas buenas del RGB.
+  if (!o.forzar) {
+    var yaSin = false; try { yaSin = !!src.propertyValue("PiAstroPilot:SinEstrellas"); } catch (eS) { }
+    var l2 = rdLum2(src), pctE = rdPctEstrellas(l2.L, l2.W, l2.H);
+    if (yaSin || pctE < 0.5)
+      throw new Error("'" + viewId + "' ya está sin estrellas (" + (yaSin ? "salió de separarEstrellas" :
+                      pctE.toFixed(2) + " % de píxeles de estrella; una con estrellas da > 1 %") + "). Separar otra vez solo saca " +
+                      "restos y ruido. Recombina la capa de estrellas que ya tienes (r.estrellas de la separación anterior). " +
+                      "opciones.forzar: true solo si de verdad quedan estrellas enteras.");
+  }
   var lineal = src.image.median() < 0.05;
   // motor: "syqon" = SyQon Axiom Mini por syqon-cli (22 nov 2026), SOLO sobre imagen estirada (en lineal sale rota).
   if (String(o.motor || "").toLowerCase() === "syqon") {
@@ -670,6 +812,19 @@ function separarEstrellas(viewId, o) {
   }
   var w = rdCopy(viewId, (typeof o.nuevaVista === "string" && o.nuevaVista) || (viewId + "_starless")), v = w.mainView, t0 = Date.now();
   var before = []; ImageWindow.windows.forEach(function (x) { before.push(x.mainView.id); });
+  // Malla de 2 px relativa a la señal fuera antes de StarX (opciones.patron, por defecto sí; IC 1396, 25 nov 2026): en
+  // las capas de dual band crece con las estrellas brillantes y StarX deja un disco con malla y un anillo. Solo en
+  // lineal; la capa de estrellas sale entonces como original − starless (suma exacta con la entrada de verdad).
+  var patron = lineal && o.patron !== false;
+  if (patron) {
+    var imP = v.image, WP = imP.width, HP = imP.height, RP = new Rect(0, 0, WP, HP), bP = new Float32Array(WP * HP);
+    v.beginProcess();
+    for (var cP = 0; cP < imP.numberOfChannels; ++cP) {
+      imP.getSamples(bP, RP, cP);
+      imP.setSamples(rdPatron2pxRelativo(bP, WP, HP, 3), RP, cP);
+    }
+    v.endProcess();
+  }
   var S = new StarXTerminator;
   S.stars = true; S.output_stars = true;
   S.unscreen = !lineal;            // lineal: suma exacta; no lineal: screen
@@ -678,6 +833,17 @@ function separarEstrellas(viewId, o) {
   var starsId = null;
   ImageWindow.windows.forEach(function (x) { if (before.indexOf(x.mainView.id) < 0) starsId = x.mainView.id; });
   if (!starsId) throw new Error("No se encontró la capa de estrellas que crea StarX");
+  if (patron) {                    // estrellas = original − starless
+    var stV = View.viewById(starsId), imS = stV.image, WS = imS.width, HS = imS.height, RS = new Rect(0, 0, WS, HS);
+    var s0 = new Float32Array(WS * HS), s1 = new Float32Array(WS * HS);
+    stV.beginProcess();
+    for (var cS = 0; cS < imS.numberOfChannels; ++cS) {
+      src.image.getSamples(s0, RS, cS); v.image.getSamples(s1, RS, cS);
+      for (var iS = 0; iS < s0.length; ++iS) s0[iS] = Math.min(1, Math.max(0, s0[iS] - s1[iS]));
+      imS.setSamples(s0, RS, cS);
+    }
+    stV.endProcess();
+  }
   if (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
     ImageWindow.windowById(starsId).mainView.id = o.nuevasEstrellas; starsId = o.nuevasEstrellas;
   }
@@ -710,7 +876,7 @@ function separarEstrellas(viewId, o) {
   // estructura_en_estrellas_pct es orientativa: en campos densos (Vía Láctea) el halo de estrellas débiles no resueltas
   // la sube sin que SXT se haya llevado nebulosa (nebulosa dual band, nov 2026: 19 %). No se usa como fallo; se revisa a ojo.
   return {
-    starless: v.id, estrellas: starsId, original: viewId, lineal: lineal, overlap: S.overlap, segundos: seg,
+    starless: v.id, estrellas: starsId, original: viewId, lineal: lineal, overlap: S.overlap, segundos: seg, patron_2px_relativo: patron,
     reconstruccion_error_max: +maxErr.toExponential(2), estructura_en_estrellas_pct: +extPct.toFixed(2), no_cumple: noCumple,
     control: {
       medido: { suma_exacta: !lineal || maxErr <= 1e-4 },
