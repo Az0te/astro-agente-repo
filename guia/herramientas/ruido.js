@@ -702,9 +702,11 @@ function rdGauss(x, W, H, s) {
 }
 
 // Patrón fijo de periodo 2 px (resto de la matriz Bayer de un OSC): segunda diferencia por filas, columnas y diagonal,
-// con su signo alterno, promediada en una ventana (medidas.patron_2px). Se resta.
+// con su signo alterno, promediada en una ventana (medidas.patron_2px). Se resta. Media ponderada sin los píxeles con
+// segunda diferencia > 4σ (y 2 px alrededor): junto a las estrellas brillantes la media simple restaba una malla FALSA
+// (IC 1396, 25 nov 2026, en SAS y Siril: capa desmezclada razón de Nyquist 1 → 1193).
 function rdPatron2px(x, W, H, r) {
-  var tot = new Float32Array(W * H), d = new Float32Array(W * H), y, i, q, m, f, fp, fn;
+  var tot = new Float32Array(W * H), d = new Float32Array(W * H), av = new Float32Array(W * H), y, i, q, m, f, fp, fn;
   for (var modo = 0; modo < 3; ++modo) {
     for (y = 0; y < H; ++y) {
       f = y * W; fp = (y > 0 ? y - 1 : 0) * W; fn = (y < H - 1 ? y + 1 : H - 1) * W;
@@ -714,15 +716,26 @@ function rdPatron2px(x, W, H, r) {
         if (modo === 0) { v = x[q] - 0.5 * (x[f + il] + x[f + ir]); m = i & 1 ? -1 : 1; }
         else if (modo === 1) { v = x[q] - 0.5 * (x[fp + i] + x[fn + i]); m = y & 1 ? -1 : 1; }
         else { v = x[q] - 0.25 * (x[fp + i] + x[fn + i] + x[f + il] + x[f + ir]); m = (i + y) & 1 ? -1 : 1; }
-        d[q] = v * m;
+        d[q] = v * m; av[q] = v;
       }
     }
-    var sv = rdSuave(d, W, H, 2 * r);
+    var mu = [];
+    for (y = 0; y < H; y += 3) for (i = 0; i < W; i += 3) mu.push(av[y * W + i]);
+    mu.sort(function (a, b) { return a - b; });
+    var med = mu[mu.length >> 1];
+    for (q = 0; q < mu.length; ++q) mu[q] = Math.abs(mu[q] - med);
+    mu.sort(function (a, b) { return a - b; });
+    var lim = 4 * (1.4826 * mu[mu.length >> 1] + 1e-12), malo = new Float32Array(W * H);
+    for (q = 0; q < W * H; ++q) malo[q] = Math.abs(av[q]) > lim ? 1 : 0;
+    var cerca = rdCaja(malo, W, H, 2), peso = new Float32Array(W * H);
+    for (q = 0; q < W * H; ++q) { peso[q] = cerca[q] > 1e-3 ? 0 : 1; d[q] *= peso[q]; }
+    var sv = rdSuave(d, W, H, 2 * r), sp = rdSuave(peso, W, H, 2 * r);
     for (y = 0; y < H; ++y) {
       f = y * W;
       for (i = 0; i < W; ++i) {
         m = modo === 0 ? (i & 1 ? -1 : 1) : modo === 1 ? (y & 1 ? -1 : 1) : ((i + y) & 1 ? -1 : 1);
-        tot[f + i] += sv[f + i] * 0.5 * m;
+        q = f + i;
+        tot[q] += (sp[q] > 0.25 ? sv[q] / Math.max(sp[q], 1e-6) : 0) * 0.5 * m;
       }
     }
   }

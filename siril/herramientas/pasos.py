@@ -3206,7 +3206,9 @@ def _cuna_cobertura(L, r=16, banda=(300, 600), umbral=0.5, max_px=600, pct=98.0)
 
 def _patron_2px(x, r=12):
     """Patrón fijo de periodo 2 px (resto de la matriz Bayer de un master OSC debayerizado), igual que medidas.patron_2px
-    de SetiAstroPilot: segunda diferencia por filas, columnas y diagonal, promediada en una ventana. Se resta."""
+    de SetiAstroPilot: segunda diferencia por filas, columnas y diagonal, promediada en una ventana. Se resta.
+    Media ponderada sin los píxeles con segunda diferencia > 4σ (y 2 px alrededor): junto a las estrellas brillantes la
+    media simple restaba una malla FALSA (IC 1396, 25 nov 2026: capa desmezclada razón de Nyquist 1 → 2043 en Siril)."""
     x = np.asarray(x, dtype=np.float32)
     h, w = x.shape
     sx = np.where(np.arange(w) % 2, -1.0, 1.0)[None, :].astype(np.float32)
@@ -3217,7 +3219,14 @@ def _patron_2px(x, r=12):
             d = x - 0.25 * (np.roll(x, 1, 0) + np.roll(x, -1, 0) + np.roll(x, 1, 1) + np.roll(x, -1, 1))
         else:
             d = x - 0.5 * (np.roll(x, 1, eje) + np.roll(x, -1, eje))
-        total += _suave(d * m, 2 * r) * 0.5 * m
+        dm = d[::3, ::3]
+        sig = 1.4826 * float(np.median(np.abs(dm - np.median(dm)))) + 1e-12
+        malo = (np.abs(d) > 4.0 * sig).astype(np.float32)
+        peso = (_caja(malo, 2) < 1e-3).astype(np.float32)
+        num = _suave(d * m * peso, 2 * r)
+        den = _suave(peso, 2 * r)
+        est = np.where(den > 0.25, num / np.maximum(den, 1e-6), 0.0).astype(np.float32)
+        total += est * 0.5 * m
     return total
 
 

@@ -685,7 +685,12 @@ def patron_2px(x, r=12):
     """Patrón fijo de periodo 2 px (filas, columnas y diagonal alternas: resto de la matriz Bayer de un master OSC
     debayerizado), estimado con la segunda diferencia (no ve la estructura suave) y promediado en una ventana. En IC 1396
     era el 1 % de la escala fina del master y el 15 % tras un denoise fuerte: salía como una malla fina (15 nov 2026).
-    Se resta: x − patron_2px(x). Igual que _patron_2px de Siril."""
+    Se resta: x − patron_2px(x). Igual que _patron_2px de Siril.
+    Junto a una estrella brillante la segunda diferencia del perfil empinado, con signo alterno y promediada en la
+    ventana, no da 0: la versión anterior restaba allí una malla FALSA (IC 1396, 25 nov 2026: el master desmezclado no
+    tenía malla, razón de Nyquist 1, y tras restar esto 1193; era la cuadrícula de los anillos). Ahora la media es
+    ponderada y deja fuera los píxeles con segunda diferencia > 4σ (y 2 px alrededor): allí el patrón se toma del
+    entorno, que es lo que es un patrón fijo; si no hay entorno válido, 0."""
     x = np.asarray(x, dtype=np.float32)
     h, w = x.shape
     sx = np.where(np.arange(w) % 2, -1.0, 1.0)[None, :].astype(np.float32)
@@ -696,7 +701,14 @@ def patron_2px(x, r=12):
             d = x - 0.25 * (np.roll(x, 1, 0) + np.roll(x, -1, 0) + np.roll(x, 1, 1) + np.roll(x, -1, 1))
         else:
             d = x - 0.5 * (np.roll(x, 1, eje) + np.roll(x, -1, eje))
-        total += suave(d * m, 2 * r) * 0.5 * m
+        dm = d[::3, ::3]
+        sig = 1.4826 * float(np.median(np.abs(dm - np.median(dm)))) + 1e-12
+        malo = (np.abs(d) > 4.0 * sig).astype(np.float32)
+        peso = (_caja(malo, 2) < 1e-3).astype(np.float32)
+        num = suave(d * m * peso, 2 * r)
+        den = suave(peso, 2 * r)
+        est = np.where(den > 0.25, num / np.maximum(den, 1e-6), 0.0).astype(np.float32)
+        total += est * 0.5 * m
     return total
 
 
