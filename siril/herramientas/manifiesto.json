@@ -1525,18 +1525,18 @@
    "nivel": "vista",
    "timeout_s": 600,
    "paso": "lineal/10-combinacion-rgb-nb.md",
-   "descripcion": "Paso 10 lineal: con el RGB lineal cargado (alineado, con gradiente y color hechos), compara añadirle el exceso de Hα en el rojo (y el de OIII en azul y verde) a varias intensidades; las estrellas se quedan las del RGB. La escala sale de las estrellas (continuo) y el exceso se limita para que ×1 como mucho duplique la nebulosa. Si lo cargado parece el propio dual band, se niega. Mide la nebulosa ganada en Hα y OIII, el ruido y la dominante del cielo y el color de las estrellas, y recomienda. La imagen no cambia: aplicarCandidato(id). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
+   "descripcion": "Paso 10 lineal: con el RGB lineal cargado (alineado, con gradiente y color hechos), compara añadirle el exceso de Hα en el rojo (y el de OIII en azul y verde) a varias intensidades; las estrellas se quedan las del RGB. La escala sale de las estrellas (continuo) y el exceso se limita para que ×1 como mucho duplique la nebulosa (también con capas sin estrellas). Se niega con capas ya estiradas, y no cumple si la nebulosa sube más de un 250 % o su R/G cambia más de ×2,5. Si lo cargado parece el propio dual band, se niega. Mide la nebulosa ganada en Hα y OIII, el ruido y la dominante del cielo y el color de las estrellas, y recomienda. La imagen no cambia: aplicarCandidato(id). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
    "resumen": "Paso 10: compara añadir Hα (y OIII) al RGB lineal y recomienda; aplicarCandidato(id).",
    "params": {
     "type": "object",
     "properties": {
      "ha": {
       "type": "string",
-      "description": "Fichero de la capa Hα (de desmezclarDualBand, alineada y con gradiente)."
+      "description": "Fichero de la capa Hα LINEAL (de desmezclarDualBand, alineada y con gradiente; mejor con estrellas). Nunca la estirada: se niega."
      },
      "oiii": {
       "type": "string",
-      "description": "Fichero de la capa OIII (opcional)."
+      "description": "Fichero de la capa OIII lineal (opcional; nunca la estirada)."
      },
      "tipo": {
       "type": "string",

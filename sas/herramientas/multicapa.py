@@ -802,10 +802,33 @@ def _flujos_estrellas(base, nb, max_n=600):
     return np.array(fb), np.array(fn)
 
 
+def _tope_exceso(ex, base, cielo_px, estrellas_px, obj_px):
+    """Tope: ×1 como mucho duplica la nebulosa sobre el cielo del canal de banda ancha (mediana en la zona del objeto sin
+    estrellas). 25 nov 2026: sólo se aplicaba con el escalado por estrellas; con capas sin estrellas (starless) se caía a
+    _excesos, sin tope, y en IC 405 (Siril, el mismo código) el Hα subió la nebulosa roja un 41 000 % (rojo puro)."""
+    mb = float(np.median(base[cielo_px]))
+    zona = obj_px & ~estrellas_px
+    s_base = float(np.median(base[zona])) - mb if zona.any() else 0.0
+    s_ex = float(np.median(ex[zona])) if zona.any() else 0.0
+    if s_ex <= 0 and zona.any():
+        s_ex = float(np.percentile(ex[zona], 75))
+    tope = 1.0
+    if s_base > 0 and s_ex > s_base:
+        tope = s_base / s_ex
+        ex = ex * tope
+    elif s_base <= 0 and s_ex > 0:
+        tope = 0.0                                     # el canal no tiene nebulosa medible: no hay a qué escalar
+        ex = ex * 0.0
+    return ex, tope, (_r(s_ex / s_base, 2) if s_base > 0 else None)
+
+
 def _excesos_estrellas(base, nb, cielo_px, estrellas_px, obj_px):
     fb, fn = _flujos_estrellas(base, nb)
     if len(fb) < 20:
-        return _excesos(base, nb, cielo_px, estrellas_px, obj_px)
+        ex, k = _excesos(base, nb, cielo_px, estrellas_px, obj_px)
+        ex, tope, puro = _tope_exceso(ex, base, cielo_px, estrellas_px, obj_px)
+        return ex, {"k_nebulosa": k, "exceso_puro_sobre_rgb": puro, "tope": _r(tope, 3),
+                    "aviso": "capa sin estrellas: escalada por la nebulosa (mejor la capa lineal CON estrellas)"}
     k = float(np.median(fb / fn))
     mb, mn = float(np.median(base[cielo_px])), float(np.median(nb[cielo_px]))
     sn = 1.4826 * float(np.median(np.abs(nb[cielo_px] - mn)))
@@ -813,15 +836,8 @@ def _excesos_estrellas(base, nb, cielo_px, estrellas_px, obj_px):
     with np.errstate(over="ignore", invalid="ignore"):
         ex = ex * _peso_senal(nb, mn, sn)
     ex[estrellas_px] = 0
-    zona = obj_px & ~estrellas_px
-    s_base = float(np.median(base[zona])) - mb if zona.any() else 0.0
-    s_ex = float(np.median(ex[zona])) if zona.any() else 0.0
-    tope = 1.0
-    if s_base > 0 and s_ex > s_base:
-        tope = s_base / s_ex
-        ex = ex * tope
-    return ex, {"k_estrellas": _r(k, 3), "exceso_puro_sobre_rgb": _r(s_ex / s_base, 2) if s_base > 0 else None,
-                "tope": _r(tope, 3)}
+    ex, tope, puro = _tope_exceso(ex, base, cielo_px, estrellas_px, obj_px)
+    return ex, {"k_estrellas": _r(k, 3), "exceso_puro_sobre_rgb": puro, "tope": _r(tope, 3)}
 
 
 def _capa(ctx, vista, forma):
@@ -850,6 +866,13 @@ def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), 
         raise RuntimeError("El RGB parece estirado: la banda estrecha se combina en lineal, tras el color (Paso 10).")
     Ha = _capa(ctx, ha, p.shape[1:])
     O = _capa(ctx, oiii, p.shape[1:]) if oiii else None
+    # 25 nov 2026, IC 405 en Siril: el modelo pasó las capas YA ESTIRADAS sobre el RGB lineal; la escala salía al mínimo
+    # del recorte (0,05, ~150 veces de más) y el final quedó rojo puro.
+    for nom, capa, v in (("Hα", Ha, ha), ("OIII", O, oiii)):
+        if capa is not None and float(np.median(capa[::4, ::4])) >= 0.05:
+            raise RuntimeError(f"La capa {nom} ('{v}') está estirada (mediana {_r(float(np.median(capa[::4, ::4])), 3)}) "
+                               "y el RGB es lineal: la banda estrecha se combina en lineal. Pasa la capa lineal tras "
+                               "gradiente (y ruido), con estrellas si la tienes, no la estirada.")
     z = M.zonas_objeto_cielo(p)
     cielo_px, obj_px, est_px = z["cielo_px"], z["obj_px"], z["est_px"]
     _, k_neb = _excesos(p[0], Ha, cielo_px, est_px, obj_px)
@@ -872,8 +895,14 @@ def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), 
         neb = float(np.median(q[0][obj_px])) - float(np.median(q[0][cielo_px])) if obj_px.any() else 0.0
         neb_o = float(np.median(q[2][obj_px])) - float(np.median(q[2][cielo_px])) if obj_px.any() else 0.0
         rg = float(np.median(q[0][est_px] / np.maximum(q[1][est_px], 1e-6))) if est_px.any() else None
+        zo = obj_px & ~est_px
+        rg_obj = None
+        if zo.any():
+            cr, cg = float(np.median(q[0][cielo_px])), float(np.median(q[1][cielo_px]))
+            sr, sg = float(np.median(q[0][zo])) - cr, float(np.median(q[1][zo])) - cg
+            rg_obj = sr / sg if sg > 1e-9 else None
         return {"nebulosa_rojo": neb, "nebulosa_azul": neb_o, "ruido_cielo": ruido, "dominante_cielo_pct": _r(dom, 1),
-                "color_estrellas_rg": rg}
+                "color_estrellas_rg": rg, "objeto_rg": rg_obj}
 
     m0 = medir(p)
     variantes = [(f"Hα en el rojo ×{a:g}", a, 0.0) for a in intensidades]
@@ -892,7 +921,7 @@ def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), 
 
     def metricas(q):
         m = medir(q)
-        return {k: (_r(v, 6) if isinstance(v, float) else v) for k, v in m.items()}
+        return {k: (v if k == "objeto_rg" else _r(v, 6) if isinstance(v, float) else v) for k, v in m.items()}
 
     lista = [(n, "combinar_propio", {}, (lambda q, f=hacer(a, b): f(q))) for n, a, b in variantes]
     r = H._comparar(ctx, d, "combinacion", lista, metricas)
@@ -910,9 +939,16 @@ def combinarCandidatos(ctx, ha, oiii=None, vista=None, intensidades=(0.5, 1.0), 
             fal.append(f"dominante del cielo {m['dominante_cielo_pct']} % (antes {m0['dominante_cielo_pct']} %)")
         if abs(cambio) > 10:
             fal.append(f"el color de las estrellas cambia un {_r(cambio, 1)} %")
+        # 25 nov 2026: topes duros (IC 405 en Siril: +41 000 % y R/G del objeto ~160 sin ningún no_cumple).
+        rg_x = (m["objeto_rg"] / m0["objeto_rg"]) if m0["objeto_rg"] and m.get("objeto_rg") and m0["objeto_rg"] > 0 else None
+        if rg_x is not None and (rg_x > 2.5 or rg_x < 0.4):
+            fal.append(f"el R/G de la nebulosa cambia ×{_r(rg_x, 2)} (máx ×2,5): el Hα domina el color")
+        if gan_h > 250 or gan_o > 250:
+            fal.append(f"la nebulosa sube un {_r(max(gan_h, gan_o), 0)} % (máx 250 %): banda estrecha mal escalada")
         x["metricas"] = {"nebulosa_halfa_ganada_pct": _r(gan_h, 1), "nebulosa_oiii_ganada_pct": _r(gan_o, 1),
                          "ruido_cielo_x": _r(ruido_x, 3), "dominante_cielo_pct": m["dominante_cielo_pct"],
-                         "color_estrellas_cambio_pct": _r(cambio, 1)}
+                         "color_estrellas_cambio_pct": _r(cambio, 1),
+                         "objeto_rg_x": _r(rg_x, 2) if rg_x is not None else None}
         x["no_cumple"] = fal
     ok = [x for x in r["candidatos"] if not x["no_cumple"]
           and x["metricas"]["nebulosa_halfa_ganada_pct"] + x["metricas"]["nebulosa_oiii_ganada_pct"] >= 5]

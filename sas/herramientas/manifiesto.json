@@ -710,18 +710,18 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "lineal/10-combinacion-rgb-nb.md",
-   "descripcion": "L10 combinar banda estrecha con el RGB: sobre la vista RGB lineal (ya con gradiente y color), compara añadir el exceso de Hα al rojo (y de OIII a verde y azul) a varias intensidades, escalado por las estrellas; mide nebulosa ganada, ruido y dominante del cielo y color de las estrellas, y recomienda. Las capas deben estar alineadas (mismo tamaño). La vista NO cambia (aplicarCandidato). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
+   "descripcion": "L10 combinar banda estrecha con el RGB: sobre la vista RGB lineal (ya con gradiente y color), compara añadir el exceso de Hα al rojo (y de OIII a verde y azul) a varias intensidades, escalado por las estrellas y limitado a que ×1 como mucho duplique la nebulosa (también con capas sin estrellas); se niega con capas ya estiradas y no cumple si la nebulosa sube más de un 250 % o su R/G cambia más de ×2,5; mide nebulosa ganada, ruido y dominante del cielo y color de las estrellas, y recomienda. Las capas deben estar alineadas (mismo tamaño). La vista NO cambia (aplicarCandidato). En nebulosas se niega si alinearMasters midió la ruta de paleta (banda estrecha >= 4 veces la RGB): la nebulosa sale como paleta (paletasCandidatos) y la RGB sólo da las estrellas; motivo la salta (nebulosa de emisión y reflexión, o el usuario pide color RGB).",
    "resumen": "L10: compara cómo añadir Hα/OIII al RGB; no cambia la vista.",
    "params": {
     "type": "object",
     "properties": {
      "ha": {
       "type": "string",
-      "description": "Vista de la capa Hα (nombre o uid)."
+      "description": "Vista de la capa Hα LINEAL (nombre o uid; alineada y con gradiente, mejor con estrellas). Nunca la estirada: se niega."
      },
      "oiii": {
       "type": "string",
-      "description": "Vista de la capa OIII (opcional)."
+      "description": "Vista de la capa OIII lineal (opcional; nunca la estirada)."
      },
      "vista": {
       "type": "string",
