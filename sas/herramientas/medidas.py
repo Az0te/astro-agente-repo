@@ -268,6 +268,14 @@ def aplanado_gradiente(c, extenso, umbral=5.0):
             continue
         ap = 100.0 * (1.0 - float(e) / e0)
         x["metricas"]["aplanado_vs_p1_pct"] = _r(ap, 1)
+        # SRGC ajusta el gradiente a un survey (el cielo real), no a la imagen: si aplana más que el plano es porque el
+        # gradiente real no es un plano, y esta medida no distingue eso de comerse nebulosa. Seti Astro (25 nov 2026, IC
+        # 1396): «SRGC causes the gradient to match the real gradient of the sky… this is not a bug». Se mide y se avisa,
+        # pero no se descarta.
+        if extenso and ap > umbral and (x.get("proceso") == "srgc" or str(x.get("metodo", "")).startswith("SRGC")):
+            x.setdefault("avisos", []).append(f"aplana la estructura grande un {_r(ap, 1)} % más que el polinomio 1; "
+                                              "SRGC sigue el gradiente real del survey, no se descarta por esto")
+            continue
         if extenso and ap > umbral:
             fuera.append(x["id"])
             x.setdefault("no_cumple", []).append(f"aplana la estructura grande un {_r(ap, 1)} % más que el polinomio 1 "
