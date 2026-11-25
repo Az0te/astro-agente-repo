@@ -1249,11 +1249,16 @@
        "enum": [
         "clahe_suave",
         "clahe_medio",
+        "clahe_128",
+        "clahe_180",
+        "clahe_256",
         "ondiculas",
-        "enfoque"
+        "enfoque",
+        "grande_suave",
+        "grande_fuerte"
        ]
       },
-      "description": "Métodos a comparar (por defecto los cuatro)."
+      "description": "Métodos a comparar (por defecto clahe_suave, clahe_medio, ondiculas, enfoque, grande_suave y grande_fuerte). clahe_128/180/256: CLAHE con zona fija de ≈ 128/180/256 px (la rejilla de clahe se calcula con el tamaño de la imagen)."
      },
      "ruido_max": {
       "type": "number",
@@ -1310,6 +1315,10 @@
      "color": {
       "type": "number",
       "description": "Color de las estrellas (> 1 las satura; 2,5 se acercó a PixInsight, que las deja con color)."
+     },
+     "atenuar": {
+      "type": "number",
+      "description": "0–0,8 (por defecto 0): baja las estrellas que caen sobre nebulosa brillante (máscara de luminosidad de la starless), para que allí mande la nebulosa; 0,3–0,5 suele bastar."
      }
     },
     "required": [

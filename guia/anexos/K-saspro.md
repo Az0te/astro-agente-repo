@@ -134,3 +134,35 @@ Recortes de 1500 × 1000 y la Natural completa (HaO3 lineal, OIII y Natural esti
   existen.
 - **Pendiente.** GHS no estira en lineal; la máscara de estrellas sacada de una capa de estrellas estirada cubre el 22 %
   (demasiado): usar `crecer` bajo o umbral más alto.
+
+<a id="videos-seti"></a>
+## Ideas de los vídeos de Seti Astro (25 nov 2026)
+
+Pedestal y propuestas 1–4 del análisis de los dos vídeos. Probado en recortes de IC 1396 (Natural v10 sin estrellas, su
+capa de estrellas, Hα estirado, HaO3 lineal) y en imágenes sintéticas:
+
+- **Pedestal 0,05 al reponer la luminancia** (`_con_luminancia`, `comprimir_nucleo`; en Siril, `nucleo.py` y la escala
+  grande). Se sube el negro, se escala y se vuelve a bajar: cerca de 0 el cociente L1/L amplificaba el ruido de color.
+  CLAHE 50 % en la Natural completa: dominante del cielo 4,6 → 12,0 % sin pedestal y → 7,1 % con él; ruido × 0,99 → 0,92.
+  Solo en estirada (en lineal desatura). PixInsight usa sus procesos de luminancia y no lo necesita.
+- **Estrellas atenuadas sobre la nebulosa brillante** (`estrellasNebulosaCandidatos`; `recombinarEstrellas` con
+  `atenuar`; también en Siril y en PixInsight). Máscara de la luminancia de la starless (t², suavizada). En IC 1396 el
+  screen ya deja las estrellas de la nebulosa al 0,71 de las del cielo oscuro; con 0,5 bajan a 0,48 sin perder ninguna
+  (0,4 %); con 0,7 casi desaparece el 5,5 %. Recomienda la más fuerte ≤ 0,5 que no pierde estrellas, y 0 si no hay
+  nebulosa brillante. Es gusto: mirar la previa.
+- **ABE con exclusión automática del objeto** (`gradienteCandidatos`, `abe_excluir`). El comando sin ventana de ABE no
+  admite polígonos; se llama a `abe_run` con `exclusion_mask` = las cajas de cielo de `cielo.py` (True = zona donde SÍ se
+  toman muestras; invertida, el gradiente quedaba peor). Campo sintético con una nebulosa gaussiana: polinomio 1 deja
+  0,10 del gradiente frente a 0,18 sin exclusión; el 2 no se come nada (sin exclusión, el 9 % del objeto). En el HaO3 de
+  IC 1396 (la nebulosa llena el campo) empata con ABE normal (0,52–0,62).
+- **CLAHE con zona en píxeles** (`clahe_128`, `clahe_180`, `clahe_256`, `clahe_180_sin_croma`; en Siril `clahe_128/180/256`
+  calculan la rejilla con el tamaño de la imagen). Con 1/8 de la imagen la zona medía 750 px. En la Natural completa,
+  zona de 128 px: +29 % de contraste frente a +26 %, con el mismo ruido. Todos los CLAHE siguen fuera por «recortes
+  nuevos» y color del cielo en esta imagen (ya pasaba). El croma repuesto apenas cambia nada aquí (croma × 1,00): el
+  reparto por cocientes ya conserva la saturación; queda para quien use curvas en la luminancia.
+- **Hα como luminancia en las afueras** (`haLuminanciaCandidatos`, nueva). Hα igualado a la luminancia de la vista y
+  suavizado, mezclado solo en lo débil con una máscara de rango invertida, croma repuesto y `saturar` opcional. Mide el
+  contraste ganado en la zona débil, el croma de esa zona, el ruido del cielo y que lo brillante no cambie. Sintético
+  (afueras con poco contraste y Hα con estructura): +4 / +10 / +18 % con 0,2 / 0,3 / 0,4, color igual, brillante sin
+  tocar. En la Natural v10 de IC 1396 baja el contraste (−12 a −24 %): su luminancia ya es de Hα y está trabajada, así que
+  no se recomienda ninguna. Pensada para paletas con las afueras flojas (OIII o SII dominantes).

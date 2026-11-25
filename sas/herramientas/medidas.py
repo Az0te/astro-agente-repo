@@ -514,7 +514,8 @@ def comprimir_nucleo(p, n, k):
     L, B, mk, u = n["L"], n["B"], n["mascara"], n["u"]
     Lo = np.clip(L - k * mk * np.maximum(B - u, 0) + 0.5 * k * mk * (L - B), 0, 1)
     if p.shape[0] == 3:
-        q = p * (Lo / np.maximum(L, 1e-6))[None]
+        # con pedestal de 0,05 (como _con_luminancia): sin él el cociente amplifica el ruido de color de lo oscuro
+        q = (p + 0.05) * ((Lo + 0.05) / np.maximum(L + 0.05, 1e-6))[None] - 0.05
         mx = q.max(axis=0)
         q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
     else:

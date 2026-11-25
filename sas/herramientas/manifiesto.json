@@ -426,7 +426,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "lineal/09-correccion-gradiente.md",
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) de SASpro (ABE polinomio 1 y 2, ABE con RBF y GraXpert IA) y SyQon DeepGradient (syqon-cli, si SyQon Studio está instalado; necesita internet, de 5 s a ~2 min; si no, va en omitidos), mide cada una con los criterios de la guía (copia_objeto, objeto_quitado_pct, gradiente_restante, irregularidad_cielo) y recomienda. La vista NO cambia: el elegido se pone con aplicarCandidato(id). Cada candidato trae previa y previa_quita (el modelo restado). Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo.",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) de SASpro (ABE polinomio 1 y 2, ABE con exclusión automática del objeto, ABE con RBF y GraXpert IA) y SyQon DeepGradient (syqon-cli, si SyQon Studio está instalado; necesita internet, de 5 s a ~2 min; si no, va en omitidos), mide cada una con los criterios de la guía (copia_objeto, objeto_quitado_pct, gradiente_restante, irregularidad_cielo) y recomienda. La vista NO cambia: el elegido se pone con aplicarCandidato(id). Cada candidato trae previa y previa_quita (el modelo restado). Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo.",
    "resumen": "Paso 9: compara ABE poli/RBF, GraXpert y SyQon DeepGradient, mide y recomienda; no cambia la vista.",
    "params": {
     "type": "object",
@@ -478,6 +478,10 @@
      "diagnostico": {
       "type": "boolean",
       "description": "Diagnóstico de manchas de la recomendada (por defecto true)."
+     },
+     "abe_excluir": {
+      "type": "boolean",
+      "description": "Probar también ABE (cada grado de polinomio) con exclusión automática del objeto: solo toma muestras en el cielo de verdad (por defecto true)."
      }
     }
    }
@@ -915,6 +919,54 @@
    }
   },
   {
+   "nombre": "haLuminanciaCandidatos",
+   "fichero": "multicapa.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "no-lineal/02-lrgb-paleta.md",
+   "descripcion": "NL2 (vídeos de Seti Astro): Hα como luminancia en las afueras de una paleta o RGB YA ESTIRADOS. Mezcla el Hα (igualado a la luminancia de la vista y con reducción de ruido extra) solo en la luminancia y solo en lo débil, con una máscara de rango invertida; conserva el color (croma repuesto) y opcionalmente sube antes el croma bajo la misma máscara. Compara mezclas (0,2/0,3/0,4) y mide el contraste ganado en la nebulosa débil, el croma de esa zona (desaturación del rojo), el ruido del cielo y que lo brillante no cambie. La vista NO cambia (aplicarCandidato).",
+   "resumen": "NL2: Hα en la luminancia de las afueras; compara mezclas y recomienda.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ha": {
+      "type": "string",
+      "description": "Vista mono de Hα estirada, alineada y del mismo tamaño (mejor sin estrellas)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Paleta o RGB estirado. Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "mezclas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Proporciones de Hα en la luminancia de lo débil (por defecto [0.2, 0.3, 0.4])."
+     },
+     "suavizar": {
+      "type": "number",
+      "description": "Reducción de ruido extra del Hα, radio en px (por defecto 2; 0 = nada)."
+     },
+     "saturar": {
+      "type": "number",
+      "description": "Sube antes el croma bajo la misma máscara (0–1, por defecto 0)."
+     },
+     "croma": {
+      "type": "boolean",
+      "description": "Reponer el croma tras cambiar la luminancia (por defecto true)."
+     },
+     "brillante": {
+      "type": "number",
+      "description": "Desde qué fracción del recorrido cielo→p99 es «brillante» y no se toca (por defecto 0,6)."
+     }
+    },
+    "required": [
+     "ha"
+    ]
+   }
+  },
+  {
    "nombre": "estirarCandidatos",
    "fichero": "herramientas.py",
    "nivel": "lectura",
@@ -1090,7 +1142,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Contraste local (no lineal, después del núcleo y antes de saturar): compara CLAHE (25 % y 50 % del detalle de escalas medias, sin levantar el fondo), realce por ondículas de las escalas 2–4, máscara de enfoque y escala grande (propios), y Texture Clarity (claridad 0,25 y 0,5) y la descomposición multiescala de SASpro; mide el contraste local en el objeto, el ruido del cielo (≤ ×1,25; ×1,10 en galaxias), la dominante y los recortes, y recomienda el de más contraste por ruido añadido. La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
+   "descripcion": "Contraste local (no lineal, después del núcleo y antes de saturar): compara CLAHE (25 % y 50 % del detalle de escalas medias, sin levantar el fondo; y con zona fija de 128, 180 o 256 px + croma repuesto: clahe_128, clahe_180, clahe_256, clahe_180_sin_croma), realce por ondículas de las escalas 2–4, máscara de enfoque y escala grande (propios), y Texture Clarity (claridad 0,25 y 0,5) y la descomposición multiescala de SASpro; mide el contraste local en el objeto, el ruido del cielo (≤ ×1,25; ×1,10 en galaxias), la dominante y los recortes, y recomienda el de más contraste por ruido añadido. La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "Contraste local: compara CLAHE, ondículas, enfoque, Texture Clarity y multiescala; no cambia la vista.",
    "params": {
     "type": "object",
@@ -2192,7 +2244,7 @@
    "nivel": "vista",
    "timeout_s": 300,
    "paso": "no-lineal/09-recombinacion.md",
-   "descripcion": "NL9: une la starless (vista) con la vista de estrellas por screen (o suma), con deshacer en la starless. Las dos deben estar estiradas: si las estrellas siguen lineales, se niega y pide estirarEstrellas. Se niega también si la 'starless' ya tiene estrellas (> 0,5 % de píxeles de estrella), p. ej. una paleta hecha con capas con estrellas, salvo forzar: true. Informa del aporte de las estrellas, el fondo y los recortes.",
+   "descripcion": "NL9: une la starless (vista) con la vista de estrellas por screen (o suma), con deshacer en la starless. Las dos deben estar estiradas: si las estrellas siguen lineales, se niega y pide estirarEstrellas. Se niega también si la 'starless' ya tiene estrellas (> 0,5 % de píxeles de estrella), p. ej. una paleta hecha con capas con estrellas, salvo forzar: true. Informa del aporte de las estrellas, el fondo y los recortes. atenuar (0–0,8) baja las estrellas sobre la nebulosa brillante, como en el vídeo de Seti Astro.",
    "resumen": "NL9: starless + estrellas por screen, con deshacer.",
    "params": {
     "type": "object",
@@ -2219,6 +2271,61 @@
      "forzar": {
       "type": "boolean",
       "description": "Recombinar aunque la vista ya tenga estrellas."
+     },
+     "atenuar": {
+      "type": "number",
+      "description": "0–0,8 (por defecto 0): baja las estrellas que caen sobre nebulosa brillante (máscara de luminosidad de la starless). Elegir con estrellasNebulosaCandidatos."
+     }
+    },
+    "required": [
+     "estrellas"
+    ]
+   }
+  },
+  {
+   "nombre": "estrellasNebulosaCandidatos",
+   "fichero": "herramientas.py",
+   "nivel": "lectura",
+   "timeout_s": 600,
+   "paso": "no-lineal/09-recombinacion.md",
+   "descripcion": "NL9 (vídeo de Seti Astro): compara la recombinación de estrellas atenuando las que caen sobre nebulosa brillante (0, 0,3 y 0,5 por defecto), con la máscara de luminosidad de la starless suavizada y con contraste. Mide el brillo que aportan las estrellas en la zona brillante y en la oscura, su cociente y las estrellas de la zona brillante que casi desaparecen (> 10 % no cumple). Sin nebulosa brillante recomienda 0. La vista NO cambia: aplicarCandidato(id) en la starless.",
+   "resumen": "NL9: estrellas atenuadas sobre la nebulosa brillante; compara y recomienda.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "estrellas": {
+      "type": "string",
+      "description": "Vista de estrellas ya estirada (de separarEstrellas + estirarEstrellas)."
+     },
+     "vista": {
+      "type": "string",
+      "description": "Starless estirada. Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "atenuaciones": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Atenuaciones a comparar, 0–0,8 (por defecto [0, 0.3, 0.5])."
+     },
+     "factor": {
+      "type": "number",
+      "description": "Multiplicador de las estrellas (por defecto 1)."
+     },
+     "metodo": {
+      "type": "string",
+      "enum": [
+       "screen",
+       "suma"
+      ]
+     },
+     "contraste": {
+      "type": "number",
+      "description": "Exponente de la máscara (por defecto 2: solo lo más brillante)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Seguir aunque la starless parezca tener estrellas (nebulosa con mucho grumo)."
      }
     },
     "required": [

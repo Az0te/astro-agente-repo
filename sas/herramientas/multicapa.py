@@ -1483,8 +1483,114 @@ def restarContinuo(ctx, nb, continuo, k, canal=None, c=0.0, nombre=None, forzar=
                         "nota": "En nebulosas de emisión con reflexión el continuo suele quitar solo un 2–5 %."}}
 
 
+def haLuminanciaCandidatos(ctx, ha, vista=None, mezclas=(0.2, 0.3, 0.4), suavizar=2.0, saturar=0.0, croma=True,
+                           brillante=0.6):
+    """Hα como luminancia en las afueras (25 nov 2026, vídeos de Seti Astro): en una paleta o un RGB ya estirados, la
+    nebulosa débil de las afueras sale con poco contraste; el Hα (mucha más señal) se mezcla en la LUMINANCIA solo allí,
+    con una máscara de rango invertida (1 en lo débil y el cielo, 0 desde 'brillante' del recorrido cielo→p99), y el color
+    se conserva. Pasos: Hα igualado a la luminancia de la vista (mismo cielo y recorrido), con reducción de ruido extra
+    (suavizar, px) porque en las afueras el Hα también es débil; saturar (opcional, 0–1) sube antes el croma bajo la misma
+    máscara; croma repone el croma tras cambiar la luminancia (si no, el rojo se lava). Compara las mezclas y mide el
+    contraste ganado en la zona débil, el croma de la zona débil (desaturación del rojo), el ruido del cielo y si la zona
+    brillante cambia (no debe). La vista no cambia: aplicarCandidato(id)."""
+    d = H._doc(ctx, vista)
+    e = H._doc(ctx, ha)
+    if d is e:
+        raise ValueError("'ha' y 'vista' son la misma vista.")
+    p, h = H._p(d.image), H._p(e.image)
+    if p.shape[0] != 3:
+        raise RuntimeError("La vista tiene que ser en color (paleta o RGB estirados).")
+    if h.shape[1:] != p.shape[1:]:
+        raise RuntimeError(f"El Hα mide {h.shape[2]}×{h.shape[1]} y la vista {p.shape[2]}×{p.shape[1]}: alinéalos antes.")
+    if M.lineal(p[:, ::8, ::8]) or M.lineal(h[:, ::8, ::8]):
+        raise RuntimeError("La vista y el Hα tienen que estar estirados (esto va en no lineal, como en el vídeo).")
+    for m_ in mezclas:
+        if not 0 < float(m_) <= 0.8:
+            raise ValueError("mezclas entre 0 y 0,8.")
+    hm = M.lum(h).astype(np.float32)
+    L = M.lum(p).astype(np.float32)
+    z = M.zonas_objeto_cielo(p)
+    cielo_px = z["cielo_px"]
+    he = _igualar(hm, L, cielo_px)
+    if float(suavizar) > 0:
+        he = M.suave(he, float(suavizar))
+    Ls = M.suave(L, 8)
+    c = float(np.median(L[cielo_px])) if cielo_px.any() else float(np.percentile(Ls[::4, ::4], 5))
+    hi = float(np.percentile(Ls[::4, ::4], 99))
+    t = np.clip((Ls - c) / max(hi - c, 1e-4), 0, 1)
+    u = np.clip(t / float(brillante), 0, 1)
+    w = (1.0 - u * u * (3 - 2 * u)).astype(np.float32)          # máscara de rango invertida y suave
+    # Zona débil: por encima del cielo (t > 0,08) y en la mitad baja de la máscara. No con obj_px: en una nebulosa que
+    # llena el campo el «objeto» es solo lo brillante y la zona débil salía vacía (IC 1396, 25 nov 2026).
+    debil = (t > 0.08) & (w > 0.5)
+    brill = t >= float(brillante)
+    if debil.sum() < 500:
+        return {"aviso": "Casi no hay nebulosa débil fuera de lo brillante: no hace falta Hα en las afueras."}
+    k0 = M.contraste_local(L, debil)
+    r0 = float(z["medidas"]["ruido"])
+
+    def croma_debil(q):
+        Lq = M.lum(q)
+        sat = np.abs(q - Lq[None]).mean(axis=0) / np.maximum(Lq, 0.02)
+        rojo = (q[0] - Lq) / np.maximum(Lq, 0.02)
+        return float(sat[debil].mean()), float(rojo[debil].mean())
+
+    s0, rj0 = croma_debil(p)
+
+    def medir(q):
+        Lq = M.lum(q)
+        k1 = M.contraste_local(Lq, debil)
+        s1, rj1 = croma_debil(q)
+        return {"contraste_debil_ganado_pct": _r(100 * (k1 / k0 - 1), 1) if k0 and k1 else None,
+                "croma_debil_rel": _r(s1 / max(s0, 1e-9), 3),
+                "rojo_debil_rel": _r(rj1 / rj0, 3) if rj0 > 0.02 else None,     # solo si lo débil es rojo
+                "ruido_rel": _r(float(M.cielo(q)["ruido"]) / max(r0, 1e-9), 3),
+                "cambio_brillante": _r(float(np.abs(Lq - L)[brill].mean()), 5) if brill.any() else None,
+                **M.recortes(q)}
+
+    def hacer(mz):
+        def f(q, **_):
+            L1 = L + float(mz) * w * (he - L)
+            q2 = q
+            if float(saturar) > 0:
+                q2 = np.clip(L[None] + (q - L[None]) * (1.0 + float(saturar) * w)[None], 0, 1)
+            return H._croma(q2, L1) if croma else H._con_luminancia(q2, L1)
+        return f
+
+    lista = [(f"Hα en la luminancia de las afueras {int(round(100 * float(mz)))} %"
+              + (f", croma +{float(saturar):g}" if float(saturar) > 0 else "") + (" + croma" if croma else ""),
+              "ha_luminancia", {}, hacer(mz)) for mz in mezclas]
+    r = H._comparar(ctx, d, "haluminancia", lista, medir)
+    r.update({"ha": H._nombre(e), "zona_debil_pct": _r(100.0 * float(debil.mean()), 1),
+              "zona_brillante_pct": _r(100.0 * float(brill.mean()), 1)})
+    for x in r["candidatos"]:
+        m, fal = x["metricas"], []
+        if m["ruido_rel"] > 1.25:
+            fal.append(f"ruido del cielo × {m['ruido_rel']} > 1,25 (más suavizar o menos mezcla)")
+        if m["cambio_brillante"] is not None and m["cambio_brillante"] > 0.005:
+            fal.append(f"la zona brillante cambia {m['cambio_brillante']} (> 0,005)")
+        if m["croma_debil_rel"] < 0.85:
+            fal.append(f"la zona débil pierde color (croma × {m['croma_debil_rel']}; croma=true o saturar)")
+        x["no_cumple"] = fal
+    ok = [x for x in r["candidatos"] if not x["no_cumple"] and (x["metricas"]["contraste_debil_ganado_pct"] or 0) > 0]
+    if ok:
+        mejor = max(ok, key=lambda x: (x["metricas"]["contraste_debil_ganado_pct"] / 100.0) / max(x["metricas"]["ruido_rel"], 1.0))
+        mm = mejor["metricas"]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: +{mm['contraste_debil_ganado_pct']} % de contraste en la nebulosa débil, ruido del "
+                       f"cielo × {mm['ruido_rel']}, croma de lo débil × {mm['croma_debil_rel']} y lo brillante sin tocar.")
+    else:
+        r["recomendado"] = None
+        r["motivo"] = "Ninguna mezcla sube el contraste de lo débil sin ruido, sin lavar el color o sin tocar lo brillante."
+    r["leyenda"] = ("contraste_debil_ganado_pct: estructura de ≈ 33 px en la nebulosa débil (máscara de rango invertida > 0,5), "
+                    "después / antes − 1. croma_debil_rel / rojo_debil_rel: saturación y exceso de rojo de esa zona, después "
+                    "/ antes. cambio_brillante: |ΔL| medio en lo brillante. La vista NO ha cambiado: aplicarCandidato(id).")
+    return H._galeria(r, p, "diferencia")
+
+
 LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "revisarRecorte": revisarRecorte,
                    "medirContinuo": medirContinuo, "restarContinuo": restarContinuo,
                    "desmezclarDualBand": desmezclarDualBand,
                    "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB, "unirCapas": unirCapas,
-                   "paletasCandidatos": paletasCandidatos, "componerHDR": componerHDR}
+                   "paletasCandidatos": paletasCandidatos, "componerHDR": componerHDR,
+                   "haLuminanciaCandidatos": haLuminanciaCandidatos}

@@ -12,6 +12,9 @@
 //            "screen"  PixelMath ~(~starless * ~(k*estrellas)), con fuerza k
 //   k        1.0      fuerza de las estrellas en "screen" (0,5–0,6 para estrellas discretas en galaxias)
 //   original ""       id de una imagen con estrellas del mismo estirado, para medir el residuo (original − final)
+//   atenuar  0        0–0,8: baja las estrellas que caen sobre nebulosa brillante (máscara t² de la luminancia de la starless,
+//                     t = (L − cielo)/(p99,5 − cielo)); fuerza el screen PixelMath. Vídeo de Seti Astro, 25 nov 2026: en
+//                     SetiAstroPilot 0,5 dejó las estrellas de la nebulosa a la mitad de las del cielo oscuro sin perder ninguna.
 // No toca las entradas.
 
 function rcMedians(view) {
@@ -19,6 +22,22 @@ function rcMedians(view) {
   for (var c = 0; c < im.numberOfChannels; ++c) { im.selectedChannel = c; out.push(+im.median().toPrecision(4)); }
   im.resetSelections();
   return out;
+}
+
+// Percentiles de la luminancia (media de canales) sobre una muestra de ~250 000 píxeles.
+function rcLumPct(view, pcts) {
+  var im = view.image, W = im.width, H = im.height, nc = Math.min(im.numberOfChannels, 3);
+  var paso = Math.max(1, Math.round(Math.sqrt(W * H / 250000))), row = new Float32Array(W), v = [];
+  for (var y = 0; y < H; y += paso) {
+    var acc = new Float32Array(W);
+    for (var c = 0; c < nc; ++c) {
+      im.getSamples(row, new Rect(0, y, W, y + 1), c);
+      for (var x = 0; x < W; x += paso) acc[x] += row[x] / nc;
+    }
+    for (var x2 = 0; x2 < W; x2 += paso) v.push(acc[x2]);
+  }
+  v.sort(function (p, q) { return p - q; });
+  return pcts.map(function (p) { return v[Math.min(v.length - 1, Math.floor(p / 100 * v.length))]; });
 }
 
 function rcCount(view, thr) {
@@ -73,6 +92,9 @@ function recombinarEstrellas(starlessId, starsId, o) {
   var base = (typeof o.nuevaVista === "string" && o.nuevaVista) || "Final", id = base;
   for (var n = 2; !ImageWindow.windowById(id).isNull; ++n) id = base + "_" + n;
   var metodo = o.metodo || "auto", k = (o.k !== undefined) ? o.k : 1.0, usado;
+  var aten = +(o.atenuar || 0);
+  if (aten < 0 || aten > 0.8) throw new Error("atenuar entre 0 y 0,8 (0 = todas las estrellas igual)");
+  if (aten > 0) metodo = "screen";
 
   // Fuera del watcher v8 (p. ej. scripts ejecutados por PiAstroPilot) screenStarsCombine no existe: se carga realces.js
   // de la misma guía, que PiAstroPilot indica en la variable global PIASTROPILOT_GUIA.
@@ -86,12 +108,21 @@ function recombinarEstrellas(starlessId, starsId, o) {
   } else {
     var P = new PixelMath;
     P.useSingleExpression = true;
-    P.symbols = "k";
-    P.expression = "k = " + k + ";\n~(~$T * ~(k*" + starsId + "))";
+    if (aten > 0) {
+      var pc = rcLumPct(sl, [5, 99.5]), cl = pc[0], hi = Math.max(pc[1], pc[0] + 1e-4);
+      var Lx = sl.image.numberOfChannels >= 3 ? "($T[0]+$T[1]+$T[2])/3" : "$T";
+      P.symbols = "k, a, c, h, t";
+      P.expression = "k = " + k + "; a = " + aten + "; c = " + cl.toPrecision(5) + "; h = " + hi.toPrecision(5) + ";\n" +
+                     "t = min(max((" + Lx + " - c)/(h - c), 0), 1);\n~(~$T * ~(k*(1 - a*t*t)*" + starsId + "))";
+    } else {
+      P.symbols = "k";
+      P.expression = "k = " + k + ";\n~(~$T * ~(k*" + starsId + "))";
+    }
     P.createNewImage = true; P.newImageId = id;
     P.truncate = true; P.truncateLower = 0; P.truncateUpper = 1;
     if (!P.executeOn(sl)) throw new Error("Recombinación (PixelMath) falló");
-    usado = "screen PixelMath, k = " + k + (metodo === "auto" ? " (screenStarsCombine no está cargado)" : "");
+    usado = "screen PixelMath, k = " + k + (aten > 0 ? ", estrellas atenuadas " + aten + " sobre la nebulosa brillante" : "") +
+            (metodo === "auto" ? " (screenStarsCombine no está cargado)" : "");
   }
   var fin = View.viewById(id);
   var w = fin.window;

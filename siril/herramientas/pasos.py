@@ -3229,7 +3229,9 @@ def _escala_grande(p, cantidad=0.5, fino=16, grueso=256):
     L1 = np.maximum(L + float(cantidad) * banda * w, 0.6 * L)
     if p.shape[0] == 1:
         return np.clip(L1[None], 0, 1).astype(np.float32)
-    q = p * (L1 / np.maximum(L, 1e-6))[None]
+    # pedestal 0,05 (25 nov 2026, como Recombine Luminance de SASpro): el cociente L1/L amplificaba el ruido de color
+    # del cielo y de las nubes oscuras
+    q = (p + 0.05) * ((L1 + 0.05) / np.maximum(L + 0.05, 1e-6))[None] - 0.05
     mx = q.max(axis=0)
     q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
     return np.clip(q, 0, 1).astype(np.float32)
@@ -3238,6 +3240,11 @@ def _escala_grande(p, cantidad=0.5, fino=16, grueso=256):
 CONTRASTE = {
     "clahe_suave": (["clahe", "1.5", "8"], "CLAHE límite 1,5"),
     "clahe_medio": (["clahe", "2.5", "8"], "CLAHE límite 2,5"),
+    # 25 nov 2026 (vídeo de Seti Astro): zona fija en píxeles. El segundo número de clahe es la rejilla (zonas por lado),
+    # no los píxeles: con 8 en una toma de 6000 px cada zona medía 750 px, casi un estirado global.
+    "clahe_128": (("clahe_px", 2.5, 128), "CLAHE límite 2,5, zona ≈ 128 px"),
+    "clahe_180": (("clahe_px", 2.5, 180), "CLAHE límite 2,5, zona ≈ 180 px"),
+    "clahe_256": (("clahe_px", 2.5, 256), "CLAHE límite 2,5, zona ≈ 256 px"),
     "ondiculas": ("ondiculas", "ondículas: escalas 2–4 × 1,15–1,3"),
     "enfoque": (["unsharp", "2.0", "0.3"], "máscara de enfoque σ 2, 0,3"),
     "grande_suave": (("escala_grande", 0.5), "escala grande 16–256 px × 1,5"),
@@ -3286,6 +3293,12 @@ def contrasteCandidatos(siril, metodos=("clahe_suave", "clahe_medio", "ondiculas
                     x = q if info["top_down"] else q[:, ::-1, :]
                     res = _a_siril(x, crudo.dtype).reshape(crudo.shape)
                     texto = f"escala grande propia (banda 16–256 px × {1 + cmd[1]:g}, pesada por la señal)"
+                elif isinstance(cmd, tuple) and cmd[0] == "clahe_px":
+                    rejilla = max(2, int(round(max(p.shape[1:]) / float(cmd[2]))))
+                    siril.cmd("clahe", f"{cmd[1]:g}", str(rejilla))
+                    texto = f"clahe {cmd[1]:g} {rejilla}"
+                    res = _crudo(siril)
+                    q = _pantalla(res, info)
                 else:
                     if cmd == "ondiculas":
                         siril.cmd("wavelet", "6", "2")
@@ -3581,8 +3594,20 @@ def _px_estrella(Lb):
     return m
 
 
-def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_estrellas=None, gamma=1.0, color=1.0):
-    """Paso 9 no lineal: une la starless cargada con la capa de estrellas de 'fichero' (screen o suma), con deshacer."""
+def _mascara_nebulosa(a, contraste=2.0):
+    """0 en el cielo, 1 en lo más brillante de la starless (p99,5), suavizada a 8 px y con la curva t^contraste (como en
+    SetiAstroPilot: máscara de luminosidad oscurecida del vídeo de Seti Astro, 25 nov 2026)."""
+    L = _suave(_lum(a).astype(np.float32), 8)
+    c = float(_cielo(a)["cielo"])
+    hi = float(np.percentile(L[::4, ::4], 99.5))
+    return (np.clip((L - c) / max(hi - c, 1e-4), 0, 1) ** float(contraste)).astype(np.float32)
+
+
+def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_estrellas=None, gamma=1.0, color=1.0,
+                        atenuar=0.0):
+    """Paso 9 no lineal: une la starless cargada con la capa de estrellas de 'fichero' (screen o suma), con deshacer.
+    atenuar (0–0,8): baja las estrellas que caen sobre nebulosa brillante (máscara de luminosidad de la starless); en
+    SetiAstroPilot 0,5 dejó las de la nebulosa a la mitad de las del cielo oscuro sin perder ninguna (IC 1396)."""
     info = H._info(siril)
     ruta = H._ruta(fichero)
     if not ruta.is_file():
@@ -3650,6 +3675,11 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
         b = np.clip(Lm + (b - Lm) * float(color), 0, 1).astype(np.float32)
     if gamma != 1.0 or color != 1.0:
         r["estrellas_ajuste"] = {"gamma": gamma, "color": color}
+    if not 0 <= float(atenuar) <= 0.8:
+        raise ValueError("atenuar entre 0 y 0,8 (0 = todas las estrellas igual).")
+    if float(atenuar) > 0:
+        b = (b * (1.0 - float(atenuar) * _mascara_nebulosa(a))[None]).astype(np.float32)
+        r["atenuar"] = float(atenuar)
     if metodo == "screen":
         res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(k * b, 0, 1))
     else:

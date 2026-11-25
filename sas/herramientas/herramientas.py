@@ -1319,9 +1319,43 @@ def _srgc_survey(p, survey):
     return "NSNS RGB continuum (north) — colour" if p.shape[0] >= 3 else "NSNS visual continuum (north) — mono"
 
 
+def _abe_excluido(q, degree=1, samples=120, frac_dilatar=1):
+    """ABE de SASpro (setiastro.saspro.abe.abe_run) con exclusión automática: fuera las muestras del objeto, según la
+    máscara de cielo de cielo.py (cajas de cielo de verdad; se rechaza lo que sube +2σ sobre la superficie, que es objeto
+    o halo, y sus vecinas). Las zonas oscuras dentro del objeto que bajan al nivel del cielo SÍ quedan como muestras.
+    Vídeo de Seti Astro (25 nov 2026): en el diálogo de ABE dibuja polígonos de exclusión sobre el objeto; el comando sin
+    ventana no los admite (exclusion_mask=None), por eso se llama a la función directamente."""
+    import inspect
+    from setiastro.saspro import abe as A
+    fn = getattr(A, "abe_run", None)
+    if fn is None:
+        raise RuntimeError("setiastro.saspro.abe no tiene abe_run; funciones: "
+                           + ", ".join(n for n in dir(A) if not n.startswith("_") and callable(getattr(A, n)))[:600])
+    par = inspect.signature(fn).parameters
+    Lb = M.binar(M.lum(q), _cielo.B)
+    cielo_b, ncc, ntot = _cielo.mascara_cielo(Lb)
+    cielo = np.repeat(np.repeat(cielo_b, _cielo.B, 0), _cielo.B, 1)
+    H, W = q.shape[1:]
+    pad = ((0, max(0, H - cielo.shape[0])), (0, max(0, W - cielo.shape[1])))
+    cielo = np.pad(cielo, pad, mode="edge")[:H, :W]
+    if cielo.mean() < 0.05:
+        raise RuntimeError(f"Casi no hay cielo libre ({100 * cielo.mean():.1f} %): la exclusión dejaría ABE sin muestras.")
+    a = np.ascontiguousarray(np.moveaxis(q, 0, -1) if q.shape[0] == 3 else q[0]).astype(np.float32)
+    kw = {"degree": int(degree), "num_samples": int(samples), "downsample": 4, "patch_size": 15, "use_rbf": False,
+          "rbf_kernel": "thin_plate", "rbf_smooth": 0.1, "exclusion_mask": cielo.astype(bool)}
+    kw = {k: v for k, v in kw.items() if k in par}
+    if "exclusion_mask" not in kw:
+        raise RuntimeError("abe_run no acepta exclusion_mask; firma: " + str(inspect.signature(fn))[:600])
+    out = fn(a, **kw)
+    out = out[0] if isinstance(out, tuple) else out
+    out = np.asarray(out, dtype=np.float32)
+    out = np.moveaxis(out, -1, 0) if out.ndim == 3 else out[None]
+    return out, 100.0 * float(cielo.mean())
+
+
 def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpert=True, muestras=120, tipo=None,
                         halo=True, halo_opciones=None, diagnostico=True, srgc=None, srgc_survey=None, cadenas=True,
-                        usar_syqon=True):
+                        usar_syqon=True, abe_excluir=True):
     """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF), GraXpert IA, SyQon DeepGradient (si está instalado y hay
     internet), el polinomio fuera del halo (+ crominancia), SRGC (si la vista tiene astrometría) y las cadenas con nuestro modelo del cielo con máscara o de
     bordes; mide y recomienda. La vista no cambia."""
@@ -1347,6 +1381,13 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
     # 16 nov 2026: en M31 no se lleva nada de galaxia; en IC 1396 es, con el polinomio 1, lo único que no aplana la nebulosa.
     # Plano en las celdas más oscuras (cielo.plano_oscuras): para nebulosas o polvo que llenan el campo.
     lista.append(("Polinomio celdas oscuras", "oscuras", {"frac": 0.25}, _cielo.plano_oscuras))
+    # 25 nov 2026: ABE con exclusión automática del objeto (vídeo de Seti Astro). En un campo sintético (nebulosa
+    # gaussiana + gradiente) el polinomio 1 deja 0,10 del gradiente frente a 0,18 sin exclusión, y el 2 no se come nada
+    # (sin exclusión, el 9 %). exclusion_mask de abe_run: True = zona donde SÍ se toman muestras (invertida, 0,38).
+    if abe_excluir:
+        for g in (polinomio or []):
+            lista.append((f"ABE polinomio {int(g)} con exclusión del objeto", "abe_excluido",
+                          {"degree": int(g), "samples": int(muestras)}, lambda q, **k: _abe_excluido(q, **k)[0]))
     omitidos = []
     if usar_syqon:
         if not _syqon.hay("deep-gradient"):
@@ -1827,31 +1868,57 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5),
     return _galeria(r, p, "diferencia")
 
 
-def _con_luminancia(p, L1):
-    """Pone la luminancia L1 conservando el color (canales × L1/L, sin pasar de 1)."""
+PEDESTAL_L = 0.05
+
+
+def _con_luminancia(p, L1, pedestal=PEDESTAL_L):
+    """Pone la luminancia L1 conservando el color (canales × L1/L, sin pasar de 1). Con pedestal (25 nov 2026, vídeo de
+    Seti Astro sobre la luminancia; como «noise floor pedestal» de Recombine Luminance de SASpro): sube el negro, escala y
+    lo vuelve a bajar. Cerca de 0 el cociente L1/L amplificaba las diferencias entre canales del ruido (R 0,001 / G 0,002
+    → un píxel verde): ruido de color en el cielo y en las nubes oscuras. Solo en imagen estirada; en lineal desatura."""
     L = M.lum(p)
     if p.shape[0] == 1:
         return np.clip(L1[None], 0, 1).astype(np.float32)
-    q = p * (L1 / np.maximum(L, 1e-6))[None]
+    k = float(pedestal)
+    q = (p + k) * ((L1 + k) / np.maximum(L + k, 1e-6))[None] - k
     mx = q.max(axis=0)
     q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
     return np.clip(q, 0, 1).astype(np.float32)
 
 
-def _clahe(p, mezcla=0.25, rejilla=8, limite=0.01):
+def _croma(p, L1, radio=8):
+    """Pone la luminancia L1 y repone el croma: q = L1 + (p − L)·g, con g = suave(L1)/suave(L) a 'radio' px. Conserva la
+    saturación (croma/luminancia) a la escala de la estructura sin multiplicar el ruido de color píxel a píxel (vídeo de
+    Seti Astro, 25 nov 2026: tras CLAHE o curvas en la luminancia, «chroma restore» devuelve el color que se lavó)."""
+    L = M.lum(p)
+    if p.shape[0] == 1:
+        return np.clip(L1[None], 0, 1).astype(np.float32)
+    g = M.suave(L1, radio) / np.maximum(M.suave(L, radio), 1e-4)
+    q = L1[None] + (p - L[None]) * np.clip(g, 0, 4)[None]
+    mx = q.max(axis=0)
+    q = np.where(mx > 1, L1[None] + (q - L1[None]) * ((1 - L1) / np.maximum(mx - L1, 1e-6))[None], q)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
+def _clahe(p, mezcla=0.25, rejilla=8, limite=0.01, tesela=None, croma=False):
     """CLAHE en la luminancia (skimage, va con SASpro), mezclado con la original. El CLAHE de skimage solo, aun con
     clip_limit bajo, iguala el histograma de cada zona: en IC 1396 subía el cielo de 0,10 a 0,18 y el ruido × 3,3
-    (14 nov 2026). Una parte (mezcla) del resultado da el realce local sin levantar el fondo."""
+    (14 nov 2026). Una parte (mezcla) del resultado da el realce local sin levantar el fondo. tesela (px): tamaño fijo de
+    la zona como en el vídeo de Seti Astro (128–256 px, 25 nov 2026), en vez de 1/rejilla de la imagen, que en una toma
+    de 6000 px daba zonas de 750 px (casi un estirado global). croma: repone el croma tras el contraste (_croma)."""
     from skimage.exposure import equalize_adapthist
     L = np.clip(M.lum(p), 0, 1)
-    k = (max(8, L.shape[0] // int(rejilla)), max(8, L.shape[1] // int(rejilla)))
+    if tesela:
+        k = (int(tesela), int(tesela))
+    else:
+        k = (max(8, L.shape[0] // int(rejilla)), max(8, L.shape[1] // int(rejilla)))
     C = equalize_adapthist(L, kernel_size=k, clip_limit=float(limite)).astype(np.float32)
     # Sólo la banda de escalas medias (4–64 px) del CLAHE: su fondo grueso cambia el nivel del cielo y su escala fina
     # amplifica el ruido (con toda la banda fina, ruido del cielo × 1,8 a 25 %).
     det_c = M.suave(C, 4) - M.suave(C, 64)
     det_l = M.suave(L, 4) - M.suave(L, 64)
     L1 = L + float(mezcla) * (det_c - det_l)
-    return _con_luminancia(p, L1)
+    return _croma(p, L1) if croma else _con_luminancia(p, L1)
 
 
 def _ondiculas(p, pesos=(1.0, 1.15, 1.3, 1.3, 1.1)):
@@ -1893,6 +1960,11 @@ def _escala_grande(p, cantidad=0.5, fino=16, grueso=256):
 CONTRASTE = {
     "clahe_suave": ("CLAHE (25 % del detalle local)", lambda q: _clahe(q, 0.25)),
     "clahe_medio": ("CLAHE (50 % del detalle local)", lambda q: _clahe(q, 0.5)),
+    # 25 nov 2026 (vídeo de Seti Astro): zona fija en píxeles y croma repuesto.
+    "clahe_128": ("CLAHE zona 128 px (50 %) + croma", lambda q: _clahe(q, 0.5, tesela=128, croma=True)),
+    "clahe_180": ("CLAHE zona 180 px (50 %) + croma", lambda q: _clahe(q, 0.5, tesela=180, croma=True)),
+    "clahe_256": ("CLAHE zona 256 px (50 %) + croma", lambda q: _clahe(q, 0.5, tesela=256, croma=True)),
+    "clahe_180_sin_croma": ("CLAHE zona 180 px (50 %)", lambda q: _clahe(q, 0.5, tesela=180)),
     "ondiculas": ("ondículas: escalas 2–4 × 1,15–1,3", _ondiculas),
     "enfoque": ("máscara de enfoque σ 2, 0,3", _enfoque),
     "grande_suave": ("escala grande 16–256 px × 1,5", lambda q: _escala_grande(q, 0.5)),
@@ -1953,6 +2025,16 @@ def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", 
         return 100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6)
 
     dom0 = dom(p)
+    o8 = obj[::4, ::4] if obj is not None and getattr(obj, "ndim", 0) == 2 else None
+
+    def croma_obj(q):
+        """Saturación media en el objeto: |canal − L| / L (submuestreado ×4)."""
+        qs = q[:, ::4, ::4]
+        Ls = M.lum(qs)
+        s_ = np.abs(qs - Ls[None]).mean(axis=0) / np.maximum(Ls, 0.02)
+        return float(s_[o8].mean()) if o8 is not None and o8.shape == s_.shape and o8.any() else float(s_.mean())
+
+    c0 = croma_obj(p) if p.shape[0] == 3 else 0.0
 
     def medir(q):
         L = M.lum(q)
@@ -1960,6 +2042,7 @@ def contrasteCandidatos(ctx, vista=None, metodos=("clahe_suave", "clahe_medio", 
         c = M.cielo(q)
         t = M.textura(L, obj)
         return {"contraste_ganado_pct": _r(100 * (k1 / k0 - 1), 1) if k0 and k1 else None,
+                "croma_objeto_rel": _r(croma_obj(q) / max(c0, 1e-9), 3) if q.shape[0] == 3 else None,
                 "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), "dominante_cielo_pct": _r(dom(q), 2),
                 "cielo": c["cielo"], "grano": t.get("grano"), "contraste_grande": t.get("contraste_grande"),
                 "suavidad": t.get("suavidad"), **M.recortes(q)}
@@ -2601,9 +2684,10 @@ def estirarEstrellas(ctx, vista, factores=(3.0, 5.0), color=1.0, p90_objetivo=0.
     return _galeria(r, p)
 
 
-def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0, forzar=False):
+def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0, forzar=False, atenuar=0.0):
     """NL9: une la starless (vista) con la vista de estrellas (screen o suma), con deshacer en la starless.
-    Ambas deben estar estiradas; si la de estrellas sigue lineal, estírala antes con estirarEstrellas."""
+    Ambas deben estar estiradas; si la de estrellas sigue lineal, estírala antes con estirarEstrellas. atenuar (0–0,8):
+    baja las estrellas que caen sobre nebulosa brillante (ver estrellasNebulosaCandidatos)."""
     d = _doc(ctx, vista)
     e = _doc(ctx, estrellas)
     if d is e:
@@ -2634,20 +2718,115 @@ def recombinarEstrellas(ctx, estrellas, vista=None, metodo="screen", factor=1.0,
         return {"aplicado": False, "p99_5_estrellas": _r(p995, 4),
                 "aviso": "La vista de estrellas parece lineal (p99,5 < 0,02) y la starless está estirada: estira antes las "
                          "estrellas (estirarEstrellas)."}
-    res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(k * b, 0, 1)) if metodo == "screen" else a + k * b
-    res = np.clip(res, 0, 1).astype(np.float32)
+    if not 0 <= float(atenuar) <= 0.8:
+        raise ValueError("atenuar entre 0 y 0,8 (0 = todas las estrellas igual).")
+    w = _mascara_nebulosa(a) if float(atenuar) > 0 else None
+    res = _unir_estrellas(a, b, metodo, k, float(atenuar), w)
     cel = M.cielo(a)["_celdas"]
     f0, f1 = float(np.mean(M.cielo_por_canal(a, cel))), float(np.mean(M.cielo_por_canal(res, cel)))
     rec0, rec1 = M.recortes(a), M.recortes(res)
     d.apply_edit(_a_sas(res, d.image), metadata={}, step_name=f"SetiAstroPilot: recombinar estrellas ({metodo} ×{k:g})")
     _ESTRELLAS.setdefault(_clave(e), {"nombre": _nombre(e), "de": None})["recombinada"] = True
     r = {"aplicado": True, "vista": _nombre(d), "estrellas": _nombre(e), "metodo": metodo, "factor": k,
+         "atenuar": float(atenuar),
          "aporte_estrellas_pct": _r(100.0 * float((M.lum(res) - M.lum(a)).mean()) / max(float(M.lum(res).mean()), 1e-9), 2),
          "fondo_antes": _r(f0, 5), "fondo_despues": _r(f1, 5), "recortes_antes": rec0, "recortes_despues": rec1,
          "nota": "Con deshacer. Guarda la versión con guardarImagen."}
     if rec1["altos_pct"] - rec0["altos_pct"] > 0.05:
         r["aviso"] = "recorte alto nuevo (núcleos de estrella a 1): deshaz y baja factor"
     return r
+
+
+def _mascara_nebulosa(a, contraste=2.0):
+    """0 en el cielo, 1 en lo más brillante de la starless (p99,5), suavizada a 8 px y con la curva t^contraste: como la
+    máscara de luminosidad oscurecida y con contraste en lo brillante del vídeo de Seti Astro (Norteamérica, 2025)."""
+    L = M.suave(M.lum(a).astype(np.float32), 8)
+    c = float(M.cielo(a)["cielo"])
+    hi = float(np.percentile(L[::4, ::4], 99.5))
+    t = np.clip((L - c) / max(hi - c, 1e-4), 0, 1)
+    return (t ** float(contraste)).astype(np.float32)
+
+
+def _unir_estrellas(a, b, metodo, k, atenuar=0.0, w=None):
+    """Screen o suma de las estrellas b (×k) sobre a; con atenuar, las estrellas se multiplican por (1 − atenuar·w):
+    siguen nítidas y enteras, solo menos brillantes donde manda la nebulosa (una máscara en la mezcla las deja
+    «transparentes»)."""
+    bb = k * b
+    if atenuar > 0 and w is not None:
+        bb = bb * (1.0 - atenuar * w)[None]
+    res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(bb, 0, 1)) if metodo == "screen" else a + bb
+    return np.clip(res, 0, 1).astype(np.float32)
+
+
+def estrellasNebulosaCandidatos(ctx, estrellas, vista=None, atenuaciones=(0.0, 0.3, 0.5), factor=1.0, metodo="screen",
+                                contraste=2.0, forzar=False):
+    """NL9 (25 nov 2026, vídeo de Seti Astro): recombina las estrellas atenuando las que caen sobre nebulosa brillante, para
+    que allí mande la nebulosa y en el cielo oscuro sigan todas. Compara varias atenuaciones con la misma máscara (lum. de
+    la starless suavizada, t^contraste). Mide el brillo que aportan las estrellas en la zona brillante y en la oscura, su
+    cociente, y las estrellas de la zona brillante que casi desaparecen (perdidas_pct). La vista no cambia:
+    aplicarCandidato(id) en la starless."""
+    d = _doc(ctx, vista)
+    e = _doc(ctx, estrellas)
+    if d is e:
+        raise ValueError("'estrellas' y 'vista' son la misma vista.")
+    a, b = _p(d.image), _p(e.image)
+    if a.shape[1:] != b.shape[1:]:
+        raise RuntimeError(f"La vista de estrellas mide {b.shape[2]}×{b.shape[1]} y la starless {a.shape[2]}×{a.shape[1]}.")
+    if b.shape[0] != a.shape[0]:
+        b = np.repeat(b, a.shape[0], axis=0) if b.shape[0] == 1 else b[:1].repeat(a.shape[0], axis=0)
+    if metodo not in ("screen", "suma"):
+        raise ValueError("metodo: screen o suma.")
+    pct = _pct_estrellas(d)
+    if pct > 1.0 and not forzar:
+        return {"aviso": f"'{_nombre(d)}' ya tiene estrellas ({pct:.1f} %): recombinar las duplicaría. Si es una starless "
+                         "con mucho grumo (nebulosa brillante recortada), forzar=true."}
+    if float(np.percentile(M.lum(b).ravel()[::7], 99.5)) < 0.02 and not M.lineal(a[:, ::8, ::8]):
+        return {"aviso": "La vista de estrellas parece lineal: estírala antes (estirarEstrellas)."}
+    w = _mascara_nebulosa(a, contraste)
+    Lb = M.lum(b)
+    est = Lb > max(0.1, float(np.percentile(Lb.ravel()[::7], 99.0)))     # cuerpos de estrella
+    brill, osc = est & (w > 0.5), est & (w < 0.1)
+    La = M.lum(a)
+    zona_pct = 100.0 * float((w > 0.5).mean())
+
+    def medir(q):
+        sube = M.lum(q) - La
+        mb = float(sube[brill].mean()) if brill.sum() > 50 else None
+        mo = float(sube[osc].mean()) if osc.sum() > 50 else None
+        perd = 100.0 * float((sube[brill] < 0.02).mean()) if brill.sum() > 50 else None
+        return {"estrellas_zona_brillante": _r(mb, 4), "estrellas_zona_oscura": _r(mo, 4),
+                "cociente_brillante_oscura": _r(mb / mo, 2) if mb is not None and mo else None,
+                "perdidas_pct": _r(perd, 1), **M.recortes(q)}
+
+    def hacer(t):
+        return lambda q, **_: _unir_estrellas(q, b, metodo, float(factor), t, w)
+
+    lista = [(f"estrellas {metodo} ×{float(factor):g}, atenuación {float(t):g} sobre la nebulosa", "estrellas_nebulosa",
+              {}, hacer(float(t))) for t in atenuaciones]
+    r = _comparar(ctx, d, "estrellasneb", lista, medir)
+    r.update({"estrellas": _nombre(e), "zona_brillante_pct": _r(zona_pct, 1),
+              "estrellas_zona_brillante_px": int(brill.sum()), "estrellas_zona_oscura_px": int(osc.sum())})
+    for x, t in zip(r["candidatos"], atenuaciones):
+        x["atenuar"] = float(t)
+    for x in r["candidatos"]:
+        m = x["metricas"]
+        x["no_cumple"] = []
+        if m["perdidas_pct"] is not None and m["perdidas_pct"] > 10:
+            x["no_cumple"].append(f"el {m['perdidas_pct']} % de las estrellas de la zona brillante casi desaparece (> 10 %)")
+    ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if zona_pct < 3 or brill.sum() <= 50:
+        cero = [x for x in ok if x.get("atenuar") == 0] or ok
+        r["recomendado"] = cero[0]["id"] if cero else None
+        r["motivo"] = (f"Casi no hay nebulosa brillante ({zona_pct:.1f} % de la imagen) o no tiene estrellas encima: sin "
+                       "atenuar.")
+    elif ok:
+        # la más fuerte que no hace desaparecer estrellas, sin pasar de 0,5 (el vídeo: «algo más tenues»)
+        mejor = max([x for x in ok if x.get("atenuar", 0) <= 0.5] or ok, key=lambda x: x.get("atenuar", 0))
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: las estrellas sobre la nebulosa aportan "
+                       f"{mejor['metricas']['cociente_brillante_oscura']} veces lo de las del cielo oscuro y casi desaparece el "
+                       f"{mejor['metricas']['perdidas_pct'] or 0} % de las de la zona brillante; mira la previa (es gusto: más atenuación = la nebulosa manda más).")
+    return _galeria(r, a, "diferencia")
 
 
 def nitidezCandidatos(ctx, vista=None, cantidades=(0.3, 0.5), modo="Both", superficie=True):
@@ -3234,6 +3413,7 @@ LISTA = {
     "deconvolucionCandidatos": deconvolucionCandidatos,
     "estirarEstrellas": estirarEstrellas,
     "recombinarEstrellas": recombinarEstrellas,
+    "estrellasNebulosaCandidatos": estrellasNebulosaCandidatos,
     "aplicarCandidato": aplicarCandidato,
     "quitarVerde": quitarVerde,
     "quitarPatron2px": quitarPatron2px,

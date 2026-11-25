@@ -99,8 +99,9 @@ def nucleoCandidatos(siril, fuerzas=(0.25, 0.4, 0.55), desde=None, radio=None, t
             Lo = L - k * mascara * np.maximum(B - u, 0) + 0.5 * k * mascara * D
             Lo = np.clip(Lo, 0, 1)
             if x.shape[0] == 3:
-                f = Lo / np.maximum(L, 1e-6)
-                q = x * f[None]
+                # pedestal 0,05 (25 nov 2026, como Recombine Luminance de SASpro): sin ruido de color en lo oscuro
+                f = (Lo + 0.05) / np.maximum(L + 0.05, 1e-6)
+                q = (x + 0.05) * f[None] - 0.05
                 mx = q.max(axis=0)
                 q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
             else:

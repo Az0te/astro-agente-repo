@@ -1481,7 +1481,7 @@
      },
      "opciones": {
       "type": "object",
-      "description": "Opcional. { metodo: \"auto\" | \"screen\", k: 1.0, original, nuevaVista }"
+      "description": "Opcional. { metodo: \"auto\" | \"screen\", k: 1.0, original, nuevaVista, atenuar: 0 } — atenuar (0–0,8) baja las estrellas que caen sobre nebulosa brillante (máscara de luminosidad de la starless); usa screen PixelMath"
      }
     },
     "required": [
