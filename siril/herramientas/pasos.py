@@ -2525,6 +2525,9 @@ def _recortes(p):
 
 # --- L14 / NL6: reducción de ruido ---------------------------------------------------------------------------
 
+SNR_CAPA_DEBIL = 15.0        # parte brillante del objeto / ruido del cielo, en lineal (Hα de IC 1396: 39; OIII 4, SII 2,7)
+
+
 def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=None, graxpert=None,
                            perdida_limpia=2.0, tipo=None, syqon=None):   # tipo: se admite (el modelo lo pasa) y no cambia nada
     """Paso 14 lineal / 6 no lineal: compara denoise de Siril a varias fuerzas (y DA3D), NoiseX, GraXpert y SyQon Prism
@@ -2553,14 +2556,15 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     if e0 is not None and zc is not None and e0 < 0.5 * _energia_brillante(L0, zc):
         e0 = None
         r_aviso_debil = ("Capa débil: en la zona brillante el detalle de 2–8 px no sobresale del ruido del cielo; la pérdida "
-                         "de detalle no se puede medir y se recomienda por el ruido (la más cercana a la mitad).")
+                         "de detalle no se puede medir y se recomienda por el ruido.")
     else:
         r_aviso_debil = None
     if mods is None:                                      # denoise de Siril: en no lineal, más suave
         mods = (0.5, 0.7, 1.0) if lineal else (0.3, 0.5)
     if ia is None:                                        # NoiseX por defecto si está el CLI de RC Astro
         # Lineal: 0,5, 0,3 ×2 y 0,5 ×2. No lineal, mucho más suave (Rafael, 10 nov 2026): 0,3, 0,5 y 0,3 ×2.
-        ia = (("0.5", "0.3x2", "0.5x2") if lineal else ("0.3", "0.5", "0.3x2")) if _rcastro_exe() else ()
+        # 0,75 (25 nov 2026): la fuerza de la receta de Rafael para capas débiles.
+        ia = (("0.5", "0.75", "0.3x2", "0.5x2") if lineal else ("0.3", "0.5", "0.3x2")) if _rcastro_exe() else ()
     huella = _huella(crudo)
     grupo = "ruido"
     _limpiar_grupo(grupo)
@@ -2577,6 +2581,19 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
         r["aviso"] = ("En las zonas con señal no hay detalle (ni de 1–4 ni de 2–8 px) por encima del ruido del cielo: la pérdida "
                       "de detalle no se puede medir.")
     r["escala_detalle_px"] = f"{banda[0]}–{banda[1]}" if e0 else None
+    # Capa débil por señal (IC 1396 Natural, 25 nov 2026): OIII, SII y Hβ de un dual band tienen la parte brillante a 3–5
+    # ruidos del cielo (Hα, 39). Ahí la «pérdida de detalle» de 2–8 px es ruido de fotones de la propia señal: NoiseX
+    # «perdía» un 25–70 % y se elegía denoise 0,7 (ruido al 35–50 %). Luego se estiran al fallo y la paleta sale con el
+    # doble de grano que la de Rafael (NXT 0,75–0,8 en esas capas) y el cielo no se puede bajar sin recortar.
+    snr = None
+    if zb is not None:
+        snr = (float(np.median(L0[zb])) - float(z["medidas"]["cielo"])) / max(r0, 1e-9)
+        r["snr_objeto"] = _r(snr, 1)
+    debil = lineal and (snr is None or snr < SNR_CAPA_DEBIL)
+    if debil:
+        r["capa_debil"] = (f"Señal débil (la parte brillante del objeto a {_r(snr, 1)} ruidos del cielo; < {SNR_CAPA_DEBIL})"
+                           if snr is not None else "Sin zona de objeto clara") +                           (": se recomienda la limpieza más fuerte que no deje el fondo muerto (como NXT 0,75–0,8 en "
+                           "estas capas); la medida de detalle cuenta el ruido de fotones como detalle y no decide.")
 
     def medir(res_crudo, nombre, texto, t0, n):
         q = _pantalla(res_crudo, info)
@@ -2687,8 +2704,12 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     medibles = [x for x in c_ok if e0 is not None and dp(x) is not None and sin_recorte(x)]
     mejor, regla = None, ""
     limpios = [x for x in medibles if dp(x) <= perdida_limpia]
+    fuertes = [x for x in c_ok if rr(x) <= 0.8 and sin_recorte(x)] if debil else []
     if ya_limpio and medibles:
         mejor, regla = max(medibles, key=rr), "el cielo ya está limpio: la pasada más suave"
+    elif fuertes:
+        mejor = min(fuertes, key=lambda x: (rr(x), x["metricas"]["ruido_grueso_rel"]))
+        regla = "capa débil: la que más ruido quita sin dejar el fondo muerto"
     elif limpios:
         mejor, regla = min(limpios, key=rr), f"la que más baja el ruido sin perder más del {perdida_limpia} % de detalle ni recortar"
     else:
@@ -2712,7 +2733,8 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     r["leyenda"] = ("ruido_rel: ruido del cielo después / antes (menos es mejor; 1 = nada). ruido_grueso_rel: lo mismo para el "
                     "moteado de bloques de 4 px (si no baja, el denoise solo cambia el grano por manchas). detalle_perdido_pct: "
                     "energía de la escala 2–8 px en la parte brillante del objeto (sin núcleo ni estrellas) que se pierde. "
-                    "no_cumple «fondo muerto» si deja menos del 25 % del ruido. El recomendado ya tiene en cuenta la fase "
+                    "no_cumple «fondo muerto» si deja menos del 25 % del ruido. capa_debil: en lineal, si la parte brillante "
+                    "está a menos de 15 ruidos del cielo se recomienda la más fuerte que no deje el fondo muerto. El recomendado ya tiene en cuenta la fase "
                     "(la que más baja el ruido sin perder más del 2 % de detalle ni recortar, en las dos fases). IA nxt: NoiseX por el CLI de RC Astro. "
                     "mod 0,5 y 0,7 son la mezcla del denoise completo con la original (lo mismo que hace -mod). "
                     "La imagen NO ha cambiado: aplicarCandidato(id).")
@@ -2947,7 +2969,7 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
     nuevos a 0, cielo y ruido y recomienda el más oscuro que no recorta más del ceros_max %. La imagen no cambia.
     IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13 salían grises y planos frente a la versión de
     Rafael (cielo ~0,02, punto negro y curva). Igual que fondoCandidatos de SetiAstroPilot.
-    Cielo final (24 nov 2026, como PixInsight b7a04d7): por defecto niveles 0,05–0,015 y hasta un 5 % de píxeles nuevos
+    Cielo final (24 nov 2026, como PixInsight b7a04d7): por defecto niveles 0,05–0,015 (con 0,02 desde el 25 nov) y hasta un 5 % de píxeles nuevos
     a 0 (el Natural de referencia de IC 1396 tiene el cielo en 0,013); si el cielo ya está en 0,035 o menos no hace nada.
     La «+ medios» conserva la señal sobre el cielo (mediana del objeto − cielo) o la sube a 0,10, en vez de devolver la
     mediana de entrada (con el cielo en 0,05 dejaba la imagen lavada); se descarta la variante que deja esa señal por
@@ -2977,7 +2999,9 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
         r["recomendado"] = None
         r["motivo"] = f"El cielo ya está oscuro ({_r(media0, 3)} ≤ 0,035): no se toca."
         return r
-    cielos = (0.05, 0.035, 0.025, 0.015) if cielos is None else cielos
+    # 0,02 (25 nov 2026): con las capas débiles bien limpias, la Natural de IC 1396 pasaba 0,025 con un 3,9 % de ceros y
+    # 0,015 se quedaba en el 5,1 %: faltaba el escalón de en medio (0,02, 4,5 %).
+    cielos = (0.05, 0.035, 0.025, 0.02, 0.015) if cielos is None else cielos
     senal0 = m_obj - media0
     variantes = []
     for t in sorted(cielos or [], reverse=True):
