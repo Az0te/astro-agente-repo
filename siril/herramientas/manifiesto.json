@@ -815,7 +815,7 @@
      },
      "forzar": {
       "type": "boolean",
-      "description": "Separar aunque la imagen ya parezca sin estrellas (< 0,5 % de píxeles de estrella). Solo si de verdad quedan estrellas enteras: separar dos veces saca restos y ruido, y esa capa no sirve para recombinar."
+      "description": "Separar aunque la imagen ya parezca sin estrellas (menos de 1 estrella fuerte por megapíxel). Solo si de verdad quedan estrellas enteras: separar dos veces saca restos y ruido, y esa capa no sirve para recombinar."
      }
     }
    }
@@ -1081,7 +1081,7 @@
      },
      "forzar": {
       "type": "boolean",
-      "description": "Separar aunque la imagen ya parezca sin estrellas (< 0,5 % de píxeles de estrella). Solo si de verdad quedan estrellas enteras: separar dos veces saca restos y ruido, y esa capa no sirve para recombinar."
+      "description": "Separar aunque la imagen ya parezca sin estrellas (menos de 1 estrella fuerte por megapíxel). Solo si de verdad quedan estrellas enteras: separar dos veces saca restos y ruido, y esa capa no sirve para recombinar."
      },
      "patron": {
       "type": "boolean",

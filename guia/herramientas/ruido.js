@@ -741,37 +741,39 @@ function rdPatron2pxRelativo(x, W, H, r) {
   return o;
 }
 
-// % de píxeles de estrella (medidas.pct_estrellas): picos del paso alto > 5σ (o > p99,5) que forman grupo (≥ 3 píxeles
-// en su 3×3). Los picos sueltos de ruido, la malla de 2 px y los anillos de StarX no cuentan. IC 1396: 0,13 % en una
-// starless, 2,3 % con estrellas. L: luminancia submuestrada 1 de cada 2 (rdLum2).
-function rdPctEstrellas(L, W, H) {
-  var S = 64, cel = [], y0, x0, y, x, i;
-  for (y0 = 0; y0 + S <= H; y0 += S) for (x0 = 0; x0 + S <= W; x0 += S) {
-    var v = [];
-    for (y = y0; y < y0 + S; y += 2) for (x = x0; x < x0 + S; x += 2) v.push(L[y * W + x]);
-    v.sort(function (p, q) { return p - q; });
-    if (v[v.length >> 1] > 1e-6) cel.push({ y: y0, x: x0, m: v[v.length >> 1] });
+// Estrellas fuertes por megapíxel (como _estrellas_fuertes_mp de Siril), para saber si una vista ya está sin
+// estrellas: máximos locales 5×5 del paso alto (L − caja₅) más de 80 veces por encima del ruido LOCAL (σ desde
+// |diferencia de vecinos| en 31 px). Vale en lineal y estirada. Prueba en vivo en Siril (IC 1396, 25 nov 2026): el % de
+// píxeles de estrella de antes daba 2,1 % en la starless lineal de StarX, igual que con estrellas. Así: con estrellas
+// 175–255/MP; starless lineales y estiradas, 0. L: luminancia submuestreada 1 de cada 2 (rdLum2).
+function rdEstrellasFuertesMP(L, W, H) {
+  var n = W * H, cj = rdCaja(L, W, H, 5), hp = new Float32Array(n), d = new Float32Array(n), i, x, y, f, a, b, m;
+  for (i = 0; i < n; ++i) hp[i] = L[i] - cj[i];
+  for (y = 0; y < H; ++y) {
+    f = y * W;
+    for (x = 0; x + 1 < W; ++x) d[f + x] = Math.abs(hp[f + x + 1] - hp[f + x]);
+    d[f + W - 1] = W > 1 ? d[f + W - 2] : 0;
   }
-  cel.sort(function (p, q) { return p.m - q.m; });
-  var k = Math.max(Math.min(5, cel.length), Math.floor(cel.length * 0.10)), dif = [];
-  for (var j = 0; j < k; ++j) for (y = cel[j].y; y < cel[j].y + S; ++y) for (x = cel[j].x; x + 1 < cel[j].x + S; x += 2)
-    dif.push(Math.abs(L[y * W + x + 1] - L[y * W + x]));
-  dif.sort(function (p, q) { return p - q; });
-  var ruido = dif.length ? dif[dif.length >> 1] / (0.6745 * Math.SQRT2) : 0;
-  var cj = rdCaja(L, W, H, 5), n = W * H, hp = new Float32Array(n), mu = [];
-  for (i = 0; i < n; ++i) { hp[i] = L[i] - cj[i]; if (i % 7 === 0) mu.push(hp[i]); }
-  mu.sort(function (p, q) { return p - q; });
-  var umbral = Math.max(5 * Math.max(ruido, 1e-6), mu[Math.floor(0.995 * (mu.length - 1))]);
-  var est = new Float32Array(n);
-  for (i = 0; i < n; ++i) est[i] = hp[i] > umbral ? 1 : 0;
-  var g = rdCaja(est, W, H, 1);
-  for (i = 0; i < n; ++i) est[i] = (est[i] && g[i] * 9 >= 2.5) ? 1 : 0;
-  var dil = rdCaja(est, W, H, 2), c = 0;
-  for (i = 0; i < n; ++i) if (dil[i] > 0) ++c;
-  return 100 * c / n;
+  var rs = rdCaja(d, W, H, 15), k = 0.8862 / Math.SQRT2, t = new Float32Array(n), mx = new Float32Array(n);
+  for (y = 0; y < H; ++y) {                       // máximo 5×5 separable, bordes por repetición
+    f = y * W;
+    for (x = 0; x < W; ++x) {
+      m = -1e30;
+      for (a = x - 2; a <= x + 2; ++a) { b = hp[f + (a < 0 ? 0 : a >= W ? W - 1 : a)]; if (b > m) m = b; }
+      t[f + x] = m;
+    }
+  }
+  for (y = 0; y < H; ++y) for (x = 0; x < W; ++x) {
+    m = -1e30;
+    for (a = y - 2; a <= y + 2; ++a) { b = t[(a < 0 ? 0 : a >= H ? H - 1 : a) * W + x]; if (b > m) m = b; }
+    mx[y * W + x] = m;
+  }
+  var c = 0;
+  for (i = 0; i < n; ++i) if (hp[i] >= mx[i] && hp[i] > 80 * (rs[i] * k + 1e-9)) ++c;
+  return c / (n * 4 / 1e6);
 }
 
-// Luminancia de una vista submuestreada 1 de cada 2 (para rdPctEstrellas).
+// Luminancia de una vista submuestreada 1 de cada 2 (para rdEstrellasFuertesMP).
 function rdLum2(view) {
   var a = rdLum(view), W = a.W >> 1, H = a.H >> 1, L = new Float32Array(W * H);
   for (var y = 0; y < H; ++y) for (var x = 0; x < W; ++x) L[y * W + x] = a.L[(2 * y) * a.W + 2 * x];
@@ -789,10 +791,10 @@ function separarEstrellas(viewId, o) {
   // estrellas; la capa nueva solo traía restos y se recombinó en lugar de las estrellas buenas del RGB.
   if (!o.forzar) {
     var yaSin = false; try { yaSin = !!src.propertyValue("PiAstroPilot:SinEstrellas"); } catch (eS) { }
-    var l2 = rdLum2(src), pctE = rdPctEstrellas(l2.L, l2.W, l2.H);
-    if (yaSin || pctE < 0.5)
+    var l2 = rdLum2(src), nE = rdEstrellasFuertesMP(l2.L, l2.W, l2.H);
+    if (yaSin || nE < 1)
       throw new Error("'" + viewId + "' ya está sin estrellas (" + (yaSin ? "salió de separarEstrellas" :
-                      pctE.toFixed(2) + " % de píxeles de estrella; una con estrellas da > 1 %") + "). Separar otra vez solo saca " +
+                      nE.toFixed(1) + " estrellas fuertes por megapíxel; una con estrellas da más de 100") + "). Separar otra vez solo saca " +
                       "restos y ruido. Recombina la capa de estrellas que ya tienes (r.estrellas de la separación anterior). " +
                       "opciones.forzar: true solo si de verdad quedan estrellas enteras.");
   }
@@ -836,13 +838,14 @@ function separarEstrellas(viewId, o) {
   if (patron) {                    // estrellas = original − starless
     var stV = View.viewById(starsId), imS = stV.image, WS = imS.width, HS = imS.height, RS = new Rect(0, 0, WS, HS);
     var s0 = new Float32Array(WS * HS), s1 = new Float32Array(WS * HS);
-    stV.beginProcess();
+    // La starless no pasa del original (StarX la sube hasta 2e-4 en algún píxel): así la suma es exacta.
+    stV.beginProcess(); v.beginProcess();
     for (var cS = 0; cS < imS.numberOfChannels; ++cS) {
       src.image.getSamples(s0, RS, cS); v.image.getSamples(s1, RS, cS);
-      for (var iS = 0; iS < s0.length; ++iS) s0[iS] = Math.min(1, Math.max(0, s0[iS] - s1[iS]));
-      imS.setSamples(s0, RS, cS);
+      for (var iS = 0; iS < s0.length; ++iS) { if (s1[iS] > s0[iS]) s1[iS] = s0[iS]; s0[iS] -= s1[iS]; }
+      imS.setSamples(s0, RS, cS); v.image.setSamples(s1, RS, cS);
     }
-    stV.endProcess();
+    v.endProcess(); stV.endProcess();
   }
   if (typeof o.nuevasEstrellas === "string" && o.nuevasEstrellas && ImageWindow.windowById(o.nuevasEstrellas).isNull) {
     ImageWindow.windowById(starsId).mainView.id = o.nuevasEstrellas; starsId = o.nuevasEstrellas;

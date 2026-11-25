@@ -432,6 +432,24 @@ def pct_estrellas(p):
     return float((_caja(est.astype(np.float32), 2) > 0).mean() * 100.0)
 
 
+def estrellas_fuertes_mp(p):
+    """Estrellas fuertes por megapíxel de p (ya submuestreada 1 de cada 2): máximos locales 5×5 del paso alto (L − caja₅)
+    más de 80 veces por encima del ruido LOCAL (σ desde |diferencia de vecinos| en 31 px). Para saber si una imagen ya
+    está sin estrellas en lineal, donde pct_estrellas falla: prueba en vivo en Siril (IC 1396, 25 nov 2026) con la
+    starless lineal de StarX, 2,1 % (igual que con estrellas). Así: con estrellas 175–255/MP, starless lineales y
+    estiradas 0. Igual que _estrellas_fuertes_mp de Siril y rdEstrellasFuertesMP de PixInsight."""
+    L = lum(p).astype(np.float32)
+    hp = L - _caja(L, 5)
+    d = np.abs(np.diff(hp, axis=1))
+    d = np.concatenate([d, d[:, -1:]], axis=1)
+    z = hp / (_caja(d, 15) * (0.8862 / np.sqrt(2)) + 1e-9)
+    a = np.pad(hp, ((0, 0), (2, 2)), mode="edge")
+    m = np.maximum.reduce([a[:, i:i + hp.shape[1]] for i in range(5)])
+    a = np.pad(m, ((2, 2), (0, 0)), mode="edge")
+    m = np.maximum.reduce([a[i:i + hp.shape[0]] for i in range(5)])
+    return int(((hp >= m) & (z > 80)).sum()) / (L.size * 4 / 1e6)
+
+
 def zona_brillante(L, z):
     """Parte brillante del objeto (celdas de objeto entre la mediana y el p97: disco, sin núcleo) sin estrellas. Ahí el
     detalle de 2–8 px domina sobre el ruido (como _zona_brillante de Siril)."""

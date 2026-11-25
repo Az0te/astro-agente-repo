@@ -854,7 +854,7 @@
    "fichero": "ruido.js",
    "nivel": "copias",
    "timeout_s": 900,
-   "descripcion": "Paso 15 lineal: StarXTerminator en una copia: starless + capa de estrellas, con comprobaciones. Con motor: \"syqon\", SyQon Axiom Mini (syqon-cli) SOLO sobre imagen ya estirada (en lineal sale rota y se niega). En lineal quita antes la malla de 2 px que crece con las estrellas brillantes (si no, StarX deja anillos con malla en las capas de dual band) y saca las estrellas como original − starless. No separa una imagen que ya está sin estrellas (salió de separarEstrellas o < 0,5 % de píxeles de estrella) salvo forzar: recombina la capa que ya tienes.",
+   "descripcion": "Paso 15 lineal: StarXTerminator en una copia: starless + capa de estrellas, con comprobaciones. Con motor: \"syqon\", SyQon Axiom Mini (syqon-cli) SOLO sobre imagen ya estirada (en lineal sale rota y se niega). En lineal quita antes la malla de 2 px que crece con las estrellas brillantes (si no, StarX deja anillos con malla en las capas de dual band) y saca las estrellas como original − starless. No separa una imagen que ya está sin estrellas (salió de separarEstrellas o menos de 1 estrella fuerte por megapíxel) salvo forzar: recombina la capa que ya tienes.",
    "paso": "lineal/15-starx.md",
    "params": {
     "type": "object",

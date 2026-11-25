@@ -3258,12 +3258,13 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False,
         # IC 1396 (25 nov 2026): se volvió a pasar StarX sobre la paleta ya sin estrellas; la capa nueva traía solo
         # restos y se recombinó en lugar de las estrellas buenas del RGB, y quedaron los anillos de las brillantes.
         ya = [v["nombre"] for v in _ESTRELLAS.values() if v.get("de") == _nombre(d)]
-        pct = _pct_estrellas(d)
-        if ya or pct < 0.5:
+        # Estrellas fuertes y no % de píxeles: en lineal el % daba lo mismo con y sin estrellas (prueba en Siril).
+        nfe = M.estrellas_fuertes_mp(_p(d.image)[:, ::2, ::2])
+        if ya or nfe < 1:
             capas = [v["nombre"] for v in _ESTRELLAS.values() if not v.get("recombinada")]
             raise RuntimeError(
                 f"'{_nombre(d)}' ya está sin estrellas (" + (f"se separó antes: {', '.join(ya)}" if ya else
-                f"{pct:.2f} % de píxeles de estrella; una con estrellas da > 1 %") + "). Separar otra vez solo saca "
+                f"{nfe:.1f} estrellas fuertes por megapíxel; una con estrellas da más de 100") + "). Separar otra vez solo saca "
                 "restos y ruido. Recombina la capa de estrellas que ya tienes" +
                 (f" ({', '.join(capas)})" if capas else "") + " con recombinarEstrellas. forzar: true solo si de verdad "
                 "quedan estrellas enteras.")
@@ -3302,6 +3303,8 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False,
         ent = np.stack([M.patron_2px_relativo(c) for c in p0]) if patron else p0
         sl, est = _rc.correr(ent, "sxt", unscreen=bool(unscreen))
         if patron and not unscreen:
+            # La starless no pasa del original (StarX la sube hasta 2e-4 en algún píxel): así la suma es exacta.
+            sl = np.minimum(sl, p0)
             est = np.clip(p0 - sl, 0.0, 1.0)
         d.apply_edit(_a_sas(sl, d.image), metadata={}, step_name="RC Astro StarXTerminator (sin estrellas)")
         m = dict(_meta(d))

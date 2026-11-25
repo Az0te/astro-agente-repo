@@ -1784,6 +1784,8 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
                     ent = _a_siril(np.stack([_patron_2px_relativo(c) for c in a0]), crudo.dtype).reshape(crudo.shape)
                 out, texto = _rcastro(siril, ent, "sxt", ["--stars"])
                 sl = out.pop("salida")
+                if patron:   # la starless no pasa del original (StarX la sube hasta 2e-4): suma exacta con la capa
+                    sl = _a_siril(np.minimum(_de_siril(sl), _de_siril(crudo)), crudo.dtype).reshape(crudo.shape)
                 st = None if patron else (next(iter(out.values())) if out else None)
                 nombre = "StarX"
             else:
@@ -3236,18 +3238,29 @@ def _patron_2px_relativo(x, r=3):
     return np.clip((y - _patron_2px(y, r)) * s, 0.0, 1.0).astype(np.float32)
 
 
-def _pct_estrellas(p):
-    """% de píxeles de estrella para saber si la imagen ya está sin estrellas (igual que medidas.pct_estrellas de
-    SetiAstroPilot): picos del paso alto > 5σ (o > p99,5) que forman grupo (≥ 3 píxeles en su 3×3). Los picos sueltos de
-    ruido, la malla de 2 px y los anillos de StarX no cuentan. IC 1396: 0,18 % en una starless, 2,3 % con estrellas."""
+def _max5(x):
+    """Máximo en ventana 5×5 (separable, bordes por repetición)."""
+    a = np.pad(x, ((0, 0), (2, 2)), mode="edge")
+    m = np.maximum.reduce([a[:, i:i + x.shape[1]] for i in range(5)])
+    a = np.pad(m, ((2, 2), (0, 0)), mode="edge")
+    return np.maximum.reduce([a[i:i + x.shape[0]] for i in range(5)])
+
+
+def _estrellas_fuertes_mp(p):
+    """Estrellas fuertes por megapíxel, para saber si la imagen ya está sin estrellas: máximos locales (5×5) del paso
+    alto (L − caja₅) más de 80 veces por encima del ruido LOCAL (σ desde |diferencia de vecinos| en 31 px), sobre la
+    luminancia submuestreada 1 de cada 2. Vale en lineal y estirada. Prueba en vivo en Siril (IC 1396, 25 nov 2026): el
+    % de píxeles de estrella de antes daba 2,1 % en la starless lineal de StarX (igual que con estrellas) y no paraba
+    nada. Medido así: con estrellas 175–255/MP (Hα y RGB lineales, capa de estrellas); starless lineales (StarX, tras
+    NXT) y estiradas 0."""
     q = p[:, ::2, ::2]
-    c = _cielo(q)
-    ruido = max(float(c["ruido_rel"]) * float(c["cielo"]), 1e-6)
-    L = _lum(q)
+    L = _lum(q).astype(np.float32)
     hp = L - _caja(L, 5)
-    est = hp > max(5 * ruido, float(np.percentile(hp.ravel()[::7], 99.5)))
-    est &= _caja(est.astype(np.float32), 1) * 9 >= 2.5
-    return float((_caja(est.astype(np.float32), 2) > 0).mean() * 100.0)
+    d = np.abs(np.diff(hp, axis=1))
+    d = np.concatenate([d, d[:, -1:]], axis=1)
+    z = hp / (_caja(d, 15) * (0.8862 / np.sqrt(2)) + 1e-9)
+    n = int(((hp >= _max5(hp)) & (z > 80)).sum())
+    return n / (L.size * 4 / 1e6)
 
 
 def _no_separar_dos_veces(p, forzar):
@@ -3255,10 +3268,11 @@ def _no_separar_dos_veces(p, forzar):
     solo traía restos y se recombinó en lugar de las estrellas buenas del RGB. Se para salvo forzar."""
     if forzar:
         return
-    pct = _pct_estrellas(p)
-    if pct < 0.5:
+    n = _estrellas_fuertes_mp(p)
+    if n < 1:
         raise RuntimeError(
-            f"La imagen cargada ya parece sin estrellas ({pct:.2f} % de píxeles de estrella; una con estrellas da > 1 %). "
+            f"La imagen cargada ya parece sin estrellas ({n:.1f} estrellas fuertes por megapíxel; una con estrellas da "
+            "más de 100). "
             "Separar otra vez solo saca restos y ruido. Recombina la capa de estrellas que ya tienes (starmask_*.fit de la "
             "separación anterior) con recombinarEstrellas. forzar: true solo si de verdad quedan estrellas enteras.")
 
