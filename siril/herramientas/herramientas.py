@@ -575,7 +575,17 @@ def abrirImagen(siril, fichero):
             and original.suffix.lower() in (".fit", ".fits", ".fts", ".xisf"):
         MASTERS_ABIERTOS[_clave(original)] = os.path.normpath(str(original))
         MASTERS_ABIERTOS[_clave(p)] = os.path.normpath(str(original))   # el FITS propio de un XISF es el mismo master
+    _avisar_pasos("_al_abrir", original)
     return r
+
+
+def _avisar_pasos(nombre, fichero):
+    """Entrega: pasos sigue qué versiones tienen las estrellas recombinadas (25 nov 2026)."""
+    try:
+        import pasos
+        getattr(pasos, nombre)(fichero)
+    except Exception:
+        pass
 
 
 # extensión -> (comando de Siril, extensiones que puede producir)
@@ -623,6 +633,7 @@ def guardarImagen(siril, fichero, sobrescribir=False):
         except Exception:
             pass
     _pila_sigue(siril)                          # guardar cambia el nombre de la imagen, pero es la misma
+    _avisar_pasos("_al_guardar", hechos[0])
     return {"fichero": hechos[0], "bytes": os.path.getsize(hechos[0])}
 
 

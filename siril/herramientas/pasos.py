@@ -3690,10 +3690,17 @@ def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False):
     # antes de exportar para que Siril parta de un estado limpio.
     tmp = H.DATOS / "trabajo" / "exportar_tmp"
     tmp.parent.mkdir(parents=True, exist_ok=True)
+    # 25 nov 2026: Siril guarda ahora .fits y quedaba un exportar_tmp.fit del 20 nov; se cargaba el .fit (el primero de la
+    # lista) y TODAS las exportaciones desde entonces salían con aquella imagen vieja (Paleta8 y Natural9 de IC 1396, el
+    # mismo JPG byte a byte). Sólo vale el fichero que acaba de escribirse.
+    t_save = time.time() - 2
     siril.cmd("save", H._arg_cmd(tmp))
-    hecho_tmp = next((Path(str(tmp) + e) for e in (".fit", ".fits", ".fts") if Path(str(tmp) + e).exists()), None)
-    if hecho_tmp is not None:
-        siril.cmd("load", H._arg_cmd(hecho_tmp))
+    nuevos = [Path(str(tmp) + e) for e in (".fit", ".fits", ".fts")
+              if Path(str(tmp) + e).exists() and os.path.getmtime(str(tmp) + e) >= t_save]
+    if not nuevos:
+        raise RuntimeError(f"Siril no ha escrito {tmp}.fit(s) para exportar: mira registro.")
+    hecho_tmp = max(nuevos, key=lambda f: os.path.getmtime(f))
+    siril.cmd("load", H._arg_cmd(hecho_tmp))
     # Los datos ya están estirados (codificados para verse): se marcan como sRGB para que Siril no les aplique la curva
     # sRGB al guardar. IC 405 (20 nov 2026): el cielo en 0,054 salía a 0,26 en el JPG (gris) por esa conversión.
     try:
@@ -3885,7 +3892,8 @@ def _control_color(k):
               "el final ha perdido el color del objeto. Revisa la combinación (más peso de Hα) o la saturación")
     if not k.get("forzar") and not _COLOR_REF.get("negado"):
         _COLOR_REF["negado"] = True
-        raise RuntimeError("Aviso de color: " + texto + ", y exporta después.")
+        raise RuntimeError("Aviso de color: " + texto + ", y exporta después. Si el color es el buscado, exporta la MISMA "
+                           "imagen otra vez (el aviso sólo frena una vez); no abras una versión anterior.")
     _COLOR_REF["aviso"] = "Aviso de color: " + texto + "."
 
 
@@ -3922,7 +3930,44 @@ def _mensaje_falta_inyeccion(llamada):
             "(aplicarCandidato) y exporta después. forzar: true sólo si el usuario quiere el RGB solo.")
 
 
+def _al_recombinar(r, k):
+    if isinstance(r, dict) and r.get("aplicado") is False:
+        return
+    _ENTREGA.update(estrellas_sueltas=False, recombinada=time.time(), con_estrellas=set(), carpeta=None,
+                    abierta_sin_estrellas=None)
+
+
+def _al_guardar(fichero):
+    """25 nov 2026 (Natural9 de IC 1396): tras el aviso de color, Qwen abrió NL_v5_ruido (anterior a recombinar las
+    estrellas) y exportó esa: final sin estrellas. Se anotan las versiones guardadas tras recombinar."""
+    if _ENTREGA.get("recombinada") and not _ENTREGA.get("abierta_sin_estrellas"):
+        _ENTREGA.setdefault("con_estrellas", set()).add(Path(str(fichero)).stem.lower())
+        _ENTREGA["carpeta"] = os.path.normcase(str(Path(str(fichero)).parent))
+
+
+def _al_abrir(fichero):
+    """Sólo cuenta una versión de la misma carpeta y anterior a la recombinación (otra imagen u otro proyecto no)."""
+    _ENTREGA["abierta_sin_estrellas"] = None
+    if not (_ENTREGA.get("recombinada") and _ENTREGA.get("carpeta")):
+        return
+    f = Path(str(fichero))
+    try:
+        vieja = os.path.getmtime(f) < _ENTREGA["recombinada"]
+    except OSError:
+        return
+    if vieja and os.path.normcase(str(f.parent)) == _ENTREGA["carpeta"] and f.stem.lower() not in _ENTREGA["con_estrellas"]:
+        _ENTREGA["abierta_sin_estrellas"] = f.name
+
+
 def _antes_exportar(k):
+    if _ENTREGA.get("abierta_sin_estrellas") and not k.get("forzar"):
+        buenas = sorted(_ENTREGA.get("con_estrellas") or [])
+        raise RuntimeError(f"Has abierto {_ENTREGA['abierta_sin_estrellas']}, una versión anterior a recombinarEstrellas: el "
+                           "final saldría sin estrellas. " + (f"Abre la última guardada con estrellas ({buenas[-1]}) y "
+                           "exporta esa. " if buenas else "Recombina las estrellas otra vez y exporta. ")
+                           + "Un aviso de color no se arregla cambiando de versión: si el color es el buscado, exporta la "
+                           "misma imagen otra vez (el aviso frena una sola vez). forzar: true sólo si el usuario pide una "
+                           "versión sin estrellas.")
     if _falta_inyeccion() and not k.get("forzar"):
         raise RuntimeError(_mensaje_falta_inyeccion("combinarCandidatos(ha=<fichero de la capa Hα estirada>, oiii=<fichero de la capa OIII estirada>), con la RGB estirada cargada"))
     if _ENTREGA["estrellas_sueltas"] and not k.get("forzar"):
@@ -3948,11 +3993,14 @@ def _despues_aplicar(r, k):
         _ENTREGA["estrellas_sueltas"] = True
     elif cid.startswith(("combinacion", "paleta")):
         _INYECCION["hecha"] = True
+        if cid.startswith("paleta"):
+            # Una paleta cambia el color a propósito (la Natural es turquesa: R/G ~0,5 frente a 1,6 del RGB): el R/G del
+            # lineal calibrado deja de ser referencia (Natural9 de IC 1396, 25 nov 2026: el aviso frenó la exportación).
+            _COLOR_REF.clear()
 
 
 _guarda("separarEstrellas", despues=lambda r, k: _ENTREGA.update(estrellas_sueltas=True))
-_guarda("recombinarEstrellas", despues=lambda r, k: _ENTREGA.update(estrellas_sueltas=False)
-        if not (isinstance(r, dict) and r.get("aplicado") is False) else None)
+_guarda("recombinarEstrellas", despues=_al_recombinar)
 _guarda("fondoCandidatos", despues=lambda r, k: _ENTREGA.update(fondo_pendiente=True))
 _guarda("aplicarCandidato", despues=_despues_aplicar)
 _guarda("exportarFinal", antes=_antes_exportar, despues=_despues_exportar)
