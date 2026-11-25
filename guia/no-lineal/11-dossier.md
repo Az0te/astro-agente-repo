@@ -17,6 +17,7 @@
 - Página HTML a partir de [`plantillas/dossier.html`](../plantillas/dossier.html): fondo oscuro, cabecera con equipo, escala, tiempos y software, índice, y una sección por paso en el orden real de la cadena.
 - En cada paso: tabla resumen de lo elegido y tabla completa con todos los candidatos y todas sus medidas. El número de cada fila coincide con el de la miniatura de la galería. Marcar qué propuso el recomendador y qué entró en la final, y explicar por qué cuando no coinciden. Debajo, una leyenda plegable con qué significa cada columna.
 - Fórmulas y coeficientes en bloque de código. Final entera y recortes al 100 %, con texto alternativo descriptivo.
+- Métricas finales con píxeles recortados **por canal**: % exactamente a 0, % por debajo de 0,001 y % a 1, más % con algún canal a 0 y con los tres a 0. Decir dónde están los ceros y qué paso los creó, y dar la misma medida en la referencia. Una media de los tres canales esconde el azul, que es el que más recorta.
 - Los fallos de las herramientas propias se cuentan como fallos: causa medida, arreglo y números de antes y después. Al final, puntos abiertos.
 - Cada número sale de la salida de una herramienta; ninguno se redondea a ojo ni se inventa. Si un texto se corrige después, se vuelven a comprobar las cifras.
 - Se publica como página y se exporta a PDF con el bloque de impresión que trae la plantilla (página alta de 325 × 460 mm, fondo oscuro, leyendas abiertas).
