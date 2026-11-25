@@ -3369,6 +3369,18 @@ def _igualar_difusa(o, ha, cielo_px=None):
     return np.clip(mh + (o - mo) * f, 0, 1)
 
 
+def _neutralizar_cielo(q, rgb):
+    """Lleva el cielo de cada canal a la media de los tres sin mover el blanco (cielo_c → media, 1 → 1). 25 nov 2026: cada
+    raya se estira por su cuenta y la paleta salía con el cielo teñido (Natural de IC 1396: 27 % en Siril, 20 % en SAS); la
+    puerta de «cielo teñido» la descartaba siempre, aunque fondoCandidatos lo neutraliza después (PixInsight no tiene
+    esa puerta y elige la Natural)."""
+    m = float(np.mean(rgb))
+    out = np.empty_like(q)
+    for c in range(q.shape[0]):
+        out[c] = m + (q[c] - rgb[c]) * ((1.0 - m) / max(1.0 - rgb[c], 1e-6))
+    return np.clip(out, 0, 1)
+
+
 def _tonos(p, m):
     """Separación de tonos: desviación circular del tono (grados), ponderada por saturación, en la máscara m."""
     R, G, B = p[0][m], p[1][m], p[2][m]
@@ -3445,12 +3457,15 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
         t0 = time.perf_counter()
         try:
             q = np.clip(np.stack(fn()).astype(np.float32), 0, 1)
+            rgb0 = _cielo_por_canal(q, cel)
+            dom0 = 100.0 * (max(rgb0) - min(rgb0)) / max(float(np.mean(rgb0)), 1e-6)
+            q = _neutralizar_cielo(q, rgb0).astype(np.float32)
             rgb = _cielo_por_canal(q, cel)
             dom = 100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6)
             mo = z["obj_px"] if z["obj_px"].any() else np.ones(q.shape[1:], bool)
             Lo = float(_lum(q)[mo].mean())
             verde = 100.0 * float(np.maximum(q[1] - np.maximum(q[0], q[2]), 0)[mo].mean()) / max(Lo, 1e-6)
-            m = {"dominante_cielo_pct": _r(dom, 1), "verde_residual_pct": _r(verde, 1),
+            m = {"dominante_cielo_pct": _r(dom, 1), "dominante_cielo_antes_pct": _r(dom0, 1), "verde_residual_pct": _r(verde, 1),
                  "sat_objeto": _r(float(_saturacion(q)[mo].mean()), 3), "separacion_tonos_grados": _r(_tonos(q, mo), 1),
                  **_recortes(q)}
             fal = []
@@ -3487,7 +3502,9 @@ def paletasCandidatos(siril, ha=None, oiii=None, sii=None, paletas=None, dominan
                        "no el color real: la elección es estética; mírala en la galería.")
     r["leyenda"] = ("separacion_tonos_grados: variedad de tonos en el objeto (desviación circular del tono ponderada por "
                     "saturación; más = más zonas distinguibles). verde_residual_pct: verde por encima de rojo y azul en el objeto. "
-                    "dominante_cielo_pct: el cielo debe quedar neutro. La imagen NO ha cambiado: aplicarCandidato(id).")
+                    "dominante_cielo_pct: el cielo debe quedar neutro (cada candidato ya lleva el cielo neutralizado por "
+                    "canal; dominante_cielo_antes_pct es el tinte de las capas tal cual). La imagen NO ha cambiado: "
+                    "aplicarCandidato(id).")
     _asegurar_restaurado(siril, crudo, huella, r)
     try:
         import multicapa

@@ -1105,6 +1105,20 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
         elegir.append("Natural")
     cel = z["medidas"]["_celdas"]
     mo = z["obj_px"] if z["obj_px"].any() else np.ones(forma, bool)
+    # 25 nov 2026: cada raya se estira por su cuenta y la paleta salía con el cielo teñido (Natural de IC 1396: 20 % en SAS,
+    # 27 % en Siril); la puerta de «cielo teñido» la descartaba siempre aunque fondoCandidatos lo neutraliza después
+    # (PixInsight no tiene esa puerta y elige la Natural). Cada candidato lleva el cielo de cada canal a la media de los
+    # tres sin mover el blanco (cielo_c → media, 1 → 1).
+    antes = {}
+
+    def neutra(nombre, q):
+        rgb = M.cielo_por_canal(q, cel)
+        antes[nombre] = 100.0 * (max(rgb) - min(rgb)) / max(float(np.mean(rgb)), 1e-6)
+        mc = float(np.mean(rgb))
+        out = np.empty_like(q)
+        for c in range(q.shape[0]):
+            out[c] = mc + (q[c] - rgb[c]) * ((1.0 - mc) / max(1.0 - rgb[c], 1e-6))
+        return np.clip(out, 0, 1).astype(np.float32)
 
     def medir(q):
         rgb = M.cielo_por_canal(q, cel)
@@ -1115,11 +1129,14 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
                 "sat_objeto": _r(float(M.saturacion(q)[mo].mean()), 3), "separacion_tonos_grados": _r(_tonos(q, mo), 1),
                 **M.recortes(q)}
 
-    lista = [(todas[k][0], f"paleta_{k}", {}, (lambda q, fn=todas[k][1]: np.clip(np.stack(fn()).astype(np.float32), 0, 1)))
+    lista = [(todas[k][0], f"paleta_{k}", {},
+              (lambda q, fn=todas[k][1], nom=todas[k][0]: neutra(nom, np.clip(np.stack(fn()).astype(np.float32), 0, 1))))
              for k in elegir]
     r = H._comparar(ctx, d, "paleta", lista, medir)
     for x in r["candidatos"]:
         m, fal = x["metricas"], []
+        if x["metodo"] in antes:
+            m["dominante_cielo_antes_pct"] = _r(antes[x["metodo"]], 1)
         if m["dominante_cielo_pct"] >= dominante_max:
             fal.append(f"cielo teñido: dominante {m['dominante_cielo_pct']} % ≥ {dominante_max} %")
         if m["verde_residual_pct"] >= verde_max:
@@ -1149,7 +1166,8 @@ def paletasCandidatos(ctx, ha, oiii, sii=None, vista=None, paletas=None, dominan
     r["vista_paleta"] = H._nombre(d)
     r["leyenda"] = ("separacion_tonos_grados: variedad de tonos en el objeto (más = más zonas distinguibles). "
                     "verde_residual_pct: verde por encima de rojo y azul en el objeto. dominante_cielo_pct: el cielo debe "
-                    "quedar neutro. La vista NO ha cambiado: aplicarCandidato(id).")
+                    "quedar neutro (cada candidato ya lleva el cielo neutralizado por canal; dominante_cielo_antes_pct es "
+                    "el tinte de las capas tal cual). La vista NO ha cambiado: aplicarCandidato(id).")
     aviso = _aviso_sin_usar([_fuente(ctx, ha), _fuente(ctx, oiii), _fuente(ctx, sii), _fuente(ctx, hb)])
     if aviso:
         r["aviso_masters"] = aviso + " (El RGB de banda ancha puede entrar después, para las estrellas.)"
