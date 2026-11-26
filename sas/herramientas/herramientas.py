@@ -2573,10 +2573,11 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     lista += [(f"color suave por tonos +{k:g} (rojo ×0,85, dorado ×1,3, azul ×1,35)", "saturar_tonos",
                {"k": float(k), "fondo": fondo}) for k in (suave or [])]
     # Realce solo del azul (IC 63, 26 nov 2026: Rafael pidió resaltar el azul de la reflexión sin tocar el rojo): ganancia
-    # de saturación g en los tonos azules y cian (190–250°), 1 en el resto, con el cielo protegido como el resto.
+    # de saturación g en los tonos cian, azul y violeta (190–270°), 1 en el resto, con el cielo protegido como el resto.
+    # La meseta llega al violeta para que un halo azul que vira a violeta hacia dentro (γ Cas) no gane un anillo.
     lista += [(f"realce del azul por tonos ×{g:g}", "saturar_tonos",
-               {"k": 0.0, "fondo": fondo, "tonos": [(0, 1.0), (150, 1.0), (190, 1 + 0.8 * (g - 1)), (220, g), (250, g),
-                                                    (280, 1.0), (360, 1.0)]}) for g in (azul or [])]
+               {"k": 0.0, "fondo": fondo, "tonos": [(0, 1.0), (150, 1.0), (180, 1 + 0.8 * (g - 1)), (200, g), (270, g),
+                                                    (300, 1.0), (360, 1.0)]}) for g in (azul or [])]
     lista += [(f"SatChroma croma ×{1 + k:g}", "satchroma",
                {"mode": 1, "strength": 1.0,
                 "points": [[i / 6.0, 1.0 + float(k)] for i in range(7)]}) for k in (satchroma or [])]
