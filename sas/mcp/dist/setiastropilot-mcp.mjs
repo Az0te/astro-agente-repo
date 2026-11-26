@@ -17069,7 +17069,7 @@ function herramientasVisibles() {
 function conexion() {
   const pj = join(DATOS, "puente.json");
   if (!existsSync(pj))
-    throw new Error("El puente de SASpro no est\xE1 abierto. En SASpro: Scripts > AstroPilot > SetiAstroPilot (puente MCP) y repite.");
+    throw new Error("El puente de SASpro no est\xE1 abierto. En SASpro: Flujos de trabajo > Scripts > AstroPilot > SetiAstroPilot (puente MCP) y repite.");
   const { puerto } = JSON.parse(readFileSync(pj, "utf-8"));
   const token = readFileSync(join(DATOS, "token"), "utf-8").trim();
   return { puerto: Number(puerto), token };

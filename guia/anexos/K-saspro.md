@@ -2,7 +2,7 @@
 
 [← Índice](../SKILL.md)
 
-Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SASpro 1.24 o posterior con el script SetiAstroPilot lanzado desde el menú Scripts > AstroPilot). Las fichas dicen **qué** hacer y con **qué criterios**; aquí sólo está **con qué herramienta o proceso de SASpro**. Los nombres de las medidas son los mismos que en las fichas.
+Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SASpro 1.24 o posterior con el script SetiAstroPilot lanzado desde el menú Flujos de trabajo > Scripts > AstroPilot (en 1.x, Scripts > AstroPilot)). Las fichas dicen **qué** hacer y con **qué criterios**; aquí sólo está **con qué herramienta o proceso de SASpro**. Los nombres de las medidas son los mismos que en las fichas.
 
 <a id="arranque"></a>
 ## Arranque en SASpro (leer con SKILL.md)

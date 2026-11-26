@@ -985,7 +985,7 @@ def _comprobar_ia(proceso, preset=None):
         t_inicio = None
     if t_inicio and torch[-1].stat().st_mtime > t_inicio + 60:
         raise RuntimeError(f"PyTorch se instaló después de arrancar SASpro y {proceso} no lo verá: reinicia SASpro y "
-                           "vuelve a lanzar el puente (Scripts > AstroPilot).")
+                           "vuelve a lanzar el puente (Flujos de trabajo > Scripts > AstroPilot).")
 
 
 def procesoSAS(ctx, proceso, preset=None, vista=None):

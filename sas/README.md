@@ -12,7 +12,7 @@ modelo ──MCP (stdio)──> sas/mcp/dist/setiastropilot-mcp.mjs ──TCP 12
 
 La diferencia con Siril es que SASpro ejecuta los scripts de usuario **dentro de su propio proceso**, en el hilo de la interfaz (Qt), con un objeto `ctx` (`setiastro/saspro/ops/scripts.py`) que da acceso a los documentos, al deshacer y a `ctx.run_command(id, preset)`.
 
-1. En SASpro se lanza una vez el script **SetiAstroPilot (puente MCP)** (menú Scripts > AstroPilot). El script vuelve enseguida y el puente se queda escuchando en `127.0.0.1:48733`. Escribe `~/.setiastropilot/puente.json` (puerto) y `~/.setiastropilot/token`.
+1. En SASpro se lanza una vez el script **SetiAstroPilot (puente MCP)** (menú Flujos de trabajo > Scripts > AstroPilot; en SASpro 1.x, menú Scripts > AstroPilot). El script vuelve enseguida y el puente se queda escuchando en `127.0.0.1:48733`. Escribe `~/.setiastropilot/puente.json` (puerto) y `~/.setiastropilot/token`.
 2. El servidor MCP lee el manifiesto (`herramientas/manifiesto.json`) y ofrece sus herramientas. Cada llamada va al puente como una línea JSON `{id, token, herramienta, args}`.
 3. El puente comprueba el token y deja el trabajo en una cola. Un temporizador de Qt en el hilo de la interfaz saca los trabajos y los ejecuta **uno detrás de otro, en el hilo de SASpro**, como si el usuario pulsara el botón. Solo se ejecutan herramientas de `herramientas.LISTA` y procesos de `PROCESOS`. No hay `eval` ni código libre (`function_bundle` queda fuera).
 
@@ -91,9 +91,9 @@ Para añadir una herramienta: la función en `herramientas/herramientas.py`, su 
 
 ## Instalar
 
-Requisitos: Seti Astro Suite Pro reciente (con el menú Scripts y `ctx.run_command`) y Node.js 18 o superior.
+Requisitos: Seti Astro Suite Pro reciente (con el menú Flujos de trabajo > Scripts y `ctx.run_command`) y Node.js 18 o superior.
 
-1. En SASpro: menú Scripts > *Open Scripts Folder* (en Windows `%LOCALAPPDATA%\SASpro\scripts`). Copia allí `sas/puente/SetiAstroPilot.py`. Si el repo no está en `~/astro-agente-repo`, cambia `REPO` en esa copia o define la variable `SETIASTROPILOT_REPO`. Recarga los scripts: aparece *AstroPilot > SetiAstroPilot (puente MCP)*.
+1. En SASpro: menú Flujos de trabajo > Scripts > *Open Scripts Folder* (en 1.x, menú Scripts) (en Windows `%LOCALAPPDATA%\SASpro\scripts`). Copia allí `sas/puente/SetiAstroPilot.py`. Si el repo no está en `~/astro-agente-repo`, cambia `REPO` en esa copia o define la variable `SETIASTROPILOT_REPO`. Recarga los scripts: aparece *AstroPilot > SetiAstroPilot (puente MCP)*.
 2. Registra el MCP (no hace falta `npm install`, `dist/` lleva todo dentro):
 
 ```

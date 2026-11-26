@@ -138,9 +138,9 @@ Para crear la variable a mano: Inicio > «variables de entorno» > *Editar las v
 
 El mismo asistente para **Seti Astro Suite Pro (SASpro)** (`sas/`). El puente corre dentro de SASpro, que ejecuta los scripts de usuario en su propio proceso, y lleva un chat igual que el de Siril: IA local, Claude, Codex o APIs con clave. Sigue la misma guía común, con herramientas de una lista blanca que comparan candidatos en cada paso. Probado de principio a fin en SASpro 1.24.2 con un master de M31.
 
-1. Requisitos: Seti Astro Suite Pro reciente (con el menú Scripts) y Node.js 18 o superior si se usa por MCP desde Claude Code o Codex.
+1. Requisitos: Seti Astro Suite Pro reciente (con el menú Flujos de trabajo > Scripts) y Node.js 18 o superior si se usa por MCP desde Claude Code o Codex.
 2. En SASpro, **Scripts > Open Scripts Folder** (en Windows `%LOCALAPPDATA%\SASpro\scripts`): copia allí `sas/puente/SetiAstroPilot.py` y `sas/puente/SetiAstroPilot_Chat.py`. Si el repositorio no está en `~/astro-agente-repo`, define la variable `SETIASTROPILOT_REPO`.
-3. Recarga los scripts y lanza **Scripts > AstroPilot > SetiAstroPilot (chat)**: arranca el puente y abre el chat.
+3. Recarga los scripts y lanza **Flujos de trabajo > Scripts > AstroPilot > SetiAstroPilot (chat)** (en SASpro 1.x, menú Scripts > AstroPilot): arranca el puente y abre el chat.
 
 Detalles, herramientas e instalación del MCP en [`sas/README.md`](sas/README.md).
 

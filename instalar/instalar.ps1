@@ -702,7 +702,7 @@ function ConfigurarSas {
     Copy-Item -LiteralPath $origen -Destination $destino -Force
     Ok $t
   }
-  Info (T "En SASpro, Scripts > Reload Scripts: aparece AstroPilot > SetiAstroPilot." "In SASpro, Scripts > Reload Scripts: AstroPilot > SetiAstroPilot appears.")
+  Info (T "En SASpro, Flujos de trabajo > Scripts > Reload Scripts: aparece AstroPilot > SetiAstroPilot." "In SASpro, Workflows > Scripts > Reload Scripts: AstroPilot > SetiAstroPilot appears.")
 }
 if ($sasExe -and -not $SoloMCP) { Titulo "Seti Astro Suite Pro"; ConfigurarSas }
 

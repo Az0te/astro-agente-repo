@@ -141,7 +141,7 @@ The same assistant for **Seti Astro Suite Pro (SASpro)** (`sas/`). The bridge ru
 
 1. Requirements: a recent Seti Astro Suite Pro (with the Scripts menu), and Node.js 18 or later if you use it through MCP from Claude Code or Codex.
 2. In SASpro, **Scripts > Open Scripts Folder** (on Windows `%LOCALAPPDATA%\SASpro\scripts`): copy `sas/puente/SetiAstroPilot.py` and `sas/puente/SetiAstroPilot_Chat.py` there. If the repository is not in `~/astro-agente-repo`, set the `SETIASTROPILOT_REPO` variable.
-3. Reload the scripts and launch **Scripts > AstroPilot > SetiAstroPilot (chat)**: it starts the bridge and opens the chat.
+3. Reload the scripts and launch **Workflows > Scripts > AstroPilot > SetiAstroPilot (chat)** (in SASpro 1.x, the Scripts > AstroPilot menu): it starts the bridge and opens the chat.
 
 Details, tools and MCP setup in [`sas/README.md`](sas/README.md) (Spanish).
 
