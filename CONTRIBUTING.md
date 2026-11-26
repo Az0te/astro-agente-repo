@@ -2,16 +2,18 @@
 
 *[English version below](#how-to-contribute)*
 
-Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y el módulo PiAstroPilot) ha crecido a partir de sesiones reales de procesado, casi todas con un solo equipo. Lo que más falta ahora son **datos y resultados de otros equipos, otros cielos y otros tipos de objeto**. No hace falta saber programar para aportar mucho.
+> **La parte de PixInsight está retirada** y no se aceptan aportaciones para ella. Ver el aviso del [README](README.md).
+
+Gracias por querer ayudar. Este proyecto (la guía de procesado y los asistentes para Siril y Seti Astro Suite Pro) ha crecido a partir de sesiones reales de procesado, casi todas con un solo equipo. Lo que más falta ahora son **datos y resultados de otros equipos, otros cielos y otros tipos de objeto**. No hace falta saber programar para aportar mucho.
 
 ## Qué aportar, de más útil a menos
 
 1. **Casos de prueba reales.** Masters (o recortes) de tipos de objeto que aún no se han probado, con su equipo, filtro y cámara. La guía mejora por tipo de objeto, y cada caso nuevo sirve para comprobar o corregir sus valores de partida.
-2. **Fallos con su registro.** Cuando un paso de PiAstroPilot o de la guía falle o dé un resultado raro, el registro del panel (o de la consola de PixInsight) y una captura valen más que cualquier descripción.
-3. **Comparativas.** Tu procesado manual al lado del de PiAstroPilot con los mismos datos. Sirven para calibrar los umbrales: nivel de cielo, ruido, moteado de color, aporte de estrellas, etc.
-4. **Pruebas con otros modelos y equipos.** Codex, otros modelos locales, otras GPU, Seestar u otros telescopios inteligentes, OSC frente a mono, macOS o Linux, otra versión de PixInsight.
+2. **Fallos con su registro.** Cuando un paso del asistente o de la guía falle o dé un resultado raro, el registro del chat (o de la consola de Siril o SASpro) y una captura valen más que cualquier descripción.
+3. **Comparativas.** Tu procesado manual al lado del del asistente con los mismos datos. Sirven para calibrar los umbrales: nivel de cielo, ruido, moteado de color, aporte de estrellas, etc.
+4. **Pruebas con otros modelos y equipos.** Codex, otros modelos locales, otras GPU, Seestar u otros telescopios inteligentes, OSC frente a mono, macOS o Linux, otra versión de Siril o SASpro.
 5. **Correcciones y mejoras de la guía**, por *pull request* (ver las reglas más abajo).
-6. **Traducciones** y, más adelante, **código** del módulo o del servidor MCP.
+6. **Traducciones** y, más adelante, **código** de los puentes o de los servidores MCP.
 
 ## Por dónde
 
@@ -23,7 +25,7 @@ Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y
 
 **Ficheros grandes:** no los adjuntes a la *issue*. Súbelos a Google Drive, OneDrive, Dropbox o WeTransfer y pega el enlace. Un recorte de 1000 × 1000 px en XISF o FITS suele bastar; si puedes, indica cuánto tiempo estará disponible el enlace.
 
-**Métricas y sesión:** el informe del Lite (.md o dossier) y el de Siril o SASpro llevan una tabla de métricas de la sesión y un bloque JSON (`astropilot-metricas/1`): modelo, versión de la guía, llamadas correctas, errores, correcciones, tiempos y tokens. Pega ese bloque en la *issue*: es lo que permite comparar envíos con datos y no solo a ojo. No lleva rutas ni datos personales. Con modelos locales se guarda además, junto al informe, un fichero `…_sesion_anonima` con la conversación completa, sin el prompt de sistema ni las previas y con las carpetas de usuario cambiadas. Nada se envía solo: revísalo y adjúntalo únicamente si quieres, y di en la plantilla si podemos usarlo para entrenar modelos locales.
+**Métricas y sesión:** el informe de Siril o de SASpro lleva una tabla de métricas de la sesión y un bloque JSON (`astropilot-metricas/1`): modelo, versión de la guía, llamadas correctas, errores, correcciones, tiempos y tokens. Pega ese bloque en la *issue*: es lo que permite comparar envíos con datos y no solo a ojo. No lleva rutas ni datos personales. Con modelos locales se guarda además, junto al informe, un fichero `…_sesion_anonima` con la conversación completa, sin el prompt de sistema ni las previas y con las carpetas de usuario cambiadas. Nada se envía solo: revísalo y adjúntalo únicamente si quieres, y di en la plantilla si podemos usarlo para entrenar modelos locales.
 
 **Datos privados:** las cabeceras FITS/XISF pueden llevar tus coordenadas, el nombre del observatorio o rutas de tu PC. Revísalas antes de compartir. Comparte solo datos tuyos o que tengas permiso para compartir, y di bajo qué condiciones pueden usarse (por ejemplo, solo para probar la guía, o también como imagen de ejemplo en la documentación).
 
@@ -37,17 +39,17 @@ Gracias por querer ayudar. Este proyecto (la guía de procesado, el puente MCP y
 
 ## Reglas para código
 
-- PiAstroPilot es un módulo PCL en C++; el servidor MCP está en TypeScript; los scripts y las funciones de la guía (`guia/herramientas/*.js`) son PJSR. Sigue el estilo del fichero que toques.
-- Prueba el cambio en PixInsight antes de abrir la *pull request* y di con qué versión (por ejemplo, 1.9.6 en Windows 11).
-- El módulo y la guía van juntos: si cambias la firma de una función de `guia/herramientas/`, actualiza `manifiesto.json` y lo que la use.
-- **Reglas CPD de PixInsight.** PixInsight endurece sus reglas para módulos y scripts de terceros (en vigor el 12 de diciembre de 2026), entre ellas la firma de código. Léelas en el foro oficial de PixInsight. No propongas cambios que dependan de saltarse esas reglas. Si tienes dudas sobre si algo las cumple, pregúntalo en *Discussions* antes de programarlo.
-- No subas binarios (DLL, `.xsgn`, `.xssk`) ni claves de firma.
+- Los puentes y las herramientas de Siril y SASpro están en Python (`siril/`, `sas/`); los servidores MCP, en TypeScript (`siril/mcp/`, `sas/mcp/`). Sigue el estilo del fichero que toques.
+- Prueba el cambio en Siril o en SASpro antes de abrir la *pull request* y di con qué versión (por ejemplo, Siril 1.4 en Windows 11).
+- Las herramientas y la guía van juntas: si cambias la firma de una herramienta, actualiza el `manifiesto.json` de su carpeta y lo que la use.
+- **Nada de código de PixInsight.** No se aceptan aportaciones para PixInsight ni código copiado, traducido o adaptado de PCL o PJSR (su licencia no lo permite fuera de PixInsight).
+- No subas binarios ni claves.
 
 ## Licencias de las aportaciones
 
 Al aportar aceptas que tu contribución se publique con la licencia de la parte del proyecto que tocas:
 
-- Código (`mcp/`, `piastropilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). El puente anterior (`watcher/`, `servidor-mcp/`), ya retirado y solo en el historial de Git, era MIT de Alain Escaffre (original) y Rafael Vidal (modificaciones).
+- Código (`siril/`, `sas/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)).
 - Guía (`guia/`): **CC BY-SA 4.0** ([`guia/LICENSE.md`](guia/LICENSE.md)).
 
 Las imágenes y datos que enlaces siguen siendo tuyos; solo se usarán como digas en la *issue*.
@@ -60,16 +62,18 @@ Sé amable y concreto. Aquí se aprende de los fallos, también de los de la gu�
 
 # How to contribute
 
-Thanks for wanting to help. This project (the processing guide, the MCP bridge and the PiAstroPilot module) grew out of real processing sessions, almost all with a single rig. What it needs most now is **data and results from other rigs, other skies and other object types**. You do not need to code to make a big contribution.
+> **The PixInsight part has been withdrawn** and contributions for it are not accepted. See the notice in the [README](README.en.md).
+
+Thanks for wanting to help. This project (the processing guide and the assistants for Siril and Seti Astro Suite Pro) grew out of real processing sessions, almost all with a single rig. What it needs most now is **data and results from other rigs, other skies and other object types**. You do not need to code to make a big contribution.
 
 ## What to contribute, most useful first
 
 1. **Real test cases.** Masters (or crops) of object types that have not been tested yet, with telescope, filter and camera. The guide improves per object type, and each new case checks or corrects its starting values.
-2. **Bugs with their log.** When a PiAstroPilot or guide step fails or gives an odd result, the panel log (or the PixInsight console) and a screenshot are worth more than any description.
-3. **Comparisons.** Your manual processing next to PiAstroPilot's on the same data. They are used to calibrate thresholds: sky level, noise, colour mottle, star contribution, etc.
-4. **Tests with other models and hardware.** Codex, other local models, other GPUs, Seestar or other smart telescopes, OSC vs mono, macOS or Linux, other PixInsight versions.
+2. **Bugs with their log.** When an assistant or guide step fails or gives an odd result, the chat log (or the Siril or SASpro console) and a screenshot are worth more than any description.
+3. **Comparisons.** Your manual processing next to the assistant's on the same data. They are used to calibrate thresholds: sky level, noise, colour mottle, star contribution, etc.
+4. **Tests with other models and hardware.** Codex, other local models, other GPUs, Seestar or other smart telescopes, OSC vs mono, macOS or Linux, other Siril or SASpro versions.
 5. **Guide fixes and improvements** by pull request (see the rules below).
-6. **Translations** and, later on, **code** for the module or the MCP server.
+6. **Translations** and, later on, **code** for the bridges or the MCP servers.
 
 ## Where
 
@@ -83,7 +87,7 @@ Issues can be written in English or Spanish.
 
 **Large files:** do not attach them to the issue. Upload them to Google Drive, OneDrive, Dropbox or WeTransfer and paste the link. A 1000 × 1000 px XISF or FITS crop is usually enough; if you can, say how long the link will stay up.
 
-**Metrics and session:** the Lite report (.md or dossier) and the Siril or SASpro report include a session metrics table and a JSON block (`astropilot-metricas/1`): model, guide version, correct calls, errors, corrections, timing and tokens. Paste that block into the issue: it lets us compare submissions with data, not just by eye. It contains no paths or personal data. With local models a `…_sesion_anonima` file with the full conversation is also saved next to the report, without the system prompt or previews and with user folders replaced. Nothing is sent automatically: check it and attach it only if you want, and say in the template whether we may use it to train local models.
+**Metrics and session:** the Siril or SASpro report includes a session metrics table and a JSON block (`astropilot-metricas/1`): model, guide version, correct calls, errors, corrections, timing and tokens. Paste that block into the issue: it lets us compare submissions with data, not just by eye. It contains no paths or personal data. With local models a `…_sesion_anonima` file with the full conversation is also saved next to the report, without the system prompt or previews and with user folders replaced. Nothing is sent automatically: check it and attach it only if you want, and say in the template whether we may use it to train local models.
 
 **Private data:** FITS/XISF headers may contain your coordinates, observatory name or local paths. Check them before sharing. Only share your own data or data you are allowed to share, and say how it may be used (only to test the guide, or also as an example image in the docs).
 
@@ -97,17 +101,17 @@ Issues can be written in English or Spanish.
 
 ## Rules for code
 
-- PiAstroPilot is a C++ PCL module; the MCP server is TypeScript; the guide's scripts and functions (`guia/herramientas/*.js`) are PJSR. Follow the style of the file you touch.
-- Test the change in PixInsight before opening the pull request and say which version (e.g. 1.9.6 on Windows 11).
-- The module and the guide go together: if you change the signature of a function in `guia/herramientas/`, update `manifiesto.json` and its callers.
-- **PixInsight CPD rules.** PixInsight is tightening its rules for third-party modules and scripts (in force from 12 December 2026), including code signing. Read them on the official PixInsight forum. Do not propose changes that rely on getting around those rules. If unsure, ask in Discussions before coding.
-- Do not commit binaries (DLL, `.xsgn`, `.xssk`) or signing keys.
+- The Siril and SASpro bridges and tools are Python (`siril/`, `sas/`); the MCP servers are TypeScript (`siril/mcp/`, `sas/mcp/`). Follow the style of the file you touch.
+- Test the change in Siril or SASpro before opening the pull request and say which version (e.g. Siril 1.4 on Windows 11).
+- The tools and the guide go together: if you change a tool's signature, update the `manifiesto.json` in its folder and its callers.
+- **No PixInsight code.** Contributions for PixInsight are not accepted, nor code copied, translated or adapted from PCL or PJSR (their licence does not allow it outside PixInsight).
+- Do not commit binaries or keys.
 
 ## Licensing of contributions
 
 By contributing you agree that your contribution is published under the licence of the part of the project you change:
 
-- Code (`mcp/`, `piastropilot/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)). The previous bridge (`watcher/`, `servidor-mcp/`), now retired and only in the Git history, was MIT by Alain Escaffre (original) and Rafael Vidal (modifications).
+- Code (`siril/`, `sas/`): **MIT**, Copyright (c) 2026 Rafael Vidal ([`LICENSE`](LICENSE)).
 - Guide (`guia/`): **CC BY-SA 4.0** ([`guia/LICENSE.md`](guia/LICENSE.md)).
 
 Images and data you link to remain yours; they will only be used as you state in the issue.
