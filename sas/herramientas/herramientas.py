@@ -3261,10 +3261,12 @@ def separarEstrellas(ctx, vista=None, motor="auto", lineal=None, unscreen=False,
         ya = [v["nombre"] for v in _ESTRELLAS.values() if v.get("de") == _nombre(d)]
         # Estrellas fuertes y no % de píxeles: en lineal el % daba lo mismo con y sin estrellas (prueba en Siril).
         nfe = M.estrellas_fuertes_mp(_p(d.image)[:, ::2, ::2])
-        if ya or nfe < 1:
+        # IC 63 (26 nov 2026): tras deshacer la separación la marca seguía y se negaba con la imagen ya con estrellas:
+        # la marca solo vale si las estrellas fuertes no dicen lo contrario.
+        if (ya and nfe < 100) or nfe < 1:
             capas = [v["nombre"] for v in _ESTRELLAS.values() if not v.get("recombinada")]
             raise RuntimeError(
-                f"'{_nombre(d)}' ya está sin estrellas (" + (f"se separó antes: {', '.join(ya)}" if ya else
+                f"'{_nombre(d)}' ya está sin estrellas (" + (f"se separó antes: {', '.join(ya)}; {nfe:.1f} estrellas fuertes por megapíxel" if ya else
                 f"{nfe:.1f} estrellas fuertes por megapíxel; una con estrellas da más de 100") + "). Separar otra vez solo saca "
                 "restos y ruido. Recombina la capa de estrellas que ya tienes" +
                 (f" ({', '.join(capas)})" if capas else "") + " con recombinarEstrellas. forzar: true solo si de verdad "
