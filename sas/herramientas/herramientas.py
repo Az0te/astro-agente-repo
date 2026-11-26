@@ -875,7 +875,8 @@ PROCESOS = {
     "extract_luminance", "recombine_luminance", "nbextract", "plate_solve", "debayer",
     "geom_flip_horizontal", "geom_flip_vertical", "geom_rotate_clockwise", "geom_rotate_counterclockwise",
     "geom_rotate_180", "geom_rescale", "geom_invert",
-    "halo_b_gon",                      # comando en SASpro 1.24.5; antes, función interna (INTERNOS)
+    "halo_b_gon",                      # comando desde SASpro 1.24.5/2.0; antes, función interna (INTERNOS)
+    "banding_blaster",                 # comando nuevo en SASpro 2.0
     "rc_bxt", "rc_nxt", "rc_sxt",      # RC Astro con su programa rc-astro (rc.py), no son comandos de SASpro
     "texture_clarity", "satchroma",    # funciones sin ventana de SASpro (INTERNOS)
 }
