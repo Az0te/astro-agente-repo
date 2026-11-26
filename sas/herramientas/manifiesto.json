@@ -1334,6 +1334,13 @@
        "type": "number"
       },
       "description": "Cantidades del color suave por tonos (por defecto [0, 0.25, 0.5]); [] para no probarlo."
+     },
+     "azul": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Ganancias de saturación SOLO en los tonos azules y cian (p. ej. [1.3, 1.6, 2.0]), para realzar la reflexión sin tocar el rojo (por defecto ninguna)."
      }
     }
    }

@@ -2532,7 +2532,7 @@ LOCALES["saturar_tonos"] = _saturar_tonos
 
 def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5), proteger_cielo=True,
                          dominante_max=5.0, ceros_max=0.5, satchroma=(0.25, 0.5), sat_max=0.80, tipo=None,
-                         con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0), suave=(0.0, 0.25, 0.5)):
+                         con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0), suave=(0.0, 0.25, 0.5), azul=()):
     """NL5 saturación: satura conservando la luminancia (propio) a varias cantidades, también a través de una máscara
     de luminancia (con_mascara; la recomendada en nebulosas), y con SatChroma de SASpro (croma Lab, ganancia uniforme
     1 + k); mide saturación del objeto y del cielo, dominante del cielo y recortes nuevos, y recomienda la mayor que
@@ -2572,6 +2572,11 @@ def saturacionCandidatos(ctx, vista=None, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5,
     # Color suave por tonos (rojo ×0,85, dorado ×1,3, azul ×1,35) a varias cantidades: suave=None para quitarlo.
     lista += [(f"color suave por tonos +{k:g} (rojo ×0,85, dorado ×1,3, azul ×1,35)", "saturar_tonos",
                {"k": float(k), "fondo": fondo}) for k in (suave or [])]
+    # Realce solo del azul (IC 63, 26 nov 2026: Rafael pidió resaltar el azul de la reflexión sin tocar el rojo): ganancia
+    # de saturación g en los tonos azules y cian (190–250°), 1 en el resto, con el cielo protegido como el resto.
+    lista += [(f"realce del azul por tonos ×{g:g}", "saturar_tonos",
+               {"k": 0.0, "fondo": fondo, "tonos": [(0, 1.0), (150, 1.0), (190, 1 + 0.8 * (g - 1)), (220, g), (250, g),
+                                                    (280, 1.0), (360, 1.0)]}) for g in (azul or [])]
     lista += [(f"SatChroma croma ×{1 + k:g}", "satchroma",
                {"mode": 1, "strength": 1.0,
                 "points": [[i / 6.0, 1.0 + float(k)] for i in range(7)]}) for k in (satchroma or [])]
