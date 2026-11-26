@@ -102,3 +102,19 @@ Se para cuando:
 6. **Falla un paso esencial.** Parar y avisar (gradiente, SPCC, BXT, estirado).
 
 Número de iteraciones o de pasadas hasta "rendirse": `[Pendiente de documentar]` — la guía fija el criterio (comparar contra no hacer nada) pero no un límite numérico.
+
+## F.8 Revisiones tras la opinión del usuario (IC 63 en SASpro, 26 nov 2026)
+
+Lo aprendido en 14 versiones de IC 63 (SQA106 + 2600MC, RGB HDR + Hα dual band), con el usuario revisando cada una. Sirve para cualquier objeto.
+
+1. **Arreglar el defecto sobre la versión que le gusta, no rehacer la cadena.** v2, v3 y v6 cambiaron estirado, cielo o contraste para resolver una queja y perdieron lo que le gustaba de v1. Las que volvieron a v1 y tocaron sólo el defecto (v4, v7) se aceptaron.
+2. **Subir el estirado o el cielo agranda el halo de una estrella brillante y aplana la nebulosa.** Medido en v2 y v3 alrededor de γ Cas.
+3. **Un anillo alrededor de una estrella brillante puede ser de la saturación, no del halo.** Si el halo cambia de tono con el radio (violeta dentro, cian fuera), saturar convierte el cambio en un anillo (saturación 0,99 a r ≈ 500–580 px). Rehacer el halo en un solo color y sacar la saturación de esa zona con una máscara radial.
+4. **Restar un halo con suelo:** p' = max(p − k·H, 0,5·p). Sin el suelo, el 0,011 % de los píxeles de R se fue a 0.
+5. **Seleccionar zonas tenues por exceso local, no por umbral absoluto.** Un umbral de L cogió los bordes de Hα (6,7 % de la imagen); «B/R menos su desenfoque σ60» encontró las zonas azuladas débiles.
+6. **Ganancias calculadas sobre la luminancia suavizada** (σ3); si no, las sombras salen moteadas.
+7. **Realzar tonos suaves con máscara muy desenfocada** (σ60, normalizada al p99,5, estrella brillante excluida). Las sombras se refuerzan sólo donde la zona es más oscura que su entorno: sh = min(Ls − blur_σ50(Ls), 0), con L < 0,2 y suelo 0,55·L.
+8. **Proteger las luces en cualquier realce de color.** En los rojos, con un peso (0,92 − máx)/0,25; sin él, R recortó entre el 0,011 % y el 0,07 %. En las estrellas, dividir por max(1, canal máximo) en vez de recortar.
+9. **Capa de estrellas con cuatro mandos medibles:** cantidad Y^γ, presencia 1 − (1 − Y)^g, tamaño max(Y, k·gauss(Y, σ)) y color alrededor de la media. Se miden con umbral Y 0,04 y máximos locales en 7 px: número de estrellas, área/número, Y en los picos originales y saturación media. Con eso se clavó lo que pidió el usuario (+25/+25/+25/+28 %) con un error de 0,2 puntos.
+10. **Dar los valores de cada opción.** Con los parámetros a la vista, el usuario pide números exactos en vez de «una entre medias».
+11. **Al recombinar estrellas, mirar el cielo.** `recombinarEstrellas` de SASpro subió el cielo de 0,035 a 0,049; se recombinó fuera con la capa conocida: S = 1 − (1 − v)/(1 − starless), v = 1 − (1 − o)(1 − S).

@@ -116,6 +116,9 @@ Si algo de la fase lineal hay que rehacer, se vuelve a la versión guardada en e
 | Reducción de ruido o quitar verde para manchas de color grandes en no lineal | Venir de una lineal neutra y con una reducción de ruido lineal moderada; bajar saturación |
 | Dar por cierto lo de internet o nombrar el objeto por el nombre del fichero | Medidas de la imagen; OBJECT o astrometría; citar la fuente |
 | Seguir ajustando un paso que no gana a "no hacer nada" | Revertir; 3–4 variantes en los pasos dudosos |
+| Rehacer la cadena (estirado, cielo, contraste) para arreglar una queja del usuario | Corregir sólo el defecto sobre la versión que le gusta ([F.8](anexos/F-anti-patrones.md)) |
+| Seleccionar zonas tenues con un umbral absoluto de L o de color | Exceso local (valor menos su desenfoque) y máscara muy desenfocada |
+| Dar opciones (suave/media/fuerte, A/B/C) sin sus valores | Una línea por opción con sus parámetros, para que el usuario pida números exactos |
 
 Lista completa y criterio de parada: [Anexo F](anexos/F-anti-patrones.md), cuando algo falla o no convence.
 
