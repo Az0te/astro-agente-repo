@@ -920,6 +920,81 @@ def combinarRGB(siril, r, g, b):
     return res
 
 
-LISTA_MULTICAPA = {"alinearMasters": alinearMasters, "revisarRecorte": revisarRecorte,
+def restarContinuo(siril, nb, continuo, canal=None, carpeta=None, nombre=None, forzar=False):
+    """Paso 16 lineal: banda estrecha sin continuo, NB_CS = NB − k·(canal − su cielo), con k medido por fotometría de
+    apertura de las MISMAS estrellas en las dos capas (las estrellas son continuo puro: en la banda estrecha salen
+    recortadas por el filtro en la proporción k). Guarda un FITS nuevo (…_CS); la imagen cargada no cambia.
+    27 nov 2026 (Rafael activó ContinuumSubtraction de Siril, GPL): escrito desde cero con la misma medida de estrellas que
+    combinarCandidatos (_flujos_estrellas), no con el método de ese script. Como medirContinuo + restarContinuo de PI."""
+    f_nb, f_bb = H._ruta(nb, "nb"), H._ruta(continuo, "continuo")
+    if re.search(r"_cs\b|_cs_|sin_?continuo", f_nb.stem, re.I) and not forzar:
+        raise RuntimeError(f"{f_nb.name} ya parece sin continuo (_CS): nunca dos restas. forzar=true sólo si no lo es.")
+    info = H._info(siril)
+    a_nb, a_bb = P._leer_fichero(siril, f_nb, info), P._leer_fichero(siril, f_bb, info)
+    n = (a_nb.mean(axis=0) if a_nb.shape[0] > 1 else a_nb[0]).astype(np.float32)
+    if n.shape != a_bb.shape[1:]:
+        raise RuntimeError(f"{f_nb.name} mide {n.shape[1]}×{n.shape[0]} y {f_bb.name} {a_bb.shape[2]}×{a_bb.shape[1]}: "
+                           "alinéalas antes (alinearMasters).")
+    if not P._lineal(n[None, ::8, ::8]) or not P._lineal(a_bb[:, ::8, ::8]):
+        raise RuntimeError("Las dos capas tienen que estar LINEALES (antes de estirar).")
+    if canal is None:
+        canal = 1 if re.search(r"o3|oiii", f_nb.stem, re.I) else 0
+    canal = {"r": 0, "g": 1, "b": 2}.get(str(canal).lower(), canal)
+    canal = int(canal) if a_bb.shape[0] == 3 else 0
+    b = a_bb[canal].astype(np.float32)
+    fb, fn = _flujos_estrellas(b, n)
+    if len(fb) < 100 and not forzar:
+        raise RuntimeError(f"Sólo {len(fb)} estrellas medibles en las dos capas (mínimo 100). ¿Alguna es starless? Usa "
+                           "las capas CON estrellas, antes de separarEstrellas.")
+    if len(fb) < 20:
+        raise RuntimeError(f"Sólo {len(fb)} estrellas medibles: no se puede medir el continuo.")
+    q = fn / fb
+    k = float(np.median(q))
+    disp = 1.4826 * float(np.median(np.abs(q - k))) / max(k, 1e-12)
+    cielo_b = float(np.median(b[::4, ::4]))
+    out = n - np.float32(k) * (b - np.float32(cielo_b))
+    L = n[::4, ::4]
+    sig = 1.4826 * float(np.median(np.abs(L - np.median(L))))
+    senal = (n - float(np.median(L))) > 5 * max(sig, 1e-12)
+    retenida = 100.0 * float((out[senal] - np.median(out[::4, ::4])).sum()) / max(
+        float((n[senal] - np.median(L)).sum()), 1e-12) if senal.any() else None
+    negativos = 100.0 * float((out < 0).mean())
+    out = np.clip(out - min(0.0, float(np.percentile(out[::4, ::4], 0.02))), 0, 1).astype(np.float32)
+    destino = H._ruta(carpeta, "carpeta") if carpeta else f_nb.parent
+    destino.mkdir(parents=True, exist_ok=True)
+    base = nombre or f"{f_nb.stem}_CS"
+    ruta, j = destino / f"{base}.fit", 2
+    while ruta.exists():
+        ruta, j = destino / f"{base}_{j}.fit", j + 1
+    try:
+        cab = siril.load_image_from_file(str(f_nb)).header or ""
+    except Exception:
+        cab = ""
+    if not cab.strip():
+        cab = "SIMPLE  =                    T\nBITPIX  =                  -32\nNAXIS   =                    2\nEND"
+    siril.save_image_file(out, cab, str(ruta))
+    H.GUARDADOS.add(H._clave(ruta))
+    _anotar_origen(ruta, [f_nb, f_bb])
+    r = {"fichero": str(ruta), "k": _r(k, 5), "estrellas": int(len(fb)), "dispersion_k_pct": _r(100 * disp, 1),
+         "canal": "RGB"[canal] if a_bb.shape[0] == 3 else "L", "emision_retenida_pct": _r(retenida, 1),
+         "negativos_pct": _r(negativos, 3),
+         "nota": "Banda estrecha sin continuo (lineal). La imagen cargada no ha cambiado. Úsala en paletas o para inyectar "
+                 "sólo la emisión; con OSC el canal también lleva algo de la raya, así que una parte pequeña de la emisión "
+                 "se resta con el continuo (emision_retenida_pct)."}
+    avisos = []
+    if disp > 0.25:
+        avisos.append(f"k poco fiable: las estrellas dan una dispersión del {_r(100 * disp, 0)} % (¿capas mal alineadas, "
+                      "gradiente o estrellas saturadas?)")
+    if negativos > 5:
+        avisos.append(f"{_r(negativos, 1)} % de píxeles negativos antes de recolocar el negro: el continuo se resta de más")
+    if retenida is not None and retenida < 40:
+        avisos.append(f"sólo queda el {_r(retenida, 0)} % de la señal: casi todo era continuo (¿objeto de reflexión o "
+                      "galaxia?)")
+    if avisos:
+        r["avisos"] = avisos
+    return r
+
+
+LISTA_MULTICAPA = {"restarContinuo": restarContinuo, "alinearMasters": alinearMasters, "revisarRecorte": revisarRecorte,
                    "desmezclarDualBand": desmezclarDualBand, "unirCapas": unirCapas,
                    "combinarCandidatos": combinarCandidatos, "combinarRGB": combinarRGB}

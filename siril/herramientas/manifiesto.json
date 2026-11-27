@@ -553,7 +553,7 @@
    "nivel": "lectura",
    "timeout_s": 1200,
    "paso": "lineal/09-correccion-gradiente.md",
-   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) (subsky de Siril con polinomio de grado 1 y 2 y con RBF, GraXpert IA por su CLI si está instalado, y SyQon DeepGradient por syqon-cli si SyQon Studio está instalado: necesita internet y tarda de 5 s a ~2 min; si no está o la casilla Internet está desmarcada va en omitidos), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Si en la sesión se han abierto dos o más masters sin alinear, comprueba si ya vienen alineados (mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio); si no, se para y pide alinearMasters (Paso 5). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo.",
+   "descripcion": "Paso 9 lineal: compara correcciones de gradiente (también polinomio fuera del halo y + crominancia, para objetos grandes y difusos: quita manchas de color de escala media sin tocar la luminancia) (subsky de Siril con polinomio de grado 1 y 2 y con RBF, GraXpert IA por su CLI si está instalado, y SyQon DeepGradient por syqon-cli si SyQon Studio está instalado: necesita internet y tarda de 5 s a ~2 min; si no está o la casilla Internet está desmarcada va en omitidos), mide cada una (copia_objeto: cuánto se parece el modelo al objeto; objeto_quitado_pct: % del objeto que se lleva; gradiente_restante: plano del cielo que queda, después/antes; irregularidad_cielo: rango de una rejilla 4×3) y recomienda. Si el objeto llena el campo (objeto_campo_pct alto) avisa de que gradiente_restante es orientativo. La imagen NO cambia: el elegido se pone con aplicarCandidato(id). Exige la imagen lineal y sin cuñas (recortarBordes antes). Si en la sesión se han abierto dos o más masters sin alinear, comprueba si ya vienen alineados (mismo tamaño, sin bordes vacíos y estrellas en el mismo sitio); si no, se para y pide alinearMasters (Paso 5). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Trae diagnostico_manchas de la recomendada (canal, exceso o hueco, si sigue al objeto, veredicto): leerlo antes de decir que una mancha es halo. También el fondo por membrana (Laplace, sin muestras, cálculo propio).",
    "resumen": "Paso 9: compara subsky polinomio/RBF, GraXpert IA y SyQon DeepGradient, mide y recomienda; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -617,6 +617,10 @@
      "diagnostico": {
       "type": "boolean",
       "description": "Diagnóstico de manchas de la recomendada (por defecto true)."
+     },
+     "membrana": {
+      "type": "boolean",
+      "description": "Probar el fondo por membrana (Laplace, sin muestras): rellena bajo el objeto lo más liso que encaja con el cielo de alrededor. Por defecto true."
      }
     }
    }
@@ -1000,7 +1004,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/06-noisex.md",
-   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril, NoiseX (si está instalado; GraXpert sólo si se pide) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) con no hacer nada; también el filtro que conserva bordes de Siril (epf guiado) y Cosmic Clarity (si está instalado, fuerzas 0,5 y 0,8). Lineal: denoise 0,5/0,7/1,0, NoiseX 0,3, 0,5, 0,7, 0,75, 0,5 ×2 y 0,7 ×2 (mejor dos pasadas de 0,5 o 0,7 que una de 0,9) y Prism. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. Capa débil en lineal (parte brillante del objeto a menos de 15 ruidos del cielo, como OIII/SII/Hβ de un dual band): la medida de detalle cuenta el ruido de fotones y no decide; se recomienda la más fuerte que no deja el fondo muerto (como NXT 0,75–0,8). no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
+   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril, NoiseX (si está instalado; GraXpert sólo si se pide) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) con no hacer nada; también el filtro que conserva bordes de Siril (epf guiado) y Cosmic Clarity (si está instalado, fuerzas 0,5 y 0,8). Lineal: denoise 0,5/0,7/1,0, NoiseX 0,3, 0,5, 0,7, 0,75, 0,5 ×2 y 0,7 ×2 (mejor dos pasadas de 0,5 o 0,7 que una de 0,9) y Prism. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. Capa débil en lineal (parte brillante del objeto a menos de 15 ruidos del cielo, como OIII/SII/Hβ de un dual band): la medida de detalle cuenta el ruido de fotones y no decide; se recomienda la más fuerte que no deja el fondo muerto (como NXT 0,75–0,8). no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id). También compara una reducción por ondículas propia con más fuerza en las sombras (ondiculas).",
    "resumen": "Pasos 14 L / 6 NL: compara denoise 0,5/0,7/1,0/DA3D con nada (ruido y detalle); no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -1058,6 +1062,13 @@
        "type": "number"
       },
       "description": "Fuerzas de Cosmic Clarity (por defecto 0,5 y 0,8 si está instalado; [] para no probarlo)."
+     },
+     "ondiculas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas de la reducción por ondículas propia (umbral suave por escala, más fuerte en las sombras). Por defecto 0,5 y 0,8 en lineal, 0,4 en no lineal; [] para no probarla."
      }
     }
    }
@@ -1068,8 +1079,8 @@
    "nivel": "lectura",
    "timeout_s": 2400,
    "paso": "lineal/15-starx.md",
-   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y, solo si la imagen ya está ESTIRADA, también con SyQon Axiom Mini (syqon-cli; en lineal sale rota y va en omitidos), y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Con StarX quita antes la malla de 2 px proporcional a la señal (anillos con malla en las brillantes de dual band). No separa una imagen que ya está sin estrellas (salvo forzar). nucleos (por defecto true): en lineal, si Siril ve estrellas saturadas, primero unclipstars (rehace el perfil de los núcleos quemados y baja la imagen lo justo); todos los motores separan esa versión.",
-   "resumen": "Paso 15: StarNet2 frente a StarX (restos, agujeros, objeto quitado); no cambia la imagen (aplicarCandidato devuelve la capa de estrellas).",
+   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, Darkstar de Cosmic Clarity (si está instalado; si no, va en omitidos) y, solo si la imagen ya está ESTIRADA, también con SyQon Axiom Mini (syqon-cli; en lineal sale rota y va en omitidos), y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Con StarX quita antes la malla de 2 px proporcional a la señal (anillos con malla en las brillantes de dual band). No separa una imagen que ya está sin estrellas (salvo forzar). nucleos (por defecto true): en lineal, si Siril ve estrellas saturadas, primero unclipstars (rehace el perfil de los núcleos quemados y baja la imagen lo justo); todos los motores separan esa versión.",
+   "resumen": "Paso 15: StarNet2, StarX y Darkstar (restos, agujeros, objeto quitado); no cambia la imagen (aplicarCandidato devuelve la capa de estrellas).",
    "params": {
     "type": "object",
     "properties": {
@@ -1080,10 +1091,11 @@
        "enum": [
         "starnet",
         "starx",
-        "syqon"
+        "syqon",
+        "cosmic"
        ]
       },
-      "description": "Motores a comparar (por defecto starnet y starx, y syqon si la imagen está estirada y SyQon Studio instalado)."
+      "description": "Motores a comparar (por defecto starnet, starx, cosmic si Cosmic Clarity Darkstar está instalado, y syqon si la imagen está estirada y SyQon Studio instalado)."
      },
      "objeto_max": {
       "type": "number",
@@ -1205,7 +1217,7 @@
    "nivel": "lectura",
    "timeout_s": 900,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5, 0,75, 1 y 1,5 (factor de fondo 1; las paletas de banda estrecha suelen aguantar 1–1,5), la saturación propia (conserva la luminancia, cielo protegido) y, en nebulosas, la propia a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También la matriz de color de Siril (ccm) que satura conservando la luminancia, ×1,25 y ×1,5 (matriz).",
+   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5, 0,75, 1 y 1,5 (factor de fondo 1; las paletas de banda estrecha suelen aguantar 1–1,5), la saturación propia (conserva la luminancia, cielo protegido) y, en nebulosas, la propia a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También la matriz de color de Siril (ccm) que satura conservando la luminancia, ×1,25 y ×1,5 (matriz). También la saturación por tonos (sólo los dos tonos dominantes del objeto).",
    "resumen": "Paso 5 NL: compara satu 0,25/0,5/0,75; saturación objeto/cielo, dominante, recortes; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -1255,6 +1267,13 @@
        "type": "number"
       },
       "description": "Factores de la matriz de saturación ccm (por defecto 1,25 y 1,5)."
+     },
+     "tonos": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Saturación sólo de los dos tonos dominantes del objeto (ventana de ±45°, cielo protegido, luminancia conservada). Por defecto 0,5 y 1,0; [] para no probarla."
      }
     }
    }
@@ -1293,6 +1312,39 @@
    }
   },
   {
+   "nombre": "hdrCandidatos",
+   "fichero": "nucleo.py",
+   "nivel": "lectura",
+   "timeout_s": 900,
+   "paso": "no-lineal/05-boost.md",
+   "descripcion": "Compresión HDR multiescala, no lineal, después de estirar y ANTES de saturar: descompone la luminancia en escalas (à trous) y, en las zonas brillantes (máscara suave sobre la escala grande, desde el umbral 'desde'), comprime la escala grande y refuerza el detalle medio, a varias fuerzas; el color de cada píxel se conserva. Para cualquier objeto con zonas quemadas (núcleos, nebulosas brillantes); en galaxias compárala con nucleoCandidatos. Mide quemado_pct (zona brillante > 0,95), estructura y brillo de la zona, antes y después; recomienda la de más estructura sin apagar la zona. La imagen NO cambia: aplicarCandidato(id).",
+   "resumen": "HDR multiescala NL: comprimir zonas brillantes; quemado, estructura, brillo; no cambia la imagen (aplicarCandidato).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "fuerzas": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas a comparar (por defecto 0,3, 0,5 y 0,8)."
+     },
+     "desde": {
+      "type": "number",
+      "description": "Umbral de la máscara de zonas brillantes en la escala grande (por defecto p99 − 0,25, mínimo 0,5)."
+     },
+     "niveles": {
+      "type": "integer",
+      "description": "Escalas à trous (por defecto según el tamaño, 5–8)."
+     },
+     "tipo": {
+      "type": "string",
+      "description": "Tipo de objeto (se admite)."
+     }
+    }
+   }
+  },
+  {
    "nombre": "contrasteCandidatos",
    "fichero": "pasos.py",
    "nivel": "lectura",
@@ -1316,10 +1368,12 @@
         "ondiculas",
         "enfoque",
         "grande_suave",
-        "grande_fuerte"
+        "grande_fuerte",
+        "curva_suave",
+        "curva_media"
        ]
       },
-      "description": "Métodos a comparar (por defecto clahe_suave, clahe_medio, ondiculas, enfoque, grande_suave y grande_fuerte). clahe_128/180/256: CLAHE con zona fija de ≈ 128/180/256 px (la rejilla de clahe se calcula con el tamaño de la imagen)."
+      "description": "Métodos a comparar (por defecto clahe_suave, clahe_medio, ondiculas, enfoque, grande_suave, grande_fuerte, curva_suave y curva_media). clahe_128/180/256: CLAHE con zona fija de ≈ 128/180/256 px (la rejilla de clahe se calcula con el tamaño de la imagen). curva_suave/curva_media: curva en S monótona (sin rebotes) con los puntos por zonas: cielo fijo, cuartiles del objeto separados."
      },
      "ruido_max": {
       "type": "number",
@@ -1399,6 +1453,42 @@
     "required": [
      "fichero"
     ]
+   }
+  },
+  {
+   "nombre": "reducirEstrellasCandidatos",
+   "fichero": "pasos.py",
+   "nivel": "lectura",
+   "timeout_s": 1800,
+   "paso": "no-lineal/09-recombinacion.md",
+   "descripcion": "No lineal, sobre la imagen estirada CON estrellas (o ya recombinada): compara reducir las estrellas con SyQon Parallax nano (syqon-cli, sólo la reducción, aplicación 0,5 y 1,0, si SyQon Studio está) y con una reducción morfológica propia (mínimo 3×3 una o dos veces dentro de una máscara suave de estrellas). Mide FWHM y número de estrellas de Siril, brillo dentro de las estrellas y cambio del objeto fuera de ellas; descarta las que cambian el objeto > 1 % o pierden más del 40 % de las estrellas, y recomienda la de más FWHM reducida. La imagen NO cambia: aplicarCandidato(id).",
+   "resumen": "Reducir estrellas NL: SyQon Parallax frente a morfológica propia; FWHM, estrellas, objeto; no cambia la imagen.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "syqon": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Aplicaciones de SyQon Parallax (por defecto 0,5 y 1,0); [] para no usarlo."
+     },
+     "morfologica": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      },
+      "description": "Pasadas de la reducción morfológica (por defecto 1 y 2); [] para no usarla."
+     },
+     "objeto_max": {
+      "type": "number",
+      "description": "% máximo de cambio del objeto fuera de las estrellas (por defecto 1)."
+     },
+     "tipo": {
+      "type": "string",
+      "description": "Tipo de objeto (se admite)."
+     }
+    }
    }
   },
   {
@@ -1586,6 +1676,53 @@
     },
     "required": [
      "ficheros"
+    ]
+   }
+  },
+  {
+   "nombre": "restarContinuo",
+   "fichero": "multicapa.py",
+   "nivel": "copias",
+   "timeout_s": 600,
+   "paso": "lineal/16-linearfit-continuo.md",
+   "descripcion": "Paso 16 lineal: banda estrecha SIN continuo, NB_CS = NB − k·(canal − su cielo), con k medido por fotometría de apertura de las mismas estrellas en la banda estrecha y en el canal de la RGB (R para Hα, G para OIII: se deduce del nombre). Las dos capas LINEALES, alineadas y CON estrellas (antes de separarEstrellas): se niega con menos de 100 estrellas medibles y con una capa que ya es _CS (nunca dos restas). Guarda un FITS nuevo <nb>_CS.fit; la imagen cargada no cambia. Devuelve k, su dispersión, emision_retenida_pct y negativos_pct, con avisos si k es poco fiable o casi todo era continuo.",
+   "resumen": "Paso 16: banda estrecha menos continuo (k por estrellas); FITS nuevo _CS, no cambia la imagen.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "nb": {
+      "type": "string",
+      "description": "Fichero de la banda estrecha (Hα u OIII), lineal y con estrellas."
+     },
+     "continuo": {
+      "type": "string",
+      "description": "Fichero RGB (o del canal de banda ancha) lineal, calibrado y con estrellas, alineado con nb."
+     },
+     "canal": {
+      "type": "string",
+      "enum": [
+       "R",
+       "G",
+       "B"
+      ],
+      "description": "Canal de la RGB que hace de continuo (por defecto R; G si nb es OIII)."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de salida (por defecto la de nb)."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre del fichero de salida sin extensión (por defecto <nb>_CS)."
+     },
+     "forzar": {
+      "type": "boolean",
+      "description": "Seguir con menos de 100 estrellas o con una capa que parece _CS. Solo si el usuario lo pide."
+     }
+    },
+    "required": [
+     "nb",
+     "continuo"
     ]
    }
   },

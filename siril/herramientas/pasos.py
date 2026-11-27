@@ -934,7 +934,7 @@ def _exigir_alineado(siril, info, sin_alinear=False):
 
 def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True, muestras=20, tolerancia=1.0,
                         ignorar_cunas=False, tipo=None, sin_alinear=False, halo=True, halo_opciones=None, diagnostico=True,
-                        usar_syqon=True):
+                        usar_syqon=True, membrana=True):
     """Paso 9 lineal: compara subsky (polinomio y RBF), GraXpert IA, SyQon DeepGradient (si está instalado y hay internet)
     y el polinomio fuera del halo (+ crominancia), mide y recomienda. La imagen no cambia."""
     info = H._info(siril)
@@ -1017,6 +1017,25 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
                 r["errores"].append("polinomio fuera del halo: " + hinfo["aviso"])
         except Exception as e:
             r["errores"].append(f"polinomio fuera del halo: {e}")
+
+    # Fondo por membrana (27 nov 2026, Rafael; idea de VeraLux Nox, escrito desde cero): sin muestras. Se marcan las celdas
+    # con objeto o estrellas y el fondo se rellena ahí resolviendo la ecuación de Laplace (lo más liso que encaja con el
+    # cielo de alrededor), en vez de ajustar un polinomio o colocar muestras.
+    if membrana:
+        t0 = time.perf_counter()
+        try:
+            q, minfo = _fondo_membrana(p)
+            n += 1
+            m = _medir_gradiente(base, q)
+            qq = q if info["top_down"] else q[:, ::-1, :]
+            res = _a_siril(qq if qq.shape[0] > 1 else qq[0], crudo.dtype).reshape(crudo.shape)
+            texto = "membrana (Laplace) " + json.dumps(minfo)
+            cid = _guardar_candidato(grupo, n, res, {"nombre": "fondo por membrana", "comando": texto,
+                                                     "huella_base": huella, "metricas": m})
+            r["candidatos"].append({"id": cid, "metodo": "fondo por membrana (Laplace, sin muestras)",
+                                    "comando": "cálculo propio", "metricas": m, "segundos": _r(time.perf_counter() - t0, 1)})
+        except Exception as e:
+            r["errores"].append(f"fondo por membrana: {e}")
 
     def absc(x): return abs(x["metricas"]["copia_objeto"] or 0)
     def resid(x): v = x["metricas"]["gradiente_restante"]; return v if v is not None else 9
@@ -1856,8 +1875,16 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
     r = {"lineal": lineal, "candidatos": [], "errores": []}
     if reparados:
         r["nucleos"] = reparados
+    import cosmic as _cosmic
     if motores is None:
         motores = ("starnet", "starx") + (("syqon",) if not lineal and _syqon.hay("axiom-mini") else ())
+        # 27 nov 2026 (Rafael): Darkstar de Cosmic Clarity, motor gratis más, si está instalado
+        if _cosmic.hay("estrellas"):
+            motores += ("cosmic",)
+        else:
+            r.setdefault("omitidos", []).append("Cosmic Clarity Darkstar: " + str(_cosmic.falta("estrellas")) + ".")
+    if isinstance(motores, str):
+        motores = tuple(x.strip() for x in motores.split(",") if x.strip())
     if lineal and "syqon" in motores:
         motores = tuple(m for m in motores if m != "syqon")
         r.setdefault("omitidos", []).append("SyQon Axiom Mini: solo sobre imagen estirada (en lineal la starless sale plana "
@@ -1874,6 +1901,14 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
                     _syqon_error(r, "SyQon Axiom Mini", e)
                     continue
                 sl, st, texto, nombre = sq["salida"], sq.get("estrellas"), sq["comando"], "SyQon Axiom Mini"
+            elif m == "cosmic":
+                try:
+                    cc = _cosmic.sin_estrellas(np.clip(_de_siril(crudo), 0, 1))
+                except _cosmic.ErrorCosmic as e:
+                    r["errores"].append(str(e))
+                    continue
+                sl = _a_siril(cc["salida"], crudo.dtype).reshape(crudo.shape)
+                st, texto, nombre = None, cc["comando"], "Cosmic Clarity Darkstar"
             elif m == "starnet":
                 sl, st, texto = _separar_starnet2(siril, info, crudo, lineal, False)
                 nombre = "StarNet2"
@@ -1901,7 +1936,7 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
                     st = _a_siril(np.clip(_de_siril(ent) - _de_siril(sl), 0, 1), crudo.dtype).reshape(crudo.shape)
                 nombre = "StarX"
             else:
-                raise ValueError("motor desconocido (starnet, starx, syqon)")
+                raise ValueError("motor desconocido (starnet, starx, syqon, cosmic)")
             if st is None:                                  # capa = original − starless
                 st = _a_siril(np.clip(_de_siril(crudo) - _de_siril(sl), 0, 1), crudo.dtype).reshape(crudo.shape)
             f_est = os.path.join(wd, f"starmask_{base}_{m}.fit")
@@ -2778,6 +2813,98 @@ def _zona_brillante(L, z):
     return px if px.sum() > 2000 else None
 
 
+def _ruido_ondiculas(x, fuerza=1.0, sombras=1.0):
+    """Reducción de ruido por ondículas (à trous B3), escrita desde cero (27 nov 2026): en cada escala, umbral suave de
+    k_j·σ_j (σ_j por MAD de la escala, k_j baja con la escala: el ruido vive en las finas) y en las sombras el umbral se
+    multiplica hasta por 1 + 'sombras' (máscara suave de la luminancia grande: 1 en el cielo, 0 en lo brillante). La
+    escala residual no se toca. Vale en lineal y en estirado. x: (canales, alto, ancho) o (alto, ancho)."""
+    import nucleo as _nucleo
+    a = np.asarray(x, np.float32)
+    plano = a.ndim == 2
+    a = a[None] if plano else a
+    L = a.mean(axis=0)
+    _, base = _nucleo._atrous(L, 5)
+    lo, hi = float(np.percentile(base[::4, ::4], 20)), float(np.percentile(base[::4, ::4], 90))
+    t = np.clip((base - lo) / max(hi - lo, 1e-9), 0, 1)
+    sombra = 1.0 + float(sombras) * (1.0 - t * t * (3 - 2 * t))
+    ks = (1.0, 0.7, 0.5, 0.3, 0.2)
+    out = []
+    for c in a:
+        capas, res = _nucleo._atrous(c, len(ks))
+        acc = res.copy()
+        for w, k in zip(capas, ks):
+            sig = 1.4826 * float(np.median(np.abs(w[::3, ::3] - np.median(w[::3, ::3]))))
+            u = float(fuerza) * k * sig * sombra
+            acc += np.sign(w) * np.maximum(np.abs(w) - u, 0)
+        out.append(acc)
+    q = np.clip(np.stack(out), 0, 1).astype(np.float32)
+    return q[0] if plano else q
+
+
+def _fondo_membrana(p, S=None, iteraciones=400, kappa=2.0):
+    """Fondo de cielo sin muestras (27 nov 2026): mediana por celdas de S px; las celdas con objeto o estrellas (por encima
+    de una superficie lisa del cielo + kappa σ, en varias vueltas) se rellenan resolviendo Laplace (Jacobi con las celdas
+    de cielo fijas, empezando por la media del cielo); se suaviza, se lleva a píxel (bilineal) y se resta dejando el nivel
+    medio del cielo. p: (canales, alto, ancho) en orden de pantalla. Devuelve la imagen corregida y un resumen."""
+    a = np.asarray(p, np.float32)
+    C, Hh, Ww = a.shape
+    S = int(S or max(8, min(Hh, Ww) // 64))
+    gh, gw = Hh // S, Ww // S
+    L = a.mean(axis=0)[:gh * S, :gw * S].reshape(gh, S, gw, S)
+    cel = np.median(L.transpose(0, 2, 1, 3).reshape(gh, gw, S * S), axis=2)
+    # Primera superficie: las celdas suavizadas a gran escala (siguen un gradiente fuerte); luego vueltas de membrana
+    # apoyada sólo en el cielo y recorte de lo que sobresale.
+    cielo = np.ones_like(cel, bool)
+    sup = _suave(cel.astype(np.float32), max(2, max(gh, gw) // 2)).astype(np.float64)
+    for _ in range(6):
+        d = cel - sup
+        sg = 1.4826 * float(np.median(np.abs(d[cielo] - np.median(d[cielo]))))
+        nuevo = d < kappa * max(sg, 1e-12)
+        # el borde difuso del objeto también fuera: se amplía lo excluido una celda
+        ex = ~nuevo
+        g = np.pad(ex, 1)
+        nuevo = ~(ex | g[:-2, 1:-1] | g[2:, 1:-1] | g[1:-1, :-2] | g[1:-1, 2:])
+        if (nuevo == cielo).all():
+            break
+        cielo = nuevo
+        sup = _membrana(cel, cielo, iteraciones)
+    if cielo.mean() < 0.15:
+        raise RuntimeError(f"Sólo un {100 * cielo.mean():.0f} % del campo es cielo: el objeto lo llena y la membrana no tiene "
+                           "dónde apoyarse.")
+    out = np.empty_like(a)
+    yy = (np.arange(Hh) + 0.5) / S - 0.5
+    xx = (np.arange(Ww) + 0.5) / S - 0.5
+    y0 = np.clip(np.floor(yy).astype(int), 0, gh - 1); y1 = np.clip(y0 + 1, 0, gh - 1)
+    x0 = np.clip(np.floor(xx).astype(int), 0, gw - 1); x1 = np.clip(x0 + 1, 0, gw - 1)
+    fy = np.clip(yy - y0, 0, 1)[:, None].astype(np.float32)
+    fx = np.clip(xx - x0, 0, 1)[None, :].astype(np.float32)
+    niveles = []
+    for k in range(C):
+        ch = a[k, :gh * S, :gw * S].reshape(gh, S, gw, S).transpose(0, 2, 1, 3).reshape(gh, gw, S * S)
+        ck = np.median(ch, axis=2)
+        f = _membrana(ck, cielo, iteraciones)
+        f = _suave(f.astype(np.float32), 2)
+        fondo = ((1 - fy) * ((1 - fx) * f[y0][:, x0] + fx * f[y0][:, x1]) + fy * ((1 - fx) * f[y1][:, x0] + fx * f[y1][:, x1]))
+        nivel = float(np.median(ck[cielo]))
+        niveles.append(nivel)
+        out[k] = a[k] - fondo + nivel
+    return np.clip(out, 0, 1).astype(np.float32), {"celda_px": S, "cielo_pct": round(100.0 * float(cielo.mean()), 1),
+                                                   "niveles": [round(v, 6) for v in niveles]}
+
+
+def _membrana(v, fijo, iteraciones=400):
+    """Relleno armónico: los valores de 'v' en 'fijo' quedan; el resto es la solución de Laplace (Jacobi, bordes por
+    reflexión). Rejilla pequeña (celdas), así que unas cientos de vueltas bastan."""
+    f = np.where(fijo, v, float(np.mean(v[fijo])) if fijo.any() else float(np.mean(v))).astype(np.float64)
+    if fijo.all():
+        return f
+    for _ in range(int(iteraciones)):
+        g = np.pad(f, 1, mode="edge")
+        nuevo = 0.25 * (g[:-2, 1:-1] + g[2:, 1:-1] + g[1:-1, :-2] + g[1:-1, 2:])
+        f = np.where(fijo, v, nuevo)
+    return f
+
+
 def _energia_brillante(L, px):
     D = _caja(L, 2) - _caja(L, 8)
     return float(np.mean(D[px] ** 2))
@@ -2807,7 +2934,7 @@ SNR_CAPA_DEBIL = 15.0        # parte brillante del objeto / ruido del cielo, en 
 
 
 def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=None, graxpert=None,
-                           perdida_limpia=2.0, tipo=None, syqon=None, cosmic=None):   # tipo: se admite (el modelo lo pasa) y no cambia nada
+                           perdida_limpia=2.0, tipo=None, syqon=None, cosmic=None, ondiculas=None):   # tipo: se admite (el modelo lo pasa) y no cambia nada
     """Paso 14 lineal / 6 no lineal: compara denoise de Siril a varias fuerzas (y DA3D), NoiseX, GraXpert y SyQon Prism
     (solo lineal) con 'nada'. No cambia la imagen."""
     info = H._info(siril)
@@ -2951,6 +3078,17 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
                 r["errores"].append(f"epf: {e}")
             finally:
                 _restaurar(siril, crudo)
+        # 27 nov 2026 (Rafael, idea de VeraLux Silentium; escrito desde cero): ondículas con umbral suave por escala y más
+        # fuerza en las sombras, donde el ruido manda y no hay detalle que perder.
+        for fz in (ondiculas if ondiculas is not None else ((0.5, 0.8) if lineal else (0.4,))):
+            n += 1
+            t1 = time.perf_counter()
+            try:
+                q = _ruido_ondiculas(_de_siril(crudo), float(fz))
+                medir(_a_siril(q, crudo.dtype).reshape(crudo.shape), f"ondículas con sombras {float(fz):g}",
+                      f"ondículas (umbral suave por escala, sombras ×2) fuerza {float(fz):g}", t1, n)
+            except Exception as e:
+                r["errores"].append(f"ondículas {fz}: {e}")
         import cosmic as _cosmic
         if cosmic is None:
             cosmic = _cosmic.hay("ruido")
@@ -3094,6 +3232,42 @@ def _saturar_propio(p, k, fondo=None, mascara=False):
     return np.clip(L + g * d, 0, 1).astype(np.float32)
 
 
+def _saturar_tonos(p, k, fondo=None, ancho=45.0):
+    """Saturación por tonos (27 nov 2026, Rafael; idea de VeraLux Vectra, escrita desde cero): sólo suben los dos tonos
+    dominantes del objeto (histograma de tono ponderado por croma en lo que pasa del cielo + 0,05, picos separados ≥ 60°),
+    con una ventana coseno de ±'ancho' grados; el resto de tonos (y el cielo, con la rampa de _saturar_propio) no cambia.
+    La luminancia se conserva y ningún canal sale de 0–1. Devuelve la imagen y los tonos elegidos (grados)."""
+    L = _lum(p)[None]
+    d = p - L
+    a = d[0] - d[1]
+    b = 0.5 * (d[0] + d[1]) - d[2]
+    h = np.degrees(np.arctan2(b, a)) % 360.0
+    cr = np.hypot(a, b)
+    obj = (L[0] > (fondo if fondo is not None else float(np.median(L))) + 0.05)
+    if obj.sum() < 500:
+        obj = L[0] > float(np.percentile(L[0], 80))
+    hist, _ = np.histogram(h[obj], bins=72, range=(0, 360), weights=cr[obj])
+    hist = np.convolve(np.r_[hist[-3:], hist, hist[:3]], np.ones(5) / 5, "same")[3:-3]
+    picos = []
+    for i in np.argsort(-hist):
+        c = (i + 0.5) * 5.0
+        if all(min(abs(c - q), 360 - abs(c - q)) >= 60 for q in picos):
+            picos.append(c)
+        if len(picos) == 2:
+            break
+    w = np.zeros_like(h)
+    for c in picos:
+        dist = np.minimum(np.abs(h - c), 360 - np.abs(h - c))
+        w = np.maximum(w, np.where(dist < ancho, 0.5 * (1 + np.cos(np.pi * dist / ancho)), 0))
+    if fondo is not None:
+        w = w * np.clip((L[0] - fondo) / 0.1, 0, 1)
+    g = 1.0 + float(k) * w[None]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tope = np.where(d < 0, L / np.maximum(-d, 1e-9), np.where(d > 0, (1 - L) / np.maximum(d, 1e-9), np.inf)).min(axis=0)
+    g = np.minimum(g, np.maximum(0.98 * tope, 1.0)[None])
+    return np.clip(L + g * d, 0, 1).astype(np.float32), [round(float(c)) for c in picos]
+
+
 def _matriz_saturacion(k, pesos=(0.2126, 0.7152, 0.0722)):
     """Nueve valores para el comando ccm de Siril: saturación ×k que conserva la luminancia (Rec. 709),
     M = k·I + (1 − k)·[pesos en cada fila]. 27 nov 2026 (Rafael): un candidato más de saturación."""
@@ -3103,7 +3277,7 @@ def _matriz_saturacion(k, pesos=(0.2126, 0.7152, 0.0722)):
 
 def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5,
                          propia=(0.25, 0.5, 1.0, 1.5), sat_max=0.80, con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0),
-                         matriz=(1.25, 1.5)):
+                         matriz=(1.25, 1.5), tonos=(0.5, 1.0)):
     """Paso 5 no lineal: compara satu de Siril, la saturación propia y (en nebulosas) la propia a través de una máscara
     de luminancia; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
@@ -3151,7 +3325,8 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     neb = str(tipo or "nebulosa").lower() != "galaxia"
     masc = [float(k) for k in (con_mascara or ())] if neb else []
     trabajos = ([("satu", float(q)) for q in cantidades] + [("propia", float(k)) for k in (propia or ())]
-                + [("mascara", k) for k in masc] + [("ccm", float(k)) for k in (matriz or ())])
+                + [("mascara", k) for k in masc] + [("ccm", float(k)) for k in (matriz or ())]
+                + [("tonos", float(k)) for k in (tonos or ())])
     try:
         for tipo_s, q in trabajos:
             n += 1
@@ -3164,6 +3339,11 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
                     siril.cmd(*args)
                     res = _crudo(siril)
                     pq = _pantalla(res, info)
+                elif tipo_s == "tonos":
+                    pq, picos = _saturar_tonos(p, q, cielo_L)
+                    args = ["saturación por tonos", f"+{q:g}", f"(tonos {picos} grados)"]
+                    x = pq if info["top_down"] else pq[:, ::-1, :]
+                    res = _a_siril(x, crudo.dtype).reshape(crudo.shape)
                 else:
                     pq = _saturar_propio(p, q, cielo_L, mascara=(tipo_s == "mascara"))
                     x = pq if info["top_down"] else pq[:, ::-1, :]
@@ -3192,6 +3372,7 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
                 texto = " ".join(args)
                 nombre = (f"satu {q:g}" if tipo_s == "satu" else f"saturación propia +{q:g} (cielo protegido)" if tipo_s == "propia"
                           else f"matriz de color ×{q:g} (ccm, luminancia conservada)" if tipo_s == "ccm"
+                          else f"saturación de los tonos del objeto +{q:g} (cielo protegido)" if tipo_s == "tonos"
                           else f"saturación propia +{q:g} con máscara de luminancia")
                 cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": texto, "huella_base": huella, "metricas": m})
                 r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "tipo": tipo_s, "metricas": m, "no_cumple": fal,
@@ -3637,10 +3818,62 @@ CONTRASTE = {
     "enfoque": (["unsharp", "2.0", "0.3"], "máscara de enfoque σ 2, 0,3"),
     "grande_suave": (("escala_grande", 0.5), "escala grande 16–256 px × 1,5"),
     "grande_fuerte": (("escala_grande", 1.0), "escala grande 16–256 px × 2"),
+    # 27 nov 2026 (Rafael; idea de VeraLux Curves, escrito desde cero): curva en S monótona (Hermite de Fritsch–Carlson,
+    # sin rebotes) con los puntos puestos por zonas: cielo fijo, cuartiles del objeto separados, luces fijas.
+    "curva_suave": (("curva", 0.5), "curva S por zonas del objeto, suave"),
+    "curva_media": (("curva", 1.0), "curva S por zonas del objeto, media"),
 }
 
 
-def contrasteCandidatos(siril, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque", "grande_suave", "grande_fuerte"),
+def _hermite_monotona(xs, ys, x):
+    """Interpolación cúbica monótona (Fritsch–Carlson): pasa por los puntos y no rebota entre ellos."""
+    xs, ys = np.asarray(xs, float), np.asarray(ys, float)
+    h = np.diff(xs)
+    dlt = np.diff(ys) / h
+    m = np.r_[dlt[0], (dlt[:-1] + dlt[1:]) / 2, dlt[-1]]
+    for i in range(len(dlt)):
+        if dlt[i] == 0:
+            m[i] = m[i + 1] = 0
+        else:
+            a, b = m[i] / dlt[i], m[i + 1] / dlt[i]
+            t = a * a + b * b
+            if t > 9:
+                tau = 3 / np.sqrt(t)
+                m[i], m[i + 1] = tau * a * dlt[i], tau * b * dlt[i]
+    i = np.clip(np.searchsorted(xs, x) - 1, 0, len(h) - 1)
+    t = (x - xs[i]) / h[i]
+    t2, t3 = t * t, t * t * t
+    return ((2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h[i] * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1]
+            + (t3 - t2) * h[i] * m[i + 1])
+
+
+def _curva_zonas(p, z, fuerza):
+    """Curva S en la luminancia: cielo (mediana) y 1 fijos; el cuartil bajo del objeto baja y el alto sube
+    fuerza × 15 % de la distancia entre ellos. Color por cociente con pedestal 0,05 (como nucleoCandidatos)."""
+    L = _lum(p)
+    c = float(np.median(L[z["cielo_px"]])) if z["cielo_px"].any() else float(np.percentile(L, 10))
+    v = L[z["obj_px"]] if z["obj_px"].any() else L.ravel()
+    q1, q3, alto = (float(np.percentile(v, x)) for x in (25, 75, 99.5))
+    q1, q3 = max(q1, c + 0.01), max(q3, c + 0.03)
+    alto = max(alto, q3 + 0.02)
+    a = 0.15 * float(fuerza) * (q3 - q1)
+    xs = [0.0, c, q1, q3, alto, 1.0] if alto < 0.999 else [0.0, c, q1, q3, 1.0]
+    ys = [0.0, c, q1 - a, q3 + a, alto, 1.0] if alto < 0.999 else [0.0, c, q1 - a, q3 + a, 1.0]
+    if not all(x2 > x1 for x1, x2 in zip(xs, xs[1:])) or not all(y2 > y1 for y1, y2 in zip(ys, ys[1:])):
+        raise RuntimeError("Los puntos de la curva no son crecientes (objeto casi al nivel del cielo).")
+    Lo = np.clip(_hermite_monotona(xs, ys, L), 0, 1).astype(np.float32)
+    if p.shape[0] == 3:
+        f = (Lo + 0.05) / np.maximum(L + 0.05, 1e-6)
+        q = (p + 0.05) * f[None] - 0.05
+        mx = q.max(axis=0)
+        q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
+    else:
+        q = Lo[None]
+    return np.clip(q, 0, 1).astype(np.float32), [round(x, 4) for x in xs], [round(y, 4) for y in ys]
+
+
+def contrasteCandidatos(siril, metodos=("clahe_suave", "clahe_medio", "ondiculas", "enfoque", "grande_suave", "grande_fuerte",
+                                          "curva_suave", "curva_media"),
                         ruido_max=None, tipo=None):
     """Paso de contraste local (no lineal): compara CLAHE, realce de escalas medias con ondículas y máscara de enfoque.
     Mide el contraste local en el objeto, el ruido del cielo y los recortes; recomienda. La imagen no cambia."""
@@ -3681,6 +3914,11 @@ def contrasteCandidatos(siril, metodos=("clahe_suave", "clahe_medio", "ondiculas
                     x = q if info["top_down"] else q[:, ::-1, :]
                     res = _a_siril(x, crudo.dtype).reshape(crudo.shape)
                     texto = f"escala grande propia (banda 16–256 px × {1 + cmd[1]:g}, pesada por la señal)"
+                elif isinstance(cmd, tuple) and cmd[0] == "curva":
+                    q, xs, ys = _curva_zonas(p, z, cmd[1])
+                    x = q if info["top_down"] else q[:, ::-1, :]
+                    res = _a_siril(x if x.shape[0] > 1 else x[0], crudo.dtype).reshape(crudo.shape)
+                    texto = f"curva S monótona por zonas: puntos {list(zip(xs, ys))}"
                 elif isinstance(cmd, tuple) and cmd[0] == "clahe_px":
                     rejilla = max(2, int(round(max(p.shape[1:]) / float(cmd[2]))))
                     siril.cmd("clahe", f"{cmd[1]:g}", str(rejilla))
@@ -4171,6 +4409,111 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
     return r
 
 
+# --- Reducción de estrellas (no lineal, con estrellas) ----------------------------------------------------------
+# 27 nov 2026 (Rafael revisó los scripts de SyQon de Siril): Parallax trae reducción de estrellas. syqon-cli (SyQon
+# Studio, ya instalado) la tiene en parallax-nano --reduction, así que no hace falta el script de Siril ni PyTorch. Junto a
+# ella, una reducción morfológica propia (mínimo local dentro de una máscara suave de estrellas, como la transformación
+# morfológica clásica), para comparar. Como el resto de *Candidatos, la imagen NO cambia: aplicarCandidato(id).
+
+def _reduccion_morfologica(x, pasadas=1, k=4.0):
+    """Erosión (mínimo 3×3) 'pasadas' veces, aplicada sólo dentro de la máscara de estrellas (paso alto > k σ, ampliada y
+    suavizada). x: (canales, alto, ancho)."""
+    L = x.mean(axis=0)
+    hp = L - _suave(L, 8)
+    s = 1.4826 * float(np.median(np.abs(hp[::3, ::3] - np.median(hp[::3, ::3]))))
+    m = (hp > k * max(s, 1e-9)).astype(np.float32)
+    m = np.clip(_caja(m, 2) * 3.0, 0, 1)
+    m = _suave(m, 2)
+    e = x.copy()
+    for _ in range(int(pasadas)):
+        g = np.pad(e, ((0, 0), (1, 1), (1, 1)), mode="edge")
+        e = np.min(np.stack([g[:, 1 + dy:g.shape[1] - 1 + dy, 1 + dx:g.shape[2] - 1 + dx]
+                             for dy in (-1, 0, 1) for dx in (-1, 0, 1)]), axis=0)
+    return np.clip(x * (1 - m[None]) + e * m[None], 0, 1).astype(np.float32), m
+
+
+def reducirEstrellasCandidatos(siril, syqon=(0.5, 1.0), morfologica=(1, 2), tipo=None, objeto_max=1.0):
+    """No lineal, imagen estirada CON estrellas (o tras recombinar): compara reducir las estrellas con SyQon Parallax
+    (si está) y con la reducción morfológica propia. Mide FWHM y número de estrellas de Siril, área de estrellas y cuánto
+    cambia el objeto fuera de ellas. La imagen no cambia: aplicarCandidato(id)."""
+    info = H._info(siril)
+    crudo = _crudo(siril)
+    p = _pantalla(crudo, info)
+    if _lineal(p):
+        raise RuntimeError("La imagen parece lineal: las estrellas se reducen sobre la imagen estirada (o al recombinar).")
+    x = np.clip(_de_siril(crudo), 0, 1).astype(np.float32)
+    x = x if x.ndim == 3 else x[None]
+    huella = _huella(crudo)
+    grupo = "reducir_estrellas"
+    _limpiar_grupo(grupo)
+    e0 = H._estrellas(siril)
+    _, m_est = _reduccion_morfologica(x, 0)
+    fuera = m_est < 0.05
+    L0 = x.mean(axis=0)
+    area0 = float((m_est > 0.5).mean())
+    r = {"antes": {"estrellas": e0.get("n"), "fwhm_px": e0.get("fwhm_px_mediana"), "area_estrellas_pct": _r(100 * area0, 2)},
+         "candidatos": [], "errores": []}
+    trabajos = [("morfologica", v) for v in (morfologica or ())]
+    if syqon:
+        if _syqon.hay("parallax-nano"):
+            trabajos = [("syqon", v) for v in syqon] + trabajos
+        else:
+            r.setdefault("omitidos", []).append("SyQon Parallax (reducción): SyQon Studio no está instalado.")
+    n = 0
+    try:
+        for tipo_r, v in trabajos:
+            n += 1
+            t0 = time.perf_counter()
+            try:
+                if tipo_r == "syqon":
+                    sq = _syqon.reducir(x, aplicacion=float(v))
+                    q, texto, nombre = np.clip(sq["salida"], 0, 1).astype(np.float32), sq["comando"], f"SyQon Parallax reducción {float(v):g}"
+                else:
+                    q, _ = _reduccion_morfologica(x, int(v))
+                    texto = f"reducción morfológica propia: mínimo 3×3 ×{int(v)} en máscara de estrellas"
+                    nombre = f"reducción morfológica ×{int(v)}"
+                res = _a_siril(q if crudo.ndim == 3 else q[0], crudo.dtype).reshape(crudo.shape)
+                _restaurar(siril, res)
+                e1 = H._estrellas(siril)
+                L1 = q.mean(axis=0)
+                cambio = 100.0 * float(np.abs(L1[fuera] - L0[fuera]).mean()) / max(float(L0[fuera].mean()), 1e-9)
+                met = {"estrellas": e1.get("n"), "fwhm_px": e1.get("fwhm_px_mediana"),
+                       "brillo_estrellas_pct": _r(100.0 * float((L1 * m_est).sum()) / max(float((L0 * m_est).sum()), 1e-9), 1),
+                       "objeto_cambio_pct": _r(cambio, 2)}
+                if e0.get("fwhm_px_mediana") and e1.get("fwhm_px_mediana"):
+                    met["fwhm_cambio_pct"] = _r(100.0 * (e1["fwhm_px_mediana"] / e0["fwhm_px_mediana"] - 1), 1)
+                fal = []
+                if cambio > objeto_max:
+                    fal.append(f"cambia el objeto fuera de las estrellas un {_r(cambio, 2)} % (> {objeto_max} %)")
+                if e0.get("n") and e1.get("n") is not None and e1["n"] < 0.6 * e0["n"]:
+                    fal.append(f"se pierden estrellas: {e1['n']} de {e0['n']} (las débiles desaparecen)")
+                cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": texto, "huella_base": huella,
+                                                         "metricas": met})
+                r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "metricas": met, "no_cumple": fal,
+                                        "segundos": _r(time.perf_counter() - t0, 1)})
+            except Exception as e:
+                r["errores"].append(f"{tipo_r} {v}: {e}")
+            finally:
+                _restaurar(siril, crudo)
+    finally:
+        _restaurar(siril, crudo)
+    ok = [c for c in r["candidatos"] if not c["no_cumple"] and c["metricas"].get("fwhm_cambio_pct") is not None]
+    if ok:
+        mejor = min(ok, key=lambda c: c["metricas"]["fwhm_cambio_pct"])
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: FWHM {r['antes']['fwhm_px']} → {mejor['metricas']['fwhm_px']} px "
+                       f"({mejor['metricas']['fwhm_cambio_pct']} %), objeto fuera de estrellas {mejor['metricas']['objeto_cambio_pct']} %.")
+    else:
+        r["recomendado"] = None
+        r["motivo"] = "Ninguno cumple o no se pudo medir la FWHM: deja las estrellas como están o baja el factor al recombinar."
+    r["leyenda"] = ("fwhm_px: mediana de Siril (menos = estrellas más pequeñas). brillo_estrellas_pct: brillo que queda "
+                    "dentro de la máscara de estrellas. objeto_cambio_pct: cambio medio fuera de las estrellas (debe ser ~0). "
+                    "La imagen NO ha cambiado: aplicarCandidato(id).")
+    _asegurar_restaurado(siril, crudo, huella, r)
+    _galeria(r, info, p, "diferencia")
+    return r
+
+
 def _estirar_estrellas_arcsinh(b, mascara, objetivo=0.10, ref=None):
     """arcsinh hasta que el p90 de los píxeles de estrella sea 'objetivo' (el estirado que ya había). ref = (capa, máscara)
     sobre la que se calibra la intensidad (la capa original cuando 'b' es la de synthstar)."""
@@ -4336,6 +4679,7 @@ def compararFinales(siril, ficheros=None):
 
 
 LISTA_PASOS = {
+    "reducirEstrellasCandidatos": reducirEstrellasCandidatos,
     "reducirRuidoCandidatos": reducirRuidoCandidatos,
     "estrellasCandidatos": estrellasCandidatos,
     "nitidezLineal": nitidezLineal,

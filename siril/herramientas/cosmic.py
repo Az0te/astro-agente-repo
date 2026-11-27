@@ -30,6 +30,7 @@ import numpy as np
 MODELOS = {
     "nitidez": ("deep_sharp_stellar_AI4", "deep_nonstellar_sharp_conditional_psf_AI4"),
     "ruido": ("deep_denoise_mono_AI4", "deep_denoise_color_AI4"),
+    "estrellas": ("darkstar_color_AI4",),          # 27 nov 2026: Darkstar (quitar estrellas), color; mono si la capa lo es
 }
 
 
@@ -70,7 +71,7 @@ def falta(modo):
     if not script():
         return "no está el script CosmicClarity_Native.py de los scripts de Siril (actualiza los scripts en Siril)"
     d = modelos_dir()
-    faltan = [m for m in MODELOS[modo] if not any((d / (m + e)).exists() for e in (".pth", ".onnx"))]
+    faltan = [m for m in MODELOS[modo] if not any((d / (m + e)).exists() for e in (".pth", ".pt", ".onnx"))]
     if faltan:
         return (f"faltan los modelos {', '.join(faltan)} en {d}: abre una vez Cosmic Clarity Native en el menú Scripts de "
                 "Siril y descárgalos")
@@ -95,6 +96,8 @@ cc.set_models_dir_override(cfg["modelos"])
 img = np.load(ent)
 if cfg["modo"] == "nitidez":
     out = cc.process_sharpen(img, cfg["params"])
+elif cfg["modo"] == "estrellas":
+    out, _ = cc.process_darkstar(img, cfg["params"])
 else:
     out = cc.process_denoise(img, cfg["params"])
 np.save(sal, np.asarray(out, dtype=np.float32))
@@ -136,3 +139,9 @@ def nitidez(p, estrellas=0.5, nebulosa=0.5, modo="Both", timeout=1800):
 def ruido(p, fuerza=0.5, timeout=1800):
     """Denoise de Cosmic Clarity (modelo completo)."""
     return _correr(p, "ruido", {"denoise_mode": "full", "denoise_strength": float(fuerza), "use_gpu": True}, timeout)
+
+
+def sin_estrellas(p, timeout=1800):
+    """Darkstar de Cosmic Clarity: devuelve la STARLESS ('salida'). Con imagen lineal el script estira y desestira solo.
+    Las estrellas (original − starless) las calcula quien llama, como con StarNet y StarX."""
+    return _correr(p, "estrellas", {"darkstar_mode": "additive", "output_stars_only": False, "use_gpu": True}, timeout)

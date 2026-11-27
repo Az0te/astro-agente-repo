@@ -254,3 +254,12 @@ def parallax(p, aplicacion=0.5, deblur=True, timeout=1800):
         r["descartar"] = (f"parallax-nano satura {s1} píxeles (la original {s0}): recorta los núcleos a 1,0. "
                           "Experimental: descartado.")
     return r
+
+
+def reducir(p, aplicacion=0.5, timeout=1800):
+    """parallax-nano sólo con la reducción de estrellas (27 nov 2026): sin corrección ni deblur, mezclado con
+    --application. Sobre imagen ESTIRADA con estrellas."""
+    lineal = float(np.median(p)) < 0.05
+    extra = ["--correction", "false", "--reduction", "true", "--deblur", "false",
+             "--application", f"{float(aplicacion):g}"]
+    return correr(p, "parallax-nano", "linear" if lineal else "nonlinear", timeout, extra=extra)

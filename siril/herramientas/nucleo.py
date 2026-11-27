@@ -150,4 +150,121 @@ def nucleoCandidatos(siril, fuerzas=(0.25, 0.4, 0.55), desde=None, radio=None, t
     return r
 
 
-LISTA_NUCLEO = {"nucleoCandidatos": nucleoCandidatos}
+# --- Compresión HDR multiescala (27 nov 2026) --------------------------------------------------------------------
+# Rafael activó el script HDR_multiscale de Siril (GPL) y pidió tenerlo como candidato. Escrito DESDE CERO, sin mirar ni
+# copiar su código: es la idea clásica de compresión de rango por escalas (como HDRMultiscaleTransform en PixInsight).
+# La luminancia se descompone con la transformada à trous (núcleo B3 1-4-6-4-1, «con agujeros»); en las zonas brillantes
+# (máscara suave sobre la capa residual) se comprime la residual con una curva racional y se refuerzan algo las capas de
+# detalle, así la estructura de dentro de la zona quemada se ve. Fuera de la máscara no cambia nada. Sirve para cualquier
+# objeto con zonas brillantes (núcleos, nebulosas brillantes como el Trapecio), no sólo bulbos de galaxia.
+
+def _atrous(L, niveles):
+    """Capas de detalle w_1..w_n y residual c_n de la transformada à trous B3 (bordes por reflexión)."""
+    k = np.array([1, 4, 6, 4, 1], np.float32) / 16.0
+    c = L.astype(np.float32)
+    capas = []
+    for j in range(niveles):
+        h = 2 ** j
+        pad = 2 * h
+        s = c
+        for eje in (0, 1):
+            sp = np.pad(s, [(pad, pad) if e == eje else (0, 0) for e in (0, 1)], mode="reflect")
+            n = s.shape[eje]
+            acc = np.zeros_like(s)
+            for i, kv in enumerate(k):
+                ini = i * h
+                acc += kv * (sp[ini:ini + n] if eje == 0 else sp[:, ini:ini + n])
+            s = acc
+        capas.append(c - s)
+        c = s
+    return capas, c
+
+
+def _medidas_hdr(L, mascara):
+    dentro = mascara > 0.5
+    return {"quemado_pct": _r(100.0 * float((L[dentro] >= 0.95).mean()) if dentro.any() else 0.0, 2),
+            "brillo_zona": _r(float(np.median(L[dentro])) if dentro.any() else None, 4),
+            "estructura_zona": _r(P._contraste_local(L, dentro, r=4) if dentro.any() else None, 5)}
+
+
+def hdrCandidatos(siril, fuerzas=(0.3, 0.5, 0.8), desde=None, niveles=None, tipo=None, brillo_min=0.75):
+    """Compresión HDR multiescala (no lineal, tras estirar, antes de saturar): compara varias fuerzas. La imagen no
+    cambia: aplicarCandidato(id)."""
+    info = H._info(siril)
+    crudo = P._crudo(siril)
+    p = P._pantalla(crudo, info)
+    if P._lineal(p):
+        raise RuntimeError("La imagen parece lineal: la compresión HDR va después de estirar (y antes de saturar).")
+    x = P._de_siril(crudo)
+    L = P._lum(x)
+    W = max(L.shape)
+    n = int(niveles or max(5, min(8, int(np.log2(W / 48)))))      # residual del orden de 1/30–1/50 del lado
+    capas, R = _atrous(L, n)
+    u = float(desde) if desde is not None else max(0.5, float(np.percentile(R, 99.0)) - 0.25)
+    techo = float(R.max())
+    if techo <= u + 0.03:
+        raise RuntimeError(f"No hay zonas brillantes que comprimir (máximo de la escala grande {techo:.2f}, umbral "
+                           f"{u:.2f}): no aplica.")
+    t = np.clip((R - u) / max(techo - u, 1e-6), 0, 1)
+    mascara = P._suave((t * t * (3 - 2 * t)).astype(np.float32), 2 ** max(1, n - 3))
+    m0 = _medidas_hdr(L, mascara)
+    huella = P._huella(crudo)
+    grupo = "hdr"
+    P._limpiar_grupo(grupo)
+    r = {"umbral": _r(u, 3), "niveles": n, "zona_pct_imagen": _r(100.0 * float((mascara > 0.5).mean()), 3),
+         "antes": m0, "candidatos": [], "errores": []}
+    medias = sum(capas[1:max(2, n - 1)])                           # detalle medio (sin la capa más fina, que es ruido)
+    for i, k in enumerate(fuerzas, 1):
+        t0 = time.perf_counter()
+        nombre = f"compresión HDR multiescala ×{k:g}"
+        try:
+            # curva racional sobre lo que la residual pasa del umbral: f(0)=0, pendiente 1 en 0, se aplana arriba
+            e = np.maximum(R - u, 0)
+            e_c = e / (1.0 + 4.0 * k * e / max(techo - u, 1e-6))
+            Lo = L + mascara * (e_c - e) + 0.6 * k * mascara * medias
+            Lo = np.clip(Lo, 0, 1)
+            if x.shape[0] == 3:
+                f = (Lo + 0.05) / np.maximum(L + 0.05, 1e-6)
+                q = (x + 0.05) * f[None] - 0.05
+                mx = q.max(axis=0)
+                q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
+            else:
+                q = Lo[None]
+            q = np.clip(q, 0, 1).astype(np.float32)
+            L1 = P._lum(q)
+            m1 = _medidas_hdr(L1, mascara)
+            fal = []
+            if m0["brillo_zona"] and m1["brillo_zona"] < brillo_min * m0["brillo_zona"]:
+                fal.append(f"la zona brillante se apaga: {m1['brillo_zona']} < {brillo_min} × {m0['brillo_zona']}")
+            if m0["estructura_zona"] and m1["estructura_zona"] and m1["estructura_zona"] < m0["estructura_zona"]:
+                fal.append("no gana estructura en la zona brillante")
+            ganancia = (100.0 * (m1["estructura_zona"] / m0["estructura_zona"] - 1)
+                        if m0["estructura_zona"] and m1["estructura_zona"] else None)
+            res = P._a_siril(q if x.shape[0] == 3 else q[0], crudo.dtype).reshape(crudo.shape)
+            cid = P._guardar_candidato(grupo, i, res, {"nombre": nombre, "comando": nombre, "huella_base": huella})
+            r["candidatos"].append({"id": cid, "metodo": nombre, "medidas": m1, "estructura_ganada_pct": _r(ganancia, 1),
+                                    "no_cumple": fal, "segundos": _r(time.perf_counter() - t0, 1)})
+        except Exception as e:
+            r["errores"].append(f"{nombre}: {e}")
+    ok = [c for c in r["candidatos"] if not c["no_cumple"]]
+    if ok:
+        def nota(c):
+            caida = 100.0 * (1 - (c["medidas"]["brillo_zona"] or 0) / max(m0["brillo_zona"] or 1e-6, 1e-6))
+            return (c["estructura_ganada_pct"] or 0) - 1.0 * (c["medidas"]["quemado_pct"] or 0) - 1.5 * max(caida, 0)
+        mejor = max(ok, key=nota)
+        mm = mejor["medidas"]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: quemado {m0['quemado_pct']} → {mm['quemado_pct']} %, estructura de la zona "
+                       f"brillante +{mejor['estructura_ganada_pct']} %, brillo {m0['brillo_zona']} → {mm['brillo_zona']}.")
+    else:
+        r["recomendado"] = None
+        r["motivo"] = "Ninguno cumple (ver no_cumple): deja la imagen como está o prueba otro umbral (desde)."
+    r["leyenda"] = ("quemado_pct: % de la zona brillante por encima de 0,95. estructura_zona: detalle de 4 px dentro de la "
+                    f"zona. brillo_zona: mediana dentro (no debe caer por debajo del {int(brillo_min * 100)} %). En galaxias "
+                    "compáralo con nucleoCandidatos. Va antes de saturar. La imagen NO ha cambiado: aplicarCandidato(id).")
+    P._asegurar_restaurado(siril, crudo, huella, r)
+    P._galeria(r, info, p, "diferencia")
+    return r
+
+
+LISTA_NUCLEO = {"nucleoCandidatos": nucleoCandidatos, "hdrCandidatos": hdrCandidatos}
