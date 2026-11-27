@@ -4416,8 +4416,9 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
 # morfológica clásica), para comparar. Como el resto de *Candidatos, la imagen NO cambia: aplicarCandidato(id).
 
 def _reduccion_morfologica(x, pasadas=1, k=4.0):
-    """Erosión (mínimo 3×3) 'pasadas' veces, aplicada sólo dentro de la máscara de estrellas (paso alto > k σ, ampliada y
-    suavizada). x: (canales, alto, ancho)."""
+    """Erosión parcial (mitad hacia el mínimo 3×3) 'pasadas' veces, sólo dentro de la máscara de estrellas (paso alto > k σ,
+    ampliada y suavizada). x: (canales, alto, ancho). Prueba real 27-nov: con el mínimo entero desaparecían las débiles
+    (17 798 → 6 261 estrellas con 1 pasada); a mitad encoge sin borrarlas."""
     L = x.mean(axis=0)
     hp = L - _suave(L, 8)
     s = 1.4826 * float(np.median(np.abs(hp[::3, ::3] - np.median(hp[::3, ::3]))))
@@ -4427,8 +4428,9 @@ def _reduccion_morfologica(x, pasadas=1, k=4.0):
     e = x.copy()
     for _ in range(int(pasadas)):
         g = np.pad(e, ((0, 0), (1, 1), (1, 1)), mode="edge")
-        e = np.min(np.stack([g[:, 1 + dy:g.shape[1] - 1 + dy, 1 + dx:g.shape[2] - 1 + dx]
-                             for dy in (-1, 0, 1) for dx in (-1, 0, 1)]), axis=0)
+        mn = np.min(np.stack([g[:, 1 + dy:g.shape[1] - 1 + dy, 1 + dx:g.shape[2] - 1 + dx]
+                              for dy in (-1, 0, 1) for dx in (-1, 0, 1)]), axis=0)
+        e = 0.5 * (e + mn)
     return np.clip(x * (1 - m[None]) + e * m[None], 0, 1).astype(np.float32), m
 
 

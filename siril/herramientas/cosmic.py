@@ -12,7 +12,8 @@
 # - los modelos en %LOCALAPPDATA%\siril\cosmic_clarity (o "cosmicclarity_modelos" en config.json): se descargan abriendo
 #   una vez Cosmic Clarity Native desde el menú Scripts de Siril (Download models);
 # - PyTorch en la Python de Siril: lo instala ese mismo script la primera vez (aquí NO se instala nada: tardaría minutos
-#   y descargaría más de un GB en mitad de una comparación).
+#   y descargaría más de un GB en mitad de una comparación). Si la de Siril no lo tiene, se usa otra Python que sí: la de
+#   "cosmicclarity_python" en config.json o, si no, la del venv de SASpro (27 nov 2026, Rafael: modelos y torch de Seti).
 #
 # Arrays: (canales, alto, ancho) 0–1, como en syqon.py. Quien llama mide, compara y aplica con deshacer.
 
@@ -66,6 +67,36 @@ def modelos_dir():
     return Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))) / "siril" / "cosmic_clarity"
 
 
+_PYTHON = {}
+
+
+def _tiene_torch(exe):
+    if exe not in _PYTHON:
+        try:
+            pr = subprocess.run([exe, "-c", "import torch, numpy"], capture_output=True, timeout=120,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            _PYTHON[exe] = pr.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            _PYTHON[exe] = False
+    return _PYTHON[exe]
+
+
+def python():
+    """La Python con PyTorch que lanza Cosmic Clarity: "cosmicclarity_python" de config.json, la de Siril o la del venv de
+    SASpro (que trae torch). None si ninguna lo tiene."""
+    c = _config().get("cosmicclarity_python")
+    if c:
+        return c if os.path.isfile(c) and _tiene_torch(c) else None
+    if importlib.util.find_spec("torch") is not None:
+        return sys.executable
+    base = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+    for x in (os.path.join(base, "SASpro", "runtime", "py312", "venv", "Scripts", "python.exe"),
+              os.path.join(base, "SASpro", "runtime", "py312", "venv", "bin", "python")):
+        if os.path.isfile(x) and _tiene_torch(x):
+            return x
+    return None
+
+
 def falta(modo):
     """None si se puede usar 'modo' (nitidez o ruido); si no, qué falta, en una frase."""
     if not script():
@@ -75,8 +106,9 @@ def falta(modo):
     if faltan:
         return (f"faltan los modelos {', '.join(faltan)} en {d}: abre una vez Cosmic Clarity Native en el menú Scripts de "
                 "Siril y descárgalos")
-    if importlib.util.find_spec("torch") is None:
-        return "falta PyTorch en la Python de Siril: abre una vez Cosmic Clarity Native en el menú Scripts de Siril"
+    if not python():
+        return ("falta PyTorch en la Python de Siril (y no hay otra con PyTorch: SASpro o \"cosmicclarity_python\" en "
+                "config.json): abre una vez Cosmic Clarity Native en el menú Scripts de Siril")
     return None
 
 
@@ -85,8 +117,43 @@ def hay(modo):
 
 
 _RUNNER = r'''
-import importlib.util, json, sys
+import importlib.util, json, sys, types
 import numpy as np
+# Con la Python de SASpro (solo torch y numpy) faltan sirilpy, PyQt6 y astropy: sustitutos vacíos, solo para lo que no
+# se pueda importar. El procesado no los usa (la ventana no se abre, las rutas de modelos van por override).
+def _hueco(nombre):
+    return type(nombre, (object,), {"__init__": lambda self, *a, **k: None, "__call__": lambda self, *a, **k: None,
+                                    "__getattr__": _metodo})
+def _metodo(self, k):
+    if k.startswith("__"):
+        raise AttributeError(k)
+    return lambda *a, **kw: None
+def _sustituto(nombre, **extra):
+    m = types.ModuleType(nombre)
+    def _attr(k):
+        if k.startswith("__"):
+            raise AttributeError(k)
+        return _hueco(k)
+    m.__getattr__ = _attr
+    m.__dict__.update(extra)
+    sys.modules[nombre] = m
+    return m
+try:
+    import sirilpy
+except ImportError:
+    _sustituto("sirilpy", ensure_installed=lambda *a, **k: True)
+try:
+    import PyQt6.QtWidgets, PyQt6.QtCore, PyQt6.QtGui
+except ImportError:
+    _q = _sustituto("PyQt6")
+    for _n in ("QtWidgets", "QtCore", "QtGui"):
+        setattr(_q, _n, _sustituto("PyQt6." + _n))
+try:
+    from astropy.io import fits
+except ImportError:
+    _a = _sustituto("astropy")
+    _a.io = _sustituto("astropy.io")
+    _a.io.fits = _sustituto("astropy.io.fits")
 ent, sal, cfg = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
 spec = importlib.util.spec_from_file_location("cosmicclarity_native_sap", cfg["script"])
 cc = importlib.util.module_from_spec(spec)
@@ -118,7 +185,7 @@ def _correr(p, modo, params, timeout=1800):
         np.save(ent, img)
         run.write_text(_RUNNER, encoding="utf-8")
         cfg = {"script": script(), "modelos": str(modelos_dir()), "modo": modo, "params": params}
-        pr = subprocess.run([sys.executable, str(run), str(ent), str(sal), json.dumps(cfg)], capture_output=True,
+        pr = subprocess.run([python(), str(run), str(ent), str(sal), json.dumps(cfg)], capture_output=True,
                             text=True, timeout=timeout, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if pr.returncode != 0 or not sal.exists():
             raise ErrorCosmic(f"Cosmic Clarity ({modo}) falló (código {pr.returncode}): {(pr.stderr or pr.stdout)[-400:]}")
@@ -127,7 +194,7 @@ def _correr(p, modo, params, timeout=1800):
     if mono:
         q = q.mean(axis=0, keepdims=True)
     return {"salida": np.clip(q, 0, 1), "segundos": round(time.perf_counter() - t0, 1),
-            "comando": f"Cosmic Clarity {modo} {json.dumps(params, ensure_ascii=False)}"}
+            "comando": f"Cosmic Clarity {modo} {json.dumps(params, ensure_ascii=False)}", "python": python()}
 
 
 def nitidez(p, estrellas=0.5, nebulosa=0.5, modo="Both", timeout=1800):

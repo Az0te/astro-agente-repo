@@ -937,6 +937,9 @@ def restarContinuo(siril, nb, continuo, canal=None, carpeta=None, nombre=None, f
                            "alinéalas antes (alinearMasters).")
     if not P._lineal(n[None, ::8, ::8]) or not P._lineal(a_bb[:, ::8, ::8]):
         raise RuntimeError("Las dos capas tienen que estar LINEALES (antes de estirar).")
+    if canal is None and not forzar and (a_nb.shape[0] > 1 or re.search(r"ha.?o(3|iii)|dual|hoo", f_nb.stem, re.I)):
+        raise RuntimeError(f"{f_nb.name} parece dual band (Hα y OIII juntos): sepáralo antes (desmezclarDualBand) y resta "
+                           "cada raya por su lado, o di canal='r' (Hα) o 'g' (OIII).")
     if canal is None:
         canal = 1 if re.search(r"o3|oiii", f_nb.stem, re.I) else 0
     canal = {"r": 0, "g": 1, "b": 2}.get(str(canal).lower(), canal)
