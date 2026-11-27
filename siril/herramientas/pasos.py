@@ -4489,6 +4489,8 @@ def reducirEstrellasCandidatos(siril, syqon=(0.5, 1.0), morfologica=(1, 2), tipo
                     fal.append(f"cambia el objeto fuera de las estrellas un {_r(cambio, 2)} % (> {objeto_max} %)")
                 if e0.get("n") and e1.get("n") is not None and e1["n"] < 0.6 * e0["n"]:
                     fal.append(f"se pierden estrellas: {e1['n']} de {e0['n']} (las débiles desaparecen)")
+                if met.get("fwhm_cambio_pct") is not None and met["fwhm_cambio_pct"] >= 0:
+                    fal.append(f"no baja la FWHM ({met['fwhm_cambio_pct']} %)")
                 cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": texto, "huella_base": huella,
                                                          "metricas": met})
                 r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "metricas": met, "no_cumple": fal,
