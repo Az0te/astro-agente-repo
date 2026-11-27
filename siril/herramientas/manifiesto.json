@@ -1461,8 +1461,8 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/09-recombinacion.md",
-   "descripcion": "No lineal, sobre la imagen estirada CON estrellas (o ya recombinada): compara reducir las estrellas con SyQon Parallax nano (syqon-cli, sólo la reducción, aplicación 0,5 y 1,0, si SyQon Studio está) y con una reducción morfológica propia (mínimo 3×3 una o dos veces dentro de una máscara suave de estrellas). Mide FWHM y número de estrellas de Siril, brillo dentro de las estrellas y cambio del objeto fuera de ellas; descarta las que cambian el objeto > 1 % o pierden más del 40 % de las estrellas, y recomienda la de más FWHM reducida. La imagen NO cambia: aplicarCandidato(id).",
-   "resumen": "Reducir estrellas NL: SyQon Parallax frente a morfológica propia; FWHM, estrellas, objeto; no cambia la imagen.",
+   "descripcion": "No lineal, sobre la imagen estirada CON estrellas (o ya recombinada): compara reducir las estrellas con SyQon Parallax nano (syqon-cli, sólo la reducción, aplicación 0,5 y 1,0, si SyQon Studio está) y con una contracción de perfiles propia (fondo por apertura morfológica; cada estrella a pico·(s/pico)^g con g 1,5 y 2, que estrecha la FWHM sin borrar las débiles; la morfológica de mínimo 3×3 sólo si se pide). Mide FWHM y número de estrellas de Siril, brillo dentro de las estrellas y cambio del objeto fuera de ellas; descarta las que cambian el objeto > 1 % o pierden más del 40 % de las estrellas, y recomienda la de más FWHM reducida. La imagen NO cambia: aplicarCandidato(id).",
+   "resumen": "Reducir estrellas NL: SyQon Parallax frente a contracción propia; FWHM, estrellas, objeto; no cambia la imagen.",
    "params": {
     "type": "object",
     "properties": {
@@ -1478,7 +1478,14 @@
       "items": {
        "type": "integer"
       },
-      "description": "Pasadas de la reducción morfológica (por defecto 1 y 2); [] para no usarla."
+      "description": "Pasadas de la reducción morfológica (por defecto ninguna: subía la FWHM al borrar las débiles)."
+     },
+     "contraccion": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Exponentes g de la contracción de perfiles (por defecto 1,5 y 2; FWHM gaussiana × 1/√g); [] para no usarla."
      },
      "objeto_max": {
       "type": "number",

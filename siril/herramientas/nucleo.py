@@ -238,6 +238,8 @@ def hdrCandidatos(siril, fuerzas=(0.3, 0.5, 0.8), desde=None, niveles=None, tipo
                 fal.append(f"la zona brillante se apaga: {m1['brillo_zona']} < {brillo_min} × {m0['brillo_zona']}")
             if m0["estructura_zona"] and m1["estructura_zona"] and m1["estructura_zona"] < m0["estructura_zona"]:
                 fal.append("no gana estructura en la zona brillante")
+            if m0["quemado_pct"] is not None and m1["quemado_pct"] is not None and m1["quemado_pct"] > m0["quemado_pct"] + 0.05:
+                fal.append(f"quema más: {m0['quemado_pct']} → {m1['quemado_pct']} % de la zona por encima de 0,95")
             ganancia = (100.0 * (m1["estructura_zona"] / m0["estructura_zona"] - 1)
                         if m0["estructura_zona"] and m1["estructura_zona"] else None)
             res = P._a_siril(q if x.shape[0] == 3 else q[0], crudo.dtype).reshape(crudo.shape)

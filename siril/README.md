@@ -40,16 +40,16 @@ Siril tiene una sola imagen cargada: ninguna herramienta lleva `vista`. Coordena
 | L12 Color | `calibrarColor` (`listaSPCC`*) | spcc; `-narrowband` automático con filtro dual band (cabecera o nombre) |
 | L11/L13 Deconvolución | `nitidezLineal` → `aplicarCandidato` | compara BlurX (`rc-astro bxt`), Richardson-Lucy y Wiener de Siril (`makepsf`), SyQon Parallax y Cosmic Clarity: FWHM, ruido, anillos oscuros |
 | L15 Estrellas | `separarEstrellas` | starnet de Siril o, si falla, StarNet2 (2.5+) directo |
-| L15 Estrellas | `estrellasCandidatos` → `aplicarCandidato` | `unclipstars` y StarNet2, StarX (`rc-astro sxt`), Darkstar de Cosmic Clarity y SyQon Axiom Mini (estirada): restos de estrellas, agujeros, objeto quitado |
+| L15 Estrellas | `estrellasCandidatos` → `aplicarCandidato` | `unclipstars` y StarNet2, StarX (`rc-astro sxt`), Darkstar de Cosmic Clarity y SyQon Axiom Mini (los dos con la imagen estirada): restos de estrellas, agujeros, objeto quitado |
 | NL1 Estirado | `estirarCandidatos` → `aplicarCandidato` | GHS al fallo (ght + linstretch; también con la simetría en la señal débil, y por canal como PixInsight), arcsinh al fallo, por escalas, hiperbólico, `autoghs`, autostretch; punto negro en lineal y altas luces hacia neutro |
 | NL5 Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | comprimir el bulbo con máscara suave (`nucleo.py`): meseta, anillos, brillo |
-| NL5 HDR | `hdrCandidatos` → `aplicarCandidato` | compresión multiescala (à trous) de las zonas brillantes: quemado, estructura, brillo |
+| NL5 HDR | `hdrCandidatos` → `aplicarCandidato` | compresión multiescala (à trous) de las zonas brillantes: quemado (no cumple si sube), estructura, brillo |
 | NL5 Contraste | `contrasteCandidatos` → `aplicarCandidato` | CLAHE, ondículas, máscara de enfoque, escala grande, curva en S monótona por zonas |
 | NL3 SCNR | `quitarVerde` | rmgreen |
 | L14 / NL6 Ruido | `reducirRuidoCandidatos` → `aplicarCandidato` | denoise (fuerza 0,5/0,7/1,0 y DA3D), NoiseX (`rc-astro nxt`), SyQon Prism, `epf`, ondículas propias con sombras y Cosmic Clarity frente a nada: ruido del cielo y pérdida de detalle (< 10 %) |
 | NL5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | satu 0,25/0,5/0,75 (fondo 1), saturación propia y, en nebulosas, con máscara de luminancia (la recomendada si cumple), `ccm` y saturación por tonos: saturación en objeto y cielo, dominante del cielo < 5 %, recortes |
 | NL9 Recombinación | `recombinarEstrellas` | starless cargada + fichero de estrellas, screen o suma con factor; capa lineal estirada con arcsinh o curva racional (o `comparar`); `synthstar` opcional |
-| NL9 Estrellas | `reducirEstrellasCandidatos` → `aplicarCandidato` | SyQon Parallax (reducción) frente a reducción morfológica propia: FWHM, estrellas, objeto |
+| NL9 Estrellas | `reducirEstrellasCandidatos` → `aplicarCandidato` | SyQon Parallax (reducción) frente a contracción de perfiles propia (pico·(s/pico)^g sobre fondo por apertura): FWHM, estrellas, objeto |
 | NL10 Exportación | `exportarFinal` | savetif (16 bits) + savejpg 95 como `<nombre>_final`, sin sobrescribir (_2, _3…) |
 
 Comparar en Siril (una sola imagen): se guarda la imagen, cada candidato se aplica, se mide y se guarda en `~/.sirilastropilot/trabajo/`, y la imagen vuelve a como estaba. `aplicarCandidato(id)` pone el elegido, exactamente el que se midió, con deshacer. GraXpert: si no lo encuentra, poner su ruta en `~/.sirilastropilot/config.json` (`{"graxpert": "C:/…/GraXpert.exe"}`). Igual con `starnet2` (si no está en la preferencia de StarNet de Siril) y `rcastro` (por defecto `C:\Program Files\RC-Astro\CLI\rc-astro.exe`; vale la licencia de RC Astro que ya se tenga).

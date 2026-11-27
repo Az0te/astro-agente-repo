@@ -1879,7 +1879,10 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
     if motores is None:
         motores = ("starnet", "starx") + (("syqon",) if not lineal and _syqon.hay("axiom-mini") else ())
         # 27 nov 2026 (Rafael): Darkstar de Cosmic Clarity, motor gratis más, si está instalado
-        if _cosmic.hay("estrellas"):
+        if lineal:                               # prueba real 27-nov: en lineal se llevó el 36,5 % del objeto
+            r.setdefault("omitidos", []).append("Cosmic Clarity Darkstar: sólo sobre imagen estirada (en lineal quitó el 36 % "
+                                                "del objeto en la prueba); motores=[\"cosmic\"] para forzarlo.")
+        elif _cosmic.hay("estrellas"):
             motores += ("cosmic",)
         else:
             r.setdefault("omitidos", []).append("Cosmic Clarity Darkstar: " + str(_cosmic.falta("estrellas")) + ".")
@@ -4457,9 +4460,35 @@ def _reduccion_morfologica(x, pasadas=1, k=4.0):
     return np.clip(x * (1 - m[None]) + e * m[None], 0, 1).astype(np.float32), m
 
 
-def reducirEstrellasCandidatos(siril, syqon=(0.5, 1.0), morfologica=(1, 2), tipo=None, objeto_max=1.0):
+def _filtro_ext(x, r, fn):
+    """Mínimo o máximo en ventana cuadrada (2r+1), separable. x: (..., alto, ancho)."""
+    for eje in (-2, -1):
+        n = x.shape[eje]
+        pad = [(0, 0)] * x.ndim
+        pad[eje] = (r, r)
+        g = np.pad(x, pad, mode="edge")
+        sl = lambda k: tuple(slice(None) if d != x.ndim + eje else slice(k, k + n) for d in range(x.ndim))
+        acc = g[sl(0)]
+        for k in range(1, 2 * r + 1):
+            acc = fn(acc, g[sl(k)])
+        x = acc
+    return x
+
+def _contraer_estrellas(x, g=1.5, r=6):
+    """Contracción de estrellas: fondo = apertura morfológica (mín. y luego máx. de radio r, quita lo más pequeño que r);
+    estrella = x − fondo; cada estrella se lleva a pico·(s/pico)^g con su propio pico (máximo local), así el núcleo no
+    cambia y las alas caen antes: un perfil gaussiano estrecha su FWHM en 1/√g sin que desaparezcan las débiles."""
+    fondo = _filtro_ext(_filtro_ext(x, r, np.minimum), r, np.maximum)
+    s = np.clip(x - fondo, 0, None)
+    pico = _filtro_ext(s, r, np.maximum)
+    q = fondo + pico * np.power(np.clip(s / np.maximum(pico, 1e-9), 0, 1), g)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
+def reducirEstrellasCandidatos(siril, syqon=(0.5, 1.0), contraccion=(1.5, 2.0), morfologica=(), tipo=None,
+                               objeto_max=1.0):
     """No lineal, imagen estirada CON estrellas (o tras recombinar): compara reducir las estrellas con SyQon Parallax
-    (si está) y con la reducción morfológica propia. Mide FWHM y número de estrellas de Siril, área de estrellas y cuánto
+    (si está) y con la contracción de perfiles propia (27-nov: la morfológica, sólo si se pide, subía la FWHM). Mide FWHM y número de estrellas de Siril, área de estrellas y cuánto
     cambia el objeto fuera de ellas. La imagen no cambia: aplicarCandidato(id)."""
     info = H._info(siril)
     crudo = _crudo(siril)
@@ -4478,7 +4507,8 @@ def reducirEstrellasCandidatos(siril, syqon=(0.5, 1.0), morfologica=(1, 2), tipo
     area0 = float((m_est > 0.5).mean())
     r = {"antes": {"estrellas": e0.get("n"), "fwhm_px": e0.get("fwhm_px_mediana"), "area_estrellas_pct": _r(100 * area0, 2)},
          "candidatos": [], "errores": []}
-    trabajos = [("morfologica", v) for v in (morfologica or ())]
+    trabajos = ([("contraccion", v) for v in (contraccion or ())] +
+                [("morfologica", v) for v in (morfologica or ())])
     if syqon:
         if _syqon.hay("parallax-nano"):
             trabajos = [("syqon", v) for v in syqon] + trabajos
@@ -4493,6 +4523,13 @@ def reducirEstrellasCandidatos(siril, syqon=(0.5, 1.0), morfologica=(1, 2), tipo
                 if tipo_r == "syqon":
                     sq = _syqon.reducir(x, aplicacion=float(v))
                     q, texto, nombre = np.clip(sq["salida"], 0, 1).astype(np.float32), sq["comando"], f"SyQon Parallax reducción {float(v):g}"
+                elif tipo_r == "contraccion":
+                    rr_ = int(np.clip(round(2 * (e0.get("fwhm_px_mediana") or 3.0)), 4, 12))
+                    qc = _contraer_estrellas(x, float(v), rr_)
+                    q = np.clip(x * (1 - m_est[None]) + qc * m_est[None], 0, 1).astype(np.float32)
+                    texto = (f"contracción de perfiles propia: pico·(s/pico)^{float(v):g} sobre apertura de radio {rr_} px, "
+                             "en máscara de estrellas")
+                    nombre = f"contracción de estrellas {float(v):g}"
                 else:
                     q, _ = _reduccion_morfologica(x, int(v))
                     texto = f"reducción morfológica propia: mínimo 3×3 ×{int(v)} en máscara de estrellas"
