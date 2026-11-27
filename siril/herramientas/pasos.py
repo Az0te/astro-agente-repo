@@ -3000,7 +3000,8 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     if debil:
         r["capa_debil"] = (f"Señal débil (la parte brillante del objeto a {_r(snr, 1)} ruidos del cielo; < {SNR_CAPA_DEBIL})"
                            if snr is not None else "Sin zona de objeto clara") +                           (": se recomienda la limpieza más fuerte que no deje el fondo muerto (como NXT 0,75–0,8 en "
-                           "estas capas); la medida de detalle cuenta el ruido de fotones como detalle y no decide.")
+                           "estas capas); la medida de detalle cuenta parte del ruido de fotones como detalle: solo decide si pasa del "
+                           "10 % (perdida_max) o en empates de ruido (±0,02).")
 
     def medir(res_crudo, nombre, texto, t0, n):
         q = _pantalla(res_crudo, info)
@@ -3098,9 +3099,16 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
             n += 1
             t1 = time.perf_counter()
             try:
-                cc = _cosmic.ruido(np.clip(_de_siril(crudo), 0, 1), fuerza=float(fz))
-                medir(_a_siril(cc["salida"], crudo.dtype).reshape(crudo.shape), f"Cosmic Clarity {float(fz):g}",
-                      cc["comando"], t1, n)
+                x0 = np.clip(_de_siril(crudo), 0, 1)
+                cc = _cosmic.ruido(x0, fuerza=float(fz))
+                q = np.asarray(cc["salida"], dtype=np.float32)
+                if q.size == x0.size:
+                    # Prueba real 27-nov (IC 405 lineal): Cosmic saturaba núcleos de estrellas (+0,03 % de píxeles ≥ 0,999)
+                    # y quedaba fuera por recorte; donde satura y el original no, se deja el original (núcleo sin ruido).
+                    q = q.reshape(x0.shape)
+                    q = np.where((q >= 0.999) & (x0 < 0.999), x0, q)
+                medir(_a_siril(q, crudo.dtype).reshape(crudo.shape), f"Cosmic Clarity {float(fz):g}",
+                      cc["comando"] + " (núcleos saturados por la IA repuestos del original)", t1, n)
             except Exception as e:
                 r["errores"].append(f"Cosmic Clarity {fz}: {e}")
         if da3d is None:
@@ -3141,6 +3149,12 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
         if rr(x) < minimo:
             x.setdefault("no_cumple", []).append(f"fondo muerto: deja el {round(100 * rr(x))} % del ruido "
                                                  f"(mínimo {round(100 * minimo)} % en esta fase)")
+    for x in c:
+        if not sin_recorte(x):                 # 27-nov: antes se descartaban en silencio
+            m = x["metricas"]
+            x.setdefault("no_cumple", []).append(
+                f"recorta: altos +{_r(m['altos_pct'] - rec0['altos_pct'], 4)} %, ceros +{_r(m['ceros_pct'] - rec0['ceros_pct'], 4)} % "
+                "(máximo +0,01 %)")
     c_ok = [x for x in c if rr(x) >= minimo]
     ya_limpio = (not lineal) and (r0 / max(z["medidas"]["cielo"], 1e-9)) < 0.015   # sólo tiene sentido estirada
     if ya_limpio:
@@ -3148,11 +3162,18 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     medibles = [x for x in c_ok if e0 is not None and dp(x) is not None and sin_recorte(x)]
     mejor, regla = None, ""
     limpios = [x for x in medibles if dp(x) <= perdida_limpia]
-    fuertes = [x for x in c_ok if rr(x) <= 0.8 and sin_recorte(x)] if debil else []
+    fuertes = [x for x in c_ok if rr(x) <= 0.8 and sin_recorte(x)
+               and (dp(x) is None or dp(x) < perdida_max)] if debil else []
+    if debil:                                   # 27-nov: Cosmic 0,8 ganaba por 0,001 de ruido perdiendo 20,9 % de detalle
+        for x in c_ok:
+            if dp(x) is not None and dp(x) >= perdida_max:
+                x.setdefault("no_cumple", []).append(f"pierde el {dp(x)} % del detalle (máximo {perdida_max} %)")
     if ya_limpio and medibles:
         mejor, regla = max(medibles, key=rr), "el cielo ya está limpio: la pasada más suave"
     elif fuertes:
-        mejor = min(fuertes, key=lambda x: (rr(x), x["metricas"]["ruido_grueso_rel"]))
+        b = min(rr(x) for x in fuertes)         # empates de ruido (± 0,02): la que menos detalle pierde
+        mejor = min([x for x in fuertes if rr(x) <= b + 0.02],
+                    key=lambda x: (dp(x) if dp(x) is not None else 0.0, x["metricas"]["ruido_grueso_rel"]))
         regla = "capa débil: la que más ruido quita sin dejar el fondo muerto"
     elif limpios:
         mejor, regla = min(limpios, key=rr), f"la que más baja el ruido sin perder más del {perdida_limpia} % de detalle ni recortar"
@@ -3177,7 +3198,9 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     r["leyenda"] = ("ruido_rel: ruido del cielo después / antes (menos es mejor; 1 = nada). ruido_grueso_rel: lo mismo para el "
                     "moteado de bloques de 4 px (si no baja, el denoise solo cambia el grano por manchas). detalle_perdido_pct: "
                     "energía de la escala 2–8 px en la parte brillante del objeto (sin núcleo ni estrellas) que se pierde. "
-                    "no_cumple «fondo muerto» si deja menos del 25 % del ruido. capa_debil: en lineal, si la parte brillante "
+                    "no_cumple «fondo muerto» si deja menos del 25 % del ruido. no_cumple «recorta» si añade más del 0,01 % "
+                    "de píxeles altos o a cero; en capa débil, «pierde el X % del detalle» si pasa de perdida_max. "
+                    "capa_debil: en lineal, si la parte brillante "
                     "está a menos de 15 ruidos del cielo se recomienda la más fuerte que no deje el fondo muerto. El recomendado ya tiene en cuenta la fase "
                     "(la que más baja el ruido sin perder más del 2 % de detalle ni recortar, en las dos fases). IA nxt: NoiseX por el CLI de RC Astro. "
                     "mod 0,5 y 0,7 son la mezcla del denoise completo con la original (lo mismo que hace -mod). "
