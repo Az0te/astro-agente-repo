@@ -1497,6 +1497,15 @@ def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=No
         args.append(f"-catalog={'localgaia' if str(catalogo) == 'localgaia' else 'gaia'}")
     filtro_cab = str(getattr(k, "filter", "") or "") if k else ""
     nb_auto = _dual_band_spcc(filtro_cab)
+    if not nb_auto and not filtro_cab:          # 27 nov 2026: masters sin FILTER que lo llevan en el nombre (FILTER-HaO3)
+        try:
+            nombre = os.path.basename(str(siril.get_image_filename() or ""))
+        except Exception:
+            nombre = ""
+        m = re.search(r"filter[-_]([^_.]+)", nombre, re.I)
+        nb_auto = _dual_band_spcc(m.group(1) if m else nombre)
+        if nb_auto:
+            filtro_cab = f"{m.group(1) if m else nombre} (del nombre del fichero)"
     if isinstance(banda_estrecha, str) and banda_estrecha.strip().startswith("{"):
         banda_estrecha = json.loads(banda_estrecha)
     if isinstance(banda_estrecha, str) and banda_estrecha.strip().lower() in ("false", "no", ""):
@@ -2202,25 +2211,37 @@ def _hiperbolico(siril, info, crudo, cielo, lim, proteccion=1.5, color=1.0):
 
 
 def _autoghs(siril, info, crudo, cielo, lim):
-    """autoghs de Siril 1.4 (GHS con el punto de simetría a −2,8 sigmas de la mediana, enlazado): se busca la intensidad D
-    que deja el cielo en el objetivo (27 nov 2026, Rafael: un candidato más)."""
-    lo, hi, mejor = 0.1, 10.0, None
-    for _ in range(7):
-        D = (lo * hi) ** 0.5
-        _restaurar(siril, crudo)
-        siril.cmd("autoghs", "-linked", "-2.8", f"{D:.3f}", "-b=0")
-        c = _medir(siril, info)
-        mejor = (D, c)
-        if c["cielo"] < cielo:
-            lo = D
-        else:
-            hi = D
-    D, _ = mejor
+    """autoghs de Siril 1.4 (GHS enlazado con el punto de simetría a k sigmas de la mediana): se busca la intensidad D
+    que deja el cielo en el objetivo (27 nov 2026, Rafael: un candidato más). Prueba real 27-nov (IC 405): con -2,8 el
+    punto de simetría caía bajo 0 tras restar el negro lineal (SP=-0,000013) y no estiraba; D no pasa de 10 en Siril.
+    Por eso k=0 (simetría en la mediana del cielo) y, si D=10 no llega, otra pasada desde lo ya estirado (máx. 4)."""
+    pasos, c = [], None
     _restaurar(siril, crudo)
-    siril.cmd("autoghs", "-linked", "-2.8", f"{D:.3f}", "-b=0")
-    c = _medir(siril, info)
+    for _ in range(4):
+        base = np.array(siril.get_image_pixeldata(), dtype=np.float32, copy=True)
+        siril.cmd("autoghs", "-linked", "0", "10", "-b=0")
+        c = _medir(siril, info)
+        if c["cielo"] < cielo:                  # ni con D=10 llega: se queda esta pasada y se sigue
+            pasos.append(10.0)
+            continue
+        lo, hi, D = 0.05, 10.0, 10.0
+        for _ in range(8):
+            D = (lo * hi) ** 0.5
+            _restaurar(siril, base)
+            siril.cmd("autoghs", "-linked", "0", f"{D:.3f}", "-b=0")
+            c = _medir(siril, info)
+            if c["cielo"] < cielo:
+                lo = D
+            else:
+                hi = D
+        _restaurar(siril, base)
+        siril.cmd("autoghs", "-linked", "0", f"{hi:.3f}", "-b=0")
+        c = _medir(siril, info)
+        pasos.append(hi)
+        break
     bp, c = _punto_negro(siril, info, c, cielo, lim.get("por_canal"))
-    return c, {"comando": f"autoghs -linked -2.8 {D:.3f} -b=0", "D": _r(D, 3), "punto_negro": _r(bp, 5)}
+    cmd = "; ".join(f"autoghs -linked 0 {D:.3f} -b=0" for D in pasos)
+    return c, {"comando": cmd, "pasadas": len(pasos), "D": [_r(D, 3) for D in pasos], "punto_negro": _r(bp, 5)}
 
 
 def _autostretch(siril, info, crudo, cielo, lim):
@@ -4017,12 +4038,14 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
     starless_estirada = not _lineal(a)
     r = {"metodo": metodo, "factor": k, "estrellas": str(ruta),
          "capa_estrellas": {"mediana": _r(float(np.median(Lb)), 5), "p99": _r(float(np.percentile(Lb.ravel()[::7], 99)), 4)}}
+    b_ref = None
     if sinteticas:
         # 27 nov 2026 (Rafael): synthstar de Siril sobre la capa de estrellas (se pone un momento en Siril y se repone la
         # starless): cambia cada estrella que Siril detecta por una sintética redonda con su flujo y su color.
         try:
-            _restaurar(siril, _a_siril(np.clip(b, 0, 1), crudo.dtype).reshape(crudo.shape))
-            e0 = H._estrellas(siril)
+            b_ref = b                 # prueba real 27-nov: calibrar el estirado sobre la synthstar dejaba D=15 (vs 144) y
+            _restaurar(siril, _a_siril(np.clip(b, 0, 1), crudo.dtype).reshape(crudo.shape))   # aporte 0,4 %: se calibra
+            e0 = H._estrellas(siril)                                      # sobre la capa original y se aplica igual
             siril.cmd("synthstar")
             b = _de_siril(_crudo(siril)).reshape(b.shape)
             e1 = H._estrellas(siril)
@@ -4033,6 +4056,7 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
             _restaurar(siril, crudo)
         Lb = _lum(b)
     mascara = _px_estrella(Lb)
+    ref = (b_ref, _px_estrella(_lum(b_ref))) if b_ref is not None else None
     if not 0 <= float(atenuar) <= 0.8:
         raise ValueError("atenuar entre 0 y 0,8 (0 = todas las estrellas igual).")
     modo = str(estirar_estrellas).lower() if estirar_estrellas not in (None, False) else None
@@ -4056,9 +4080,9 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
     def componer(estirado, dur):
         bb, det = b, {}
         if estirado == "arcsinh":
-            bb, det = _estirar_estrellas_arcsinh(b, mascara)
+            bb, det = _estirar_estrellas_arcsinh(b, mascara, ref=ref)
         elif estirado == "racional":
-            bb, det = _estirar_estrellas_racional(b, mascara, dureza=dur)
+            bb, det = _estirar_estrellas_racional(b, mascara, dureza=dur, ref=ref)
         # Estrellas como las de PixInsight (15 nov 2026): gamma > 1 apaga halos y núcleos; color > 1 separa los canales de
         # la luminancia (las del RGB salían casi blancas). gamma 1,3 + color 2,5 se acercó al final de PI de IC 1396.
         if gamma != 1.0:
@@ -4147,9 +4171,11 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
     return r
 
 
-def _estirar_estrellas_arcsinh(b, mascara, objetivo=0.10):
-    """arcsinh hasta que el p90 de los píxeles de estrella sea 'objetivo' (el estirado que ya había)."""
-    vals = b[:, mascara].mean(axis=0)
+def _estirar_estrellas_arcsinh(b, mascara, objetivo=0.10, ref=None):
+    """arcsinh hasta que el p90 de los píxeles de estrella sea 'objetivo' (el estirado que ya había). ref = (capa, máscara)
+    sobre la que se calibra la intensidad (la capa original cuando 'b' es la de synthstar)."""
+    rb, rm = ref if ref is not None else (b, mascara)
+    vals = rb[:, rm].mean(axis=0)
     lo, hi = 0.0, np.log(1e5)
     for _ in range(30):
         s = float(np.exp((lo + hi) / 2))
@@ -4163,7 +4189,7 @@ def _estirar_estrellas_arcsinh(b, mascara, objetivo=0.10):
     return q, {"arcsinh": _r(s, 1), "p90_estrellas": _r(float(np.percentile(_lum(q)[mascara], 90)), 3)}
 
 
-def _estirar_estrellas_racional(b, mascara, objetivo=0.10, dureza=1.0, color=1.0):
+def _estirar_estrellas_racional(b, mascara, objetivo=0.10, dureza=1.0, color=1.0, ref=None):
     """Estirado de la capa de estrellas lineal con una curva racional acotada, f(x) = ((1 + D)·x / (1 + D·x))^dureza
     (0 → 0, 1 → 1), aplicada a la luminancia; cada canal se multiplica por el mismo factor f(L)/L, así que el color de cada
     estrella (las proporciones entre canales) no cambia y los núcleos no se blanquean. D se busca para que el p90 de los
@@ -4172,7 +4198,7 @@ def _estirar_estrellas_racional(b, mascara, objetivo=0.10, dureza=1.0, color=1.0
     (27 nov 2026)."""
     b = np.clip(np.asarray(b, dtype=np.float32), 0, 1)
     L = b.mean(axis=0)
-    vals = L[mascara]
+    vals = np.clip(ref[0], 0, 1).mean(axis=0)[ref[1]] if ref is not None else L[mascara]
     d = float(dureza)
 
     def f(x, D):
