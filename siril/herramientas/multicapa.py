@@ -185,6 +185,40 @@ def _fondo_por_canal(p):
     return [float(np.percentile(b[i], 0.2)) for i in range(c)]
 
 
+def _extraer_cfa(siril, info, fichero, carpeta, nombre, previa, crudo_previo, huella_previa):
+    """Master CFA sin debayer (1 canal con BAYERPAT): extract_HaOIII de Siril, que saca Hα de los píxeles rojos y OIII de los
+    verdes y azules sin interpolar (27 nov 2026, Rafael). Sale a la resolución de la capa Hα (la mitad), con -resample=ha.
+    Los masters debayerizados (los de WBPP o Siril con debayer) siguen por mínimos cuadrados."""
+    wd = Path(siril.get_siril_wd())
+    t0 = time.time() - 2
+    siril.cmd("extract_HaOIII", "-resample=ha")
+    nuevos = {}
+    for raya, patron in (("Ha", "Ha_*"), ("OIII", "OIII_*")):
+        fs = [f for f in wd.glob(patron) if f.suffix.lower() in (".fit", ".fits", ".fts") and f.stat().st_mtime >= t0]
+        if not fs:
+            raise RuntimeError(f"extract_HaOIII no ha escrito {patron} en {wd}: mira registro.")
+        nuevos[raya] = max(fs, key=lambda f: f.stat().st_mtime)
+    base = Path(fichero).stem if fichero else (nombre or Path(info.get("fichero") or "dualband").stem)
+    destino = H._ruta(carpeta, "carpeta") if carpeta else (Path(fichero).parent if fichero else H.DATOS / "capas")
+    destino.mkdir(parents=True, exist_ok=True)
+    out = {}
+    for raya, f in nuevos.items():
+        ruta = destino / f"{base}_{raya}{f.suffix}"
+        k = 2
+        while ruta.exists():
+            ruta = destino / f"{base}_{raya}_{k}{f.suffix}"
+            k += 1
+        shutil.move(str(f), str(ruta))
+        H.GUARDADOS.add(H._clave(ruta))
+        out[raya] = {"fichero": str(ruta)}
+        _anotar_origen(ruta, [fichero or info.get("fichero")])
+    if previa:
+        siril.cmd("load", H._arg_cmd(Path(previa)))
+    return {"metodo": "extract_HaOIII de Siril (master CFA, sin interpolar; a la resolución de Hα)", "capas": out,
+            "nota": "Las capas son la mitad de grandes que un master debayerizado: alinéalas (alinearMasters) antes de "
+                    "combinarlas con un RGB."}
+
+
 def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=None, quitar_patron=True):
     """Paso 7 lineal: separa las dos rayas de un master OSC dual band (HaO3 → Hα y OIII; S2Hb → SII y Hβ; S2O3 → SII y
     OIII), en lineal, como FITS mono. Con el filtro reconocido (nombre, FILTER o 'filtro'), por mínimos cuadrados con la
@@ -205,8 +239,11 @@ def desmezclarDualBand(siril, fichero=None, carpeta=None, nombre=None, filtro=No
             siril.cmd("load", H._arg_cmd(Path(previa)))
         raise RuntimeError("Este dual band viene de masters alineados sin revisarRecorte: haz antes revisarRecorte(ficheros de los alineados) y desmezcla el *_rec.fit. Si separas antes, las capas quedan con las franjas de borde y hay que recortarlas a mano igual que el RGB (IC 405, 19 nov 2026).")
     info = H._info(siril)
+    if info["canales"] == 1 and re.search(r"BAYERPAT\s*=", siril.get_image_fits_header() or ""):
+        return _extraer_cfa(siril, info, fichero, carpeta, nombre, previa, crudo_previo, huella_previa)
     if info["canales"] != 3:
-        raise RuntimeError("desmezclarDualBand necesita el master dual band en color (3 canales).")
+        raise RuntimeError("desmezclarDualBand necesita el master dual band en color (3 canales) o un master CFA sin "
+                           "debayer (1 canal con BAYERPAT).")
     crudo = P._crudo(siril)
     p = P._de_siril(crudo)                             # orden de filas de Siril: se guarda igual
     if not P._lineal(P._pantalla(crudo, info)):

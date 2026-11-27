@@ -1,6 +1,6 @@
 {
  "version": 1,
- "nota": "Herramientas que el MCP sirilastropilot ofrece al modelo. El puente (siril/puente/SirilAstroPilot.py) solo ejecuta las que están en LISTA de siril/herramientas/herramientas.py; este fichero describe sus parámetros. Mismo formato que guia/herramientas/manifiesto.json. Niveles: lectura (no cambia nada), vista (cambia la imagen cargada, con deshacer), disco (lee o escribe ficheros). resumen: versión corta para clientes con poco contexto (SIRILASTROPILOT_COMPACTO=1). El puente ignora los parámetros que una herramienta no conoce (con aviso en parametros_ignorados) y sugiere el correcto si parece una errata.",
+ "nota": "Herramientas que el MCP sirilastropilot ofrece al modelo. El puente (siril/puente/SirilAstroPilot.py) solo ejecuta las que están en LISTA de siril/herramientas/herramientas.py; este fichero describe sus parámetros. Mismo formato que guia/herramientas/manifiesto.json. Niveles: lectura (no cambia nada), vista (cambia la imagen cargada, con deshacer), disco (lee o escribe ficheros). resumen: versión corta para clientes con poco contexto (SIRILASTROPILOT_COMPACTO=1). El puente ignora los parámetros que una herramienta no conoce (con aviso en parametros_ignorados) y sugiere el correcto si parece una errata. oculta: true = no se ofrece al modelo del chat (depuración o casos raros); el puente la sigue ejecutando.",
  "funciones": [
   {
    "nombre": "ping",
@@ -336,7 +336,8 @@
    "params": {
     "type": "object",
     "properties": {}
-   }
+   },
+   "oculta": true
   },
   {
    "nombre": "medirRendimiento",
@@ -357,7 +358,8 @@
       "description": "Medir también la detección de estrellas (por defecto false)."
      }
     }
-   }
+   },
+   "oculta": true
   },
   {
    "nombre": "registro",
@@ -447,7 +449,8 @@
    "params": {
     "type": "object",
     "properties": {}
-   }
+   },
+   "oculta": true
   },
   {
    "nombre": "comandoSiril",
@@ -690,7 +693,8 @@
       "description": "Qué lista (por defecto oscsensor)."
      }
     }
-   }
+   },
+   "oculta": true
   },
   {
    "nombre": "calibrarColor",
@@ -698,7 +702,7 @@
    "nivel": "vista",
    "timeout_s": 600,
    "paso": "lineal/12-spcc.md",
-   "descripcion": "Paso 12 lineal: SPCC de Siril sobre la imagen cargada (exige lineal y con astrometría). NO pases sensor: la herramienta lo toma del perfil del usuario o de la cámara de la cabecera; pásalo sólo si el usuario lo dice. Devuelve el cielo por canal antes y después, la dominante que queda en el cielo y las líneas del registro de Siril. El sensor sale de la cabecera de la imagen (INSTRUME) antes que del perfil; DSLR Canon/Nikon de la base con su filtro de serie; si la DSLR no está, pide fotometrica: true (PCC). Si el catálogo de estrellas no responde (sin internet, servidor caído), cae solo a equilibrarColor y lo avisa: no repitas la llamada. PCC usa el Gaia local si está instalado.",
+   "descripcion": "Paso 12 lineal: SPCC de Siril sobre la imagen cargada (exige lineal y con astrometría). NO pases sensor: la herramienta lo toma del perfil del usuario o de la cámara de la cabecera; pásalo sólo si el usuario lo dice. Devuelve el cielo por canal antes y después, la dominante que queda en el cielo y las líneas del registro de Siril. El sensor sale de la cabecera de la imagen (INSTRUME) antes que del perfil; DSLR Canon/Nikon de la base con su filtro de serie; si la DSLR no está, pide fotometrica: true (PCC). Si el catálogo de estrellas no responde (sin internet, servidor caído), cae solo a equilibrarColor y lo avisa: no repitas la llamada. PCC usa el Gaia local si está instalado. banda_estrecha: true para un master dual band Hα+OIII procesado SOLO (sin RGB): SPCC en modo banda estrecha con las rayas y el ancho del filtro de la cabecera (ALP-T, L-eXtreme, L-Ultimate, HaO3…); o las rayas en nm. Con RGB alineado no hace falta (se desmezcla y se inyecta); un tri/quad band como única imagen va como RGB (banda ancha).",
    "resumen": "Paso 12: SPCC. No pases sensor (sale del perfil o de la cabecera) salvo que el usuario lo diga.",
    "params": {
     "type": "object",
@@ -745,8 +749,8 @@
       "description": "Catálogo para SPCC (localgaia, gaia) o PCC (además nomad, apass). Sin él: el local si está."
      },
      "banda_estrecha": {
-      "type": "object",
-      "description": "{ rwl, rbw, gwl, gbw, bwl, bbw } en nm para modo banda estrecha."
+      "type": "string",
+      "description": "\"true\" = rayas del filtro de la cabecera (dual band Hα+OIII procesado solo); o en nm como JSON: {\"rwl\":656.3,\"rbw\":5,\"gwl\":500.7,\"gbw\":5,\"bwl\":500.7,\"bbw\":5}."
      },
      "forzar_sensor": {
       "type": "boolean",
@@ -791,7 +795,7 @@
    "nivel": "vista",
    "timeout_s": 1200,
    "paso": "lineal/15-starx.md",
-   "descripcion": "Paso 15 lineal: StarNet desde Siril (instalado y configurado en Preferencias de Siril). Deja la starless cargada y la capa de estrellas como fichero starmask en la carpeta de trabajo de Siril. Con imagen lineal usa -stretch. Guardar la starless con guardarImagen. No separa una imagen que ya está sin estrellas (salvo forzar): recombina la capa que ya tienes.",
+   "descripcion": "Paso 15 lineal: StarNet desde Siril (instalado y configurado en Preferencias de Siril). Deja la starless cargada y la capa de estrellas como fichero starmask en la carpeta de trabajo de Siril. Con imagen lineal usa -stretch. Guardar la starless con guardarImagen. No separa una imagen que ya está sin estrellas (salvo forzar): recombina la capa que ya tienes. nucleos (por defecto true): en lineal, unclipstars antes de separar si hay estrellas saturadas (deja su propio deshacer).",
    "resumen": "Paso 15: StarNet; starless cargada y estrellas en fichero.",
    "params": {
     "type": "object",
@@ -816,6 +820,10 @@
      "forzar": {
       "type": "boolean",
       "description": "Separar aunque la imagen ya parezca sin estrellas (menos de 1 estrella fuerte por megapíxel). Solo si de verdad quedan estrellas enteras: separar dos veces saca restos y ruido, y esa capa no sirve para recombinar."
+     },
+     "nucleos": {
+      "type": "boolean",
+      "description": "unclipstars antes de separar (por defecto true, sólo en lineal)."
      }
     }
    }
@@ -826,8 +834,8 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/01-estirado.md",
-   "descripcion": "Paso 1 no lineal: compara GHS por pasadas cortas en tres intensidades (suave y medio paran al 60 y 80 % del ruido límite; fuerte, al fallo), arcsinh al fallo, autostretch enlazado y un hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo (0,10 nebulosas y cúmulos, 0,07 galaxias, 0,12 nebulosas oscuras), y recomienda el que más separa la señal débil del fondo sin fallos de ruido, recorte ni dominante. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También GHS con el punto de simetría en la señal débil (brazos). Mide senal_debil (zona débil del objeto sobre el cielo); en galaxias, y en empates de separación, recomienda el que más la levanta. Topes: p99 ≤ 0,80, p999 ≤ 0,92 y que estire (p99 al menos 0,10 sobre el cielo); GHS en modo que conserva el color. También un estirado por escalas (base comprimida, detalle conservado), con el mismo cielo y topes. Antes de estirar quita el pedestal del cielo en lineal (un mismo resto en los tres canales: sale el color real), y en GHS y arcsinh las altas luces van hacia neutro (sin núcleo salmón). Sólo falla por dominante si es un tinte (aditivo en las celdas oscuras y planas), no por el color propio de polvo o nebulosa. Marca como no_cumple el estirado que deja la mediana de la señal (píxeles a más de 5 ruidos del cielo) por encima de 0,25 (senal_max); si todos la superan, recomienda el que la deja más baja. También GHS al fallo por canal (la misma curva en R, G y B, como el estirado enlazado de PixInsight y SASpro) y objeto_rg (R/G del objeto sobre el cielo) en cada candidato: en nebulosas, si el recomendado deja objeto_rg un 30 % por encima del GHS por canal y éste separa casi igual (≥ 85 %) o levanta igual la señal débil, se recomienda el GHS por canal (IC 405: en luminancia la nebulosa salía roja).",
-   "resumen": "Paso 1 NL: compara GHS, arcsinh, por escalas, autostretch e hiperbólico con el mismo cielo; no cambia la imagen (aplicarCandidato).",
+   "descripcion": "Paso 1 no lineal: compara GHS por pasadas cortas en tres intensidades (suave y medio paran al 60 y 80 % del ruido límite; fuerte, al fallo), arcsinh al fallo, autostretch enlazado, autoghs de Siril (GHS automático) y un hiperbólico en luminancia que conserva el color de cada píxel (necesita el color ya calibrado) sobre la starless lineal, todos con el cielo en el mismo objetivo (0,10 nebulosas y cúmulos, 0,07 galaxias, 0,12 nebulosas oscuras), y recomienda el que más separa la señal débil del fondo sin fallos de ruido, recorte ni dominante. La imagen NO cambia: aplicarCandidato(id). Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También GHS con el punto de simetría en la señal débil (brazos). Mide senal_debil (zona débil del objeto sobre el cielo); en galaxias, y en empates de separación, recomienda el que más la levanta. Topes: p99 ≤ 0,80, p999 ≤ 0,92 y que estire (p99 al menos 0,10 sobre el cielo); GHS en modo que conserva el color. También un estirado por escalas (base comprimida, detalle conservado), con el mismo cielo y topes. Antes de estirar quita el pedestal del cielo en lineal (un mismo resto en los tres canales: sale el color real), y en GHS y arcsinh las altas luces van hacia neutro (sin núcleo salmón). Sólo falla por dominante si es un tinte (aditivo en las celdas oscuras y planas), no por el color propio de polvo o nebulosa. Marca como no_cumple el estirado que deja la mediana de la señal (píxeles a más de 5 ruidos del cielo) por encima de 0,25 (senal_max); si todos la superan, recomienda el que la deja más baja. También GHS al fallo por canal (la misma curva en R, G y B, como el estirado enlazado de PixInsight y SASpro) y objeto_rg (R/G del objeto sobre el cielo) en cada candidato: en nebulosas, si el recomendado deja objeto_rg un 30 % por encima del GHS por canal y éste separa casi igual (≥ 85 %) o levanta igual la señal débil, se recomienda el GHS por canal (IC 405: en luminancia la nebulosa salía roja).",
+   "resumen": "Paso 1 NL: compara GHS, arcsinh, por escalas, autostretch, autoghs e hiperbólico con el mismo cielo; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
     "properties": {
@@ -862,10 +870,11 @@
         "asinh",
         "escalas",
         "autostretch",
+        "autoghs",
         "hiperbolico"
        ]
       },
-      "description": "Métodos a comparar (por defecto todos: GHS suave, medio y al fallo, GHS por canal, arcsinh, por escalas, autostretch e hiperbólico)."
+      "description": "Métodos a comparar (por defecto todos: GHS suave, medio y al fallo, GHS por canal, arcsinh, por escalas, autostretch, autoghs e hiperbólico)."
      },
      "negro_lineal": {
       "type": "boolean",
@@ -953,7 +962,11 @@
    "paso": "lineal/07-extraccion-canales.md",
    "descripcion": "L7/L14: quita de cada canal de la imagen cargada el patrón fijo de periodo 2 px (filas, columnas y diagonal alternas: resto de la matriz Bayer de un master OSC), con deshacer. Para capas ya separadas o ya sin ruido: tras un denoise fuerte esa malla fina pasa del 1 % al 15 % de la escala fina. desmezclarDualBand ya lo hace por defecto.",
    "resumen": "L7: quita la malla de 2 px de la matriz Bayer.",
-   "params": {"type": "object", "properties": {}}
+   "params": {
+    "type": "object",
+    "properties": {}
+   },
+   "oculta": true
   },
   {
    "nombre": "quitarVerde",
@@ -987,7 +1000,7 @@
    "nivel": "lectura",
    "timeout_s": 1800,
    "paso": "no-lineal/06-noisex.md",
-   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril, NoiseX (si está instalado; GraXpert sólo si se pide) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) con no hacer nada. Lineal: denoise 0,5/0,7/1,0, NoiseX 0,3, 0,5, 0,7, 0,75, 0,5 ×2 y 0,7 ×2 (mejor dos pasadas de 0,5 o 0,7 que una de 0,9) y Prism. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. Capa débil en lineal (parte brillante del objeto a menos de 15 ruidos del cielo, como OIII/SII/Hβ de un dual band): la medida de detalle cuenta el ruido de fotones y no decide; se recomienda la más fuerte que no deja el fondo muerto (como NXT 0,75–0,8). no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
+   "descripcion": "Pasos 14 lineal y 6 no lineal: compara el denoise de Siril, NoiseX (si está instalado; GraXpert sólo si se pide) y SyQon Prism Essential (syqon-cli, si SyQon Studio está instalado; SOLO en lineal) con no hacer nada; también el filtro que conserva bordes de Siril (epf guiado) y Cosmic Clarity (si está instalado, fuerzas 0,5 y 0,8). Lineal: denoise 0,5/0,7/1,0, NoiseX 0,3, 0,5, 0,7, 0,75, 0,5 ×2 y 0,7 ×2 (mejor dos pasadas de 0,5 o 0,7 que una de 0,9) y Prism. No lineal, mucho más suave: denoise 0,3/0,5 y NoiseX 0,3, 0,5 y 0,3 ×2. Mide el ruido del cielo y la pérdida de detalle (2–8 px en la parte brillante del objeto) y recomienda el que más ruido quita sin perder prácticamente detalle (≤ 2 %) ni recortar. Capa débil en lineal (parte brillante del objeto a menos de 15 ruidos del cielo, como OIII/SII/Hβ de un dual band): la medida de detalle cuenta el ruido de fotones y no decide; se recomienda la más fuerte que no deja el fondo muerto (como NXT 0,75–0,8). no_cumple «fondo muerto» si deja menos del 25 % del ruido en lineal o menos del 50 % en no lineal. La imagen NO cambia: aplicarCandidato(id).",
    "resumen": "Pasos 14 L / 6 NL: compara denoise 0,5/0,7/1,0/DA3D con nada (ruido y detalle); no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -1038,6 +1051,13 @@
        "nebulosa_oscura"
       ],
       "description": "Tipo de objeto (se admite; no cambia el resultado)."
+     },
+     "cosmic": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Fuerzas de Cosmic Clarity (por defecto 0,5 y 0,8 si está instalado; [] para no probarlo)."
      }
     }
    }
@@ -1048,7 +1068,7 @@
    "nivel": "lectura",
    "timeout_s": 2400,
    "paso": "lineal/15-starx.md",
-   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y, solo si la imagen ya está ESTIRADA, también con SyQon Axiom Mini (syqon-cli; en lineal sale rota y va en omitidos), y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Con StarX quita antes la malla de 2 px proporcional a la señal (anillos con malla en las brillantes de dual band). No separa una imagen que ya está sin estrellas (salvo forzar).",
+   "descripcion": "Paso 15 lineal: quita las estrellas con StarNet2 (ejecutable directo) y con StarX (CLI de RC Astro, rc-astro sxt), los que estén instalados, y, solo si la imagen ya está ESTIRADA, también con SyQon Axiom Mini (syqon-cli; en lineal sale rota y va en omitidos), y compara las starless: restos_estrellas_pct (picos de estrella que quedan), agujeros_pct (núcleos por debajo del fondo de alrededor) y objeto_quitado_pct (señal del objeto fuera de estrellas y halos que se lleva). Recomienda el de menos restos y agujeros que no se lleve más del 2 % del objeto. Guarda la capa de estrellas de cada uno en la carpeta de trabajo de Siril. La imagen NO cambia: aplicarCandidato(id) pone la starless y devuelve la ruta de su capa de estrellas. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. Con StarX quita antes la malla de 2 px proporcional a la señal (anillos con malla en las brillantes de dual band). No separa una imagen que ya está sin estrellas (salvo forzar). nucleos (por defecto true): en lineal, si Siril ve estrellas saturadas, primero unclipstars (rehace el perfil de los núcleos quemados y baja la imagen lo justo); todos los motores separan esa versión.",
    "resumen": "Paso 15: StarNet2 frente a StarX (restos, agujeros, objeto quitado); no cambia la imagen (aplicarCandidato devuelve la capa de estrellas).",
    "params": {
     "type": "object",
@@ -1086,6 +1106,10 @@
      "patron": {
       "type": "boolean",
       "description": "Solo con starx: quita antes la malla de 2 px que crece con las estrellas brillantes (capas de dual band) y saca las estrellas como original − starless. Por defecto true: sin esto StarX deja anillos con malla en las brillantes."
+     },
+     "nucleos": {
+      "type": "boolean",
+      "description": "Rehacer los núcleos saturados con unclipstars antes de separar (por defecto true, sólo en lineal)."
      }
     }
    }
@@ -1093,11 +1117,11 @@
   {
    "nombre": "nitidezLineal",
    "fichero": "pasos.py",
-   "nivel": "vista",
-   "timeout_s": 1800,
+   "nivel": "lectura",
+   "timeout_s": 3600,
    "paso": "lineal/13-bxt-completo.md",
-   "descripcion": "Pasos 11 y 13 lineales: deconvolución con IA de RC Astro (rc-astro bxt) sobre la imagen lineal, con deshacer. solo_corregir: true = solo corrige la forma de las estrellas (Paso 11); si no, nitidez de estrellas, de la nebulosa y halos (Paso 13). Devuelve las estrellas (FWHM, redondez) antes y después.",
-   "resumen": "Pasos 11/13: deconvolución IA (solo corregir o completa), con deshacer; FWHM antes y después.",
+   "descripcion": "Pasos 11 y 13 lineales: COMPARA deconvoluciones con los motores instalados y recomienda; la imagen NO cambia (aplicarCandidato). Paso 13 (completa): BlurX (rc-astro bxt), Richardson-Lucy y Wiener de Siril con la PSF medida en las estrellas (makepsf stars), SyQon Parallax y Cosmic Clarity. Paso 11 (solo_corregir: true, sólo forma de las estrellas): BlurX --correct-only y SyQon Parallax sin deblur. Mide FWHM, redondez, saturadas, ruido del cielo y anillos oscuros alrededor de las estrellas (anillo que queda más oscuro que en la de partida); recomienda la menor FWHM sin artefactos (ruido +25 %, más de un 2 % del anillo oscurecido o saturadas nuevas = no_cumple). Los que no están instalados van en omitidos.",
+   "resumen": "Pasos 11/13: compara BlurX, RL/Wiener de Siril, SyQon y Cosmic Clarity (FWHM, ruido, anillos); no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
     "properties": {
@@ -1116,6 +1140,24 @@
      "halos": {
       "type": "number",
       "description": "Ajuste de halos −0,5–0,5 (por defecto 0)."
+     },
+     "motores": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "bxt",
+        "rl",
+        "wiener",
+        "parallax",
+        "cosmic"
+       ]
+      },
+      "description": "Motores a comparar (por defecto todos los instalados; con solo_corregir, bxt y parallax)."
+     },
+     "iteraciones": {
+      "type": "integer",
+      "description": "Iteraciones de Richardson-Lucy (por defecto 10)."
      }
     }
    }
@@ -1163,7 +1205,7 @@
    "nivel": "lectura",
    "timeout_s": 900,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5, 0,75, 1 y 1,5 (factor de fondo 1; las paletas de banda estrecha suelen aguantar 1–1,5), la saturación propia (conserva la luminancia, cielo protegido) y, en nebulosas, la propia a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat.",
+   "descripcion": "Paso 5 no lineal: compara satu de Siril con cantidades 0,25, 0,5, 0,75, 1 y 1,5 (factor de fondo 1; las paletas de banda estrecha suelen aguantar 1–1,5), la saturación propia (conserva la luminancia, cielo protegido) y, en nebulosas, la propia a través de una máscara de luminancia (0 en el cielo, 1 en lo brillante, como en PixInsight; es la recomendada si alguna cumple: sin máscara, el ruido de color del cielo para la saturación antes y la nebulosa queda plana) sobre la imagen estirada en color. Mide la saturación media en el objeto y en el cielo, la dominante del cielo (debe quedar < 5 %: el cielo no gana color) y los recortes, y recomienda la mayor que cumple. La imagen NO cambia: aplicarCandidato(id). Mirar el recomendado con previa antes de aplicarlo. Cada candidato trae miniaturas (previa del resultado y previa_quita de lo que quita) para la galería del chat. También la matriz de color de Siril (ccm) que satura conservando la luminancia, ×1,25 y ×1,5 (matriz).",
    "resumen": "Paso 5 NL: compara satu 0,25/0,5/0,75; saturación objeto/cielo, dominante, recortes; no cambia la imagen (aplicarCandidato).",
    "params": {
     "type": "object",
@@ -1206,6 +1248,13 @@
        "nebulosa_oscura"
       ],
       "description": "Tipo de objeto: en galaxias no se prueba la saturación con máscara (por defecto nebulosa)."
+     },
+     "matriz": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Factores de la matriz de saturación ccm (por defecto 1,25 y 1,5)."
      }
     }
    }
@@ -1295,7 +1344,7 @@
    "nivel": "vista",
    "timeout_s": 300,
    "paso": "no-lineal/09-recombinacion.md",
-   "descripcion": "Paso 9 no lineal: une la starless cargada con la capa de estrellas de un fichero (la de separarEstrellas) con screen 1−(1−a)(1−k·b) (por defecto) o suma, y pone el resultado en la imagen con deshacer. Si la capa de estrellas es lineal y la starless está estirada no hace nada y avisa; con estirar_estrellas: true estira la capa con arcsinh hasta que el p90 de los píxeles de estrella sea ≈ 0,10. Controles: aporte_estrellas_pct (≥ 0,5 %), que el fondo no baje y recortes nuevos.",
+   "descripcion": "Paso 9 no lineal: une la starless cargada con la capa de estrellas de un fichero (la de separarEstrellas) con screen 1−(1−a)(1−k·b) (por defecto) o suma, y pone el resultado en la imagen con deshacer. Si la capa de estrellas es lineal y la starless está estirada no hace nada y avisa; con estirar_estrellas: true estira la capa con arcsinh hasta que el p90 de los píxeles de estrella sea ≈ 0,10. Controles: aporte_estrellas_pct (≥ 0,5 %), que el fondo no baje y recortes nuevos. estirar_estrellas también acepta \"racional\" (curva racional acotada en la luminancia que conserva el color de cada estrella; dureza > 1 = más compactas) y \"comparar\" (arcsinh, racional y racional dureza 1,4 como candidatos, sin aplicar: aplicarCandidato; mide aporte, área de estrellas y color). sinteticas: true pasa antes synthstar de Siril por la capa (estrellas redondas sintéticas en vez de las deformadas por coma o seguimiento; da redondez antes y después).",
    "resumen": "Paso 9 NL: starless cargada + fichero de estrellas (screen o suma, factor), con deshacer; avisa si las estrellas son lineales.",
    "params": {
     "type": "object",
@@ -1317,8 +1366,14 @@
       "description": "Fuerza k de las estrellas (por defecto 1; 0,5–0,6 para estrellas discretas)."
      },
      "estirar_estrellas": {
-      "type": "boolean",
-      "description": "Estirar la capa de estrellas si es lineal (arcsinh hasta p90 de estrella ≈ 0,10)."
+      "type": "string",
+      "enum": [
+       "true",
+       "arcsinh",
+       "racional",
+       "comparar"
+      ],
+      "description": "Capa lineal sobre starless estirada: \"true\"/\"arcsinh\", \"racional\" o \"comparar\"."
      },
      "gamma": {
       "type": "number",
@@ -1331,6 +1386,14 @@
      "atenuar": {
       "type": "number",
       "description": "0–0,8 (por defecto 0): baja las estrellas que caen sobre nebulosa brillante (máscara de luminosidad de la starless), para que allí mande la nebulosa; 0,3–0,5 suele bastar."
+     },
+     "dureza": {
+      "type": "number",
+      "description": "Con \"racional\": 1 = normal; 1,2–1,6 = estrellas más compactas."
+     },
+     "sinteticas": {
+      "type": "boolean",
+      "description": "synthstar de Siril sobre la capa de estrellas antes de unir (por defecto false)."
      }
     },
     "required": [
@@ -1411,19 +1474,36 @@
    "params": {
     "type": "object",
     "properties": {
-     "ficheros": {"type": "array", "items": {"type": "string"}, "description": "Los masters alineados (todos)."},
-     "carpeta": {"type": "string", "description": "Carpeta de salida (por defecto la de los alineados)."},
-     "aplicar": {"type": "boolean", "description": "Guardar los recortados (por defecto sí)."},
-     "margen": {"type": "integer", "description": "Margen extra en px por lado (por defecto 8)."}
+     "ficheros": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Los masters alineados (todos)."
+     },
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta de salida (por defecto la de los alineados)."
+     },
+     "aplicar": {
+      "type": "boolean",
+      "description": "Guardar los recortados (por defecto sí)."
+     },
+     "margen": {
+      "type": "integer",
+      "description": "Margen extra en px por lado (por defecto 8)."
+     }
     },
-    "required": ["ficheros"]
+    "required": [
+     "ficheros"
+    ]
    }
   },
   {
    "nombre": "alinearMasters",
    "fichero": "multicapa.py",
    "nivel": "disco",
-   "timeout_s": 900,
+   "timeout_s": 1800,
    "paso": "lineal/05-staralignment-crop.md",
    "descripcion": "Paso 5 lineal: alinea varios masters del mismo objeto (otra noche u otro filtro, p. ej. un RGB y un dual band) contra el primero, con los comandos de secuencia de Siril, y los recorta TODOS al mismo rectángulo con datos en todos (sin las cuñas de cada apilado): después no hace falta recortarBordes. Deja copias <nombre>_alin.fit en 'carpeta' (los originales no se tocan) y carga la primera. Devuelve el desplazamiento y el giro de cada uno. Devuelve ruta_paso10: minutos de banda ancha y estrecha (de la cabecera: tiempo total y FILTER) y la ruta del Paso 10; con la estrecha >= 4 veces la ancha, \"paleta\": en nebulosas la nebulosa sale de las capas con paletasCandidatos (ya no se niega) y combinarCandidatos se niega salvo motivo.",
    "resumen": "Paso 5: alinea varios masters contra el primero y los recorta a la zona común.",
@@ -1453,7 +1533,7 @@
    "nivel": "disco",
    "timeout_s": 300,
    "paso": "lineal/07-extraccion-canales.md",
-   "descripcion": "Paso 7 lineal: separa un master OSC con filtro dual band en dos capas mono lineales (HaO3 → Ha y OIII; S2Hb → SII y Hb; S2O3 → SII y OIII). Con el filtro reconocido (nombre, FILTER o 'filtro'), por mínimos cuadrados con la respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract); si no, Hα = rojo y OIII = media de verde y azul. Guarda <nombre>_<raya>.fit y da su señal en ruidos. Va antes del gradiente y del color. Usa TODOS los masters: las capas de la misma raya se juntan con unirCapas. Con fichero, al terminar vuelve a dejar cargada la imagen que había (imagen_cargada dice cuál): para trabajar una capa, ábrela con abrirImagen.",
+   "descripcion": "Paso 7 lineal: separa un master OSC con filtro dual band en dos capas mono lineales (HaO3 → Ha y OIII; S2Hb → SII y Hb; S2O3 → SII y OIII). Con el filtro reconocido (nombre, FILTER o 'filtro'), por mínimos cuadrados con la respuesta del IMX571 tras restar el fondo de cada canal (como DBXtract); si no, Hα = rojo y OIII = media de verde y azul. Guarda <nombre>_<raya>.fit y da su señal en ruidos. Va antes del gradiente y del color. Usa TODOS los masters: las capas de la misma raya se juntan con unirCapas. Con fichero, al terminar vuelve a dejar cargada la imagen que había (imagen_cargada dice cuál): para trabajar una capa, ábrela con abrirImagen. Un master CFA sin debayer (1 canal con BAYERPAT) se separa con extract_HaOIII de Siril (sin interpolar, a la resolución de Hα).",
    "resumen": "Paso 7: separa cada dual band en sus dos rayas (FITS mono, lineales).",
    "params": {
     "type": "object",
@@ -1561,7 +1641,12 @@
      },
      "tipo": {
       "type": "string",
-      "enum": ["nebulosa", "cumulo", "galaxia", "nebulosa_oscura"],
+      "enum": [
+       "nebulosa",
+       "cumulo",
+       "galaxia",
+       "nebulosa_oscura"
+      ],
       "description": "Tipo de objeto: en galaxias no se aplica la ruta de paleta."
      },
      "motivo": {

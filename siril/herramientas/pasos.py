@@ -1129,6 +1129,19 @@ def aplicarCandidato(siril, id):
     if datos.get("estrellas"):
         r["estrellas"] = datos["estrellas"]
         r["nota"] += " La capa de estrellas de este candidato es 'estrellas' (para recombinarEstrellas)."
+    if cid.startswith("gradiente_") and info.get("canales", 3) >= 3:
+        # Regla de la guía (13 nov 2026): tras el gradiente, medir siempre las manchas de color que quedan. Ninguna de
+        # las 13 sesiones de Qwen (19–25 nov) llamó a diagnosticoManchas: gradienteCandidatos sólo diagnostica su
+        # recomendado, así que si el modelo aplica otro, se diagnostica aquí.
+        try:
+            d = _halo.diagnosticar(_pantalla(_crudo(siril), info))
+            r["diagnostico_manchas"] = d
+            if any(z.get("tipo") in ("hueco", "exceso en un canal") for z in d.get("zonas", [])):
+                r["nota"] += (" Quedan manchas de color que son artefactos (diagnostico_manchas): deshacer y aplicar el "
+                              "candidato «fuera del halo + crominancia», o una segunda pasada con GraXpert IA "
+                              "(gradienteCandidatos con polinomio: [], rbf: []).")
+        except Exception as e:
+            r["diagnostico_manchas_error"] = str(e)[:160]
     return r
 
 
@@ -1391,6 +1404,27 @@ def _misma_obra(a, b):
     return bool(a and b) and (a == b or a.startswith(b + os.sep) or b.startswith(a + os.sep))
 
 
+# 27 nov 2026 (Rafael): SPCC en modo banda estrecha para un dual band procesado SOLO (sin RGB con el que combinarlo). Con
+# RGB, el dual band se desmezcla y su color lo pone la paleta o la inyección; un tri/quad band como única imagen se procesa
+# como RGB con SPCC de banda ancha (regla de la guía, 13 nov 2026). Anchos de banda de los filtros más corrientes (nm).
+_DUAL_BAND = [
+    (r"l-?ultimate|ultimate", 3.0), (r"alp-?t.*3|3\s*nm", 3.0), (r"alp-?t|5\s*nm", 5.0), (r"l-?extreme|lextreme", 7.0),
+    (r"nbz|ha-?o3|hao3|dual|duo", 7.0),
+]
+
+
+def _dual_band_spcc(filtro):
+    """{rwl, rbw, gwl, gbw, bwl, bbw} para un filtro dual band Hα+OIII de OSC por su nombre; None si no lo es (o es
+    tri/quad band, L-eNhance, o lleva SII)."""
+    f = str(filtro or "").lower()
+    if not f or re.search(r"tri|quad|enhance|s2|sii|hb|hbeta", f):
+        return None
+    for patron, ancho in _DUAL_BAND:
+        if re.search(patron, f):
+            return {"rwl": 656.3, "rbw": ancho, "gwl": 500.7, "gbw": ancho, "bwl": 500.7, "bbw": ancho}
+    return None
+
+
 def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=None, lpf=None, filtros_rgb=None, blanco=None,
                   limitmag=None, catalogo=None, banda_estrecha=None, ignorar_perfil=False, fotometrica=False):
     """Paso 12 lineal: SPCC sobre la imagen cargada (lineal y con astrometría), con el cielo por canal antes y después.
@@ -1461,7 +1495,18 @@ def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=No
         args.append(f"-limitmag={str(limitmag).strip()}")
     if catalogo:
         args.append(f"-catalog={'localgaia' if str(catalogo) == 'localgaia' else 'gaia'}")
-    if banda_estrecha:
+    filtro_cab = str(getattr(k, "filter", "") or "") if k else ""
+    nb_auto = _dual_band_spcc(filtro_cab)
+    if isinstance(banda_estrecha, str) and banda_estrecha.strip().startswith("{"):
+        banda_estrecha = json.loads(banda_estrecha)
+    if isinstance(banda_estrecha, str) and banda_estrecha.strip().lower() in ("false", "no", ""):
+        banda_estrecha = None
+    if banda_estrecha is True or str(banda_estrecha).lower() in ("auto", "true", "si", "sí"):
+        if not nb_auto:
+            raise ValueError(f"banda_estrecha: no sé las rayas del filtro «{filtro_cab or 'sin FILTER en la cabecera'}». "
+                             "Pásalas en nm: {rwl, rbw, gwl, gbw, bwl, bbw} (Hα 656,3; OIII 500,7; SII 672,4; Hβ 486,1).")
+        banda_estrecha = nb_auto
+    if isinstance(banda_estrecha, dict) and banda_estrecha:
         args.append("-narrowband")
         for clave in ("rwl", "rbw", "gwl", "gbw", "bwl", "bbw"):
             if clave in banda_estrecha:
@@ -1494,6 +1539,11 @@ def calibrarColor(siril, sensor=None, mono=False, forzar_sensor=False, filtro=No
     if dom >= 5:
         r["aviso"] = (f"El cielo queda con una dominante del {round(dom, 1)} %: suele venir del gradiente; revisa el Paso 9 "
                       "o neutraliza el fondo antes de estirar.")
+    if nb_auto and "-narrowband" not in args:
+        r["nota_banda_estrecha"] = (f"El filtro de la cabecera («{filtro_cab}») es un dual band Hα+OIII. Si esta imagen se "
+                                    "procesa SOLA (sin un RGB con el que combinarla), repite con banda_estrecha: true (SPCC "
+                                    "en modo banda estrecha con las rayas del filtro). Con un RGB alineado no hace falta: "
+                                    "se desmezcla y se inyecta.")
     if origen_sensor != "pedido":
         r["nota_sensor"] = f"Sensor {sensor} tomado de: {origen_sensor} (no lo indicaste)."
     if lpf and re.search(MARCAS_DSLR, str(sensor or "")):
@@ -1551,7 +1601,25 @@ def _separar_starnet2(siril, info, crudo, lineal, upscale, timeout=1800):
     return sl, st, texto
 
 
-def separarEstrellas(siril, estirar=None, upscale=False, motor="auto", forzar=False):
+def _reparar_nucleos(siril, aplicar=False):
+    """unclipstars de Siril (27 nov 2026, Rafael): rehace el perfil de las estrellas con el núcleo saturado y baja toda la
+    imagen lo justo para que nada pase de 1. Sólo si Siril ve estrellas saturadas. Devuelve (píxeles nuevos, detalle o None);
+    sin aplicar, la imagen cargada vuelve a como estaba."""
+    crudo = _crudo(siril)
+    e0 = H._estrellas(siril)
+    sat0 = int(e0.get("saturadas") or 0)
+    if sat0 == 0:
+        return crudo, None
+    siril.cmd("unclipstars")
+    nuevo = _crudo(siril)
+    e1 = H._estrellas(siril)
+    if not aplicar:
+        _restaurar(siril, crudo)
+    return nuevo, {"comando": "unclipstars", "saturadas_antes": sat0, "saturadas_despues": e1.get("saturadas"),
+                   "nota": "Núcleos saturados rehechos antes de separar (la imagen se ha bajado un poco para que quepan)."}
+
+
+def separarEstrellas(siril, estirar=None, upscale=False, motor="auto", forzar=False, nucleos=True):
     """Paso 15 lineal: StarNet. Deja la starless cargada y la capa de estrellas en un fichero.
     motor: siril (comando starnet), starnet2 (ejecutable StarNet2 2.5+ directo) o auto (Siril y, si falla, starnet2).
     No separa una imagen que ya está sin estrellas (salvo forzar)."""
@@ -1559,6 +1627,14 @@ def separarEstrellas(siril, estirar=None, upscale=False, motor="auto", forzar=Fa
     p = H._pixeles(siril, info)
     _no_separar_dos_veces(p, forzar)
     lineal = _lineal(p)
+    reparados = None
+    if nucleos and lineal:                    # deja un estado de deshacer propio (comando de Siril)
+        try:
+            _, reparados = _reparar_nucleos(siril, aplicar=True)
+        except Exception as e:
+            reparados = {"error": f"unclipstars: {str(e)[:150]}"}
+        if reparados and not reparados.get("error"):
+            p = H._pixeles(siril, info)
     forzado = False
     if estirar is None:
         estirar = lineal
@@ -1570,7 +1646,10 @@ def separarEstrellas(siril, estirar=None, upscale=False, motor="auto", forzar=Fa
         raise ValueError("motor: auto, siril o starnet2.")
     wd = siril.get_siril_wd()
     if motor == "starnet2":
-        return _separar_directo(siril, info, p, lineal, upscale, wd)
+        r = _separar_directo(siril, info, p, lineal, upscale, wd)
+        if reparados:
+            r["nucleos"] = reparados
+        return r
     antes = {f: os.path.getmtime(f) for f in glob.glob(os.path.join(wd, "starmask*"))}
     args = (["-stretch"] if estirar else []) + (["-upscale"] if upscale else [])
     t0 = time.perf_counter()
@@ -1593,6 +1672,8 @@ def separarEstrellas(siril, estirar=None, upscale=False, motor="auto", forzar=Fa
          "starless": "cargada en Siril (sin guardar)", "estrellas": max(nuevos, key=os.path.getmtime) if nuevos else None,
          "senal_quitada_media": _r(quitado, 6), "imagen": info2,
          "nota": "Guarda la starless con guardarImagen. La capa de estrellas se abre luego con abrirImagen."}
+    if reparados:
+        r["nucleos"] = reparados
     if forzado:
         r["nota_estirar"] = ("La imagen es lineal: se ha usado -stretch aunque pediste estirar: false (sin él StarNet deja la "
                              "starless casi negra). La starless sigue lineal.")
@@ -1736,7 +1817,7 @@ def _medir_starless(base, z, sl, est):
             "capa_estrellas_media": _r(float(_lum(est).mean()), 6) if est is not None else None}
 
 
-def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=False, patron=True):
+def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=False, patron=True, nucleos=True):
     """Paso 15 lineal: quita las estrellas con StarNet y con StarX (los que estén instalados) y, sobre imagen ESTIRADA,
     también con SyQon Axiom Mini; mide y recomienda. La imagen no cambia: aplicarCandidato(id) pone la starless elegida y
     devuelve su capa de estrellas. No separa una imagen que ya está sin estrellas (salvo forzar). patron (por defecto
@@ -1746,13 +1827,26 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
     p = _pantalla(crudo, info)
     _no_separar_dos_veces(p, forzar)
     lineal = _lineal(p)
-    z = _zonas(p)
     huella = _huella(crudo)
+    crudo_orig = crudo
+    reparados = None
+    if nucleos and lineal:
+        # Todos los motores separan la imagen con los núcleos rehechos (unclipstars); la imagen cargada no cambia hasta
+        # aplicarCandidato, que pone la starless de esa versión y da su capa de estrellas.
+        try:
+            crudo, reparados = _reparar_nucleos(siril)
+            if reparados:
+                p = _pantalla(crudo, info)
+        except Exception as e:
+            crudo, reparados = crudo_orig, {"error": f"unclipstars: {str(e)[:150]}"}
+    z = _zonas(p)
     grupo = "estrellas"
     _limpiar_grupo(grupo)
     wd = _carpeta_capas(siril, info)
     base = Path(info["fichero"] or "imagen").stem
     r = {"lineal": lineal, "candidatos": [], "errores": []}
+    if reparados:
+        r["nucleos"] = reparados
     if motores is None:
         motores = ("starnet", "starx") + (("syqon",) if not lineal and _syqon.hay("axiom-mini") else ())
     if lineal and "syqon" in motores:
@@ -1834,45 +1928,163 @@ def estrellasCandidatos(siril, motores=None, objeto_max=2.0, tipo=None, forzar=F
                     "% de núcleos que quedan por debajo del fondo de alrededor (huecos oscuros). objeto_quitado_pct: señal del "
                     "objeto (fuera de estrellas y halos) que se lleva el motor. La imagen NO ha cambiado: aplicarCandidato(id) "
                     "pone la starless y devuelve la ruta de su capa de estrellas.")
-    _asegurar_restaurado(siril, crudo, huella, r)
+    _asegurar_restaurado(siril, crudo_orig, huella, r)
     _galeria(r, info, p, "estrellas")
     return r
 
 
-# --- L11/L13: deconvolución con IA (BlurX por el CLI de RC Astro) ----------------------------------------------
+# --- L11/L13: deconvolución comparada --------------------------------------------------------------------------
+# 27 nov 2026 (Rafael): nitidezLineal sólo usaba BlurX, así que no comparaba nada y sin licencia de RC Astro no había
+# deconvolución. Ahora compara, con los que estén instalados: BlurX (rc-astro bxt), Richardson-Lucy y Wiener de Siril con
+# la PSF medida en las estrellas (makepsf stars), SyQon Parallax y Cosmic Clarity. Como el resto de *Candidatos, la imagen
+# NO cambia: aplicarCandidato(id).
 
-def nitidezLineal(siril, solo_corregir=False, estrellas=0.5, nebulosa=0.5, halos=0.0):
-    """Pasos 11/13 lineales: deconvolución con el CLI de RC Astro (bxt). Pone el resultado con deshacer y mide estrellas."""
+def _medir_nitidez(siril, a, escala, z0, cielo0, info):
+    """Estrellas (Siril, sobre los píxeles 'a' puestos un momento), ruido del cielo y anillos oscuros junto a las estrellas."""
+    _restaurar(siril, a)
+    e = H._estrellas(siril, escala)
+    q = _pantalla(a, info)
+    L = _lum(q)
+    c = _cielo(q)
+    anillo = _dilatar(z0["est_px"], 4) & ~z0["est_px"]
+    # Anillo oscuro (Gibbs): píxeles del anillo de 4 px alrededor de las estrellas que quedan más de 4 ruidos del cielo por
+    # DEBAJO de como estaban en la de partida (la deconvolución no debería oscurecer el fondo junto a las estrellas).
+    sigma = max(cielo0["ruido_rel"] * cielo0["cielo"], 1e-7)
+    oscuros = (100.0 * float((L[anillo] < z0["L0"][anillo] - 4 * sigma).mean()) if anillo.any() and "L0" in z0 else None)
+    return {"n": e.get("n"), "fwhm_px": e.get("fwhm_px_mediana"), "redondez": e.get("redondez_mediana"),
+            "saturadas": e.get("saturadas"), "ruido_rel": c["ruido_rel"], "anillos_oscuros_pct": _r(oscuros, 3)}
+
+
+def _dilatar(m, r):
+    """Máscara agrandada r px (caja), sin scipy."""
+    return _caja(m.astype(np.float32), r) > 0
+
+
+def nitidezLineal(siril, solo_corregir=False, estrellas=0.5, nebulosa=0.5, halos=0.0, motores=None, iteraciones=10):
+    """Pasos 11/13 lineales: compara deconvoluciones y recomienda. solo_corregir: sólo corregir la forma de las estrellas
+    (BlurX --correct-only y SyQon Parallax sin deblur; Siril no tiene «sólo corregir»). La imagen NO cambia."""
     info = H._info(siril)
     crudo = _crudo(siril)
-    if not _lineal(_pantalla(crudo, info)):
+    p = _pantalla(crudo, info)
+    if not _lineal(p):
         raise RuntimeError("La imagen no parece lineal: la deconvolución va en lineal (Pasos 11 y 13).")
     k = siril.get_image_keywords()
     escala = (206.265 * k.pixel_size_x * max(1, k.binning_x or 1) / k.focal_length
               if k and k.focal_length and k.pixel_size_x else None)
-    antes = H._estrellas(siril, escala)
-    if solo_corregir:
-        args = ["--correct-only"]
+    huella = _huella(crudo)
+    grupo = "nitidez"
+    _limpiar_grupo(grupo)
+    z0 = dict(_zonas(p), L0=_lum(p))
+    c0 = _cielo(p)
+    antes = _medir_nitidez(siril, crudo, escala, z0, c0, info)
+    r = {"solo_corregir": bool(solo_corregir), "antes": antes, "candidatos": [], "errores": []}
+    import cosmic as _cosmic
+    if motores is None:
+        motores = ["bxt", "parallax"] if solo_corregir else ["bxt", "rl", "wiener", "parallax", "cosmic"]
+    if "bxt" in motores and not _rcastro_exe():
+        motores = [m for m in motores if m != "bxt"]
+        r.setdefault("omitidos", []).append("BlurX: no está el CLI de RC Astro (rc-astro).")
+    if "parallax" in motores and not _syqon.hay("parallax-nano"):
+        motores = [m for m in motores if m != "parallax"]
+        r.setdefault("omitidos", []).append("SyQon Parallax: SyQon Studio no está instalado.")
+    if "cosmic" in motores and not _cosmic.hay("nitidez"):
+        motores = [m for m in motores if m != "cosmic"]
+        r.setdefault("omitidos", []).append("Cosmic Clarity: " + str(_cosmic.falta("nitidez")) + ".")
+    psf_lista = False
+    n = 0
+    try:
+        for m in motores:
+            n += 1
+            t0 = time.perf_counter()
+            try:
+                extra = {}
+                if m == "bxt":
+                    args = (["--correct-only"] if solo_corregir else
+                            [f"--ss={float(estrellas):.2f}", f"--sn={float(nebulosa):.2f}", f"--ash={float(halos):.2f}"])
+                    out, texto = _rcastro(siril, crudo, "bxt", args, reescalar_alto=True)
+                    res, nombre = out["salida"], "BlurX" + (" (sólo corregir)" if solo_corregir else "")
+                    if out.get("_reescalado"):
+                        extra["reescalado"] = _r(out["_reescalado"], 3)
+                elif m in ("rl", "wiener"):
+                    if solo_corregir:
+                        raise ValueError("Siril no tiene «sólo corregir»: pasa solo_corregir: false")
+                    _restaurar(siril, crudo)
+                    if not psf_lista:
+                        siril.cmd("makepsf", "stars", "-sym")
+                        psf_lista = True
+                    if m == "rl":
+                        cmd = ["rl", f"-iters={int(iteraciones)}", "-tv"]
+                        nombre = f"Richardson-Lucy de Siril ({int(iteraciones)} iteraciones, PSF de las estrellas)"
+                    else:
+                        cmd = ["wiener"]
+                        nombre = "Wiener de Siril (PSF de las estrellas)"
+                    siril.cmd(*cmd)
+                    res = _crudo(siril)
+                    texto = "makepsf stars -sym; " + " ".join(cmd)
+                elif m == "parallax":
+                    try:
+                        sq = _syqon_en(crudo, _syqon.parallax, aplicacion=0.5, deblur=not solo_corregir)
+                    except _syqon.ErrorSyQon as e:
+                        _syqon_error(r, "SyQon Parallax", e)
+                        continue
+                    if sq.get("descartar"):
+                        r.setdefault("omitidos", []).append("SyQon Parallax: " + sq["descartar"])
+                        continue
+                    res, texto, nombre = sq["salida"], sq["comando"], "SyQon Parallax Nano"
+                elif m == "cosmic":
+                    if solo_corregir:
+                        raise ValueError("Cosmic Clarity no tiene «sólo corregir»")
+                    try:
+                        cc = _cosmic.nitidez(np.clip(_de_siril(crudo), 0, 1), estrellas=estrellas, nebulosa=nebulosa)
+                    except _cosmic.ErrorCosmic as e:
+                        r["errores"].append(str(e))
+                        continue
+                    res = _a_siril(cc["salida"], crudo.dtype).reshape(crudo.shape)
+                    texto, nombre = cc["comando"], "Cosmic Clarity (nitidez)"
+                else:
+                    raise ValueError("motor desconocido (bxt, rl, wiener, parallax, cosmic)")
+                met = _medir_nitidez(siril, res, escala, z0, c0, info)
+                if antes.get("fwhm_px") and met.get("fwhm_px"):
+                    met["fwhm_cambio_pct"] = _r(100.0 * (met["fwhm_px"] / antes["fwhm_px"] - 1), 1)
+                if antes.get("ruido_rel") and met.get("ruido_rel") is not None:
+                    met["ruido_cambio_pct"] = _r(100.0 * (met["ruido_rel"] / max(antes["ruido_rel"], 1e-9) - 1), 1)
+                cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": texto, "huella_base": huella,
+                                                         "metricas": met})
+                r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "metricas": met, **extra,
+                                        "segundos": _r(time.perf_counter() - t0, 1)})
+            except Exception as e:
+                r["errores"].append(f"{m}: {e}")
+    finally:
+        _restaurar(siril, crudo)
+    c = r["candidatos"]
+
+    def g(x, k, d):
+        v = x["metricas"].get(k)
+        return d if v is None else v
+    sat0 = antes.get("saturadas") or 0
+    osc0 = antes.get("anillos_oscuros_pct") or 0
+    # Sin artefactos: no más de un 25 % de ruido, ni más de un 2 % del anillo oscurecido, ni un 20 % más de saturadas.
+    ok = [x for x in c if g(x, "ruido_cambio_pct", 0) <= 25 and g(x, "anillos_oscuros_pct", 0) <= osc0 + 2.0
+          and g(x, "saturadas", 0) <= sat0 * 1.2 + 5]
+    for x in c:
+        if x not in ok:
+            x["no_cumple"] = "más ruido (+25 %), anillos oscuros o estrellas saturadas nuevas"
+    mejor = min(ok, key=lambda x: g(x, "fwhm_px", 99)) if ok else None
+    if mejor:
+        mm = mejor["metricas"]
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: FWHM {antes.get('fwhm_px')} → {mm.get('fwhm_px')} px "
+                       f"({mm.get('fwhm_cambio_pct')} %), ruido {mm.get('ruido_cambio_pct')} %, sin anillos oscuros nuevos.")
     else:
-        args = [f"--ss={float(estrellas):.2f}", f"--sn={float(nebulosa):.2f}", f"--ash={float(halos):.2f}"]
-    t0 = time.perf_counter()
-    out, texto = _rcastro(siril, crudo, "bxt", args, reescalar_alto=True)
-    _poner(siril, out["salida"], f"SirilAstroPilot: {texto}"[:70])
-    despues = H._estrellas(siril, escala)
-    r = {"comando": texto, "segundos": _r(time.perf_counter() - t0, 1), "estrellas_antes": antes, "estrellas_despues": despues,
-         "nota": "Hecho con deshacer. Mira un recorte al 100 % en estrellas (anillos oscuros, núcleos duros) antes de seguir."}
-    if out.get("_reescalado"):
-        r["reescalado"] = (f"La salida llegaba a {_r(out['_reescalado'], 3)} (núcleos más concentrados): se ha dividido toda la "
-                           "imagen por ese valor en vez de recortar, así que no hay núcleos recortados nuevos. Es lineal: el "
-                           "estirado lo compensa.")
-    if antes.get("fwhm_px_mediana") and despues.get("fwhm_px_mediana"):
-        cambio = 100.0 * (despues["fwhm_px_mediana"] / antes["fwhm_px_mediana"] - 1)
-        r["fwhm_cambio_pct"] = _r(cambio, 1)
-        if solo_corregir:
-            r["lectura"] = ("Sólo corrección (--correct-only, sin enfoque): corrige la PSF (coma, astigmatismo, desenfoque del "
-                            "borde, mezcla de la matriz Bayer). En ópticas de campo amplio y píxeles grandes (submuestreado) "
-                            f"baja la FWHM de verdad; un {_r(cambio, 0)} % no indica que se haya enfocado de más. Lo que sí sería "
-                            "sospechoso: anillos oscuros o núcleos duros en un recorte al 100 %.")
+        r["recomendado"] = None
+        r["motivo"] = ("Ninguno mejora sin artefactos: sigue sin deconvolución o mira los candidatos al 100 %."
+                       if c else "Ningún motor ha funcionado: ver errores y omitidos.")
+    r["leyenda"] = ("fwhm_px: tamaño mediano de las estrellas (menor = más nítido). ruido_cambio_pct: ruido del cielo frente a "
+                    "la de partida (la deconvolución lo sube). anillos_oscuros_pct: % del anillo de 4 px alrededor de las estrellas "
+                    "que queda más de 4 ruidos por debajo de la de partida (anillos de Gibbs). La imagen NO ha cambiado: aplicarCandidato(id). "
+                    "En Paso 11 (sólo corregir) mira sobre todo la redondez; en Paso 13, la FWHM y un recorte al 100 %.")
+    _asegurar_restaurado(siril, crudo, huella, r)
+    _galeria(r, info, p, "diferencia")
     return r
 
 
@@ -1987,6 +2199,28 @@ def _hiperbolico(siril, info, crudo, cielo, lim, proteccion=1.5, color=1.0):
     bp, c = _punto_negro(siril, info, c, cielo, lim.get("por_canal"))
     d["punto_negro_final"] = _r(bp, 5)
     return c, d
+
+
+def _autoghs(siril, info, crudo, cielo, lim):
+    """autoghs de Siril 1.4 (GHS con el punto de simetría a −2,8 sigmas de la mediana, enlazado): se busca la intensidad D
+    que deja el cielo en el objetivo (27 nov 2026, Rafael: un candidato más)."""
+    lo, hi, mejor = 0.1, 10.0, None
+    for _ in range(7):
+        D = (lo * hi) ** 0.5
+        _restaurar(siril, crudo)
+        siril.cmd("autoghs", "-linked", "-2.8", f"{D:.3f}", "-b=0")
+        c = _medir(siril, info)
+        mejor = (D, c)
+        if c["cielo"] < cielo:
+            lo = D
+        else:
+            hi = D
+    D, _ = mejor
+    _restaurar(siril, crudo)
+    siril.cmd("autoghs", "-linked", "-2.8", f"{D:.3f}", "-b=0")
+    c = _medir(siril, info)
+    bp, c = _punto_negro(siril, info, c, cielo, lim.get("por_canal"))
+    return c, {"comando": f"autoghs -linked -2.8 {D:.3f} -b=0", "D": _r(D, 3), "punto_negro": _r(bp, 5)}
 
 
 def _autostretch(siril, info, crudo, cielo, lim):
@@ -2215,7 +2449,7 @@ def _dominante_aditiva(p, celdas_px=None, S=64):
 
 def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
                       metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "ghs_canal", "asinh", "escalas", "autostretch",
-                               "hiperbolico"),
+                               "autoghs", "hiperbolico"),
                       negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True, senal_max=0.25,
                       forzar=False):
     """Paso 1 no lineal: compara GHS al fallo, arcsinh, estirado por escalas y autostretch con el cielo en el mismo
@@ -2274,6 +2508,7 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
              "asinh": ("arcsinh al fallo", ln(_asinh_al_fallo)),
              "escalas": ("por escalas (base comprimida, detalle conservado)", _escalas),
              "autostretch": ("autostretch enlazado", _autostretch),
+             "autoghs": ("autoghs de Siril (GHS automático, enlazado)", _autoghs),
              "hiperbolico": ("hiperbólico en luminancia, color conservado", _hiperbolico)}
     r = {"cielo_objetivo": cielo, "limites": {k: v for k, v in lim.items() if k != "por_canal"},
          "punto_negro": "por canal" if negro_por_canal else "común", "candidatos": [], "errores": []}
@@ -2551,7 +2786,7 @@ SNR_CAPA_DEBIL = 15.0        # parte brillante del objeto / ruido del cielo, en 
 
 
 def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=None, graxpert=None,
-                           perdida_limpia=2.0, tipo=None, syqon=None):   # tipo: se admite (el modelo lo pasa) y no cambia nada
+                           perdida_limpia=2.0, tipo=None, syqon=None, cosmic=None):   # tipo: se admite (el modelo lo pasa) y no cambia nada
     """Paso 14 lineal / 6 no lineal: compara denoise de Siril a varias fuerzas (y DA3D), NoiseX, GraXpert y SyQon Prism
     (solo lineal) con 'nada'. No cambia la imagen."""
     info = H._info(siril)
@@ -2683,6 +2918,32 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
                 medir(sq["salida"], "SyQon Prism Essential", sq["comando"], t1, n)
             except _syqon.ErrorSyQon as e:
                 _syqon_error(r, "SyQon Prism Essential", e)
+        # 27 nov 2026 (Rafael): filtro que conserva los bordes de Siril (epf, guiado por la propia imagen) y Cosmic Clarity
+        # (IA gratis de SetiAstro, si está instalado) como candidatos más.
+        for nombre_epf, cmd_epf in (("filtro que conserva bordes (epf guiado)", ["epf", "-guided", "-d=5", "-mod=0.8"]),):
+            n += 1
+            t1 = time.perf_counter()
+            try:
+                siril.cmd(*cmd_epf)
+                medir(_crudo(siril), nombre_epf, " ".join(cmd_epf), t1, n)
+            except Exception as e:
+                r["errores"].append(f"epf: {e}")
+            finally:
+                _restaurar(siril, crudo)
+        import cosmic as _cosmic
+        if cosmic is None:
+            cosmic = _cosmic.hay("ruido")
+            if not cosmic:
+                r.setdefault("omitidos", []).append("Cosmic Clarity: " + str(_cosmic.falta("ruido")) + ".")
+        for fz in ((0.5, 0.8) if cosmic is True else (cosmic or ())):
+            n += 1
+            t1 = time.perf_counter()
+            try:
+                cc = _cosmic.ruido(np.clip(_de_siril(crudo), 0, 1), fuerza=float(fz))
+                medir(_a_siril(cc["salida"], crudo.dtype).reshape(crudo.shape), f"Cosmic Clarity {float(fz):g}",
+                      cc["comando"], t1, n)
+            except Exception as e:
+                r["errores"].append(f"Cosmic Clarity {fz}: {e}")
         if da3d is None:
             # En IC 1396 (25 MP) el normal tardó 12 s y DA3D 268 s (~20×): por defecto solo si el normal es muy rápido.
             da3d = t_den < 5
@@ -2812,8 +3073,16 @@ def _saturar_propio(p, k, fondo=None, mascara=False):
     return np.clip(L + g * d, 0, 1).astype(np.float32)
 
 
+def _matriz_saturacion(k, pesos=(0.2126, 0.7152, 0.0722)):
+    """Nueve valores para el comando ccm de Siril: saturación ×k que conserva la luminancia (Rec. 709),
+    M = k·I + (1 − k)·[pesos en cada fila]. 27 nov 2026 (Rafael): un candidato más de saturación."""
+    k = float(k)
+    return [f"{(k if i == j else 0.0) + (1.0 - k) * pesos[j]:.5f}" for i in range(3) for j in range(3)]
+
+
 def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.0, dominante_max=5.0, tipo=None, ceros_max=0.5,
-                         propia=(0.25, 0.5, 1.0, 1.5), sat_max=0.80, con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0)):
+                         propia=(0.25, 0.5, 1.0, 1.5), sat_max=0.80, con_mascara=(0.5, 1.0, 1.5, 2.0, 2.5, 3.0),
+                         matriz=(1.25, 1.5)):
     """Paso 5 no lineal: compara satu de Siril, la saturación propia y (en nebulosas) la propia a través de una máscara
     de luminancia; mide saturación en objeto y cielo y recortes."""
     info = H._info(siril)
@@ -2861,15 +3130,16 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
     neb = str(tipo or "nebulosa").lower() != "galaxia"
     masc = [float(k) for k in (con_mascara or ())] if neb else []
     trabajos = ([("satu", float(q)) for q in cantidades] + [("propia", float(k)) for k in (propia or ())]
-                + [("mascara", k) for k in masc])
+                + [("mascara", k) for k in masc] + [("ccm", float(k)) for k in (matriz or ())])
     try:
         for tipo_s, q in trabajos:
             n += 1
             t0 = time.perf_counter()
-            args = (["satu", f"{q:g}", f"{float(fondo):g}"] if tipo_s == "satu" else
+            args = (["satu", f"{q:g}", f"{float(fondo):g}"] if tipo_s == "satu" else ["ccm", *_matriz_saturacion(q)]
+                    if tipo_s == "ccm" else
                     ["saturación propia", f"+{q:g}"] + (["con máscara de luminancia"] if tipo_s == "mascara" else []))
             try:
-                if tipo_s == "satu":
+                if tipo_s in ("satu", "ccm"):
                     siril.cmd(*args)
                     res = _crudo(siril)
                     pq = _pantalla(res, info)
@@ -2900,6 +3170,7 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
                     fal.append(f"el cielo gana un {_r(gan_cielo, 1)} % de saturación (> 10 %)")
                 texto = " ".join(args)
                 nombre = (f"satu {q:g}" if tipo_s == "satu" else f"saturación propia +{q:g} (cielo protegido)" if tipo_s == "propia"
+                          else f"matriz de color ×{q:g} (ccm, luminancia conservada)" if tipo_s == "ccm"
                           else f"saturación propia +{q:g} con máscara de luminancia")
                 cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": texto, "huella_base": huella, "metricas": m})
                 r["candidatos"].append({"id": cid, "metodo": nombre, "comando": texto, "tipo": tipo_s, "metricas": m, "no_cumple": fal,
@@ -3662,6 +3933,8 @@ def _leer_fichero(siril, ruta, info):
         d = np.moveaxis(d, -1, 0)
     d = d[np.newaxis] if d.ndim == 2 else d
     k = 65535.0 if d.dtype == np.uint16 else (255.0 if d.dtype == np.uint8 else 1.0)
+    if d.dtype == np.uint16 and Path(str(ruta)).suffix.lower() in (".jpg", ".jpeg", ".png") and int(d.max()) <= 255:
+        k = 255.0                           # Siril carga los JPG/PNG de 8 bits como USHORT con valores 0–255 (bitpix 8)
     d = d.astype(np.float32) / np.float32(k)
     td = getattr(f, "top_down", None)
     # FITS de SASpro: van de arriba abajo y lo dicen con ROWORDER = 'TOP-DOWN' (el autor, 16 nov 2026). Si la cabecera lo
@@ -3700,10 +3973,14 @@ def _mascara_nebulosa(a, contraste=2.0):
 
 
 def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_estrellas=None, gamma=1.0, color=1.0,
-                        atenuar=0.0):
+                        atenuar=0.0, dureza=1.0, sinteticas=False):
     """Paso 9 no lineal: une la starless cargada con la capa de estrellas de 'fichero' (screen o suma), con deshacer.
     atenuar (0–0,8): baja las estrellas que caen sobre nebulosa brillante (máscara de luminosidad de la starless); en
-    SetiAstroPilot 0,5 dejó las de la nebulosa a la mitad de las del cielo oscuro sin perder ninguna (IC 1396)."""
+    SetiAstroPilot 0,5 dejó las de la nebulosa a la mitad de las del cielo oscuro sin perder ninguna (IC 1396).
+    estirar_estrellas (capa lineal sobre starless estirada): true o "arcsinh", "racional" (curva racional acotada en la
+    luminancia que conserva el color de cada estrella; dureza > 1 estrellas más compactas) o "comparar" (las tres variantes
+    como candidatos, sin aplicar: aplicarCandidato). sinteticas: synthstar de Siril sobre la capa (estrellas redondas
+    sintéticas en lugar de las deformadas por coma o seguimiento)."""
     info = H._info(siril)
     ruta = H._ruta(fichero)
     if not ruta.is_file():
@@ -3740,68 +4017,181 @@ def recombinarEstrellas(siril, fichero, metodo="screen", factor=1.0, estirar_est
     starless_estirada = not _lineal(a)
     r = {"metodo": metodo, "factor": k, "estrellas": str(ruta),
          "capa_estrellas": {"mediana": _r(float(np.median(Lb)), 5), "p99": _r(float(np.percentile(Lb.ravel()[::7], 99)), 4)}}
+    if sinteticas:
+        # 27 nov 2026 (Rafael): synthstar de Siril sobre la capa de estrellas (se pone un momento en Siril y se repone la
+        # starless): cambia cada estrella que Siril detecta por una sintética redonda con su flujo y su color.
+        try:
+            _restaurar(siril, _a_siril(np.clip(b, 0, 1), crudo.dtype).reshape(crudo.shape))
+            e0 = H._estrellas(siril)
+            siril.cmd("synthstar")
+            b = _de_siril(_crudo(siril)).reshape(b.shape)
+            e1 = H._estrellas(siril)
+            r["sinteticas"] = {"comando": "synthstar", "redondez_antes": e0.get("redondez_mediana"),
+                               "redondez_despues": e1.get("redondez_mediana"), "fwhm_antes": e0.get("fwhm_px_mediana"),
+                               "fwhm_despues": e1.get("fwhm_px_mediana")}
+        finally:
+            _restaurar(siril, crudo)
+        Lb = _lum(b)
     mascara = _px_estrella(Lb)
-    if star_lineal and starless_estirada:
-        if estirar_estrellas is None or not estirar_estrellas:
-            r.update(aplicado=False, aviso=(
-                "La capa de estrellas parece lineal (mediana < 0,05 y p99 < 0,05) y la starless está estirada: juntarlas así "
-                "da estrellas apagadas o «círculos enormes». Repite con estirar_estrellas: true (arcsinh hasta que el p90 de "
-                "los píxeles de estrella sea ≈ 0,10) o estira la capa antes."))
-            return r
-        vals = b[:, mascara].mean(axis=0)
-        lo, hi = 0.0, np.log(1e5)
-        for _ in range(30):
-            s = float(np.exp((lo + hi) / 2))
-            p90 = float(np.percentile(np.arcsinh(s * vals) / np.arcsinh(s), 90))
-            if p90 < 0.10:
-                lo = np.log(s)
-            else:
-                hi = np.log(s)
-        s = float(np.exp((lo + hi) / 2))
-        b = (np.arcsinh(s * np.clip(b, 0, 1)) / np.arcsinh(s)).astype(np.float32)
-        r["estirado_estrellas"] = {"arcsinh": _r(s, 1), "p90_estrellas": _r(float(np.percentile(_lum(b)[mascara], 90)), 3)}
-    elif metodo == "suma" and starless_estirada:
-        r["aviso_suma"] = "La guía reserva la suma para capas lineales; con la starless estirada, mejor screen."
-    # Estrellas como las de PixInsight (15 nov 2026): gamma > 1 apaga halos y núcleos; color > 1 separa los canales de la
-    # luminancia (las del RGB salían casi blancas). gamma 1,3 + color 2,5 se acercó al final de PI de IC 1396.
-    if gamma != 1.0:
-        b = np.power(np.clip(b, 0, 1), float(gamma)).astype(np.float32)
-    if color != 1.0 and b.shape[0] == 3:
-        Lm = b.mean(axis=0, keepdims=True)
-        b = np.clip(Lm + (b - Lm) * float(color), 0, 1).astype(np.float32)
-    if gamma != 1.0 or color != 1.0:
-        r["estrellas_ajuste"] = {"gamma": gamma, "color": color}
     if not 0 <= float(atenuar) <= 0.8:
         raise ValueError("atenuar entre 0 y 0,8 (0 = todas las estrellas igual).")
-    if float(atenuar) > 0:
-        b = (b * (1.0 - float(atenuar) * _mascara_nebulosa(a))[None]).astype(np.float32)
-        r["atenuar"] = float(atenuar)
-    if metodo == "screen":
-        res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(k * b, 0, 1))
-    else:
-        res = a + k * b
-    res = np.clip(res, 0, 1).astype(np.float32)
-    Lr = _lum(res)
-    aporte = 100.0 * float((Lr - La).mean()) / max(float(Lr.mean()), 1e-9)
-    # fondo: celdas de cielo de la starless, antes y después
+    modo = str(estirar_estrellas).lower() if estirar_estrellas not in (None, False) else None
+    if modo in ("false", "no", "0", ""):
+        modo = None
+    if modo in ("true", "1", "si", "sí"):
+        modo = "arcsinh"
+    if modo not in (None, "arcsinh", "racional", "comparar"):
+        raise ValueError("estirar_estrellas: true/arcsinh, racional o comparar.")
+    if star_lineal and starless_estirada and not modo:
+        r.update(aplicado=False, aviso=(
+            "La capa de estrellas parece lineal (mediana < 0,05 y p99 < 0,05) y la starless está estirada: juntarlas así "
+            "da estrellas apagadas o «círculos enormes». Repite con estirar_estrellas: true (arcsinh hasta que el p90 de "
+            "los píxeles de estrella sea ≈ 0,10), \"racional\" o \"comparar\", o estira la capa antes."))
+        return r
+    if not (star_lineal and starless_estirada):
+        modo = None
+        if metodo == "suma" and starless_estirada:
+            r["aviso_suma"] = "La guía reserva la suma para capas lineales; con la starless estirada, mejor screen."
+
+    def componer(estirado, dur):
+        bb, det = b, {}
+        if estirado == "arcsinh":
+            bb, det = _estirar_estrellas_arcsinh(b, mascara)
+        elif estirado == "racional":
+            bb, det = _estirar_estrellas_racional(b, mascara, dureza=dur)
+        # Estrellas como las de PixInsight (15 nov 2026): gamma > 1 apaga halos y núcleos; color > 1 separa los canales de
+        # la luminancia (las del RGB salían casi blancas). gamma 1,3 + color 2,5 se acercó al final de PI de IC 1396.
+        if gamma != 1.0:
+            bb = np.power(np.clip(bb, 0, 1), float(gamma)).astype(np.float32)
+        if color != 1.0 and bb.shape[0] == 3:
+            Lm = bb.mean(axis=0, keepdims=True)
+            bb = np.clip(Lm + (bb - Lm) * float(color), 0, 1).astype(np.float32)
+        if float(atenuar) > 0:
+            bb = (bb * (1.0 - float(atenuar) * _mascara_nebulosa(a))[None]).astype(np.float32)
+        if metodo == "screen":
+            res = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(k * bb, 0, 1))
+        else:
+            res = a + k * bb
+        return np.clip(res, 0, 1).astype(np.float32), det
+
+    La = _lum(a)
     cel = _cielo(a)["_celdas"]
-    fondo_a, fondo_r = np.mean(_cielo_por_canal(a, cel)), np.mean(_cielo_por_canal(res, cel))
-    rec0, rec1 = _recortes(a), _recortes(res)
-    r.update(aporte_estrellas_pct=_r(aporte, 2), fondo_antes=_r(fondo_a, 5), fondo_despues=_r(fondo_r, 5),
-             recortes_antes=rec0, recortes_despues=rec1)
-    avisos = []
-    if aporte < 0.5:
-        avisos.append(f"las estrellas aportan solo el {round(aporte, 2)} % (< 0,5 %): ¿capa vacía, lineal o factor bajo?")
-    if fondo_r < fondo_a - 1e-5:
-        avisos.append("el fondo baja tras recombinar: hay un error en otro sitio (no debería pasar)")
-    if rec1["altos_pct"] - rec0["altos_pct"] > 0.05:
-        avisos.append(f"recorte alto nuevo {_r(rec1['altos_pct'] - rec0['altos_pct'], 3)} % (núcleos de estrella a 1): baja factor")
-    if avisos:
-        r["avisos"] = avisos
+    fondo_a = np.mean(_cielo_por_canal(a, cel))
+    rec0 = _recortes(a)
+
+    def medir_rec(res):
+        Lr = _lum(res)
+        aporte = 100.0 * float((Lr - La).mean()) / max(float(Lr.mean()), 1e-9)
+        fondo_r = np.mean(_cielo_por_canal(res, cel))
+        rec1 = _recortes(res)
+        m = {"aporte_estrellas_pct": _r(aporte, 2), "fondo_antes": _r(fondo_a, 5), "fondo_despues": _r(fondo_r, 5),
+             "recortes_antes": rec0, "recortes_despues": rec1}
+        if res.shape[0] == 3 and mascara.any():
+            m["saturacion_estrellas"] = _r(float(_saturacion(res)[mascara].mean()), 3)
+        # tamaño: píxeles donde las estrellas suben la luminancia más de 0,05 (halos gordos = más)
+        m["area_estrellas_pct"] = _r(100.0 * float(((Lr - La) > 0.05).mean()), 3)
+        avisos = []
+        if aporte < 0.5:
+            avisos.append(f"las estrellas aportan solo el {round(aporte, 2)} % (< 0,5 %): ¿capa vacía, lineal o factor bajo?")
+        if fondo_r < fondo_a - 1e-5:
+            avisos.append("el fondo baja tras recombinar: hay un error en otro sitio (no debería pasar)")
+        if rec1["altos_pct"] - rec0["altos_pct"] > 0.05:
+            avisos.append(f"recorte alto nuevo {_r(rec1['altos_pct'] - rec0['altos_pct'], 3)} % (núcleos de estrella a 1): baja factor")
+        if avisos:
+            m["avisos"] = avisos
+        return m
+
+    if gamma != 1.0 or color != 1.0:
+        r["estrellas_ajuste"] = {"gamma": gamma, "color": color}
+    if float(atenuar) > 0:
+        r["atenuar"] = float(atenuar)
+    if modo == "comparar":
+        grupo = "recombinar"
+        _limpiar_grupo(grupo)
+        huella = _huella(crudo)
+        r["candidatos"], r["errores"] = [], []
+        for n, (est, dur, nombre) in enumerate((("arcsinh", 1.0, "arcsinh (p90 de las estrellas ≈ 0,10)"),
+                                                ("racional", 1.0, "racional, color conservado"),
+                                                ("racional", 1.4, "racional, más compactas (dureza 1,4)")), 1):
+            try:
+                res, det = componer(est, dur)
+                m = medir_rec(res)
+                cid = _guardar_candidato(grupo, n, _a_siril(res, crudo.dtype).reshape(crudo.shape),
+                                         {"nombre": nombre, "comando": f"{metodo} ×{k:g}, {est}", "huella_base": huella,
+                                          "metricas": m})
+                r["candidatos"].append({"id": cid, "metodo": nombre, "estirado": det, "metricas": m})
+            except Exception as e:
+                r["errores"].append(f"{nombre}: {e}")
+        c = [x for x in r["candidatos"] if not x["metricas"].get("avisos")] or r["candidatos"]
+        if c:
+            # Las estrellas con más color sin halos más grandes que las de arcsinh.
+            area0 = r["candidatos"][0]["metricas"]["area_estrellas_pct"] if r["candidatos"] else 0
+            buenos = [x for x in c if x["metricas"]["area_estrellas_pct"] <= area0 * 1.1 + 0.01] or c
+            mejor = max(buenos, key=lambda x: x["metricas"].get("saturacion_estrellas") or 0)
+            r["recomendado"] = mejor["id"]
+            r["motivo"] = (f"{mejor['metodo']}: estrellas con más color ({mejor['metricas'].get('saturacion_estrellas')}) sin "
+                           f"más área que las de arcsinh ({mejor['metricas']['area_estrellas_pct']} %).")
+        r["leyenda"] = ("aporte_estrellas_pct: luz que suman las estrellas. area_estrellas_pct: % de la imagen donde suben más "
+                        "de 0,05 (halos gordos = más). saturacion_estrellas: color medio en las estrellas. La imagen NO ha "
+                        "cambiado: aplicarCandidato(id).")
+        r["aplicado"] = False
+        _galeria(r, info, _pantalla(crudo, info), "diferencia")
+        return r
+    res, det = componer(modo, float(dureza))
+    if det:
+        r["estirado_estrellas"] = det
+    r.update(medir_rec(res))
     _poner(siril, _a_siril(res, crudo.dtype).reshape(crudo.shape),
            f"SirilAstroPilot: estrellas {metodo} x{k:g}")
     r.update(aplicado=True, nota="Hecho con deshacer. Mira con previa (y un recorte al 100 % en estrellas) y guarda con guardarImagen.")
     return r
+
+
+def _estirar_estrellas_arcsinh(b, mascara, objetivo=0.10):
+    """arcsinh hasta que el p90 de los píxeles de estrella sea 'objetivo' (el estirado que ya había)."""
+    vals = b[:, mascara].mean(axis=0)
+    lo, hi = 0.0, np.log(1e5)
+    for _ in range(30):
+        s = float(np.exp((lo + hi) / 2))
+        p90 = float(np.percentile(np.arcsinh(s * vals) / np.arcsinh(s), 90))
+        if p90 < objetivo:
+            lo = np.log(s)
+        else:
+            hi = np.log(s)
+    s = float(np.exp((lo + hi) / 2))
+    q = (np.arcsinh(s * np.clip(b, 0, 1)) / np.arcsinh(s)).astype(np.float32)
+    return q, {"arcsinh": _r(s, 1), "p90_estrellas": _r(float(np.percentile(_lum(q)[mascara], 90)), 3)}
+
+
+def _estirar_estrellas_racional(b, mascara, objetivo=0.10, dureza=1.0, color=1.0):
+    """Estirado de la capa de estrellas lineal con una curva racional acotada, f(x) = ((1 + D)·x / (1 + D·x))^dureza
+    (0 → 0, 1 → 1), aplicada a la luminancia; cada canal se multiplica por el mismo factor f(L)/L, así que el color de cada
+    estrella (las proporciones entre canales) no cambia y los núcleos no se blanquean. D se busca para que el p90 de los
+    píxeles de estrella quede en 'objetivo'; dureza > 1 baja los halos (estrellas más compactas). Idea pública inspirada en
+    el planteamiento de VeraLux StarComposer (Riccardo Paterniti, GPL-3), del que NO se ha copiado código ni constantes
+    (27 nov 2026)."""
+    b = np.clip(np.asarray(b, dtype=np.float32), 0, 1)
+    L = b.mean(axis=0)
+    vals = L[mascara]
+    d = float(dureza)
+
+    def f(x, D):
+        return np.power((1.0 + D) * x / (1.0 + D * x), d)
+    lo, hi = np.log(1e-2), np.log(1e7)
+    for _ in range(50):
+        D = float(np.exp((lo + hi) / 2))
+        if float(np.percentile(f(vals, D), 90)) < objetivo:
+            lo = np.log(D)
+        else:
+            hi = np.log(D)
+    D = float(np.exp((lo + hi) / 2))
+    fl = f(L, D)
+    q = b * (fl / np.maximum(L, 1e-7))[None]
+    if color < 1.0 and b.shape[0] > 1:
+        q = color * q + (1.0 - color) * f(b, D)
+    m = q.max(axis=0)
+    q = np.where(m[None] > 1.0, q / np.maximum(m, 1e-7)[None], q).astype(np.float32)
+    return q, {"racional_D": _r(D, 2), "dureza": d, "p90_estrellas": _r(float(np.percentile(_lum(q)[mascara], 90)), 3)}
 
 
 # --- NL10: exportar ------------------------------------------------------------------------------------------
@@ -4143,6 +4533,8 @@ def _despues_aplicar(r, k):
         _ENTREGA["fondo_pendiente"] = False
     elif cid.startswith("estrellas"):
         _ENTREGA["estrellas_sueltas"] = True
+    elif cid.startswith("recombinar"):
+        _al_recombinar({}, k)
     elif cid.startswith(("combinacion", "paleta")):
         _INYECCION["hecha"] = True
         if cid.startswith("paleta"):
