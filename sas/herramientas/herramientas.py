@@ -1121,13 +1121,49 @@ def _vaciar_rehacer(doc):
     pila.clear()
 
 
-def _limpiar_grupo(grupo):
+# Numeración de cada grupo: lo que se suma al número del candidato para no pisar los de otra vista (ver _limpiar_grupo).
+_DESPLAZA = {}
+_VIDA_OTRA_VISTA_S = 3 * 3600
+
+
+def _limpiar_grupo(grupo, uid=None):
+    """Borra los candidatos anteriores del grupo. Con uid (la vista que se va a comparar) sólo borra los de esa vista
+    y los de otras con más de 3 h; los de otra vista reciente se conservan y la numeración sigue tras ellos.
+    IC 434 (28 nov 2026): pidieron el gradiente de Hα y de RGB a la vez; el modelo lanzó la RGB antes de mirar las
+    previas del Hα y la segunda comparación borró los candidatos y las miniaturas de la primera."""
     TRABAJO.mkdir(parents=True, exist_ok=True)
+    _DESPLAZA[grupo] = 0
+    if uid is None:
+        for f in TRABAJO.glob(f"{grupo}_*"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        return
+    ahora, quedan, borrar = time.time(), [], []
+    for fj in TRABAJO.glob(f"{grupo}_*.json"):
+        m = re.fullmatch(rf"{re.escape(grupo)}_(\d+)", fj.stem)
+        if not m:
+            continue
+        try:
+            otra = json.loads(fj.read_text(encoding="utf-8")).get("uid") not in (None, uid)
+            reciente = ahora - fj.stat().st_mtime < _VIDA_OTRA_VISTA_S
+        except Exception:
+            otra = reciente = False
+        (quedan if (otra and reciente) else borrar).append((int(m.group(1)), fj.stem))
+    vivos = {cid for _, cid in quedan}
     for f in TRABAJO.glob(f"{grupo}_*"):
+        m = re.match(rf"({re.escape(grupo)}_\d+)(?:_|\.|$)", f.name)
+        if m and m.group(1) in vivos:
+            continue
+        if not m and f.name.startswith(f"{grupo}_original") and uid[:8] not in f.name \
+                and ahora - f.stat().st_mtime < _VIDA_OTRA_VISTA_S:
+            continue                             # la miniatura de partida de la otra vista
         try:
             f.unlink()
         except OSError:
             pass
+    _DESPLAZA[grupo] = max((n for n, _ in quedan), default=0)
 
 
 # --- Guarda: reducción de ruido lineal antes de estirar (24 nov 2026, como ruido.js f8d2ee7) -------------------------
@@ -1163,7 +1199,7 @@ def _exigir_ruido_lineal(funcion_ruido):
 
 def _guardar_candidato(grupo, n, a, datos):
     TRABAJO.mkdir(parents=True, exist_ok=True)
-    cid = f"{grupo}_{n}"
+    cid = f"{grupo}_{int(n) + _DESPLAZA.get(grupo, 0)}"
     np.save(TRABAJO / f"{cid}.npy", a)
     (TRABAJO / f"{cid}.json").write_text(json.dumps(datos, ensure_ascii=False, default=str), encoding="utf-8")
     return cid
@@ -1216,6 +1252,10 @@ def _galeria(r, base_p, modo=None, lado=800, original=True):
         y0, x0 = max(0, h // 2 - 300), max(0, w // 2 - 300)
         zona = (slice(y0, y0 + 600), slice(x0, x0 + 600))
     grupo = cands[0]["id"].rsplit("_", 1)[0] if cands and cands[0].get("id") else "galeria"
+    try:                                        # por vista: otra comparación del mismo tipo sobre otra vista no la pisa
+        suf = "_" + json.loads((TRABAJO / f"{cands[0]['id']}.json").read_text(encoding="utf-8"))["uid"][:8]
+    except Exception:
+        suf = ""
     ps = ps_orig = None
     try:
         if lineal:
@@ -1225,10 +1265,10 @@ def _galeria(r, base_p, modo=None, lado=800, original=True):
                 ps = _params_estirado(_reducir(_p(np.load(TRABAJO / f"{ref['id']}.npy", mmap_mode="r")), lado))
         if original:                            # en paletas la de partida no es comparable
             ver = (lambda q: _estirar_con(q, ps_orig)) if lineal else (lambda q: q)
-            o = {"metodo": "Original (de partida)", "previa": _jpg(ver(b), TRABAJO / f"{grupo}_original.jpg", 85)}
+            o = {"metodo": "Original (de partida)", "previa": _jpg(ver(b), TRABAJO / f"{grupo}_original{suf}.jpg", 85)}
             if zona:
                 o["previa_recorte"] = _jpg(ver(np.asarray(base_p[:, zona[0], zona[1]], dtype=np.float32)),
-                                           TRABAJO / f"{grupo}_original_100.jpg", 90)
+                                           TRABAJO / f"{grupo}_original{suf}_100.jpg", 90)
             r["original"] = o
     except Exception as e:
         r["original_error"] = str(e)[:120]
@@ -1283,7 +1323,7 @@ def _comparar(ctx, doc, grupo, lista, medir):
     Con máscara (parámetro 'mascara' de la *Candidatos), cada candidato se mezcla con la imagen de partida a través de
     ella antes de medirlo y guardarlo."""
     h0 = M.huella(doc.image)
-    _limpiar_grupo(grupo)
+    _limpiar_grupo(grupo, getattr(doc, "uid", None))
     r = {"vista": _nombre(doc), "candidatos": [], "errores": [], "recomendado": None, "motivo": ""}
     mk = None
     if _MASCARA["spec"] is not None:
@@ -3460,9 +3500,9 @@ def aplicarCandidato(ctx, id, vista=None):
         if otra:
             v = ctx.get_document(datos["uid"])
             raise RuntimeError(f"El candidato '{id}' es de la última comparación, hecha sobre "
-                               f"'{_nombre(_base(v)) if v is not None else datos['uid']}', no sobre esta vista: cada "
-                               "comparación del mismo tipo sustituye a la anterior. Compara y aplica vista por vista "
-                               "(comparación → aplicarCandidato → siguiente vista).")
+                               f"'{_nombre(_base(v)) if v is not None else datos['uid']}', no sobre esta vista: y esa "
+                               "vista ha cambiado desde entonces (o se volvió a comparar). Usa los candidatos de la "
+                               "comparación hecha sobre esta vista, o repítela.")
         raise RuntimeError("La vista ha cambiado desde la comparación (otra imagen o ya se aplicó algo): repite la comparación.")
     lineal_antes = str(id).startswith("ruido_") and M.lineal(_p(d.image)[:, ::8, ::8])
     d.apply_edit(a.astype(np.float32, copy=False), metadata={}, step_name=f"SetiAstroPilot: {datos.get('nombre', id)}")
