@@ -37,7 +37,7 @@ Se lee entero al empezar, junto con el `perfil.md` del usuario y el **arranque d
 
 | Paso | Qué se decide o compara | Medidas que deciden |
 |---|---|---|
-| L1 Análisis | Tipo de objeto, señal, estrellas brillantes, bordes sin datos (con Internet, ficha del objeto) | estadísticas por canal, escala, saturados, bordes |
+| L1 Análisis | Tipo de objeto (un cometa cambia el flujo: [Anexo D](anexos/D-flujos-por-tipo-objeto.md#cometas)), señal, estrellas brillantes, bordes sin datos (con Internet, ficha del objeto) | estadísticas por canal, escala, saturados, bordes |
 | L2 Inventario | Grupos de lights y su calibración | compatibilidad (`no_cumple`) |
 | L3 Selección de subs | Subs con nubes, mal guiado o desenfoque | FWHM, excentricidad, estrellas, cielo |
 | L4 Preprocesado | Calibración, registro e integración | revisión previa (`no_cumple`), log |
@@ -134,7 +134,7 @@ Lista completa y criterio de parada: [Anexo F](anexos/F-anti-patrones.md), cuand
 | Mono con rueda | LRGB, HOO, SHO | 7 no aplica; calibración con QE y filtros reales |
 | Mono + OSC | LRGB / LHa-RHaGB / HOO+RGB | 10 con ajuste lineal entre canales y `w ∝ 1/σ²` |
 
-Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias, nebulosas oscuras, planetarias, cúmulos e IFN: [Anexo D](anexos/D-flujos-por-tipo-objeto.md).
+Una paleta es una convención, no el color real: decirlo en el dossier. Galaxias, nebulosas oscuras, planetarias, cúmulos, IFN y cometas: [Anexo D](anexos/D-flujos-por-tipo-objeto.md).
 
 **Modelo por paso** (rápido o potente, regla N): [Anexo H](anexos/H-modelo-por-paso.md), sólo si la plataforma ofrece varios modelos y no lo ha elegido ya.
 

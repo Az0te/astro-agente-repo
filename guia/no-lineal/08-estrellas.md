@@ -56,6 +56,8 @@ Cuanto más oscurece `mtf`, más se reducen. Como mucho **dos pasadas**. Control
 - Atenuar 35–40 % sólo la capa de estrellas en la corona del halo es aceptable y se documenta; nunca tocar la nebulosa de esa zona.
 - Halo dudoso (¿reflejo, nubes, real?), restos de la separación en estrellas muy brillantes o halos instrumentales en la starless: ver el detalle antes de tocar nada.
 
+**Cometas.** La capa de estrellas sale del **apilado de estrellas** (alineado en estrellas), separándolas allí. No se saca del apilado del cometa, donde son trazos o restos. En ese apilado, en cambio, sí hay que quitar los restos de estrellas, con una máscara que proteja núcleo y coma. Se estira por separado del cometa ([Anexo D](../anexos/D-flujos-por-tipo-objeto.md#cometas)).
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-08); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** Tamaño y saturación conseguidos frente a los pedidos (×1,2 / ×1,5 y ×1,1 / ×1,2); fondo negro (mediana ≈ 0 tras el suelo); p90 de los píxeles de estrella (> 0,005) ≥ 0,08 (0,08–0,13 con el estirado propio de estrellas, más con el mismo estirado que la starless); `pix_estrella_pct` (píxeles con luminancia > 0,02) ≥ 0,3 % en campos con estrellas: por debajo, la capa está casi vacía y la final saldrá sin estrellas (galaxia grande procesada por un modelo local, nov 2026); `no_cumple` vacío; sin manchas de residuos ni anillos de color; máximo < 0,98; halos residuales revisados al 200–400 % en zonas brillantes.

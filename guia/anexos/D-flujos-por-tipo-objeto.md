@@ -54,4 +54,39 @@ Sin los pasos 2–4 (modelo local, 7 nov 2026): 269 estrellas detectables frente
 
 **Paleta Hubble (SHO) sin SPCC.** "Calibrar en lineal con BackgroundNeutralization (preview de fondo) + ColorCalibration con preview de la nebulosa como blanco y **'Structure detection' desactivado** (cuenta toda la luz de la nebulosa, no sólo estrellas). Lo mismo con la imagen completa como blanco en campos estelares sin SPCC."
 
+
+<a id="cometas"></a>
+**Cometas** (27 nov 2026, de tutoriales de cometas; sin pasada propia todavía). El cometa se mueve contra las estrellas durante la sesión: alineado en las estrellas sale corrido, y alineado en el núcleo las estrellas salen en trazos. Por eso se hacen **dos apilados** (estrellas y cometa), cada uno por su camino, y se unen al final. Lo que más se estropea: la cola débil (con el gradiente, el rechazo o el separador de estrellas) y el verde de la coma (con SCNR).
+
+Flujo, en orden (sustituye lo que se indica en cada paso; lo demás, como siempre):
+
+1. **Análisis** (Paso 1 lineal). Apuntar si hay cola y de qué tipo (de polvo: ancha, curva, amarillenta; iónica: estrecha, recta, azulada, con nudos), o si sólo hay coma redonda. Apuntar también la duración de la sesión, si el cometa estaba bajo (el gradiente cambia durante la sesión) y qué calibración hay (con una DSLR, a menudo ninguna).
+2. **Preprocesado y dos apilados** (Paso 4, [Cometas: dos apilados](../lineal/04-preprocesado.md#cometas)).
+   - Calibración si la hay. Sin ella: corrección cosmética y debayer; el viñeteo lo quitará el modelo de fondo.
+   - Apilado de **estrellas**, alineado en las estrellas.
+   - Apilado del **cometa**, alineado en el núcleo, con candidatos de método y de rechazo que se comparan con previas.
+   - En los dos, comprobar que se registraron N de N fotogramas.
+3. **Cola iónica.** Cambia en minutos. Con sesiones largas, comparar el apilado de todo con tramos cortos: todo da menos ruido y la cola movida; los tramos dan la cola nítida y más ruido. Se elige mirando las previas.
+4. **Gradiente** (Paso 9 lineal), en los dos apilados.
+   - Muestras fuera de **toda** la trayectoria del cometa, no sólo de su posición final: en el apilado de estrellas el cometa queda como un borrón a lo largo de su recorrido.
+   - Por fotograma, antes de apilar, si el cometa estaba bajo.
+   - Enseñar el modelo quitado y comprobar que no lleva cola.
+   - Sin flats, el modelo tiene que llevarse también el viñeteo (comparar grados y RBF).
+5. **Color** (Paso 12 lineal).
+   - Se calibra en el apilado de estrellas (SPCC, o PCC en DSLR) con blanco G2V o medio de estrellas: la luz del cometa es la del Sol reflejada, más las emisiones de la coma.
+   - Se pasa al apilado del cometa con las mismas ganancias por canal (salen de los mismos fotogramas) o con un ajuste lineal sobre la cabeza.
+   - **Nunca** se calibra con un fotograma suelto: el resto de la secuencia queda sin calibrar y cambia de color entre tomas.
+6. **Estirado** (Paso 1 no lineal). Por pasadas (GHS al fallo), cometa y estrellas por separado. Núcleo con margen: no quemarlo.
+7. **Verde** (Paso 3 no lineal). El verde de la coma es emisión real del C2 y **no se quita**. SCNR o quitar verde, sólo en las estrellas o en el fondo, con máscara que deje fuera coma y cola.
+8. **Realce** (Paso 5 no lineal).
+   - Compresión multiescala del rango dinámico, de 5 y de 4 capas, con máscara de luminancia, para la coma interior y el núcleo.
+   - Contraste local (ecualización adaptativa del histograma, CLAHE) con límite de contraste alto y cantidad baja, para la estructura de la cola iónica.
+   - Larson-Sekanina (filtro rotacional) sólo como **variante de análisis**, con su nombre en la previa y en el dossier: inventa simetrías y nunca es la final.
+9. **Estrellas y recombinación** (Pasos 8 y 9 no lineal). La capa de estrellas sale del apilado de estrellas, no de separar el del cometa. Se une con screen 1 − (1 − a)(1 − b) o con suma, comprobando el aporte de las estrellas: que se vean sin tapar la cola débil.
+   - **Cielo final ~0,10** (Rafael, 28 nov 2026, Lemmon), no el 0,015–0,05 de las nebulosas: con el cielo oscuro se pierden la cola débil y el polvo o la nebulosidad de fondo que haya en el campo. `fondoCandidatos(tipo='cometa')` usa 0,10 por defecto, con el punto negro de cada canal limitado al 0,01 % de píxeles a 0 (sin esquinas negras). Sin polvo ni cola débil que enseñar, se puede bajar.
+   - `exportarFinal` con un cometa admite el cielo hasta 0,13, avisa de cielo gris por encima de 0,13 y de cielo oscuro por debajo de 0,06, de más del 0,01 % de un canal a 0 y de coma quemada.
+10. **Dossier.** Qué apilado del cometa se eligió (método, rechazo, tramo de tiempo), que el verde de la coma es C2, cómo se calibró el color y, si se enseña, la variante Larson-Sekanina marcada como análisis.
+
+Errores a no repetir en este tipo de objeto: calibrar el color en un fotograma suelto; SCNR global (se lleva la coma); muestras de fondo sobre la cola o sobre la trayectoria; quitar estrellas fotograma a fotograma en un cometa sin cola (el separador se lo lleva como si fuera una estrella); dar por buena la secuencia sin comprobar que se registraron todos los fotogramas.
+
 ---

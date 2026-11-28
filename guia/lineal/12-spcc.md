@@ -29,6 +29,11 @@
 
 Lo que no se hace en ningún caso es ajustar el color a ojo, ni copiar la calibración de otra foto.
 
+**Cometas** ([Anexo D](../anexos/D-flujos-por-tipo-objeto.md#cometas)).
+- El color se calibra en el **apilado de estrellas**, con blanco G2V o medio de estrellas: el cometa refleja la luz del Sol.
+- Se pasa al apilado del cometa con las mismas ganancias por canal, porque los dos salen de los mismos fotogramas. Si se normalizaron distinto, con un ajuste lineal sobre la cabeza.
+- Nunca se calibra con un fotograma suelto: el resto de la secuencia queda sin calibrar.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-12); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Dónde neutralizar.** Sobre la **starless lineal** (la que se va a estirar) y midiendo en las mismas celdas que mide el estirado: hecho sobre la imagen con estrellas antes de separarlas, la dominante vuelve al estirar la starless. Las funciones de estirado lo hacen solas por defecto (desplazamiento aditivo, no cambia el objeto). Una dominante azul o roja no se arregla con SCNR, que sólo quita verde.

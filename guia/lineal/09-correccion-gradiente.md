@@ -67,6 +67,8 @@ Entre los candidatos que no se comen el objeto y no dejan manchas visibles se re
 
 **SyQon DeepGradient** (si está SyQon Studio) entra como un candidato más en las tres herramientas. Necesita internet; ver [Anexo L](../anexos/L-syqon.md).
 
+**Cometas** ([Anexo D](../anexos/D-flujos-por-tipo-objeto.md#cometas)). Muestras fuera de toda la trayectoria del cometa en los dos apilados: en el de estrellas, el cometa es un borrón a lo largo de su recorrido; en el del cometa, las estrellas son trazos. Si el cometa estaba bajo, el gradiente cambia durante la sesión: quitarlo por fotograma antes de apilar (grado bajo) y, si hace falta, otra vez después. Enseñar siempre el modelo quitado y comprobar que no lleva la cola. Sin flats, el modelo tiene que llevarse el viñeteo: comparar grados y RBF, y mirar las esquinas.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-09); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Control.** Modelo liso y sin objeto; fondo no aplastado con la misma visualización antes y después; contraste objeto−cielo ≥ 90 % en polvo/IFN; la astrometría sigue al terminar. Anillo oscuro alrededor de un objeto extenso = se ha comido el halo: volver atrás y usar plano robusto o muestras manuales.

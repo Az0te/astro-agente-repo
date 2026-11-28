@@ -39,6 +39,34 @@
 
 **Plan antes de apilar.** El apilado tarda y ocupa disco: antes de lanzarlo, enseñar al usuario el plan (noches, subs, el flat de cada noche y filtro, darks y carpeta de salida) y esperar su visto bueno. Sólo se lanza sin parar si pidió el procesado completo hasta el final.
 
+<a id="cometas"></a>
+**Cometas: dos apilados** (27 nov 2026, de tutoriales; sin pasada propia todavía). El cometa se mueve contra las estrellas, así que se hacen dos apilados de los mismos fotogramas calibrados. Flujo completo: [Anexo D, Cometas](../anexos/D-flujos-por-tipo-objeto.md#cometas).
+
+- **Estrellas.** Alineado en las estrellas y rechazo normal. El cometa sale corrido y no importa: de este apilado sólo se usan las estrellas (y la calibración de color).
+- **Cometa.** Alineado en el **núcleo**. Se marca el núcleo, aproximado, en el primer y en el último fotograma. El movimiento (píxeles por hora) sale de la hora de cada toma (`DATE-OBS`), y se afina con un ajuste de la PSF del núcleo en cada fotograma si el programa lo tiene.
+  - Según el programa, se alinea sobre los fotogramas sin registrar (una sola interpolación) o sobre los ya registrados en estrellas (sólo desplazamiento).
+  - Programas: [Anexo I](../anexos/I-siril.md#cometas) (Siril).
+- **Comprobar N de N.** En los dos apilados, contar los fotogramas registrados frente a los de entrada. Algún registro deja fuera la referencia sin avisar.
+
+**Candidatos del apilado del cometa** (se comparan con previas de la cola y de un recorte de restos de estrellas; ninguno se elige solo):
+
+| Candidato | Cómo | Cuándo |
+|---|---|---|
+| A | Alinear en el núcleo; el rechazo se lleva las estrellas, que se mueven entre tomas. Los restos que queden, con el separador de estrellas y una máscara que proteja el núcleo y la coma | Siempre; el único posible en un cometa sin cola |
+| B | Quitar las estrellas en **cada** fotograma (separador de estrellas) y después alinear en el núcleo | Sólo si el cometa tiene cola: una coma redonda se la lleva como si fuera una estrella. Tarda mucho y ocupa mucho disco |
+
+Rechazo, en los dos (promedio, normalización aditiva con escalado):
+
+| Rechazo | Resultado |
+|---|---|
+| winsorized 3 / 3 | más cola, más restos de estrellas |
+| winsorized 1 / 1 | menos restos, algo menos de cola |
+| MAD 1 / 1 | pocos restos y la cola casi entera |
+
+Las trazas de satélite y de avión se van con el rechazo en los tres. **Cola frente a restos:** se elige mirando la cola débil a 100 % y los restos en el fondo, no por el ruido.
+
+**Sesiones largas.** La cola iónica cambia en minutos: comparar el apilado de toda la sesión con tramos cortos (la mitad, un cuarto) y elegir mirando la cola.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/lineal.md#lineal-04); en Siril, [Anexo I](../anexos/I-siril.md).
 
 La revisión de la calibración antes de lanzar el preprocesado, leyendo sólo cabeceras y unos pocos flats, encontró en una nebulosa oscura (nov 2026) lo que en octubre costó una tarde: sin dark de 240 s, flats sin `FILTER`, flats con otro `TELESCOP` y flats saturados. En una galaxia grande detectó los flats con el azul saturado y que no había dark de 60 s. En una nebulosa dual band, que los flats y los lights llevaban nombres de filtro distintos para el mismo filtro (renombrado en el programa de captura después de los flats): hay que emparejarlos con un alias o corregir `FILTER` en copias de los flats.

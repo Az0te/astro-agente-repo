@@ -47,6 +47,8 @@ Modo color conserva el tono; por canal puede desplazarlo. Histograma con dos cú
 
 **Nebulosas de emisión: color en luminancia o por canal.** Un estirado en luminancia conserva las proporciones del lineal; uno enlazado por canal (la misma curva en R, G y B: STF y MAS de PixInsight, el estadístico de SASpro) las comprime en las luces medias. En IC 405 (nov 2026) el R/G del objeto sobre el cielo pasó al estirar de 2,84 a 1,89 en PixInsight y de 3,80 a 2,37 en SASpro, pero en Siril, con GHS en luminancia, se quedó en 4,1 y la saturación lo llevó a 7: núcleo rojo. Con la misma curva por canal quedó en 2,5 (3,7 tras saturar). En nebulosas, si el estirado en luminancia deja el R/G del objeto un 30 % por encima del estirado por canal y éste separa casi igual, se elige el estirado por canal.
 
+**Cometas** ([Anexo D](../anexos/D-flujos-por-tipo-objeto.md#cometas)). Cometa y estrellas son dos apilados y se estiran por separado: el cometa por pasadas (GHS al fallo), con el núcleo con margen; las estrellas en el [Paso 8](08-estrellas.md).
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-01); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Registro del estirado.** El estirado al fallo de la starless queda registrado (pasadas y puntos negros) para que el Paso 8 pueda repetirlo sobre starless + estrellas en galaxias (estrellas con el mismo estirado).

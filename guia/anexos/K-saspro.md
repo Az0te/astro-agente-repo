@@ -33,7 +33,7 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 | NL7 Nitidez | **`nitidezCandidatos`** (Cosmic Clarity sharpen) → `aplicarCandidato` |
 | NL8 Estrellas | **`estirarEstrellas`** (de la vista de estrellas; arcsinh a varios p90 y + Halo-B-Gon; `mas_pequenas` si se ven grandes) → `aplicarCandidato` |
 | NL9 Recombinación | `recombinarEstrellas` (starless + vista de estrellas, screen) |
-| NL10 Exportación | `exportarFinal` |
+| NL10 Exportación | `exportarFinal` (cielo 0,01–0,10; con un cometa hasta 0,13, objetivo ~0,10: [Anexo D](D-flujos-por-tipo-objeto.md#cometas)) |
 
 **Siempre disponibles:** `ping`, `vistas`, `imagen`, `cabecera`, `estadisticas`, `previa` (también de un candidato y de un recorte), `registro`, `abrirImagen`, `guardarImagen`, `duplicarVista`, `activarVista`, `cerrarVista`, `deshacer`, `rehacer`, `procesoSAS`, `ayudaProceso`, `estado` (trabajos largos).
 

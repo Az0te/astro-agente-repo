@@ -57,6 +57,44 @@ Bajo demanda: sólo hace falta con el servidor **sirilastropilot** conectado (Si
 
 Trabaja en una carpeta propia (`~/.sirilastropilot/apilado/<proyecto>`) con enlaces a los subs: los ficheros del usuario no se tocan. Con varios grupos de lights se apila uno cada vez (`grupo`); combinarlos es el Paso 10. Es un trabajo largo: el estado del puente enseña el progreso.
 
+<a id="cometas"></a>
+### Cometas: dos apilados (`apilarCometa`)
+
+Ficha: [lineal/04-preprocesado.md](../lineal/04-preprocesado.md#cometas) y [Anexo D](D-flujos-por-tipo-objeto.md#cometas). Herramientas de `cometas.py`, con los mismos nombres y criterios que en SASpro:
+
+- **`apilarCometa(carpeta)`**:
+  - Primero `planSolo: true`: devuelve tomas, calibración, disco y tiempo, y no toca Siril.
+  - Calibra como `apilarCandidatos`. Ficheros sin tipo (CR3 sueltos, sin IMAGETYP ni carpeta «lights») se toman como lights.
+  - Registra por estrellas (`register -2pass` + `seqapplyreg`) y dice **N de N**. Apila las estrellas (winsorized 3/3).
+  - Busca el núcleo en cada toma (cada toma menos la mediana de todas) y ajusta una recta x(t), y(t) con `DATE-OBS` + `EXPTIME`/2.
+    - Si no lo encuentra, pasar `nucleo` (primera toma registrada) y `nucleo_final` (última).
+    - Avisa de las tomas fuera de la recta y si el cometa se mueve menos que una estrella: entonces basta el apilado normal.
+  - Desplaza cada toma al núcleo de la toma central. Siril no tiene comando de script para su registro de cometas, así que:
+    - escribe la traslación en el `.seq` y lanza `seqapplyreg -prefix=cm_`;
+    - antes comprueba el signo con 3 tomas (correlación de fase sobre las estrellas);
+    - si no cuadra, desplaza cada toma con numpy (Lanczos4).
+  - Candidatos del cometa:
+    - de Siril: winsorized 3/3 y 1/1, MAD 1/1, mediana;
+    - propios: mediana y media 1/1 con las estrellas de cada toma fuera (`mascara_estrellas`, por defecto sí);
+    - opcionales: método A (`quitar_restos`: StarX, StarNet2 o propio sobre el mejor, con el núcleo protegido) y método B (`metodo_b`: `seqstarnet` en cada toma; lento).
+  - Mide ruido de fondo, restos de estrellas fuera de la coma (por MP) y señal de coma y cola. ★ = menos restos entre los que conservan ≥ 95 % de la señal; empate → menos ruido.
+  - Deja cargado el cometa recomendado. Guarda `master_cometa_…` y `master_estrellas_…` con un `.json` de la trayectoria, que usan las otras herramientas. Previas de todos con el mismo estirado y un recorte del núcleo.
+- Después, cada apilado por la fase lineal:
+  - `gradienteCandidatos` en cada uno, revisando que el modelo no se coma la cola;
+  - `resolverAstrometria` y `calibrarColor` **sólo en el de estrellas**, guardándolo antes y después de calibrar;
+  - **`transferirColorCometa(estrellas_antes, estrellas_despues, cometa)`**: ajuste lineal por canal entre los dos apilados de estrellas, aplicado al cometa. Se niega si R² < 0,98 (algo más que una calibración lineal).
+- `quitarVerde` no se usa en la coma (el verde del C2 es real). El cometa se estira sin separar estrellas.
+- Fondo y entrega: `fondoCandidatos(tipo='cometa')` deja el cielo en ~0,10 (Rafael, 28 nov 2026) sin más del 0,01 % de un canal a 0; `exportarFinal(tipo='cometa')` lo acepta hasta 0,13.
+- **`combinarCometaEstrellas(cometa, estrellas)`**: capa de estrellas del apilado de estrellas (original − starless, sin el ruido del cielo), apagada a lo largo de la trayectoria del núcleo. `modo` pantalla (los dos con el mismo estirado, por defecto) o suma (lineal). Mide `cola_tapada_pct` y avisa si pasa del 5 %. Resultado cargado y guardado sin sobrescribir.
+- **`larsonSekanina`**: sólo análisis (chorros, capas de la coma, estructura de la cola); previas por ángulo, la imagen no cambia.
+
+A mano en la interfaz de Siril, el camino equivalente:
+1. Registro por estrellas (`r_`).
+2. Gradiente por fotograma si el cometa estaba bajo, con las muestras fuera de la trayectoria.
+3. Pestaña de registro «Cometas/asteroides»: núcleo en la primera y en la última imagen (prefijo `comet_`, canal verde en OSC).
+4. Apilar `comet_` con cada rechazo y `r_` con winsorized 3/3.
+5. Comprobar **N de N** en la consola: alguna versión de Siril 1.4 deja fuera la referencia; si pasa, reconvertir los `r_*.fit` en una secuencia nueva.
+
 ## Fase lineal
 
 | Paso | Herramienta | Con qué en Siril | Medidas que devuelve |
@@ -103,7 +141,7 @@ Notas de la fase lineal:
 | 5 Saturación | `saturacionCandidatos` → `aplicarCandidato` | `satu` 0,25 / 0,5 / 0,75 con factor de fondo 1; saturación propia (cielo protegido) y, en nebulosas, la propia con máscara de luminancia (la recomendada si cumple); `ccm` con matriz de saturación que conserva la luminancia, ×1,25 y ×1,5; saturación sólo de los dos tonos dominantes del objeto (+0,5 y +1, cielo protegido) | `sat_objeto`, `sat_cielo`, `dominante_cielo_pct`, recortes |
 | 6 Ruido | `reducirRuidoCandidatos` | como en el Paso 14 lineal, pero mucho más suave: `denoise` 0,3 / 0,5 y NoiseX 0,3, 0,5 y 0,3 ×2; en las dos fases también `epf -guided`, ondículas propias con más fuerza en las sombras y Cosmic Clarity 0,5 y 0,8 (si está) | mismo criterio, y ninguna puede dejar menos del 50 % del ruido del cielo (fondo muerto) |
 | 9 Recombinación | `recombinarEstrellas` | screen 1 − (1 − a)(1 − k·b) o suma, con la capa de estrellas del Paso 15; capa lineal: `estirar_estrellas` arcsinh, racional (color de cada estrella conservado; `dureza`) o `comparar` (candidatos); `sinteticas: true` = `synthstar` sobre la capa | `aporte_estrellas_pct`, fondo antes y después, recortes |
-| 10 Exportación | `exportarFinal` | `savetif` (16 bits) y `savejpg` 95 | rutas y tamaños; no sobrescribe (_2, _3…) |
+| 10 Exportación | `exportarFinal` | `savetif` (16 bits) y `savejpg` 95 | rutas y tamaños; no sobrescribe (_2, _3…). Cielo entre 0,01 y 0,10; con un cometa (`tipo='cometa'` o `.json` de trayectoria) hasta 0,13, objetivo ~0,10 (Rafael, 28 nov 2026), con control de canales a 0 y coma quemada |
 
 Notas de la fase no lineal:
 
@@ -118,4 +156,4 @@ Notas de la fase no lineal:
 
 ## Pasos sin herramienta propia en Siril
 
-Preprocesado y apilado (fase lineal 2–4, 6–7), combinación de canales (lineal 10), HDR, máscaras (no lineal 4) y dossier: con los scripts y comandos de Siril a mano (`comandoSiril` para lo que esté en la lista blanca), siguiendo los criterios de la ficha.
+Preprocesado y apilado (fase lineal 2–4 salvo cometas, que tienen [`apilarCometa`](#cometas), y 6–7), combinación de canales (lineal 10), HDR, máscaras (no lineal 4) y dossier: con los scripts y comandos de Siril a mano (`comandoSiril` para lo que esté en la lista blanca), siguiendo los criterios de la ficha.

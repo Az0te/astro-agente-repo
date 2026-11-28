@@ -13,6 +13,8 @@
 - Invariante: "el resultado nunca es menor que la base (`1−(1−B)(1−S) ≥ B`); si el fondo baja tras recombinar, hay un error en otro sitio. Lo que ya está a 1 en cualquier capa no se recupera."
 - "Comprobar la reconstrucción: starless + estrellas con su propia fórmula debe reproducir la imagen original."
 
+**Cometas.** Las estrellas del apilado de estrellas se ponen sobre el cometa con screen 1 − (1 − a)(1 − b) o con suma. Comprobar `aporte_estrellas_pct` y la cola débil: las estrellas tienen que verse sin taparla. Si los fondos de los dos apilados no coinciden, se igualan antes de unirlos.
+
 **Cómo hacerlo:** en PixInsight, [Anexo J](../anexos/J-pixinsight/no-lineal.md#no-lineal-09); en Siril, [Anexo I](../anexos/I-siril.md).
 
 **Subida del fondo en campos densos.** Si la capa de estrellas tiene el fondo a cero (mediana ≤ 0,002) y aun así el fondo sube algo al recombinar, es el screen de miles de estrellas débiles, no un halo: se admite hasta 0,01 + 0,002 · aporte de estrellas (como mucho 0,03) y se dice como aviso. En una prueba, por no admitirlo, se repitió 14 veces la preparación de estrellas con el mismo resultado. Con la capa de estrellas sin el fondo a cero, el límite sigue en 0,01 y se vuelve al Paso 8.
