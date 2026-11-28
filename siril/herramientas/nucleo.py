@@ -62,6 +62,15 @@ def _medidas(L, mascara, centro, rmax):
             "anillos_pct": _r(_anillos(_perfil(L, centro, rmax)), 2)}
 
 
+def _rodilla_luces(p, u, tope=0.95):
+    """Rodilla de luces sobre el MÁXIMO de los canales: por encima de u, V' = u + (tope − u)·(1 − e^(−(V − u)/(tope − u)))
+    (pendiente 1 en u, nunca llega a tope); el color sale por el cociente V'/V. Para la coma de un cometa."""
+    V = np.max(p, axis=0) if p.shape[0] > 1 else p[0]
+    d = max(float(tope) - float(u), 1e-3)
+    f = np.where(V > u, u + d * (1 - np.exp(-(V - u) / d)), V)
+    return np.clip(p * (f / np.maximum(V, 1e-6))[None], 0, 1).astype(np.float32)
+
+
 def nucleoCandidatos(siril, fuerzas=(0.25, 0.4, 0.55), desde=None, radio=None, tipo=None, brillo_min=0.85,
                      anillos_max=1.5):
     """Paso de núcleo (galaxias, no lineal, antes de saturar): compara comprimir el bulbo a varias fuerzas. La imagen no
@@ -92,13 +101,37 @@ def nucleoCandidatos(siril, fuerzas=(0.25, 0.4, 0.55), desde=None, radio=None, t
     r = {"centro_px": [int(centro[1]), cy], "umbral": _r(u, 3), "radio_base_px": r_b,
          "bulbo_pct_imagen": _r(100.0 * float((mascara > 0.5).mean()), 3), "antes": m0, "candidatos": [], "errores": []}
     D = L - B
-    for n, k in enumerate(fuerzas, 1):
+    # Cometa (Lemmon, 27-nov: coma blanca): con la trayectoria (.json junto al fichero) se mide la coma quemada
+    quem = None
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+        import cometas as _cm
+        fj = _Path(info.get("fichero") or "").with_suffix(".json")
+        meta_c = _json.loads(fj.read_text(encoding="utf-8")) if info.get("fichero") and fj.exists() else None
+        if isinstance(meta_c, dict) and meta_c.get("nucleo_ref"):
+            xy, rc_ = meta_c["nucleo_ref"], float(meta_c.get("r_coma") or 30)
+            quem = lambda q: _cm._coma_quemada(q if info["top_down"] else q[:, ::-1, :], xy, rc_)
+            m0["coma_quemada_pct"] = quem(x)
+    except Exception as e:
+        r["errores"].append(f"coma quemada: {e}")
+    items = [(f"comprimir el bulbo ×{k:g}", k, None) for k in fuerzas]
+    if quem:
+        # cometa: rodilla de luces sobre el máximo de los canales (_rodilla_luces); el compresor del bulbo devuelve el
+        # detalle (L − B) y en una coma empinada la volvía a quemar (Lemmon SAS, 27-nov: 13 % → 18–20 %)
+        items += [(f"rodilla de luces desde {u_:g} (máximo de canales, color conservado)", None, u_) for u_ in (0.5, 0.6, 0.7, 0.8)]
+    for n, (nombre, k, u_r) in enumerate(items, 1):
         t0 = time.perf_counter()
-        nombre = f"comprimir el bulbo ×{k:g}"
         try:
-            Lo = L - k * mascara * np.maximum(B - u, 0) + 0.5 * k * mascara * D
-            Lo = np.clip(Lo, 0, 1)
-            if x.shape[0] == 3:
+            if u_r is not None:
+                q = _rodilla_luces(x, u_r)
+                Lo = None
+            else:
+                Lo = L - k * mascara * np.maximum(B - u, 0) + 0.5 * k * mascara * D
+                Lo = np.clip(Lo, 0, 1)
+            if Lo is None:
+                pass
+            elif x.shape[0] == 3:
                 # pedestal 0,05 (25 nov 2026, como Recombine Luminance de SASpro): sin ruido de color en lo oscuro
                 f = (Lo + 0.05) / np.maximum(L + 0.05, 1e-6)
                 q = (x + 0.05) * f[None] - 0.05
@@ -116,6 +149,11 @@ def nucleoCandidatos(siril, fuerzas=(0.25, 0.4, 0.55), desde=None, radio=None, t
                 fal.append(f"anillos nuevos: el perfil sube hacia fuera un {m1['anillos_pct']} % (antes {m0['anillos_pct']} %)")
             if m0["meseta_radio_px"] and m1["meseta_radio_px"] >= m0["meseta_radio_px"] and m0["meseta_radio_px"] > 2:
                 fal.append("la meseta no baja")
+            if quem:
+                m1["coma_quemada_pct"] = quem(q)
+                fal = [t for t in fal if not t.startswith("el bulbo se apaga")]
+                if (m1["coma_quemada_pct"] or 0) > 0.5:
+                    fal.append(f"la coma sigue quemada: {m1['coma_quemada_pct']} % a ≥ 0,98 (objetivo < 0,5 %)")
             ganancia = (100.0 * (m1["estructura_bulbo"] / m0["estructura_bulbo"] - 1)
                         if m0["estructura_bulbo"] and m1["estructura_bulbo"] else None)
             res = P._a_siril(q if x.shape[0] == 3 else q[0], crudo.dtype)
@@ -127,6 +165,17 @@ def nucleoCandidatos(siril, fuerzas=(0.25, 0.4, 0.55), desde=None, radio=None, t
         except Exception as e:
             r["errores"].append(f"{nombre}: {e}")
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if quem and r["candidatos"]:
+        if ok:
+            mejor = max(ok, key=lambda x: x["medidas"]["brillo_bulbo"] or 0)
+            mot = "el más suave que deja la coma sin quemar"
+        else:
+            mejor = min(r["candidatos"], key=lambda x: x["medidas"].get("coma_quemada_pct") or 0)
+            mot = "el que menos coma quema, aunque no llega al 0,5 % (rehaz el estirado con menos fuerza)"
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: {mot} ({m0.get('coma_quemada_pct')} → {mejor['medidas'].get('coma_quemada_pct')} % "
+                       f"a ≥ 0,98), brillo {m0['brillo_bulbo']} → {mejor['medidas']['brillo_bulbo']}.")
+        ok = []
     if ok:
         # más estructura, menos meseta, y penaliza apagar el bulbo (×0,75 dejaba un bulbo gris y plano, M31)
         def nota(x):
@@ -137,7 +186,7 @@ def nucleoCandidatos(siril, fuerzas=(0.25, 0.4, 0.55), desde=None, radio=None, t
         mm = mejor["medidas"]
         r["motivo"] = (f"{mejor['metodo']}: meseta {m0['meseta_radio_px']} → {mm['meseta_radio_px']} px, estructura del bulbo "
                        f"+{mejor['estructura_ganada_pct']} %, brillo {m0['brillo_bulbo']} → {mm['brillo_bulbo']}, sin anillos nuevos.")
-    else:
+    elif not r.get("recomendado"):
         r["recomendado"] = None
         r["motivo"] = "Ninguno cumple (ver no_cumple): deja el núcleo como está o prueba otro umbral (desde) o radio."
     r["leyenda"] = ("meseta_radio_px: radio equivalente de lo que pasa de 0,95 en el bulbo (menos = menos quemado). "

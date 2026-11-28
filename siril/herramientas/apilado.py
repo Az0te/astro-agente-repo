@@ -470,59 +470,9 @@ def _seleccion_filas(pares, k):
             "excluidos": fuera}, [x["sub"] - 1 for x in fuera]
 
 
-RECHAZOS = {"w": "winsorized sigma", "g": "ESD generalizado", "l": "ajuste lineal", "s": "sigma", "p": "percentil", "a": "MAD"}
-
-
-def _compatibles_entre_si(gs):
-    return len({(g.get("filtro"), g.get("exp"), g.get("gain"), g.get("offset"), g.get("bin"), g.get("tam"), g.get("capas"))
-                for g in gs}) == 1
-
-
-def apilarCandidatos(siril, carpeta, grupo=None, proyecto=None, rechazos=("w", "g", "l"), pesos=(False, True),
-                     seleccionar=True, k=2.5, drizzle=False, excluir=None, conservar_intermedios=False):
-    """Pasos 3–4 lineales: masters, calibración, debayer (OSC), registro, selección de subs y apilado comparando métodos
-    de rechazo con y sin pesos. Varias noches juntas: cada una se calibra con lo suyo, se unen las calibradas y se
-    registran y apilan contra una referencia común. Trabaja en ~/.sirilastropilot/apilado/<proyecto> con enlaces a los
-    ficheros (los del usuario no se tocan). Deja cargado el master recomendado y lo guarda allí sin sobrescribir."""
-    t0 = time.perf_counter()
-    raiz, fichas, saltados = _recorrer(carpeta, excluir)
-    grupos = _agrupar(fichas)
-    lights = [g for g in grupos if g["tipo"] == "light"]
-    if not lights:
-        raise RuntimeError("No encuentro lights (IMAGETYP o carpeta «lights»). Mira inventarioSubs.")
-    ids = {_id_grupo(g): g for g in lights}
-    if isinstance(grupo, str) and grupo not in ("todos", "todas"):
-        grupo = [grupo]
-    if isinstance(grupo, (list, tuple)):
-        falta = [x for x in grupo if x not in ids]
-        if falta:
-            raise ValueError(f"No hay grupo de lights «{falta[0]}». Grupos: {', '.join(ids)}")
-        elegidos = [ids[x] for x in grupo]
-    else:                                   # sin grupo (o «todos»): todas las noches si son compatibles entre sí
-        elegidos = lights
-    if not _compatibles_entre_si(elegidos):
-        familias = {}
-        for g in elegidos:
-            familias.setdefault((g.get("filtro"), g.get("exp"), g.get("gain")), []).append(_id_grupo(g))
-        raise ValueError("Los grupos de lights no se pueden apilar juntos (otro filtro, exposición o gain). Apila cada familia "
-                         "por separado con 'grupo': " + " | ".join(", ".join(v) for v in familias.values()))
-    osc = any(f.get("bayer") or f.get("raw") for f in fichas if any(f["fichero"] in g["ficheros"] for g in elegidos))
-    base_nombre = _id_grupo(elegidos[0]) if len(elegidos) == 1 else f"{_id_grupo(elegidos[0]).rsplit('_', 1)[0]}_{len(elegidos)}noches"
-    nombre = re.sub(r"[^\w.-]+", "_", proyecto or f"{raiz.name}_{base_nombre}")[:80]
-    trabajo = APILADO / nombre
-    _limpiar_intermedios(trabajo, tambien_masters=True)     # restos de un intento anterior (cortado o con otros subs)
-    for sub in ("process", "masters", "candidatos", "unidos"):
-        (trabajo / sub).mkdir(parents=True, exist_ok=True)
-    r = {"grupos": [_id_grupo(g) for g in elegidos], "lights": sum(g["n"] for g in elegidos), "osc": osc, "trabajo": str(trabajo),
-         "saltados": saltados, "pasos": [], "avisos": [], "calibracion": [], "candidatos": [], "errores": []}
-
-    def cmd(*a):
-        siril.cmd(*a)
-        r["pasos"].append(" ".join(a))
-
-    def cd(p):
-        siril.cmd("cd", H._arg_cmd(Path(p)))
-
+def _preparar(siril, trabajo, elegidos, grupos, osc, drizzle, r, cmd, cd):
+    """Pasos 1–2 de apilarCandidatos (también los usa apilarCometa): masters, calibración de cada noche con lo suyo
+    (debayer en OSC) y, con varias noches, una sola secuencia con todas las calibradas. Devuelve (secuencia, tramos)."""
     hechos = {}                             # master ya hecho por grupo de calibración (darks compartidos entre noches)
 
     def master(g, tipo, extra=()):
@@ -596,6 +546,63 @@ def apilarCandidatos(siril, carpeta, grupo=None, proyecto=None, rechazos=("w", "
         _enlazar([str(p) for p in calibradas], trabajo / "unidos", "todas", ordenar=False)
         cd(trabajo / "unidos"); cmd("convert", "todas", "-out=../process"); cd(trabajo / "process")
         seq = "todas"
+    return seq, tramos
+
+
+RECHAZOS = {"w": "winsorized sigma", "g": "ESD generalizado", "l": "ajuste lineal", "s": "sigma", "p": "percentil", "a": "MAD"}
+
+
+def _compatibles_entre_si(gs):
+    return len({(g.get("filtro"), g.get("exp"), g.get("gain"), g.get("offset"), g.get("bin"), g.get("tam"), g.get("capas"))
+                for g in gs}) == 1
+
+
+def apilarCandidatos(siril, carpeta, grupo=None, proyecto=None, rechazos=("w", "g", "l"), pesos=(False, True),
+                     seleccionar=True, k=2.5, drizzle=False, excluir=None, conservar_intermedios=False):
+    """Pasos 3–4 lineales: masters, calibración, debayer (OSC), registro, selección de subs y apilado comparando métodos
+    de rechazo con y sin pesos. Varias noches juntas: cada una se calibra con lo suyo, se unen las calibradas y se
+    registran y apilan contra una referencia común. Trabaja en ~/.sirilastropilot/apilado/<proyecto> con enlaces a los
+    ficheros (los del usuario no se tocan). Deja cargado el master recomendado y lo guarda allí sin sobrescribir."""
+    t0 = time.perf_counter()
+    raiz, fichas, saltados = _recorrer(carpeta, excluir)
+    grupos = _agrupar(fichas)
+    lights = [g for g in grupos if g["tipo"] == "light"]
+    if not lights:
+        raise RuntimeError("No encuentro lights (IMAGETYP o carpeta «lights»). Mira inventarioSubs.")
+    ids = {_id_grupo(g): g for g in lights}
+    if isinstance(grupo, str) and grupo not in ("todos", "todas"):
+        grupo = [grupo]
+    if isinstance(grupo, (list, tuple)):
+        falta = [x for x in grupo if x not in ids]
+        if falta:
+            raise ValueError(f"No hay grupo de lights «{falta[0]}». Grupos: {', '.join(ids)}")
+        elegidos = [ids[x] for x in grupo]
+    else:                                   # sin grupo (o «todos»): todas las noches si son compatibles entre sí
+        elegidos = lights
+    if not _compatibles_entre_si(elegidos):
+        familias = {}
+        for g in elegidos:
+            familias.setdefault((g.get("filtro"), g.get("exp"), g.get("gain")), []).append(_id_grupo(g))
+        raise ValueError("Los grupos de lights no se pueden apilar juntos (otro filtro, exposición o gain). Apila cada familia "
+                         "por separado con 'grupo': " + " | ".join(", ".join(v) for v in familias.values()))
+    osc = any(f.get("bayer") or f.get("raw") for f in fichas if any(f["fichero"] in g["ficheros"] for g in elegidos))
+    base_nombre = _id_grupo(elegidos[0]) if len(elegidos) == 1 else f"{_id_grupo(elegidos[0]).rsplit('_', 1)[0]}_{len(elegidos)}noches"
+    nombre = re.sub(r"[^\w.-]+", "_", proyecto or f"{raiz.name}_{base_nombre}")[:80]
+    trabajo = APILADO / nombre
+    _limpiar_intermedios(trabajo, tambien_masters=True)     # restos de un intento anterior (cortado o con otros subs)
+    for sub in ("process", "masters", "candidatos", "unidos"):
+        (trabajo / sub).mkdir(parents=True, exist_ok=True)
+    r = {"grupos": [_id_grupo(g) for g in elegidos], "lights": sum(g["n"] for g in elegidos), "osc": osc, "trabajo": str(trabajo),
+         "saltados": saltados, "pasos": [], "avisos": [], "calibracion": [], "candidatos": [], "errores": []}
+
+    def cmd(*a):
+        siril.cmd(*a)
+        r["pasos"].append(" ".join(a))
+
+    def cd(p):
+        siril.cmd("cd", H._arg_cmd(Path(p)))
+
+    seq, tramos = _preparar(siril, trabajo, elegidos, grupos, osc, drizzle, r, cmd, cd)
     _progreso("registrar (dos pasadas)")
     cmd("register", seq, "-2pass")
     sel = {"excluidos": []}

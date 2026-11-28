@@ -13,6 +13,7 @@
 import math
 import os
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -623,6 +624,15 @@ def guardarImagen(siril, fichero, sobrescribir=False):
     if not hechos:
         raise RuntimeError(f"Siril no ha escrito {base}{ext}.")
     GUARDADOS.update(_clave(h) for h in hechos)
+    if previo:                                  # cometa: la trayectoria del núcleo (.json de apilarCometa) va con cada
+        try:                                    # versión; sin ella la unión buscaba el núcleo a ciegas (Lemmon, 27-nov)
+            js = Path(previo).with_suffix(".json")
+            if js.is_file() and "trayectoria" in js.read_text(encoding="utf-8"):
+                for h_ in hechos:
+                    if Path(h_).suffix.lower() in (".fit", ".fits", ".fts") and Path(h_).with_suffix(".json") != js:
+                        shutil.copyfile(js, Path(h_).with_suffix(".json"))
+        except OSError:
+            pass
     origen = master_de(previo) if previo else None
     if origen:
         DERIVADAS.update({_clave(h): origen for h in hechos})
@@ -804,6 +814,10 @@ LISTA.update(LISTA_MULTICAPA)
 # Núcleo de galaxias (nucleo.py): comprimir el bulbo tras estirar, antes de saturar.
 from nucleo import LISTA_NUCLEO  # noqa: E402
 LISTA.update(LISTA_NUCLEO)
+
+# Cometas (cometas.py): apilado en las estrellas y en el núcleo, unión, color y Larson-Sekanina (análisis).
+from cometas import LISTA_COMETAS  # noqa: E402
+LISTA.update(LISTA_COMETAS)
 
 
 # Rutas de entrada mal escritas (.fit/.fits, mayúsculas): se resuelven en todas las herramientas antes de llamar a

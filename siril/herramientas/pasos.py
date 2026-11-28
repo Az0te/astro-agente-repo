@@ -321,6 +321,13 @@ def _lineal(p):
     return float(np.median(_lum(p))) < 0.05
 
 
+def _lineal_final(p):
+    """Para exportar: mediana < 0,05 sola no basta, un final con el cielo en 0,02–0,03 (lo que pide fondoCandidatos) se
+    tomaba por lineal y se saltaba los controles del cometa (Lemmon SAS, 27-nov). Lineal = mediana baja Y p99 bajo."""
+    sub = p[:, ::8, ::8] if p.ndim == 3 else p[::8, ::8]
+    return _lineal(sub) and float(np.percentile(_lum(sub), 99)) < 0.12
+
+
 def _log_nuevo(siril, antes):
     """Líneas del registro de Siril escritas después de 'antes' (texto completo anterior)."""
     t = siril.get_siril_log() or ""
@@ -647,6 +654,24 @@ def _rango_rejilla(Z, cielo):
     return (max(m) - min(m)) if len(m) >= 2 else float("nan")
 
 
+
+def _esquinas(Z, valido, obj):
+    """Cuatro esquinas frente al centro (27 nov 2026, Lemmon: esquinas de abajo negras por un viñeteo mal corregido):
+    mediana de una caja de 1/10 del lado en cada esquina (sin objeto) menos la del centro, en σ del ruido fino del
+    cielo (paso alto de la imagen binada). Devuelve ([si, sd, ii, id], σ)."""
+    h, w = Z.shape
+    k = max(4, min(h, w) // 10)
+    ok = valido & ~obj
+    def med(ys, xs):
+        a, m = Z[ys, xs], ok[ys, xs]
+        return float(np.median(a[m])) if m.sum() >= 8 else float(np.median(a))
+    c = med(slice(h // 2 - k, h // 2 + k), slice(w // 2 - k, w // 2 + k))
+    hp = (Z - _caja(Z, 2))[ok]
+    s = 1.4826 * float(np.median(np.abs(hp - np.median(hp)))) if hp.size else 0.0
+    e = [med(slice(0, k), slice(0, k)) - c, med(slice(0, k), slice(w - k, w)) - c,
+         med(slice(h - k, h), slice(0, k)) - c, med(slice(h - k, h), slice(w - k, w)) - c]
+    return e, s
+
 def _preparar_gradiente(p, b=8):
     L = _binar(_lum(p), b)
     med = float(np.median(L))
@@ -686,7 +711,7 @@ def _preparar_gradiente(p, b=8):
         s_q = 1.4826 * float(np.median(np.abs(q - np.median(q))))
         lleno = 100.0 * float((medc[vc] > float(np.max(q)) + 5 * max(s_q, 1e-9)).mean())
     O2 = _ajuste_poli(L, cielo, 2)
-    return {"L": L, "valido": valido, "obj": o, "cielo": cielo, "rango0": _rango_rejilla(L, cielo),
+    return {"L": L, "valido": valido, "obj": o, "cielo": cielo, "rango0": _rango_rejilla(L, cielo), "esq0": _esquinas(L, valido, o),
             "plano0": _amplitud_plano(L, cielo, valido),
             "objeto_campo_pct": lleno if lleno is not None else 100.0 * float(o.sum()) / max(int(valido.sum()), 1),
             "senal_obj": float((L - O2)[o].sum()), "O_hp": L - O2, "b": b}
@@ -723,7 +748,19 @@ def _medir_gradiente(base, pc):
     est = 1.4826 * float(np.median(np.abs(rc[v] - np.median(rc[v])))) if v.any() else float("nan")
     return {"copia_objeto": _r(corr, 3), "objeto_quitado_pct": _r(come, 1), "gradiente_restante": _r(resid, 3),
             "irregularidad_cielo": _r(irreg, 3), "negativos_pct": _r(100.0 * float((pc < 0).mean()), 3),
-            "escala_pct": _r(100.0 * alfa, 2), "estructura_grande": _r(est, 8)}
+            "escala_pct": _r(100.0 * alfa, 2), "estructura_grande": _r(est, 8), **_medir_esquinas(base, C)}
+
+
+def _medir_esquinas(base, C):
+    """esquinas_sigma: las cuatro esquinas menos el centro (σ del ruido fino; sup. izq., sup. dcha., inf. izq., inf.
+    dcha.); esquinas_restante: la peor esquina frente a la de la imagen sin tocar (menor = mejor; > 1, peor que antes)."""
+    if "esq0" not in base:
+        return {}
+    e, s = _esquinas(C, base["valido"], base["obj"])
+    e0, s0 = base["esq0"]
+    peor0 = max(abs(x) for x in e0)
+    return {"esquinas_sigma": [_r(x / max(s0, 1e-12), 1) for x in e],
+            "esquinas_restante": _r(max(abs(x) for x in e) / peor0, 3) if peor0 > 0 else None}
 
 
 def _aplanado_gradiente(c, extenso, umbral=5.0):
@@ -932,11 +969,117 @@ def _exigir_alineado(siril, info, sin_alinear=False):
         "usuario lo confirma, repetir con sin_alinear: true.")
 
 
+# --- Zona excluida del modelo del fondo (cometas; 27 nov 2026, Lemmon, igual que SetiAstroPilot) ---------------------
+
+def _zona_excluida(H_, W_, excluir):
+    """Máscara (alto, ancho) True = zona que el modelo del fondo no puede tocar, en píxeles de pantalla ((0,0) arriba a
+    la izquierda, como las previas). excluir: lista de {"segmento": [x0, y0, x1, y1], "ancho": px} (trayectoria del
+    núcleo en el apilado de estrellas), {"circulo": [x, y, r]}, {"poligono": [[x, y], ...]} o {"cono": [x, y,
+    angulo_grados, largo, abertura_grados]} (cola desde el núcleo; 0 = hacia +x, 90 = hacia abajo)."""
+    import cv2
+    if isinstance(excluir, str):
+        excluir = json.loads(excluir)
+    if isinstance(excluir, dict):
+        excluir = [excluir]
+    m = np.zeros((H_, W_), np.uint8)
+    for fz in (excluir or []):
+        if "segmento" in fz:
+            x0, y0, x1, y1 = [int(round(v)) for v in fz["segmento"]]
+            a = max(1, int(round(fz.get("ancho", 200))))
+            cv2.line(m, (x0, y0), (x1, y1), 1, a)
+            cv2.circle(m, (x0, y0), max(1, a // 2), 1, -1)
+            cv2.circle(m, (x1, y1), max(1, a // 2), 1, -1)
+        elif "circulo" in fz:
+            x, y, rr = fz["circulo"]
+            cv2.circle(m, (int(round(x)), int(round(y))), max(1, int(round(rr))), 1, -1)
+        elif "poligono" in fz:
+            cv2.fillPoly(m, [np.round(np.asarray(fz["poligono"], np.float64)).astype(np.int32)], 1)
+        elif "cono" in fz:
+            x, y, ang, largo, ab = [float(v) for v in fz["cono"]]
+            pts = [(x, y)] + [(x + largo * np.cos(np.radians(t)), y + largo * np.sin(np.radians(t)))
+                              for t in np.linspace(ang - ab / 2, ang + ab / 2, 17)]
+            cv2.fillPoly(m, [np.round(np.asarray(pts)).astype(np.int32)], 1)
+        else:
+            raise ValueError(f"forma de exclusión desconocida: {fz}")
+    return m.astype(bool)
+
+
+def _polinomio_fuera_zona(q, zona, grado=2, celda=64):
+    """Superficie por canal ajustada en celdas de cielo (percentil 40) que no tocan la zona, con rechazo +2,5σ / −4σ.
+    grado 1, 2, 3 o "radial" (plano + r², r⁴, r⁶ desde el centro: viñeteo sin flats). Cálculo propio."""
+    q = np.asarray(q, dtype=np.float32)
+    C, Hh, Ww = q.shape
+    k = int(celda)
+    h, w = Hh // k, Ww // k
+    zc = zona[:h * k, :w * k].reshape(h, k, w, k).any(axis=(1, 3))
+    asp = Ww / Hh
+
+    def T(X, Y):
+        t = [np.ones_like(X), X, Y]
+        if grado == "radial":
+            R2 = (X * asp) ** 2 + Y ** 2
+            return np.stack(t + [R2, R2 * R2, R2 * R2 * R2], -1)
+        if grado >= 2:
+            t += [X * X, X * Y, Y * Y]
+        if grado >= 3:
+            t += [X ** 3, X * X * Y, X * Y * Y, Y ** 3]
+        return np.stack(t, -1)
+
+    yy, xx = np.mgrid[0:h, 0:w]
+    Tc = T((xx + 0.5) / w - 0.5, (yy + 0.5) / h - 0.5)
+    Yf, Xf = np.mgrid[0:Hh, 0:Ww].astype(np.float32)
+    Tf = T((Xf + 0.5) / Ww - 0.5, (Yf + 0.5) / Hh - 0.5).astype(np.float32)
+    del Xf, Yf
+    out = np.array(q, copy=True)
+    for c in range(C):
+        a = q[c, :h * k, :w * k].reshape(h, k, w, k).transpose(0, 2, 1, 3).reshape(h, w, -1)
+        cel = np.percentile(a, 40, axis=2)
+        sel = ~zc & np.isfinite(cel)
+        A, z = Tc[sel], cel[sel].astype(np.float64)
+        keep = np.ones(len(z), bool)
+        for _ in range(8):
+            co, *_ = np.linalg.lstsq(A[keep], z[keep], rcond=None)
+            rr = z - A @ co
+            sg = 1.4826 * float(np.median(np.abs(rr[keep] - np.median(rr[keep])))) or 1e-12
+            keep = (rr < 2.5 * sg) & (rr > -4 * sg)
+        mod = Tf @ co.astype(np.float32)
+        out[c] = q[c] - mod + np.float32(np.median(mod[::8, ::8]))
+    return np.clip(out, 0, 1).astype(np.float32)
+
+
+def _binar8(a):
+    h, w = a.shape[0] // 8, a.shape[1] // 8
+    return a[:h * 8, :w * 8].reshape(h, 8, w, 8).mean(axis=(1, 3))
+
+
+def _cola_en_modelo(base_p, q, zona):
+    """% de la señal de la zona excluida que se lleva el modelo (base − q) por encima de una superficie de grado 2
+    ajustada al modelo fuera de la zona. 0 = el modelo pasa por debajo de la cola; > 5 % = se come cola."""
+    Lb, Lq = np.asarray(base_p, np.float32).mean(0), np.asarray(q, np.float32).mean(0)
+    mod = _binar8(Lb - Lq)
+    h, w = mod.shape
+    z = (_binar8(zona.astype(np.float32)) > 0.5)[:h, :w]
+    if z.sum() < 4 or (~z).sum() < 10:
+        return None
+    yy, xx = np.mgrid[0:h, 0:w]
+    X, Y = xx / w - 0.5, yy / h - 0.5
+    A = np.stack([np.ones_like(X), X, Y, X * X, X * Y, Y * Y], -1).astype(np.float64)
+    co, *_ = np.linalg.lstsq(A[~z], mod[~z].astype(np.float64), rcond=None)
+    exceso = mod[z] - A[z] @ co
+    lb = _binar8(Lb)[:h, :w]
+    senal = lb[z] - float(np.median(lb[~z]))
+    sm = float(np.sum(np.clip(senal, 0, None)))
+    return _r(100.0 * float(np.sum(np.clip(exceso, 0, None))) / sm, 2) if sm > 0 else None
+
+
 def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True, muestras=20, tolerancia=1.0,
                         ignorar_cunas=False, tipo=None, sin_alinear=False, halo=True, halo_opciones=None, diagnostico=True,
-                        usar_syqon=True, membrana=True):
+                        usar_syqon=True, membrana=True, excluir=None):
     """Paso 9 lineal: compara subsky (polinomio y RBF), GraXpert IA, SyQon DeepGradient (si está instalado y hay internet)
-    y el polinomio fuera del halo (+ crominancia), mide y recomienda. La imagen no cambia."""
+    y el polinomio fuera del halo (+ crominancia), mide y recomienda. La imagen no cambia.
+    excluir: zonas que el modelo no puede tocar (cola y trayectoria de un cometa; formas en _zona_excluida). Con ellas
+    se añaden el polinomio propio fuera de la zona (1, 2 y viñeteo radial) y la membrana con la zona fuera, cada
+    candidato lleva cola_en_modelo_pct y la recomendación se queda entre los que respetan la zona (27 nov 2026)."""
     info = H._info(siril)
     alineado = _exigir_alineado(siril, info, sin_alinear)
     crudo = _crudo(siril)
@@ -946,6 +1089,7 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
     _comprobar_bordes(p, ignorar_cunas)
     huella = _huella(crudo)
     base = _preparar_gradiente(p)
+    zona = _zona_excluida(p.shape[1], p.shape[2], excluir) if excluir else None
     grupo = "gradiente"
     _limpiar_grupo(grupo)
     r = {"candidatos": [], "errores": [], "recomendado": None, "motivo": ""}
@@ -1021,25 +1165,82 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
     # Fondo por membrana (27 nov 2026, Rafael; idea de VeraLux Nox, escrito desde cero): sin muestras. Se marcan las celdas
     # con objeto o estrellas y el fondo se rellena ahí resolviendo la ecuación de Laplace (lo más liso que encaja con el
     # cielo de alrededor), en vez de ajustar un polinomio o colocar muestras.
-    if membrana:
+    # Con zona: también polinomio 2 + membrana. Sola, Laplace rellena la zona sin máximos dentro y el viñeteo es una
+    # cúpula: dejaba un pedestal bajo la cola. El polinomio quita la cúpula y la membrana sigue el resto hasta las
+    # esquinas (Lemmon SAS, 27-nov: esquinas 0,065 y cola en el modelo 0,13 % frente a 0,158 y 1,47 % de la sola).
+    variantes = [("fondo por membrana (Laplace, sin muestras)", None, False)]
+    if zona is not None:
+        variantes.append(("polinomio 2 + membrana fuera de la zona", 2, False))
+        # huecos oscuros compactos (mota de polvo sin flats; Lemmon 27-nov, −10 % a la izquierda de la cola): sobre la
+        # membrana y solos (para una imagen ya corregida, como la unión lineal del cometa)
+        variantes.append(("polinomio 2 + membrana + huecos oscuros rellenos", 2, True))
+        variantes.append(("solo huecos oscuros rellenos", "nada", True))
+    for nombre_m, g_m, con_huecos in (variantes if membrana else []):
         t0 = time.perf_counter()
         try:
-            q, minfo = _fondo_membrana(p)
+            if g_m == "nada":
+                q, minfo = np.asarray(p, np.float32), {}
+            else:
+                q, minfo = _fondo_membrana(_polinomio_fuera_zona(p, zona, grado=g_m) if g_m else p, zona=zona)
+            if con_huecos:
+                q, hinfo = _rellenar_huecos(q, zona)
+                minfo = {**minfo, **hinfo}
             n += 1
             m = _medir_gradiente(base, q)
             qq = q if info["top_down"] else q[:, ::-1, :]
             res = _a_siril(qq if qq.shape[0] > 1 else qq[0], crudo.dtype).reshape(crudo.shape)
-            texto = "membrana (Laplace) " + json.dumps(minfo)
-            cid = _guardar_candidato(grupo, n, res, {"nombre": "fondo por membrana", "comando": texto,
+            texto = ("polinomio 2 fuera de la zona + " if g_m else "") + "membrana (Laplace) " + json.dumps(minfo)
+            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre_m, "comando": texto,
                                                      "huella_base": huella, "metricas": m})
-            r["candidatos"].append({"id": cid, "metodo": "fondo por membrana (Laplace, sin muestras)",
+            r["candidatos"].append({"id": cid, "metodo": nombre_m,
                                     "comando": "cálculo propio", "metricas": m, "segundos": _r(time.perf_counter() - t0, 1)})
         except Exception as e:
-            r["errores"].append(f"fondo por membrana: {e}")
+            r["errores"].append(f"{nombre_m}: {e}")
+
+    # Zona excluida (cometa): polinomios propios fuera de ella y, para todos, cuánta cola se lleva el modelo.
+    if zona is not None:
+        r["zona_excluida_pct"] = _r(100.0 * float(zona.mean()), 1)
+        for g in (1, 2, "radial"):
+            t0 = time.perf_counter()
+            nombre = (f"polinomio {g}" if g != "radial" else "viñeteo radial + plano") + " fuera de la zona (propio)"
+            try:
+                q = _polinomio_fuera_zona(p, zona, grado=g)
+                n += 1
+                m = _medir_gradiente(base, q)
+                qq = q if info["top_down"] else q[:, ::-1, :]
+                res = _a_siril(qq if qq.shape[0] > 1 else qq[0], crudo.dtype).reshape(crudo.shape)
+                cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"polinomio_zona grado={g}",
+                                                         "huella_base": huella, "metricas": m})
+                r["candidatos"].append({"id": cid, "metodo": nombre, "comando": "cálculo propio", "metricas": m,
+                                        "segundos": _r(time.perf_counter() - t0, 1)})
+            except Exception as e:
+                r["errores"].append(f"{nombre}: {e}")
+        for x in r["candidatos"]:
+            try:
+                q = _pantalla(np.load(TRABAJO / f"{x['id']}.npy"), info)
+                x["metricas"]["cola_en_modelo_pct"] = _cola_en_modelo(p, q, zona)
+            except Exception as e:
+                r["errores"].append(f"cola en el modelo de {x['id']}: {e}")
 
     def absc(x): return abs(x["metricas"]["copia_objeto"] or 0)
-    def resid(x): v = x["metricas"]["gradiente_restante"]; return v if v is not None else 9
-    def eat(x): v = x["metricas"]["objeto_quitado_pct"]; return abs(v) if v is not None else 100
+    def resid(x):
+        v = x["metricas"]["gradiente_restante"]
+        v = v if v is not None else 9
+        # Con zona (cometa con DSLR sin flats, Lemmon 27-nov): gradiente_restante sólo mide el plano y el polinomio 1
+        # ganaba con 0,14 dejando la cúpula del viñeteo (irregularidad 0,81, huecos en las 4 esquinas). Ahí manda el peor.
+        if zona is not None and x["metricas"].get("irregularidad_cielo") is not None:
+            v = max(v, x["metricas"]["irregularidad_cielo"])
+        # y las esquinas (Lemmon, 27-nov: esquinas de abajo negras con el plano «corregido»)
+        if zona is not None and x["metricas"].get("esquinas_restante") is not None:
+            v = max(v, x["metricas"]["esquinas_restante"])
+        return v
+    def eat(x):
+        v = x["metricas"]["objeto_quitado_pct"]
+        if v is None:
+            return 100
+        # Con zona (cometa) la cola la vigila cola_en_modelo_pct; un negativo es el modelo pasando por debajo del objeto
+        # (devuelve señal) y no comerse nada: la membrana del Lemmon (−9,8, 27-nov) quedaba fuera por el abs().
+        return max(v, 0.0) if zona is not None else abs(v)
     c = r["candidatos"]
     # Campos de nebulosa o polvo extenso: lo que se lleva el modelo es señal débil que no vuelve (11 nov 2026: el ★ era
     # un RBF que se llevaba el 2,4 % de la nebulosa). Ahí se tolera ≤ 1 % y, a gradiente parecido, gana el que menos se lleva.
@@ -1047,6 +1248,10 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
     tope = 1.0 if extenso else 3.0
     fuera = set(_aplanado_gradiente(c, extenso))
     c = [x for x in c if x["id"] not in fuera] or c
+    if zona is not None:
+        # sólo los que no se comen la cola (≤ 3 %) y, si hay alguno, que dejen menos gradiente que la imagen sin tocar
+        c = [x for x in c if (x["metricas"].get("cola_en_modelo_pct") or 0) <= 3] or c  # 3,6 % (GraXpert, Lemmon 27-nov) ya llevaba la cola: bulto dentro del cono
+        c = [x for x in c if resid(x) <= 1] or c
     seguros = [x for x in c if eat(x) <= tope and absc(x) < 0.3]
     limpios = [x for x in c if absc(x) < 0.3]
     if seguros:
@@ -1085,7 +1290,10 @@ def gradienteCandidatos(siril, polinomio=(1, 2), rbf=(0.5,), usar_graxpert=True,
             q = _pantalla(np.load(TRABAJO / f"{r['recomendado']}.npy"), info)
             r["diagnostico_manchas"] = _halo.diagnosticar(q)
             # Si las manchas que deja son artefactos de color y la crominancia es segura, se recomienda esa.
-            cambio = _halo.preferir_por_diagnostico(r["diagnostico_manchas"], c, r["recomendado"], tope)
+            # con zona, el cambio sólo entre los que la respetan y sin dejar mucho más gradiente (Lemmon 27-nov en SAS)
+            g0 = next((resid(x) for x in c if x["id"] == r["recomendado"]), None)
+            pool = c if zona is None else [x for x in c if g0 is None or resid(x) <= max(1.0, 1.5 * g0)]
+            cambio = _halo.preferir_por_diagnostico(r["diagnostico_manchas"], pool, r["recomendado"], tope)
             if cambio:
                 r["recomendado_por_medidas"] = r["recomendado"]
                 r["diagnostico_manchas_por_medidas"] = r["diagnostico_manchas"]
@@ -1806,10 +2014,39 @@ def _rcastro(siril, crudo, producto, args=(), timeout=1800, reescalar_alto=False
         x = _de_siril(x)
         if holgura != 1.0:
             x = x / np.float32(holgura)                   # vuelta a la escala original
-            maximo = float(x.max())
-            if maximo > 1.0:                              # núcleos por encima de 1: se baja todo, no se recorta
-                x = x / np.float32(maximo)
-                out["_reescalado"] = maximo
+            # núcleos por encima de 1: se recortan solo ellos (Lemmon 27-nov: bajar toda la imagen por el máximo,
+            # ×0,5 con un núcleo a 2, oscurecía el cielo y daba «anillos oscuros 100 %» y una FWHM falsa)
+            sobre = int((x > 1.0).sum())
+            if sobre:
+                out["_recortados_px"] = sobre
+            # sin recortar canal a canal: el canal mayor pasa por una rodilla suave y los otros se escalan igual, así el
+            # núcleo conserva el color de la estrella (Lemmon 27-nov: recortar dejaba un píxel rosado en el centro)
+            if x.ndim == 3 and x.shape[0] == 3:
+                # 28-nov (Lemmon): BlurX sube cada canal del núcleo a su manera (hueco en el verde, centro rojo); donde
+                # pasa de 0,9 el núcleo toma el color de la entrada y una rodilla sin meseta (si no, anillos al calibrar)
+                if producto == "bxt" and a.ndim == 3 and a.shape == x.shape:
+                    try:
+                        import tomas_estrellas as _TE
+                        x, npn = _TE.proteger_nucleos_deconv(a / np.float32(holgura), x)
+                        if npn:
+                            out["_nucleos_protegidos"] = npn
+                    except Exception as ex:  # noqa: BLE001
+                        out["_nucleos_protegidos"] = f"error: {ex}"
+                m = x.max(0)
+                k = 0.9
+                s_ = m > k
+                if s_.any():
+                    m2 = np.where(s_, k + (1 - k) * np.tanh((m - k) / (1 - k)), m)
+                    x = x * np.where(s_, m2 / np.maximum(m, 1e-9), 1.0)[None].astype(np.float32)
+        if producto == "nxt" and holgura == 1.0 and x.ndim == 3 and x.shape == a.shape:
+            # 28-nov (Lemmon): NXT rehace los núcleos brillantes (0,9 → 1,0–2,0, cada canal distinto): vuelven a la entrada
+            try:
+                import tomas_estrellas as _TE
+                x, npn = _TE.proteger_nucleos_nxt(a, x)
+                if npn:
+                    out["_nucleos_protegidos_nxt"] = npn
+            except Exception as ex:  # noqa: BLE001
+                out["_nucleos_protegidos_nxt"] = f"error: {ex}"
         x = np.clip(x, 0, 1)
         out["salida" if f.name == sal.name else f.stem] = _a_siril(x, crudo.dtype).reshape(crudo.shape)
     texto = " ".join(["rc-astro", producto, *[str(x) for x in args]])
@@ -2050,8 +2287,10 @@ def nitidezLineal(siril, solo_corregir=False, estrellas=0.5, nebulosa=0.5, halos
                             [f"--ss={float(estrellas):.2f}", f"--sn={float(nebulosa):.2f}", f"--ash={float(halos):.2f}"])
                     out, texto = _rcastro(siril, crudo, "bxt", args, reescalar_alto=True)
                     res, nombre = out["salida"], "BlurX" + (" (sólo corregir)" if solo_corregir else "")
-                    if out.get("_reescalado"):
-                        extra["reescalado"] = _r(out["_reescalado"], 3)
+                    if out.get("_recortados_px"):
+                        extra["nucleos_recortados_a_1_px"] = out["_recortados_px"]
+                    if out.get("_nucleos_protegidos"):
+                        extra["nucleos_protegidos"] = out["_nucleos_protegidos"]
                 elif m in ("rl", "wiener"):
                     if solo_corregir:
                         raise ValueError("Siril no tiene «sólo corregir»: pasa solo_corregir: false")
@@ -2237,10 +2476,10 @@ def _asinh_al_fallo(siril, info, crudo, cielo, lim):
     return c, d
 
 
-def _hiperbolico(siril, info, crudo, cielo, lim, proteccion=1.5, color=1.0):
+def _hiperbolico(siril, info, crudo, cielo, lim, proteccion=1.5, color=1.0, rodilla=None):
     """Hiperbólico en luminancia que conserva el color (hiperbolico.py), con el cielo en el objetivo y luego el punto negro
-    como los demás."""
-    q, d = _hip.estirar(np.clip(_de_siril(crudo), 0, 1), cielo=cielo, proteccion=proteccion, color=color)
+    como los demás. rodilla: luces comprimidas antes de recortar (cometas, núcleos de galaxia)."""
+    q, d = _hip.estirar(np.clip(_de_siril(crudo), 0, 1), cielo=cielo, proteccion=proteccion, color=color, rodilla=rodilla)
     _restaurar(siril, _a_siril(q, crudo.dtype).reshape(crudo.shape))
     c = _medir(siril, info)
     bp, c = _punto_negro(siril, info, c, cielo, lim.get("por_canal"))
@@ -2508,7 +2747,7 @@ def _dominante_aditiva(p, celdas_px=None, S=64):
 
 def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
                       metodos=("ghs_suave", "ghs_medio", "ghs", "ghs_debil", "ghs_canal", "asinh", "escalas", "autostretch",
-                               "autoghs", "hiperbolico"),
+                               "autoghs", "hiperbolico", "hiperbolico_rodilla"),
                       negro_por_canal=True, negro_lineal=True, neutralizar=True, luces_neutras=True, senal_max=0.25,
                       forzar=False):
     """Paso 1 no lineal: compara GHS al fallo, arcsinh, estirado por escalas y autostretch con el cielo en el mismo
@@ -2568,7 +2807,9 @@ def estirarCandidatos(siril, tipo=None, cielo=None, ruido_max=None,
              "escalas": ("por escalas (base comprimida, detalle conservado)", _escalas),
              "autostretch": ("autostretch enlazado", _autostretch),
              "autoghs": ("autoghs de Siril (GHS automático, enlazado)", _autoghs),
-             "hiperbolico": ("hiperbólico en luminancia, color conservado", _hiperbolico)}
+             "hiperbolico": ("hiperbólico en luminancia, color conservado", _hiperbolico),
+             "hiperbolico_rodilla": ("hiperbólico con rodilla de luces desde 0,8 (sin recortar núcleos)",
+                                     lambda s, i, c, cl, li: _hiperbolico(s, i, c, cl, li, rodilla=0.8))}
     r = {"cielo_objetivo": cielo, "limites": {k: v for k, v in lim.items() if k != "por_canal"},
          "punto_negro": "por canal" if negro_por_canal else "común", "candidatos": [], "errores": []}
     if bps_lineal is not None:
@@ -2844,7 +3085,7 @@ def _ruido_ondiculas(x, fuerza=1.0, sombras=1.0):
     return q[0] if plano else q
 
 
-def _fondo_membrana(p, S=None, iteraciones=400, kappa=2.0):
+def _fondo_membrana(p, S=None, iteraciones=400, kappa=2.0, zona=None):
     """Fondo de cielo sin muestras (27 nov 2026): mediana por celdas de S px; las celdas con objeto o estrellas (por encima
     de una superficie lisa del cielo + kappa σ, en varias vueltas) se rellenan resolviendo Laplace (Jacobi con las celdas
     de cielo fijas, empezando por la media del cielo); se suaviza, se lleva a píxel (bilineal) y se resta dejando el nivel
@@ -2858,6 +3099,9 @@ def _fondo_membrana(p, S=None, iteraciones=400, kappa=2.0):
     # Primera superficie: las celdas suavizadas a gran escala (siguen un gradiente fuerte); luego vueltas de membrana
     # apoyada sólo en el cielo y recorte de lo que sobresale.
     cielo = np.ones_like(cel, bool)
+    # zona excluida (cometa): sus celdas nunca son cielo
+    libre = (~zona[:gh * S, :gw * S].reshape(gh, S, gw, S).any(axis=(1, 3))) if zona is not None else np.ones_like(cielo)
+    cielo &= libre
     sup = _suave(cel.astype(np.float32), max(2, max(gh, gw) // 2)).astype(np.float64)
     for _ in range(6):
         d = cel - sup
@@ -2867,6 +3111,7 @@ def _fondo_membrana(p, S=None, iteraciones=400, kappa=2.0):
         ex = ~nuevo
         g = np.pad(ex, 1)
         nuevo = ~(ex | g[:-2, 1:-1] | g[2:, 1:-1] | g[1:-1, :-2] | g[1:-1, 2:])
+        nuevo &= libre
         if (nuevo == cielo).all():
             break
         cielo = nuevo
@@ -2907,6 +3152,104 @@ def _membrana(v, fijo, iteraciones=400):
         f = np.where(fijo, v, nuevo)
     return f
 
+
+
+def _caja_np(x, k):
+    """Media en caja (2k+1)² con bordes reflejados, numpy puro."""
+    if k < 1:
+        return x
+    g = np.pad(np.asarray(x, np.float64), k, mode="reflect")
+    c = np.cumsum(np.cumsum(g, 0), 1)
+    c = np.pad(c, ((1, 0), (1, 0)))
+    n = 2 * k + 1
+    s = c[n:, n:] - c[:-n, n:] - c[n:, :-n] + c[:-n, :-n]
+    return (s / (n * n)).astype(np.float32)
+
+
+def _gauss_np(x, s):
+    k = max(1, int(round(s)))
+    return _caja_np(_caja_np(_caja_np(x, k), k), k)
+
+
+def _rellenar_huecos(p, zona=None, b=8, kappa=4.0, area_min=12, area_max=6000, iteraciones=300):
+    """Huecos oscuros compactos del cielo (sombra de una mota de polvo sin flats, el «hueco» de diagnosticoManchas): en
+    la imagen binada b×b por mediana (sin estrellas) se buscan zonas por debajo de su entorno (paso alto de ~15 celdas)
+    más de kappa σ, de area_min a area_max celdas y fuera de la zona excluida; dentro se rellena con membrana (Laplace)
+    desde el borde, canal a canal, y se SUMA solo el déficit (suave), así las estrellas de dentro no cambian de forma.
+    La señal real solo suma luz: un hueco más oscuro que el cielo de alrededor no es señal. Lemmon, 27-nov: mancha de
+    −10 % del cielo y ~80 px de radio a la izquierda de la cola (en Siril y en SAS)."""
+    a = np.asarray(p, np.float32)
+    C, H, W = a.shape
+    gh, gw = H // b, W // b
+    cel = np.median(a[:, :gh * b, :gw * b].reshape(C, gh, b, gw, b).transpose(0, 1, 3, 2, 4).reshape(C, gh, gw, b * b), axis=3)
+    L = _gauss_np(cel.mean(0), 1)
+    alto = L - _gauss_np(L, 15)
+    sg = 1.4826 * float(np.median(np.abs(alto - np.median(alto))))
+    # entorno sin lo brillante (estrellas grandes, cola): con una media simple, el cielo junto a una estrella brillante
+    # sale «por debajo de su entorno» y se tomaba por hueco (Lemmon, 27-nov: 21 huecos, casi todos anillos de estrellas)
+    for _ in range(2):
+        w = (alto < 2 * sg).astype(np.float32)
+        bg = _gauss_np(L * w, 15) / np.maximum(_gauss_np(w, 15), 1e-3)
+        alto = L - bg
+        sg = 1.4826 * float(np.median(np.abs(alto - np.median(alto))))
+    brillo = alto > 3 * sg
+    for _ in range(4):
+        g = np.pad(brillo, 1)
+        brillo = brillo | g[:-2, 1:-1] | g[2:, 1:-1] | g[1:-1, :-2] | g[1:-1, 2:]
+    malo = (alto < -kappa * max(sg, 1e-12)) & ~brillo
+    if zona is not None:
+        z = zona[:gh * b, :gw * b].reshape(gh, b, gw, b).any(axis=(1, 3))
+        malo &= ~z
+    # componentes conexas (4-vecinos) sin scipy ni cv2
+    etiq = np.zeros((gh, gw), np.int32)
+    huecos, n = [], 0
+    ys, xs = np.nonzero(malo)
+    for y0, x0 in zip(ys, xs):
+        if etiq[y0, x0]:
+            continue
+        n += 1
+        pila, pts = [(y0, x0)], []
+        etiq[y0, x0] = n
+        while pila:
+            y, x = pila.pop()
+            pts.append((y, x))
+            for yy, xx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if 0 <= yy < gh and 0 <= xx < gw and malo[yy, xx] and not etiq[yy, xx]:
+                    etiq[yy, xx] = n
+                    pila.append((yy, xx))
+        if area_min <= len(pts) <= area_max:
+            huecos.append((n, pts))
+    info = {"huecos": [], "celda_px": b}
+    if not huecos:
+        return a.copy(), info
+    m = np.isin(etiq, [k for k, _ in huecos])
+    # agrandar 3 celdas: el borde de la sombra es suave y el umbral solo coge el centro
+    for _ in range(3):
+        g = np.pad(m, 1)
+        m = m | g[:-2, 1:-1] | g[2:, 1:-1] | g[1:-1, :-2] | g[1:-1, 2:]
+    fijo = ~m
+    out = a.copy()
+    yy = (np.arange(H) + 0.5) / b - 0.5
+    xx = (np.arange(W) + 0.5) / b - 0.5
+    y0 = np.clip(np.floor(yy).astype(int), 0, gh - 1); y1 = np.clip(y0 + 1, 0, gh - 1)
+    x0 = np.clip(np.floor(xx).astype(int), 0, gw - 1); x1 = np.clip(x0 + 1, 0, gw - 1)
+    fy = np.clip(yy - y0, 0, 1)[:, None].astype(np.float32)
+    fx = np.clip(xx - x0, 0, 1)[None, :].astype(np.float32)
+    for k in range(C):
+        ck = _gauss_np(cel[k], 1)
+        lleno = _membrana(ck, fijo, iteraciones)
+        dfc = _gauss_np(np.clip(lleno - ck, 0, None) * m, 1.5)
+        out[k] += ((1 - fy) * ((1 - fx) * dfc[y0][:, x0] + fx * dfc[y0][:, x1])
+                   + fy * ((1 - fx) * dfc[y1][:, x0] + fx * dfc[y1][:, x1]))
+    for k_, pts in huecos:
+        pa = np.asarray(pts)
+        cy, cx = pa.mean(0)
+        prof = float(np.min(alto[pa[:, 0], pa[:, 1]]))
+        cielo = float(np.median(L))
+        info["huecos"].append({"centro_px": [int((cx + 0.5) * b), int((cy + 0.5) * b)],
+                               "radio_px": int(b * np.sqrt(len(pts) / np.pi)),
+                               "profundidad_pct_cielo": round(100 * prof / cielo, 1) if cielo > 0 else None})
+    return np.clip(out, 0, 1).astype(np.float32), info
 
 def _energia_brillante(L, px):
     D = _caja(L, 2) - _caja(L, 8)
@@ -3174,8 +3517,17 @@ def reducirRuidoCandidatos(siril, mods=None, da3d=None, perdida_max=10.0, ia=Non
     if ya_limpio and medibles:
         mejor, regla = max(medibles, key=rr), "el cielo ya está limpio: la pasada más suave"
     elif fuertes:
-        b = min(rr(x) for x in fuertes)         # empates de ruido (± 0,02): la que menos detalle pierde
-        mejor = min([x for x in fuertes if rr(x) <= b + 0.02],
+        # ruido efectivo: el mayor de grano fino y moteado de 4 px (Lemmon, 27-nov: epf guiado ganaba con 0,27 de grano
+        # y 0,77 de moteado frente a NoiseX 0,30 / 0,31: cambiaba el grano por manchas)
+        def ef(x):
+            return max(rr(x), x["metricas"].get("ruido_grueso_rel") or 0.0)
+        for x in fuertes:
+            g = x["metricas"].get("ruido_grueso_rel") or 0.0
+            if g > rr(x) + 0.3:
+                x.setdefault("avisos", []).append(f"moteado: el grano baja al {round(100 * rr(x))} % pero las manchas "
+                                                  f"de 4 px solo al {round(100 * g)} %")
+        b = min(ef(x) for x in fuertes)         # empates de ruido (± 0,02): la que menos detalle pierde
+        mejor = min([x for x in fuertes if ef(x) <= b + 0.02],
                     key=lambda x: (dp(x) if dp(x) is not None else 0.0, x["metricas"]["ruido_grueso_rel"]))
         regla = "capa débil: la que más ruido quita sin dejar el fondo muerto"
     elif limpios:
@@ -3311,8 +3663,9 @@ def saturacionCandidatos(siril, cantidades=(0.25, 0.5, 0.75, 1.0, 1.5), fondo=1.
         raise RuntimeError("La saturación necesita una imagen en color.")
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
-    if _lineal(p):
-        raise RuntimeError("La imagen parece lineal (mediana < 0,05): la saturación va después de estirar (Paso 5 no lineal).")
+    # _lineal_final y no _lineal: un cometa estirado con el cielo ya en 0,025 tiene la mediana < 0,05 (Lemmon, 27-nov)
+    if _lineal_final(p):
+        raise RuntimeError("La imagen parece lineal (mediana < 0,05 y p99 < 0,12): la saturación va después de estirar (Paso 5 no lineal).")
     z = _zonas(p)
     cel = z["medidas"]["_celdas"]
 
@@ -3486,8 +3839,29 @@ def _rango(q, cel, blanco=0.40, gmax=2.0):
     return np.clip(s + (q - s) * g, 0, 1).astype(np.float32), g
 
 
+def _pie_suave(p, s, t):
+    """Baja el cielo (s → t) SIN recortar, sobre la LUMINANCIA y con el color por cociente: iguala el cielo de los
+    canales, luego f(L) = t + g·(L − s) por encima del cielo (g = (1 − t)/(1 − s)) y t·(L/s)^γ por debajo (γ = g·s/t, misma
+    pendiente); cada canal × f(L)/L. Para el cometa (Lemmon, 27-nov): el punto negro dejaba el 9 % de R y B a 0 (su ruido
+    es el doble que el de G) y limitado al percentil 0,01 % no bajaba el cielo de 0,12."""
+    p = np.asarray(p, dtype=np.float32)
+    sm = float(np.mean(s))
+    if p.shape[0] > 1:
+        p = np.clip(p - (np.asarray(s, np.float32) - sm)[:, None, None], 0, None)
+    L = p.mean(axis=0)
+    sk = float(min(max(sm, 1e-4), 0.999))
+    tk = float(min(t, sk))
+    g = (1 - tk) / (1 - sk)
+    gam = g * sk / max(tk, 1e-6)
+    fL = np.where(L >= sk, tk + g * (L - sk), tk * np.power(np.clip(L / sk, 0, 1), gam))
+    q = p * (fL / np.maximum(L, 1e-7))[None]
+    m = q.max(axis=0)
+    q = np.where(m[None] > 1.0, q / np.maximum(m, 1e-7)[None], q)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
 def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0, rango=True,
-                    blanco=0.40, ganancia_max=2.0, senal=0.10):
+                    blanco=0.40, ganancia_max=2.0, senal=0.10, recorte_canal_max=None):
     """Paso 5 no lineal (fondo): punto negro por canal para dejar el cielo en varios niveles, neutro; mide píxeles
     nuevos a 0, cielo y ruido y recomienda el más oscuro que no recorta más del ceros_max %. La imagen no cambia.
     IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13 salían grises y planos frente a la versión de
@@ -3497,7 +3871,10 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
     La «+ medios» conserva la señal sobre el cielo (mediana del objeto − cielo) o la sube a 0,10, en vez de devolver la
     mediana de entrada (con el cielo en 0,05 dejaba la imagen lavada); se descarta la variante que deja esa señal por
     debajo del 85 % de la de entrada (se come la nebulosa). Gana el cielo más oscuro que cumple; a casi igual cielo
-    (±0,005), «+ rango», luego «+ medios», luego el punto negro solo."""
+    (±0,005), «+ rango», luego «+ medios», luego el punto negro solo.
+    recorte_canal_max (% de píxeles nuevos a 0 en CADA canal; con tipo 'cometa', 0,01 por defecto): el punto negro de
+    cada canal no pasa de ese percentil (Lemmon, 27-nov: cielo con un 0,1–0,2 % recortado). Con tipo 'cometa' y
+    sin cielos, el nivel es 0,10 (Rafael, 28-nov)."""
     info = H._info(siril)
     crudo = _crudo(siril)
     p = _pantalla(crudo, info)
@@ -3518,6 +3895,9 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
     obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
     m_obj = float(np.median(_lum(p)[obj_px]))
     media0 = float(np.mean(s0))
+    # Cometa (Rafael, 28-nov): cielo final ~0,10 para enseñar el polvo de fondo y la cola débil.
+    if cielos is None and re.search(r"(?i)comet", str(tipo or "")):
+        cielos = (0.10,)
     if cielos is None and media0 <= 0.035:
         r["recomendado"] = None
         r["motivo"] = f"El cielo ya está oscuro ({_r(media0, 3)} ≤ 0,035): no se toca."
@@ -3526,18 +3906,30 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
     # 0,015 se quedaba en el 5,1 %: faltaba el escalón de en medio (0,02, 4,5 %).
     cielos = (0.05, 0.035, 0.025, 0.02, 0.015) if cielos is None else cielos
     senal0 = m_obj - media0
+    if recorte_canal_max is None and re.search(r"(?i)comet", str(tipo or "")):
+        recorte_canal_max = 0.01
+    tope_bp = None
+    if recorte_canal_max is not None:
+        tope_bp = [float(np.percentile(p[k, ::2, ::2], float(recorte_canal_max))) * 0.999 for k in range(p.shape[0])]
+        r["recorte_canal_max_pct"] = recorte_canal_max
+    ceros_canal0 = [100.0 * float((p[k] <= 0).mean()) for k in range(p.shape[0])]
     variantes = []
     for t in sorted(cielos or [], reverse=True):
-        variantes += [(float(t), False), (float(t), True)] + ([(float(t), "rango")] if rango else [])
+        variantes += [(float(t), False), (float(t), True)] + ([(float(t), "rango")] if rango else [])                      + ([(float(t), "pie")] if tope_bp is not None else [])
     for t, var in variantes:
-        medios, es_rango = var is True, var == "rango"
+        medios, es_rango, es_pie = var is True, var == "rango", var == "pie"
         if float(np.mean(s0)) <= t:   # un canal ya por debajo no se toca (bp 0)
             continue
         n += 1
         t0 = time.perf_counter()
         try:
-            bp = np.array([max(0.0, (s - t) / (1 - t)) for s in s0], dtype=np.float32).reshape(-1, 1, 1)
+            bp_l = [max(0.0, (s - t) / (1 - t)) for s in s0]
+            if tope_bp is not None:
+                bp_l = [min(b, tb) for b, tb in zip(bp_l, tope_bp)]
+            bp = np.array(bp_l, dtype=np.float32).reshape(-1, 1, 1)
             q = np.clip((p - bp) / np.maximum(1 - bp, 1e-6), 0, 1).astype(np.float32)
+            if es_pie:
+                q = _pie_suave(p, s0, t)
             if medios:
                 # Curva que deja el cielo en t y devuelve la mediana del objeto a la de antes (MTF sobre t–1): el fondo
                 # baja sin apagar la nebulosa (15 nov 2026: el punto negro solo la oscurecía; la referencia usa curva).
@@ -3560,6 +3952,9 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
             m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)   # lo que decide (ceros_pct incluye los de antes)
             fal = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                    if m["ceros_nuevos_pct"] > ceros_max else [])
+            m["ceros_canal_nuevos_pct"] = [_r(100.0 * float((q[k] <= 0).mean()) - ceros_canal0[k], 4) for k in range(q.shape[0])]
+            if recorte_canal_max is not None and max(m["ceros_canal_nuevos_pct"]) > 1.5 * float(recorte_canal_max):
+                fal.append(f"recorta a 0 en un canal un {max(m['ceros_canal_nuevos_pct'])} % (máx {recorte_canal_max} % por canal)")
             senal1 = m["objeto_mediana"] - m["cielo"]
             m["senal_sobre_cielo"] = _r(senal1, 4)
             if senal0 > 0.01 and senal1 < 0.85 * senal0:
@@ -3572,7 +3967,7 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
             f1 = _franja_sobre_cielo(q, rgb)
             # La «+ medios» frente al punto negro solo del mismo nivel (sólo lo que tiñe la curva); el punto negro solo no se
             # juzga: en paletas recortaba parte de la franja a 0 en un canal y parecía teñir.
-            if not medios and not es_rango:
+            if not medios and not es_rango and not es_pie:
                 f_plano[t] = f1
             m["franja_p10_p30"], m["tinte_franja_pct"] = f1, (_tinte_franja(f_plano.get(t), f1) if (medios or es_rango) else None)
             if m["tinte_franja_pct"] is not None and m["tinte_franja_pct"] > tinte_max:
@@ -3580,8 +3975,8 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
                            f"frente al punto negro solo (máx {tinte_max} %)")
             res = q if info["top_down"] else q[:, ::-1, :]
             res = _a_siril(res, crudo.dtype).reshape(crudo.shape)
-            nombre = f"cielo a {t:g}" + (" + medios" if medios else " + rango" if es_rango else "")
-            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": f"punto negro por canal {bp.ravel().round(4).tolist()}" + (" + curva de medios" if medios else f" + punto blanco ×{g_rango:.2f}" if es_rango else ""),
+            nombre = f"cielo a {t:g}" + (" + medios" if medios else " + rango" if es_rango else " con pie suave (sin recortar)" if es_pie else "")
+            cid = _guardar_candidato(grupo, n, res, {"nombre": nombre, "comando": (f"pie suave en luminancia, cielo {[round(float(x), 4) for x in s0]} → {t:g}" if es_pie else f"punto negro por canal {bp.ravel().round(4).tolist()}") + (" + curva de medios" if medios else f" + punto blanco ×{g_rango:.2f}" if es_rango else ""),
                                                      "huella_base": huella, "metricas": m})
             r["candidatos"].append({"id": cid, "metodo": nombre, "metricas": m, "no_cumple": fal,
                                     "segundos": _r(time.perf_counter() - t0, 1)})
@@ -3591,7 +3986,7 @@ def fondoCandidatos(siril, cielos=None, ceros_max=5.0, tipo=None, tinte_max=3.0,
     # Primero las «+ rango» que cumplen; si no, las «+ medios»; si no, el punto negro solo, que oscurece también la
     # nebulosa (24 nov 2026: el más oscuro dejaba la mediana del objeto en la mitad).
     def _nivel(x):
-        return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith("+ medios") else 0
+        return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith(("+ medios", "(sin recortar)")) else 0
     if ok:
         # 24 nov 2026: el cielo más oscuro que cumple (antes, primero el grupo «+ rango»: en PixInsight la Paleta5 se quedó
         # con el cielo en 0,065); a casi igual cielo (±0,005), «+ rango», luego «+ medios», luego el punto negro solo.
@@ -4639,15 +5034,28 @@ def _libre(carpeta, base):
         n += 1
 
 
-def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False):
+def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False, tipo=None):
     """Paso 10 no lineal: TIFF 16 bits y JPG en 'carpeta' como <nombre>_final.tif/.jpg, sin sobrescribir. Exige el cielo
-    entre 0,01 y 0,10 (fondo ajustado) salvo forzar."""
+    entre 0,01 y 0,10 (fondo ajustado) salvo forzar; con un cometa, entre 0,01 y 0,13 (objetivo ~0,10, Rafael 28-nov).
+    Con un cometa (tipo 'cometa' o .json de trayectoria junto al fichero) controla además cielo gris (> 0,13), recorte a
+    0 por canal y coma quemada."""
     info = H._info(siril)
     p0 = H._pixeles(siril, info)
-    if not _lineal(p0):
+    meta_c = None
+    try:
+        if info.get("fichero"):
+            fj = Path(info["fichero"]).with_suffix(".json")
+            if fj.exists():
+                meta_c = json.loads(fj.read_text(encoding="utf-8"))
+                meta_c = meta_c if isinstance(meta_c, dict) and meta_c.get("nucleo_ref") else None
+    except (OSError, ValueError):
+        meta_c = None
+    es_cometa = bool(meta_c or re.search(r"(?i)comet", str(tipo or "")))
+    if not _lineal_final(p0):
         cielo = float(_cielo(p0[:, ::4, ::4])["cielo"])
-        if not forzar and not 0.01 <= cielo <= 0.10:
-            raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,01–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05; sin pasarle cielos) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
+        tope = 0.13 if es_cometa else 0.10
+        if not forzar and not 0.01 <= cielo <= tope:
+            raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,01–{tope:.2f}): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05; sin pasarle cielos) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
     dest = H._ruta(carpeta, "carpeta")
     base = str(nombre or Path(info["fichero"] or "imagen").stem)
     if not re.fullmatch(r"[\w .\-]+", base) or base.strip(". ") == "":
@@ -4655,7 +5063,10 @@ def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False):
     dest.mkdir(parents=True, exist_ok=True)
     raiz = _libre(dest, base)
     p = H._pixeles(siril, info)
-    r = {"control": {**_recortes(p), "lineal": _lineal(p)}}
+    r = {"control": {**_recortes(p), "lineal": _lineal_final(p)}}
+    if es_cometa and not r["control"]["lineal"]:
+        import cometas as _cm
+        r["control_cometa"] = _cm.control_final(p, meta_c, float(_cielo(p[:, ::4, ::4])["cielo"]))
     if r["control"]["lineal"]:
         r["aviso"] = "La imagen parece lineal: en TIFF/JPG se verá casi negra. ¿Falta estirar?"
     q = max(1, min(100, int(calidad)))
@@ -4692,6 +5103,15 @@ def exportarFinal(siril, carpeta, nombre=None, calidad=95, forzar=False):
             hechos.append({"fichero": str(f), "bytes": os.path.getsize(f)})
     if len(hechos) < 2:
         raise RuntimeError(f"Siril no ha escrito los dos ficheros ({[h['fichero'] for h in hechos]}): mira registro.")
+    # Lemmon (27 nov 2026): Siril se quedaba con «exportar_tmp.fits» cargado y Rafael veía el temporal. Se carga el TIFF
+    # final, que es lo que se entrega.
+    try:
+        tif = next(Path(h["fichero"]) for h in hechos if h["fichero"].lower().endswith((".tif", ".tiff")))
+        siril.cmd("load", H._arg_cmd(tif))
+        H._pila_sigue(siril)
+        r["cargado"] = str(tif)
+    except Exception as e:
+        r["aviso_carga"] = f"no he podido cargar el TIFF final ({str(e)[:120]}): sigue cargado el temporal."
     r.update(ficheros=hechos, segundos=_r(time.perf_counter() - t0, 1), calidad_jpg=q,
              nota="TIFF de 16 bits y JPG con el perfil de color que tenga la imagen en Siril (para web, sRGB). "
                   "Guarda también la versión FITS 32 bits con guardarImagen si no lo has hecho.")
