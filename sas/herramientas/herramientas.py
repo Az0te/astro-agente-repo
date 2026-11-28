@@ -547,7 +547,15 @@ def abrirImagen(ctx, fichero):
         ctx.activate_view(getattr(doc, "uid", None) or _nombre(doc))
     except Exception:
         pass
-    return _info(_base(doc))
+    r = _info(_base(doc))
+    # Una imagen ya estirada (final, TIFF de 8/16 bits estirado) se ve tal cual: sin el autoestirado de pantalla.
+    try:
+        a = np.asarray(_base(doc).image, dtype=np.float32)
+        lineal = float(np.median(a[::7, ::7])) < 0.02
+        r["pantalla"] = _pantalla(ctx, doc, estirado=lineal)
+    except Exception as e:
+        r["pantalla"] = {"aviso": str(e)}
+    return r
 
 
 _FORMATOS = {".fit": "fits", ".fits": "fits", ".fts": "fits", ".tif": "tif", ".tiff": "tif", ".png": "png",
@@ -589,6 +597,28 @@ def cabecera(ctx, vista=None, todas=False):
     return r
 
 
+def _meta_cometa_junto(p, m, fp0=None):
+    """Cometa: la trayectoria del núcleo (metadatos 'cometa' de apilarCometa) se guarda en <fichero>.json junto a cada
+    FITS/XISF, para que la unión y Larson-Sekanina la tengan al reabrir (Lemmon, 27-nov: se perdía al guardar)."""
+    try:
+        if p.suffix.lower() not in (".fit", ".fits", ".fts", ".xisf"):
+            return
+        import json as _json
+        tray = m.get("cometa") if isinstance(m.get("cometa"), dict) else None
+        fp0 = fp0 or m.get("file_path")
+        if tray is None and fp0:
+            # 28-nov: vista abierta de un fichero con su .json al lado (sin metadatos 'cometa'): guardada con otro nombre
+            # perdía la trayectoria y la unión buscaba el núcleo a ciegas
+            fj = Path(fp0).with_suffix(".json")
+            if fj.exists() and fj != p.with_suffix(".json"):
+                tray = _json.loads(fj.read_text(encoding="utf-8"))
+                tray = tray if isinstance(tray, dict) and tray.get("nucleo_ref") else None
+        if tray:
+            p.with_suffix(".json").write_text(_json.dumps(tray, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
     """Guarda una vista (formato por la extensión: .fits, .xisf, .tif, .png, .jpg). No sobrescribe salvo
     sobrescribir: true. bits: '16-bit', '32-bit floating point'… (por defecto 32 bits flotante en FITS/XISF/TIFF)."""
@@ -600,9 +630,14 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
     if p.exists() and not sobrescribir:
         raise FileExistsError(f"{p} ya existe. Usa otro nombre (v1, v2…) o sobrescribir: true.")
     p.parent.mkdir(parents=True, exist_ok=True)
+    # 27-nov (Lemmon): bits "32" no es un nombre de SASpro y guardaba un FITS de 8 bits (78 MB en vez de 314)
+    _b = str(bits).strip().lower().replace("-bit", "").replace(" floating point", "").replace("bits", "").strip() if bits is not None else None
+    bits = {"32": "32-bit floating point", "32f": "32-bit floating point", "float": "32-bit floating point",
+            "16": "16-bit", "8": "8-bit"}.get(_b, bits)
     if bits is None:
         bits = "8-bit" if fmt in ("jpg",) else "16-bit" if fmt == "png" else "32-bit floating point"
     m = _meta(d)
+    fp0 = m.get("file_path")                       # antes de guardar: save_document la cambia al fichero nuevo
     img = d.image
     # SASpro 1.24.5: save_document guarda como «Guardar como» (cabecera actual y astrometría). Si no existe, el camino de
     # siempre (cabecera fusionada con wcs_header).
@@ -610,6 +645,7 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
         try:
             ctx.save_document(str(p), doc=d, bit_depth=bits)
             if p.exists():
+                _meta_cometa_junto(p, m, fp0)
                 try:
                     import multicapa
                     multicapa._anotar_origen(str(p), [x for x in (m.get("file_path"), _nombre(d)) if x])
@@ -629,6 +665,7 @@ def guardarImagen(ctx, fichero, vista=None, sobrescribir=False, bits=None):
                    file_meta=m.get("file_meta"))
     if not p.exists():
         raise RuntimeError(f"SASpro no ha escrito {p}.")
+    _meta_cometa_junto(p, m, fp0)
     try:                                # procedencia: el fichero nuevo sale de la vista (y de su fichero de origen)
         import multicapa
         multicapa._anotar_origen(str(p), [x for x in (m.get("file_path"), _nombre(d)) if x])
@@ -799,15 +836,24 @@ def _anotar_estrellas(ctx, antes, d):
             _ESTRELLAS[_clave(x)] = {"nombre": _nombre(x), "de": _nombre(d), "recombinada": False}
 
 
-def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
+def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False, tipo=None):
     """Entrega: TIFF de 16 bits + JPG calidad 95 como <nombre>_final, sin sobrescribir (_2, _3…). Exige el cielo entre
-    0,01 y 0,10 (fondo ajustado) salvo forzar."""
+    0,01 y 0,10 (fondo ajustado) salvo forzar; con un cometa, entre 0,01 y 0,13 (objetivo ~0,10, Rafael 28-nov). Con un
+    cometa (tipo 'cometa' o trayectoria en la vista) controla además cielo gris (> 0,13), recorte a 0 por canal y coma
+    quemada."""
     d = _doc(ctx, vista)
-    if M.lineal(_p(d.image)[:, ::8, ::8]):
-        raise RuntimeError("La imagen parece lineal (mediana < 0,05): estírala antes de exportar.")
+    _sub = _p(d.image)[:, ::8, ::8]
+    # mediana < 0,05 sola no basta: un final con el cielo en 0,02–0,03 (lo que pide fondoCandidatos) tiene la mediana en
+    # 0,03 y se tomaba por lineal (Lemmon SAS, 27-nov). Lineal = mediana baja Y p99 bajo (un apilado lineal casi no pasa
+    # de 0,1 salvo estrellas; uno estirado y oscuro tiene el objeto y las estrellas por encima).
+    if M.lineal(_sub) and float(np.percentile(M.lum(_sub), 99)) < 0.12:
+        raise RuntimeError("La imagen parece lineal (mediana < 0,05 y p99 < 0,12): estírala antes de exportar.")
     cielo = float(M.cielo(_p(d.image)[:, ::4, ::4])["cielo"])
-    if not forzar and not 0.01 <= cielo <= 0.10:
-        raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,01–0,10): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05; sin pasarle cielos) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
+    meta_c = _cometas._meta_cometa(d)
+    es_cometa = bool(meta_c or re.search(r"(?i)comet", str(tipo or "")))
+    tope = 0.13 if es_cometa else 0.10
+    if not forzar and not 0.01 <= cielo <= tope:
+        raise RuntimeError(f"Cielo en {cielo:.3f} (fuera de 0,01–{tope:.2f}): ajusta el fondo antes de exportar con fondoCandidatos (cielo oscuro y neutro, 0,015–0,05; sin pasarle cielos) y repasa contraste y saturación. IC 405 (20 nov 2026): Qwen exportó con el cielo gris en Siril y la nebulosa apagada en PixInsight por saltarse ese paso. forzar: true sólo si el usuario quiere ese cielo.")
     abiertas = {_clave(x) for x in _docs(ctx)}
     sueltas = [v["nombre"] for k, v in _ESTRELLAS.items() if k in abiertas and not v["recombinada"]]
     if sueltas and not any(v["recombinada"] for v in _ESTRELLAS.values()) and not forzar:
@@ -832,6 +878,8 @@ def exportarFinal(ctx, carpeta=None, nombre=None, vista=None, forzar=False):
                       "candidato: si el cielo no quedó como querías, aplica el recomendado (aplicarCandidato) y exporta de nuevo.")
     if aviso_color:
         r["aviso_color"] = aviso_color
+    if es_cometa:
+        r["control_cometa"] = _cometas.control_final(p, meta_c, cielo)
     return r
 
 
@@ -1320,7 +1368,7 @@ def _srgc_survey(p, survey):
     return "NSNS RGB continuum (north) — colour" if p.shape[0] >= 3 else "NSNS visual continuum (north) — mono"
 
 
-def _abe_excluido(q, degree=1, samples=120, frac_dilatar=1):
+def _abe_excluido(q, degree=1, samples=120, frac_dilatar=1, zona=None, auto=True):
     """ABE de SASpro (setiastro.saspro.abe.abe_run) con exclusión automática: fuera las muestras del objeto, según la
     máscara de cielo de cielo.py (cajas de cielo de verdad; se rechaza lo que sube +2σ sobre la superficie, que es objeto
     o halo, y sus vecinas). Las zonas oscuras dentro del objeto que bajan al nivel del cielo SÍ quedan como muestras.
@@ -1339,6 +1387,10 @@ def _abe_excluido(q, degree=1, samples=120, frac_dilatar=1):
     H, W = q.shape[1:]
     pad = ((0, max(0, H - cielo.shape[0])), (0, max(0, W - cielo.shape[1])))
     cielo = np.pad(cielo, pad, mode="edge")[:H, :W]
+    if not auto:
+        cielo = np.ones((H, W), bool)
+    if zona is not None:                 # zona dada a mano (trayectoria y cola de un cometa): nunca se toman muestras
+        cielo = cielo & ~zona
     if cielo.mean() < 0.05:
         raise RuntimeError(f"Casi no hay cielo libre ({100 * cielo.mean():.1f} %): la exclusión dejaría ABE sin muestras.")
     a = np.ascontiguousarray(np.moveaxis(q, 0, -1) if q.shape[0] == 3 else q[0]).astype(np.float32)
@@ -1354,17 +1406,277 @@ def _abe_excluido(q, degree=1, samples=120, frac_dilatar=1):
     return out, 100.0 * float(cielo.mean())
 
 
+def _zona_excluida(H, W, excluir):
+    """Máscara (H, W) True = zona excluida del modelo del fondo. excluir: lista de formas en píxeles de la vista:
+    {"segmento": [x0, y0, x1, y1], "ancho": px} (trayectoria del núcleo en el apilado de estrellas),
+    {"circulo": [x, y, r]}, {"poligono": [[x, y], ...]} (cola), {"cono": [x, y, angulo_grados, largo, abertura_grados]}
+    (cola desde el núcleo; ángulo 0 = hacia +x, 90 = hacia +y)."""
+    import cv2
+    if isinstance(excluir, str):         # el cliente puede mandarlo como texto JSON
+        excluir = json.loads(excluir)
+    if isinstance(excluir, dict):
+        excluir = [excluir]
+    m = np.zeros((H, W), np.uint8)
+    for f in (excluir or []):
+        if "segmento" in f:
+            x0, y0, x1, y1 = [int(round(v)) for v in f["segmento"]]
+            a = max(1, int(round(f.get("ancho", 200))))
+            cv2.line(m, (x0, y0), (x1, y1), 1, a)
+            cv2.circle(m, (x0, y0), max(1, a // 2), 1, -1)
+            cv2.circle(m, (x1, y1), max(1, a // 2), 1, -1)
+        elif "circulo" in f:
+            x, y, r = f["circulo"]
+            cv2.circle(m, (int(round(x)), int(round(y))), max(1, int(round(r))), 1, -1)
+        elif "poligono" in f:
+            cv2.fillPoly(m, [np.round(np.asarray(f["poligono"], np.float64)).astype(np.int32)], 1)
+        elif "cono" in f:
+            x, y, ang, largo, ab = [float(v) for v in f["cono"]]
+            pts = [(x, y)] + [(x + largo * np.cos(np.radians(a)), y + largo * np.sin(np.radians(a)))
+                              for a in np.linspace(ang - ab / 2, ang + ab / 2, 17)]
+            cv2.fillPoly(m, [np.round(np.asarray(pts)).astype(np.int32)], 1)
+        else:
+            raise ValueError(f"forma de exclusión desconocida: {f}")
+    return m.astype(bool)
+
+
+def _polinomio_fuera_zona(q, zona, grado=2, celda=64):
+    """Superficie polinómica por canal ajustada en celdas de cielo (percentil 40, poco peso de las estrellas) que no
+    tocan la zona excluida, con rechazo asimétrico (+2,5σ / −4σ). Cálculo propio. Para cometas: la cola y la
+    trayectoria no entran en el modelo."""
+    q = np.asarray(q, dtype=np.float32)
+    C, H, W = q.shape
+    k = int(celda)
+    h, w = H // k, W // k
+    zc = zona[:h * k, :w * k].reshape(h, k, w, k).any(axis=(1, 3))
+
+    asp = W / H
+
+    def T(X, Y):
+        t = [np.ones_like(X), X, Y]
+        if grado == "radial":            # viñeteo sin flats: plano + r², r⁴, r⁶ desde el centro (Lemmon 27-nov, Canon)
+            R2 = (X * asp) ** 2 + Y ** 2
+            return np.stack(t + [R2, R2 * R2, R2 * R2 * R2], -1)
+        if grado >= 2:
+            t += [X * X, X * Y, Y * Y]
+        if grado >= 3:
+            t += [X ** 3, X * X * Y, X * Y * Y, Y ** 3]
+        return np.stack(t, -1)
+
+    yy, xx = np.mgrid[0:h, 0:w]
+    Tc = T((xx + 0.5) / w - 0.5, (yy + 0.5) / h - 0.5)
+    Yf, Xf = np.mgrid[0:H, 0:W].astype(np.float32)
+    Tf = T((Xf + 0.5) / W - 0.5, (Yf + 0.5) / H - 0.5).astype(np.float32)
+    del Xf, Yf
+    out = np.array(q, copy=True)
+    for c in range(C):
+        a = q[c, :h * k, :w * k].reshape(h, k, w, k).transpose(0, 2, 1, 3).reshape(h, w, -1)
+        cel = np.percentile(a, 40, axis=2)
+        sel = ~zc & np.isfinite(cel)
+        A, z = Tc[sel], cel[sel].astype(np.float64)
+        keep = np.ones(len(z), bool)
+        for _ in range(8):
+            co, *_ = np.linalg.lstsq(A[keep], z[keep], rcond=None)
+            r = z - A @ co
+            s = 1.4826 * float(np.median(np.abs(r[keep] - np.median(r[keep])))) or 1e-12
+            keep = (r < 2.5 * s) & (r > -4 * s)
+        mod = Tf @ co.astype(np.float32)
+        out[c] = q[c] - mod + np.float32(np.median(mod[::8, ::8]))
+    return out
+
+
+def _suave(x, r):
+    k = max(1, int(round(r / 2)))
+    return M._caja(M._caja(M._caja(x, k), k), k)
+
+
+def _membrana(v, fijo, iteraciones=400):
+    """Relleno armónico (igual que en Siril): los valores de 'v' en 'fijo' quedan; el resto, Laplace por Jacobi."""
+    f = np.where(fijo, v, float(np.mean(v[fijo])) if fijo.any() else float(np.mean(v))).astype(np.float64)
+    if fijo.all():
+        return f
+    for _ in range(int(iteraciones)):
+        g = np.pad(f, 1, mode="edge")
+        nuevo = 0.25 * (g[:-2, 1:-1] + g[2:, 1:-1] + g[1:-1, :-2] + g[1:-1, 2:])
+        f = np.where(fijo, v, nuevo)
+    return f
+
+
+def _fondo_membrana(p, S=None, iteraciones=400, kappa=2.0, zona=None):
+    """Fondo por membrana, sin muestras (el de Siril, 27 nov 2026): mediana por celdas; las celdas con objeto, estrellas
+    o en la zona excluida se rellenan con Laplace apoyado en las de cielo; se suaviza, se lleva a píxel y se resta
+    dejando el nivel del cielo. Sigue el viñeteo hasta las esquinas (las celdas de las esquinas son cielo y quedan
+    fijas), cosa que un polinomio de grado bajo no hace (Lemmon SAS, 27-nov: anillo claro y esquinas negras)."""
+    a = np.asarray(p, np.float32)
+    C, Hh, Ww = a.shape
+    S = int(S or max(8, min(Hh, Ww) // 64))
+    gh, gw = Hh // S, Ww // S
+    L = a.mean(axis=0)[:gh * S, :gw * S].reshape(gh, S, gw, S)
+    cel = np.median(L.transpose(0, 2, 1, 3).reshape(gh, gw, S * S), axis=2)
+    libre = (~zona[:gh * S, :gw * S].reshape(gh, S, gw, S).any(axis=(1, 3))) if zona is not None else np.ones_like(cel, bool)
+    cielo = libre.copy()
+    sup = _suave(cel.astype(np.float32), max(2, max(gh, gw) // 2)).astype(np.float64)
+    for _ in range(6):
+        d = cel - sup
+        sg = 1.4826 * float(np.median(np.abs(d[cielo] - np.median(d[cielo]))))
+        ex = ~(d < kappa * max(sg, 1e-12))
+        g = np.pad(ex, 1)
+        nuevo = ~(ex | g[:-2, 1:-1] | g[2:, 1:-1] | g[1:-1, :-2] | g[1:-1, 2:]) & libre
+        if (nuevo == cielo).all():
+            break
+        cielo = nuevo
+        sup = _membrana(cel, cielo, iteraciones)
+    if cielo.mean() < 0.15:
+        raise RuntimeError(f"Sólo un {100 * cielo.mean():.0f} % del campo es cielo: la membrana no tiene dónde apoyarse.")
+    out = np.empty_like(a)
+    yy = (np.arange(Hh) + 0.5) / S - 0.5
+    xx = (np.arange(Ww) + 0.5) / S - 0.5
+    y0 = np.clip(np.floor(yy).astype(int), 0, gh - 1); y1 = np.clip(y0 + 1, 0, gh - 1)
+    x0 = np.clip(np.floor(xx).astype(int), 0, gw - 1); x1 = np.clip(x0 + 1, 0, gw - 1)
+    fy = np.clip(yy - y0, 0, 1)[:, None].astype(np.float32)
+    fx = np.clip(xx - x0, 0, 1)[None, :].astype(np.float32)
+    for k in range(C):
+        ck = np.median(a[k, :gh * S, :gw * S].reshape(gh, S, gw, S).transpose(0, 2, 1, 3).reshape(gh, gw, S * S), axis=2)
+        fk = _suave(_membrana(ck, cielo, iteraciones).astype(np.float32), 2)
+        fondo = ((1 - fy) * ((1 - fx) * fk[y0][:, x0] + fx * fk[y0][:, x1]) + fy * ((1 - fx) * fk[y1][:, x0] + fx * fk[y1][:, x1]))
+        out[k] = a[k] - fondo + np.float32(np.median(ck[cielo]))
+    return np.clip(out, 0, 1).astype(np.float32), {"celda_px": S, "cielo_pct": round(100.0 * float(cielo.mean()), 1)}
+
+
+def _caja_np(x, k):
+    """Media en caja (2k+1)² con bordes reflejados, numpy puro."""
+    if k < 1:
+        return x
+    g = np.pad(np.asarray(x, np.float64), k, mode="reflect")
+    c = np.cumsum(np.cumsum(g, 0), 1)
+    c = np.pad(c, ((1, 0), (1, 0)))
+    n = 2 * k + 1
+    s = c[n:, n:] - c[:-n, n:] - c[n:, :-n] + c[:-n, :-n]
+    return (s / (n * n)).astype(np.float32)
+
+
+def _gauss_np(x, s):
+    k = max(1, int(round(s)))
+    return _caja_np(_caja_np(_caja_np(x, k), k), k)
+
+
+def _rellenar_huecos(p, zona=None, b=8, kappa=4.0, area_min=12, area_max=6000, iteraciones=300):
+    """Huecos oscuros compactos del cielo (sombra de una mota de polvo sin flats, el «hueco» de diagnosticoManchas): en
+    la imagen binada b×b por mediana (sin estrellas) se buscan zonas por debajo de su entorno (paso alto de ~15 celdas)
+    más de kappa σ, de area_min a area_max celdas y fuera de la zona excluida; dentro se rellena con membrana (Laplace)
+    desde el borde, canal a canal, y se SUMA solo el déficit (suave), así las estrellas de dentro no cambian de forma.
+    La señal real solo suma luz: un hueco más oscuro que el cielo de alrededor no es señal. Lemmon, 27-nov: mancha de
+    −10 % del cielo y ~80 px de radio a la izquierda de la cola (en Siril y en SAS)."""
+    a = np.asarray(p, np.float32)
+    C, H, W = a.shape
+    gh, gw = H // b, W // b
+    cel = np.median(a[:, :gh * b, :gw * b].reshape(C, gh, b, gw, b).transpose(0, 1, 3, 2, 4).reshape(C, gh, gw, b * b), axis=3)
+    L = _gauss_np(cel.mean(0), 1)
+    alto = L - _gauss_np(L, 15)
+    sg = 1.4826 * float(np.median(np.abs(alto - np.median(alto))))
+    # entorno sin lo brillante (estrellas grandes, cola): con una media simple, el cielo junto a una estrella brillante
+    # sale «por debajo de su entorno» y se tomaba por hueco (Lemmon, 27-nov: 21 huecos, casi todos anillos de estrellas)
+    for _ in range(2):
+        w = (alto < 2 * sg).astype(np.float32)
+        bg = _gauss_np(L * w, 15) / np.maximum(_gauss_np(w, 15), 1e-3)
+        alto = L - bg
+        sg = 1.4826 * float(np.median(np.abs(alto - np.median(alto))))
+    brillo = alto > 3 * sg
+    for _ in range(4):
+        g = np.pad(brillo, 1)
+        brillo = brillo | g[:-2, 1:-1] | g[2:, 1:-1] | g[1:-1, :-2] | g[1:-1, 2:]
+    malo = (alto < -kappa * max(sg, 1e-12)) & ~brillo
+    if zona is not None:
+        z = zona[:gh * b, :gw * b].reshape(gh, b, gw, b).any(axis=(1, 3))
+        malo &= ~z
+    # componentes conexas (4-vecinos) sin scipy ni cv2
+    etiq = np.zeros((gh, gw), np.int32)
+    huecos, n = [], 0
+    ys, xs = np.nonzero(malo)
+    for y0, x0 in zip(ys, xs):
+        if etiq[y0, x0]:
+            continue
+        n += 1
+        pila, pts = [(y0, x0)], []
+        etiq[y0, x0] = n
+        while pila:
+            y, x = pila.pop()
+            pts.append((y, x))
+            for yy, xx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if 0 <= yy < gh and 0 <= xx < gw and malo[yy, xx] and not etiq[yy, xx]:
+                    etiq[yy, xx] = n
+                    pila.append((yy, xx))
+        if area_min <= len(pts) <= area_max:
+            huecos.append((n, pts))
+    info = {"huecos": [], "celda_px": b}
+    if not huecos:
+        return a.copy(), info
+    m = np.isin(etiq, [k for k, _ in huecos])
+    # agrandar 3 celdas: el borde de la sombra es suave y el umbral solo coge el centro
+    for _ in range(3):
+        g = np.pad(m, 1)
+        m = m | g[:-2, 1:-1] | g[2:, 1:-1] | g[1:-1, :-2] | g[1:-1, 2:]
+    fijo = ~m
+    out = a.copy()
+    yy = (np.arange(H) + 0.5) / b - 0.5
+    xx = (np.arange(W) + 0.5) / b - 0.5
+    y0 = np.clip(np.floor(yy).astype(int), 0, gh - 1); y1 = np.clip(y0 + 1, 0, gh - 1)
+    x0 = np.clip(np.floor(xx).astype(int), 0, gw - 1); x1 = np.clip(x0 + 1, 0, gw - 1)
+    fy = np.clip(yy - y0, 0, 1)[:, None].astype(np.float32)
+    fx = np.clip(xx - x0, 0, 1)[None, :].astype(np.float32)
+    for k in range(C):
+        ck = _gauss_np(cel[k], 1)
+        lleno = _membrana(ck, fijo, iteraciones)
+        dfc = _gauss_np(np.clip(lleno - ck, 0, None) * m, 1.5)
+        out[k] += ((1 - fy) * ((1 - fx) * dfc[y0][:, x0] + fx * dfc[y0][:, x1])
+                   + fy * ((1 - fx) * dfc[y1][:, x0] + fx * dfc[y1][:, x1]))
+    for k_, pts in huecos:
+        pa = np.asarray(pts)
+        cy, cx = pa.mean(0)
+        prof = float(np.min(alto[pa[:, 0], pa[:, 1]]))
+        cielo = float(np.median(L))
+        info["huecos"].append({"centro_px": [int((cx + 0.5) * b), int((cy + 0.5) * b)],
+                               "radio_px": int(b * np.sqrt(len(pts) / np.pi)),
+                               "profundidad_pct_cielo": round(100 * prof / cielo, 1) if cielo > 0 else None})
+    return np.clip(out, 0, 1).astype(np.float32), info
+
+
+def _cola_en_modelo(base_p, q, zona):
+    """Cuánto del objeto que hay en la zona excluida se lleva el modelo: el modelo (base − q) en la zona menos lo que
+    predice una superficie de grado 2 ajustada al modelo fuera de la zona, sumado y dividido por la señal de la zona
+    sobre el cielo. 0 = el modelo pasa por debajo de la cola sin seguirla; > 5 % = se come cola."""
+    Lb, Lq = M.lum(base_p), M.lum(q)
+    mod = M.binar(Lb - Lq, 8)
+    z = M.binar(zona.astype(np.float32), 8) > 0.5
+    h, w = mod.shape
+    z = z[:h, :w]
+    if z.sum() < 4 or (~z).sum() < 10:
+        return None
+    yy, xx = np.mgrid[0:h, 0:w]
+    X, Y = xx / w - 0.5, yy / h - 0.5
+    A = np.stack([np.ones_like(X), X, Y, X * X, X * Y, Y * Y], -1).astype(np.float64)
+    co, *_ = np.linalg.lstsq(A[~z], mod[~z].astype(np.float64), rcond=None)
+    exceso = mod[z] - A[z] @ co
+    lb = M.binar(Lb, 8)[:h, :w]
+    senal = lb[z] - float(np.median(lb[~z]))
+    s = float(np.sum(np.clip(senal, 0, None)))
+    return _r(100.0 * float(np.sum(np.clip(exceso, 0, None))) / s, 2) if s > 0 else None
+
+
 def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpert=True, muestras=120, tipo=None,
                         halo=True, halo_opciones=None, diagnostico=True, srgc=None, srgc_survey=None, cadenas=True,
-                        usar_syqon=True, abe_excluir=True):
+                        usar_syqon=True, abe_excluir=True, excluir=None):
     """Paso 9 lineal: compara ABE (polinomio 1 y 2, y con RBF), GraXpert IA, SyQon DeepGradient (si está instalado y hay
     internet), el polinomio fuera del halo (+ crominancia), SRGC (si la vista tiene astrometría) y las cadenas con nuestro modelo del cielo con máscara o de
-    bordes; mide y recomienda. La vista no cambia."""
+    bordes; mide y recomienda. La vista no cambia.
+    excluir: zonas que el modelo no puede tocar (trayectoria y cola de un cometa; formas en _zona_excluida). Con ellas
+    se añaden ABE con la zona fuera y un polinomio propio fuera de la zona, cada candidato lleva cola_en_modelo_pct y
+    la recomendación se queda entre los que respetan la zona (27 nov 2026, cometa Lemmon)."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if not M.lineal(p[:, ::8, ::8]):
         raise RuntimeError("La imagen no parece lineal (mediana > 0,05): el gradiente se corrige en lineal (Paso 9).")
     base = M.preparar_gradiente(p)
+    zona = _zona_excluida(p.shape[1], p.shape[2], excluir) if excluir else None
     lista = [(f"ABE polinomio {int(g)}", "abe", {"degree": int(g), "samples": int(muestras), "rbf": False})
              for g in (polinomio or [])]
     if rbf:
@@ -1389,6 +1701,31 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
         for g in (polinomio or []):
             lista.append((f"ABE polinomio {int(g)} con exclusión del objeto", "abe_excluido",
                           {"degree": int(g), "samples": int(muestras)}, lambda q, **k: _abe_excluido(q, **k)[0]))
+    if zona is not None:
+        for g in (polinomio or []):
+            lista.append((f"ABE polinomio {int(g)} con la zona excluida", "abe_zona",
+                          {"degree": int(g), "samples": int(muestras)},
+                          lambda q, **k: _abe_excluido(q, zona=zona, auto=False, **k)[0]))
+            lista.append((f"ABE polinomio {int(g)} con la zona y el objeto excluidos", "abe_zona_auto",
+                          {"degree": int(g), "samples": int(muestras)},
+                          lambda q, **k: _abe_excluido(q, zona=zona, auto=True, **k)[0]))
+        for g in (1, 2, "radial"):
+            lista.append(((f"Polinomio {g}" if g != "radial" else "Viñeteo radial + plano") + " fuera de la zona (propio)",
+                          "polinomio_zona", {"grado": g}, lambda q, **k: _polinomio_fuera_zona(q, zona, **k)))
+        # membrana (Laplace) con la zona fuera: sigue el viñeteo hasta las esquinas sin muestras
+        lista.append(("Fondo por membrana (Laplace) fuera de la zona (propio)", "membrana_zona", {},
+                      lambda q, **k: _fondo_membrana(q, zona=zona)[0]))
+        # membrana sobre el polinomio 2: sola, dentro de la zona rellena por Laplace y, como el viñeteo es una cúpula
+        # (más claro en el centro) y Laplace no tiene máximos dentro, dejaba un pedestal bajo la cola (Lemmon SAS,
+        # 27-nov: objeto_quitado −10,8 %). El polinomio quita la cúpula y la membrana sigue lo que queda hasta las esquinas.
+        lista.append(("Polinomio 2 + membrana fuera de la zona (propio)", "membrana_zona", {"sobre": "polinomio 2"},
+                      lambda q, **k: _fondo_membrana(_polinomio_fuera_zona(q, zona, grado=2), zona=zona)[0]))
+        # y los huecos oscuros compactos (mota de polvo sin flats): sobre esa misma membrana y solos (para una imagen ya
+        # corregida, p. ej. la unión lineal del cometa)
+        lista.append(("Polinomio 2 + membrana + huecos oscuros rellenos (propio)", "membrana_zona", {"sobre": "polinomio 2", "huecos": True},
+                      lambda q, **k: _rellenar_huecos(_fondo_membrana(_polinomio_fuera_zona(q, zona, grado=2), zona=zona)[0], zona)[0]))
+        lista.append(("Solo huecos oscuros rellenos (propio)", "membrana_zona", {"huecos": True},
+                      lambda q, **k: _rellenar_huecos(q, zona)[0]))
     omitidos = []
     if usar_syqon:
         if not _syqon.hay("deep-gradient"):
@@ -1441,14 +1778,42 @@ def gradienteCandidatos(ctx, vista=None, polinomio=(1, 2), rbf=True, usar_graxpe
                                         "segundos": _r(time.perf_counter() - t0, 1)})
         except Exception as e:
             r["errores"].append(f"cadenas con el modelo del cielo: {e}")
-    r["recomendado"], r["criterio"], r["motivo"] = M.elegir_gradiente(r["candidatos"], base["objeto_campo_pct"], tipo)
+    respetan = None
+    if zona is not None:
+        for c in r["candidatos"]:
+            try:
+                c["metricas"]["cola_en_modelo_pct"] = _cola_en_modelo(p, _p(_cargar_candidato(c["id"])[0]), zona)
+            except Exception as e:
+                c["metricas"]["cola_en_modelo_pct"] = None
+                r["errores"].append(f"cola_en_modelo de {c['metodo']}: {e}")
+        r["zona_excluida_pct"] = _r(100.0 * float(zona.mean()), 1)
+        respetan = [c for c in r["candidatos"] if c["proceso"] in ("abe_zona", "abe_zona_auto", "polinomio_zona", "membrana_zona")
+                    and (c["metricas"].get("cola_en_modelo_pct") or 0) <= 3]  # GraXpert con 3,6 % tenía la cola en el modelo (Lemmon Siril, 27-nov)
+        # nunca uno que deja más gradiente que la imagen sin tocar (> 1), si hay otro: en las estrellas del Lemmon
+        # (27-nov) salía el ABE 1 con 1,94 porque el ABE 2 (0,50) se llevaba un 3,1 % «del objeto» (cometa corrido)
+        respetan = [c for c in respetan if (c["metricas"].get("gradiente_restante") or 9) <= 1] or respetan
+        # y las esquinas: el plano corregido dejaba las de abajo negras (Lemmon SAS, 27-nov). Solo los que dejan la peor
+        # esquina cerca de la mejor (≤ 1,5 × la mejor o ≤ 0,25 de la original).
+        er = [c["metricas"].get("esquinas_restante") for c in respetan if c["metricas"].get("esquinas_restante") is not None]
+        if er:
+            tope_e = max(0.25, 1.5 * min(er))
+            respetan = [c for c in respetan if (c["metricas"].get("esquinas_restante") or 9) <= tope_e] or respetan
+    r["recomendado"], r["criterio"], r["motivo"] = M.elegir_gradiente(respetan or r["candidatos"],
+                                                                      base["objeto_campo_pct"], tipo)
+    if respetan:
+        r["motivo"] = "Entre los que respetan la zona excluida (cola_en_modelo ≤ 5 %): " + str(r["motivo"])
     # Qué es cada mancha que queda en la recomendada: canal, exceso o hueco, si sigue al objeto, y veredicto.
     if diagnostico and r["recomendado"] and p.shape[0] >= 3:
         try:
             r["diagnostico_manchas"] = _halo.diagnosticar(_p(_cargar_candidato(r["recomendado"])[0]))
             # Si las manchas que deja son artefactos de color y la crominancia es segura, se recomienda esa.
             tope = M.tope_gradiente(base["objeto_campo_pct"], tipo)[1]
-            cambio = _halo.preferir_por_diagnostico(r["diagnostico_manchas"], r["candidatos"], r["recomendado"], tope)
+            # Con zona excluida, el cambio solo entre los que la respetan y sin dejar más gradiente que el elegido: en el
+            # Lemmon (27-nov) se iba al «fuera del halo + crominancia», con 1,73 de gradiente restante (peor que sin tocar).
+            g0 = next((c["metricas"].get("gradiente_restante") for c in r["candidatos"] if c["id"] == r["recomendado"]), None)
+            pool = [c for c in (respetan or r["candidatos"])
+                    if g0 is None or (c["metricas"].get("gradiente_restante") or 9) <= max(1.0, 1.5 * g0)]
+            cambio = _halo.preferir_por_diagnostico(r["diagnostico_manchas"], pool, r["recomendado"], tope)
             if cambio:
                 r["recomendado_por_medidas"] = r["recomendado"]
                 r["diagnostico_manchas_por_medidas"] = r["diagnostico_manchas"]
@@ -1571,6 +1936,9 @@ def estirarCandidatos(ctx, vista=None, medianas=(0.15, 0.2), ghs=True, propio=Tr
         for cl in (0.10, 0.12):
             lista.append((f"hiperbólico en luminancia, color conservado (cielo {cl})", "hiperbolico",
                           {"cielo": cl, "proteccion": 1.5, "color": 1.0}))
+        # 27-nov (Lemmon): con rodilla de luces antes de recortar, la coma no queda en una meseta a 1,0
+        lista.append(("hiperbólico con rodilla de luces desde 0,8 (cielo 0.1, sin recortar núcleos)", "hiperbolico",
+                      {"cielo": 0.10, "proteccion": 1.5, "color": 1.0, "rodilla": 0.8}))
 
     def medir(q):
         m = M.cielo(q)
@@ -1828,7 +2196,20 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5),
     if _sas_al_menos(1, 24, 5):
         lista += [(f"WaveScale HDR (comando de SASpro) compresión {c:g}", "wavescale_hdr",
                    {"compression_factor": float(c), "n_scales": 5, "mask_gamma": 5.0}) for c in (hdr or [])]
-    r = _comparar(ctx, d, "nucleo", lista, lambda q: M.medir_nucleo(q, n))
+    # Cometa (Lemmon, 27-nov: coma y primer tramo de cola blancos, 13 % de la coma a ≥ 0,98): con la trayectoria en la
+    # vista, cada candidato mide la coma quemada y se recomienda el más suave que la deja por debajo del 0,5 %.
+    meta_c = _cometas._meta_cometa(d)
+    quem = None
+    if meta_c and meta_c.get("nucleo_ref"):
+        xy, rc_ = meta_c["nucleo_ref"], float(meta_c.get("r_coma") or 30)
+        quem = lambda q: _cometas._coma_quemada(q, xy, rc_)
+        m0["coma_quemada_pct"] = quem(p)
+        # rodilla de luces sobre el máximo de los canales (ver M.comprimir_luces): la que de verdad baja la coma
+        for u_ in (0.5, 0.6, 0.7, 0.8):
+            lista.append((f"rodilla de luces desde {u_:g} (máximo de canales, color conservado)", "luces_cometa",
+                          {"u": u_}, (lambda q, u: M.comprimir_luces(q, u))))
+    r = _comparar(ctx, d, "nucleo", lista,
+                  (lambda q: {**M.medir_nucleo(q, n), "coma_quemada_pct": quem(q)}) if quem else (lambda q: M.medir_nucleo(q, n)))
     for x in r["candidatos"]:
         m1, fal = x["metricas"], []
         if m0["brillo_bulbo"] and (m1["brillo_bulbo"] or 0) < brillo_min * m0["brillo_bulbo"]:
@@ -1839,8 +2220,26 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5),
             fal.append("la meseta no baja")
         x["estructura_ganada_pct"] = (_r(100.0 * (m1["estructura_bulbo"] / m0["estructura_bulbo"] - 1), 1)
                                       if m0["estructura_bulbo"] and m1["estructura_bulbo"] else None)
+        if quem and (m1.get("coma_quemada_pct") or 0) > 0.5:
+            fal.append(f"la coma sigue quemada: {m1.get('coma_quemada_pct')} % a ≥ 0,98 (objetivo < 0,5 %)")
+        if quem:   # en un cometa la coma se apaga algo al protegerla: no se pide el 85 % del brillo
+            fal = [t for t in fal if not t.startswith("el bulbo se apaga")]
         x["no_cumple"] = fal
     ok = [x for x in r["candidatos"] if not x["no_cumple"]]
+    if quem and not ok and r["candidatos"]:
+        mejor = min(r["candidatos"], key=lambda x: x["metricas"].get("coma_quemada_pct") or 0)
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: el que menos coma quema ({m0.get('coma_quemada_pct')} → "
+                       f"{mejor['metricas'].get('coma_quemada_pct')} %), aunque no llega al 0,5 %: rehaz el estirado con "
+                       "menos fuerza o con más rango en las luces y vuelve a probar.")
+        ok = []
+    elif quem and ok:
+        mejor = max(ok, key=lambda x: x["metricas"]["brillo_bulbo"] or 0)
+        r["recomendado"] = mejor["id"]
+        r["motivo"] = (f"{mejor['metodo']}: el más suave que deja la coma sin quemar ({m0.get('coma_quemada_pct')} → "
+                       f"{mejor['metricas'].get('coma_quemada_pct')} % a ≥ 0,98), brillo {m0['brillo_bulbo']} → "
+                       f"{mejor['metricas']['brillo_bulbo']}.")
+        ok = []
     if ok:
         # La más suave que deja la meseta en su mínimo (M31 en SASpro, 13 nov 2026: las tres llegaban a 0 px y la
         # puntuación por estructura elegía ×0,55, con el bulbo gris y plano). Si ninguna la quita, como en Siril.
@@ -1858,7 +2257,7 @@ def nucleoCandidatos(ctx, vista=None, fuerzas=(0.25, 0.4, 0.55), hdr=(1.5, 2.5),
         r["motivo"] = (f"{mejor['metodo']}: meseta {m0['meseta_radio_px']} → {mm['meseta_radio_px']} px, estructura del "
                        f"bulbo {mejor['estructura_ganada_pct']:+} %, brillo {m0['brillo_bulbo']} → {mm['brillo_bulbo']}, "
                        "sin anillos nuevos.")
-    else:
+    elif not r.get("recomendado"):
         r["motivo"] = "Ninguno cumple (ver no_cumple): deja el núcleo como está o prueba otro umbral (desde) o radio."
     cy, cx = n["centro"]
     r.update(antes=m0, centro_px=[int(cx), int(cy)], umbral=_r(n["u"], 3), radio_base_px=n["r_b"])
@@ -2385,8 +2784,31 @@ def _mediana_senal(L, cielo, ruido_abs, frac_min=0.05):
     return round(float(np.median(s)), 4) if s.size >= frac_min * v.size else None
 
 
+def _pie_suave(p, s, t):
+    """Baja el cielo (s → t) SIN recortar, sobre la LUMINANCIA y con el color por cociente: primero iguala el cielo de
+    los canales (resta la diferencia con el cielo medio), luego f(L): recta por encima del cielo (t + g·(L − s),
+    g = (1 − t)/(1 − s), 1 → 1) y por debajo un pie potencia t·(L/s)^γ con γ = g·s/t (misma pendiente en s); cada canal
+    × f(L)/L. Nada llega a 0 que no lo estuviera. Para el cometa (Lemmon, 27-nov): el punto negro dejaba el 9 % de R y B
+    a 0 (su ruido es el doble que el de G: OSC y el azul ×2,3 del color del cometa); limitado al percentil 0,01 % no
+    bajaba el cielo de 0,12; y el pie canal a canal llevaba a ~0 el 2,5 % de R y B."""
+    p = np.asarray(p, dtype=np.float32)
+    sm = float(np.mean(s))
+    if p.shape[0] > 1:
+        p = np.clip(p - (np.asarray(s, np.float32) - sm)[:, None, None], 0, None)
+    L = p.mean(axis=0)
+    sk = float(min(max(sm, 1e-4), 0.999))
+    tk = float(min(t, sk))
+    g = (1 - tk) / (1 - sk)
+    gam = g * sk / max(tk, 1e-6)
+    fL = np.where(L >= sk, tk + g * (L - sk), tk * np.power(np.clip(L / sk, 0, 1), gam))
+    q = p * (fL / np.maximum(L, 1e-7))[None]
+    m = q.max(axis=0)
+    q = np.where(m[None] > 1.0, q / np.maximum(m, 1e-7)[None], q)
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
 def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, rango=True,
-                    blanco=0.40, ganancia_max=2.0, senal=0.10):
+                    blanco=0.40, ganancia_max=2.0, senal=0.10, tipo=None, recorte_canal_max=None):
     """NL5 fondo: punto negro por canal para dejar el cielo en varios niveles (más oscuro = más profundidad y
     contraste) y neutro; mide píxeles nuevos a 0, cielo y ruido, y recomienda el más oscuro que no recorta más del
     ceros_max % de los píxeles. La vista no cambia. IC 1396 (15 nov 2026): los finales con el cielo en 0,12–0,13
@@ -2396,7 +2818,10 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
     La «+ medios» conserva la señal sobre el cielo (mediana del objeto − cielo) o la sube a 0,10, en vez de devolver la
     mediana de entrada (con el cielo en 0,05 dejaba la imagen lavada); se descarta la variante que deja esa señal por
     debajo del 85 % de la de entrada (se come la nebulosa). Gana el cielo más oscuro que cumple; a casi igual cielo
-    (±0,005), «+ rango», luego «+ medios», luego el punto negro solo."""
+    (±0,005), «+ rango», luego «+ medios», luego el punto negro solo.
+    recorte_canal_max (% de píxeles nuevos a 0 en CADA canal; con tipo 'cometa', 0,01 por defecto): el punto negro de
+    cada canal no pasa de ese percentil (Lemmon, 27-nov: esquinas negras con 0,12–0,19 % recortado). Con tipo
+    'cometa' y sin cielos, el nivel es 0,10 (Rafael, 28-nov)."""
     d = _doc(ctx, vista)
     p = _p(d.image)
     if M.lineal(p[:, ::8, ::8]):
@@ -2409,12 +2834,21 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
     obj_px = z["obj_px"] if z["obj_px"].any() else np.ones(p.shape[1:], bool)
     m_obj = float(np.median(M.lum(p)[obj_px]))
     media0 = float(np.mean(s0))
+    # Cometa (Rafael, 28-nov): cielo final ~0,10 para enseñar el polvo de fondo y la cola débil.
+    if cielos is None and re.search(r"(?i)comet", str(tipo or "")):
+        cielos = (0.10,)
     if cielos is None and media0 <= 0.035:
         return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
                 "motivo": f"El cielo ya está oscuro ({_r(media0, 3)} ≤ 0,035): no se toca."}
     # escalón 0,02 (25 nov 2026, como en Siril ee64e45): entre 0,025 y 0,015 el fondo elegía 0,025 o se pasaba de ceros
     cielos = (0.05, 0.035, 0.025, 0.02, 0.015) if cielos is None else cielos
     senal0 = m_obj - media0
+    if recorte_canal_max is None and re.search(r"(?i)comet", str(tipo or "")):
+        recorte_canal_max = 0.01
+    tope_bp = None
+    if recorte_canal_max is not None:
+        tope_bp = [float(np.percentile(p[k, ::2, ::2], float(recorte_canal_max))) * 0.999 for k in range(p.shape[0])]
+    ceros_canal0 = [100.0 * float((p[k] <= 0).mean()) for k in range(p.shape[0])]
 
     def rg(q):                                   # color del objeto: R/G mediano en la zona del objeto
         return float(np.median(q[0][obj_px])) / max(float(np.median(q[1][obj_px])), 1e-6) if q.shape[0] == 3 else 1.0
@@ -2429,6 +2863,7 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
                 "franja_p10_p30": f1, "tinte_franja_pct": _tinte_franja(f0, f1),
                 "objeto_mediana": _r(float(np.median(M.lum(q)[obj_px])), 4),
                 "ruido_rel": _r(float(c["ruido"]) / max(r0, 1e-9), 3), "objeto_rg_x": _r(rg(q) / max(rg0, 1e-6), 3),
+                "ceros_canal_nuevos_pct": [_r(100.0 * float((q[k] <= 0).mean()) - ceros_canal0[k], 4) for k in range(q.shape[0])],
                 **M.recortes(q)}
 
     lista = []
@@ -2438,6 +2873,8 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
         if float(np.mean(s0)) <= t:
             continue
         bp = [max(0.0, (s - t) / (1 - t)) for s in s0]
+        if tope_bp is not None:
+            bp = [min(b, tb) for b, tb in zip(bp, tope_bp)]
         lista.append((f"cielo a {t:g}", "punto_negro", {"bp": bp}, (lambda q, bp: _punto_negro(q, bp))))
         # Destino de la mediana: la señal sobre el cielo de entrada o 0,10 (no la mediana de entrada: lavaba la imagen).
         m_dest = float(t) + max(senal0, min(float(senal), m_obj - float(t)))
@@ -2446,6 +2883,9 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
         if rango:
             lista.append((f"cielo a {t:g} + rango", "punto_negro_rango", {"bp": bp},
                           (lambda q, bp: _rango(_punto_negro(q, bp), cel, blanco, ganancia_max)[0])))
+        if tope_bp is not None:
+            lista.append((f"cielo a {t:g} con pie suave (sin recortar)", "pie_suave", {"s": [float(x) for x in s0], "t": float(t)},
+                          (lambda q, s, t: _pie_suave(q, s, t))))
     if not lista:
         return {"vista": _nombre(d), "candidatos": [], "recomendado": None,
                 "motivo": f"El cielo ya está en {_r(float(np.mean(s0)), 3)}, igual o por debajo de los niveles pedidos."}
@@ -2459,6 +2899,8 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
         m["ceros_nuevos_pct"] = _r(m["ceros_pct"] - rec0["ceros_pct"], 3)
         x["no_cumple"] = ([f"recorta a 0 un {m['ceros_nuevos_pct']} % más (máx {ceros_max} %)"]
                           if m["ceros_nuevos_pct"] > ceros_max else [])
+        if recorte_canal_max is not None and max(m["ceros_canal_nuevos_pct"]) > 1.5 * float(recorte_canal_max):
+            x["no_cumple"].append(f"recorta a 0 en un canal un {max(m['ceros_canal_nuevos_pct'])} % (máx {recorte_canal_max} % por canal)")
         senal1 = m["objeto_mediana"] - m["cielo"]
         m["senal_sobre_cielo"] = _r(senal1, 4)
         if senal0 > 0.01 and senal1 < 0.85 * senal0:
@@ -2485,7 +2927,7 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
     # Primero las «+ rango» que cumplen; si no, las «+ medios»; si no, el punto negro solo, que oscurece también la
     # nebulosa (24 nov 2026: el más oscuro dejaba la mediana del objeto en la mitad).
     def _nivel(x):
-        return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith("+ medios") else 0
+        return 2 if x["metodo"].endswith("+ rango") else 1 if x["metodo"].endswith(("+ medios", "(sin recortar)")) else 0
     if ok:
         # 24 nov 2026: el cielo más oscuro que cumple; a casi igual cielo (±0,005), «+ rango», «+ medios», punto negro.
         cmin = min(x["metricas"]["cielo"] for x in ok)
@@ -2500,6 +2942,10 @@ def fondoCandidatos(ctx, vista=None, cielos=None, ceros_max=5.0, tinte_max=3.0, 
     else:
         r["motivo"] = "Ninguno cumple (recortan, cambian el color del objeto o tiñen el fondo débil: ver no_cumple): deja el fondo como está o pide otros niveles."
     r["antes"] = {"cielo_rgb": [_r(x, 4) for x in s0], "franja_p10_p30": f0}
+    if tope_bp is not None:
+        r["recorte_canal_max_pct"] = recorte_canal_max
+        r["nota_recorte"] = (f"Punto negro limitado al percentil {recorte_canal_max} % de cada canal: el cielo puede quedar "
+                             "por encima del nivel pedido (mira 'cielo').")
     r["siguiente"] = "Aplica el recomendado con aplicarCandidato antes de seguir (comparar no cambia la imagen)."
     return _galeria(r, p, None)
 
@@ -3397,13 +3843,46 @@ def cerrarVista(ctx, vista, sin_guardar=False):
     return {"cerrada": nombre, "abiertas": abiertas}
 
 
-def activarVista(ctx, vista):
-    """Pone activa una vista (las llamadas sin 'vista' trabajan sobre la activa)."""
+def _vista_qt(ctx, d):
+    """Widget de la vista (ImageSubWindow) del documento d, o None."""
+    try:
+        sw = ctx._find_subwindow_for_doc(d)
+    except Exception:
+        return None
+    cand = list(sw) if isinstance(sw, tuple) else [sw]
+    for x in list(cand):
+        try:
+            cand.append(x.widget())
+        except Exception:
+            pass
+    for x in cand:
+        if x is not None and any("stretch" in a.lower() for a in dir(x)):
+            return x
+    return next((x for x in cand if x is not None), None)
+
+
+def _pantalla(ctx, d, estirado=None):
+    """Estirado de pantalla de SASpro en la vista de d. Con estirado False/True lo apaga/enciende (solo pantalla, no
+    toca los datos). Lemmon (27 nov 2026): los finales se abrían con «Display-Stretch Applied» y SASpro reestiraba en
+    pantalla una imagen ya estirada: cielo gris y ruidoso que no está en el fichero."""
+    v = _vista_qt(ctx, d)
+    if v is None or not hasattr(v, "set_autostretch"):
+        return {"aviso": "no encuentro el estirado de pantalla de esa vista"}
+    if isinstance(estirado, str):                 # el MCP puede pasar "false" como texto: bool("false") es True
+        estirado = estirado.strip().lower() in ("1", "true", "si", "sí", "yes", "on")
+    if estirado is not None:
+        v.set_autostretch(bool(estirado))
+    return {"estirado_pantalla": bool(getattr(v, "autostretch_enabled", False))}
+
+
+def activarVista(ctx, vista, estirado_pantalla=None):
+    """Pone activa una vista (las llamadas sin 'vista' trabajan sobre la activa). estirado_pantalla false quita el
+    autoestirado de pantalla de SASpro (para ver un final ya estirado tal cual)."""
     d = _doc(ctx, vista)
     a = _reactivar(ctx, d)
     if a != _nombre(d):
         raise RuntimeError(f"SASpro no ha activado '{_nombre(d)}' (activa: {a}). Indica 'vista' en cada llamada.")
-    return {"vista_activa": a}
+    return {"vista_activa": a, "pantalla": _pantalla(ctx, d, estirado_pantalla)}
 
 
 def _reactivar(ctx, d):
@@ -3485,6 +3964,11 @@ LISTA.update(_mascaras.LISTA_MASCARAS)
 import utilidades as _utilidades  # noqa: E402
 
 LISTA.update(_utilidades.LISTA_UTILIDADES)
+
+# Cometas (27 nov 2026): apilado en estrellas y en el cometa, unión, color y Larson-Sekanina (piezas de comet_stacking).
+import cometas as _cometas  # noqa: E402
+
+LISTA.update(_cometas.LISTA_COMETAS)
 
 
 # --- Máscara en las comparaciones (25 nov 2026) ----------------------------------------------------------------------

@@ -44,7 +44,7 @@ def resolver_D(t_cielo, objetivo, b):
     return float(np.exp(0.5 * (lo + hi)))
 
 
-def estirar(p, cielo=0.10, proteccion=1.5, color=1.0, sigmas_negro=6.0):
+def estirar(p, cielo=0.10, proteccion=1.5, color=1.0, sigmas_negro=6.0, rodilla=None, tope=0.95):
     """p: (canales, alto, ancho) lineal 0–1. Devuelve (imagen estirada, detalle). El cielo de la luminancia queda en
     'cielo'; el punto negro común se pone 'sigmas_negro' ruidos por debajo del cielo (sin recortar sombras)."""
     p = np.asarray(p, dtype=np.float32)
@@ -56,6 +56,11 @@ def estirar(p, cielo=0.10, proteccion=1.5, color=1.0, sigmas_negro=6.0):
     d = np.diff(L[::2, ::2], axis=1)
     ruido = float(1.4826 * np.median(np.abs(d - np.median(d))) / np.sqrt(2))
     bp = max(0.0, cs - sigmas_negro * ruido)
+    # el punto negro es común a los tres canales pero el ruido de R y B (OSC, y B ×2,3 al calibrar el cometa) es el doble
+    # que el de la luminancia: 6 σ de L recortaban a 0 el 0,2 % de R y el 0,38 % de B (Lemmon, 27-nov). Tope: el
+    # percentil 0,005 % del canal más bajo.
+    if p.shape[0] > 1:
+        bp = min(bp, max(0.0, min(float(np.percentile(p[k, ::2, ::2], 0.005)) for k in range(p.shape[0])) * 0.999))
     esc = 1.0 / max(1.0 - bp, 1e-6)
     t = np.clip((L - bp) * esc, 0.0, 1.0)
     b = float(proteccion)
@@ -66,7 +71,16 @@ def estirar(p, cielo=0.10, proteccion=1.5, color=1.0, sigmas_negro=6.0):
     if color < 1.0 and p.shape[0] > 1:
         q = color * q + (1.0 - color) * _f(x, D, b)
     m = q.max(axis=0)
+    if rodilla is not None:
+        # rodilla de luces ANTES de recortar (Lemmon, 27-nov: el estirado dejaba la coma a 1,0 en 24 px de radio y la
+        # rodilla de nucleoCandidatos, después, solo podía bajar esa meseta plana): el máximo de canales por encima de
+        # 'rodilla' se lleva a una exponencial que no pasa de 'tope', con el valor sin recortar (conserva la estructura)
+        u, dd = float(rodilla), max(float(tope) - float(rodilla), 1e-3)
+        mk = np.where(m > u, u + dd * (1.0 - np.exp(-(m - u) / dd)), m)
+        q = q * (mk / np.maximum(m, 1e-7))[None]
+        m = mk
     q = np.where(m[None] > 1.0, q / np.maximum(m, 1e-7)[None], q)
     detalle = {"D": round(D, 3), "proteccion_b": b, "color": float(color), "punto_negro": round(bp, 6),
-               "cielo_lineal": round(cs, 6), "cielo_objetivo": float(cielo)}
+               "cielo_lineal": round(cs, 6), "cielo_objetivo": float(cielo),
+               **({"rodilla": float(rodilla), "tope": float(tope)} if rodilla is not None else {})}
     return np.clip(q, 0.0, 1.0).astype(np.float32), detalle

@@ -268,7 +268,7 @@
     "properties": {
      "forzar": {
       "type": "boolean",
-      "description": "Exportar aunque el cielo no esté entre 0,03 y 0,10 (sólo si el usuario quiere ese cielo)."
+      "description": "Exportar aunque el cielo no esté entre 0,01 y 0,10 (con un cometa, 0,13) (sólo si el usuario quiere ese cielo)."
      },
      "carpeta": {
       "type": "string",
@@ -280,6 +280,10 @@
      "vista": {
       "type": "string",
       "description": "Nombre, título de la ventana o uid de la vista (ver vistas). Sin ella, la vista activa."
+     },
+     "tipo": {
+      "type": "string",
+      "description": "Tipo de objeto. Con 'cometa' (o si la vista lleva la trayectoria) admite el cielo hasta 0,13 (objetivo ~0,10) y controla cielo gris (> 0,13) u oscuro (< 0,06), recorte a 0 por canal (> 0,01 %) y coma quemada (> 0,5 %)."
      }
     }
    }
@@ -340,13 +344,17 @@
    "fichero": "herramientas.py",
    "nivel": "vista",
    "timeout_s": 30,
-   "descripcion": "Pone activa una vista: las llamadas sin 'vista' trabajan sobre la activa. separarEstrellas ya deja activa la starless.",
+   "descripcion": "Pone activa una vista: las llamadas sin 'vista' trabajan sobre la activa. separarEstrellas ya deja activa la starless. abrirImagen quita sola el estirado de pantalla si la imagen ya está estirada.",
    "params": {
     "type": "object",
     "properties": {
      "vista": {
       "type": "string",
       "description": "Nombre, título de la ventana o uid de la vista (ver vistas)."
+     },
+     "estirado_pantalla": {
+      "type": "boolean",
+      "description": "false quita el autoestirado de pantalla de SASpro (ver un final ya estirado tal cual); true lo pone. Solo pantalla, no toca los datos."
      }
     },
     "required": [
@@ -482,6 +490,13 @@
      "abe_excluir": {
       "type": "boolean",
       "description": "Probar también ABE (cada grado de polinomio) con exclusión automática del objeto: solo toma muestras en el cielo de verdad (por defecto true)."
+     },
+     "excluir": {
+      "type": "array",
+      "description": "Zonas que el modelo del fondo no puede tocar (cometa: trayectoria del núcleo y cola), en píxeles de la vista. Cada una: {\"segmento\": [x0,y0,x1,y1], \"ancho\": px}, {\"circulo\": [x,y,r]}, {\"poligono\": [[x,y],...]} o {\"cono\": [x,y,angulo_grados,largo,abertura_grados]} (ángulo 0 = +x, 90 = +y). Añade ABE con la zona fuera y un polinomio propio fuera de la zona, mide cola_en_modelo_pct (lo que se lleva el modelo de la zona; > 5 % = se come cola) y recomienda solo entre los que la respetan.",
+      "items": {
+       "type": "object"
+      }
      }
     }
    }
@@ -1205,7 +1220,7 @@
    "nivel": "lectura",
    "timeout_s": 600,
    "paso": "no-lineal/05-boost.md",
-   "descripcion": "NL5 fondo (después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,05, 0,035, 0,025, 0,02 y 0,015, neutro (si el cielo ya está en 0,035 o menos no hace nada: no se llama dos veces); cada nivel también «+ medios» (curva que deja la señal sobre el cielo, mediana − cielo, en la de antes o en 0,10 si era menor: el fondo baja sin apagar la nebulosa ni lavarla) y «+ rango» (punto negro + punto blanco lineal, recta por canal con pivote en el cielo: el cielo y el color de la franja no se mueven y el p99 de la luminancia sube a 'blanco', 0,40, con ganancia ×1–×2 y sin quemar más de un 0,05 % nuevo; abre el rango de una imagen oscura y plana). Mide píxeles nuevos a 0, cielo por canal, ruido y señal sobre el cielo, y se queda con el cielo más oscuro que cumple y, a casi igual cielo (±0,005), con la «+ rango», luego la «+ medios», luego el punto negro solo. No cumple si lleva a 0 más de un 5 % de píxeles nuevos (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro y el cielo en 0,013) o si deja la señal sobre el cielo por debajo del 85 % de la de entrada (se come la nebulosa). Lo normal es NO pasar cielos ni ceros_max. Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
+   "descripcion": "NL5 fondo (después de recombinar o de montar la paleta, antes de exportar): punto negro por canal para dejar el cielo en 0,05, 0,035, 0,025, 0,02 y 0,015, neutro (si el cielo ya está en 0,035 o menos no hace nada: no se llama dos veces); cada nivel también «+ medios» (curva que deja la señal sobre el cielo, mediana − cielo, en la de antes o en 0,10 si era menor: el fondo baja sin apagar la nebulosa ni lavarla) y «+ rango» (punto negro + punto blanco lineal, recta por canal con pivote en el cielo: el cielo y el color de la franja no se mueven y el p99 de la luminancia sube a 'blanco', 0,40, con ganancia ×1–×2 y sin quemar más de un 0,05 % nuevo; abre el rango de una imagen oscura y plana). Mide píxeles nuevos a 0, cielo por canal, ruido y señal sobre el cielo, y se queda con el cielo más oscuro que cumple y, a casi igual cielo (±0,005), con la «+ rango», luego la «+ medios», luego el punto negro solo. No cumple si lleva a 0 más de un 5 % de píxeles nuevos (la versión de referencia de IC 1396 tiene un 3 % del polvo más oscuro a negro y el cielo en 0,013) o si deja la señal sobre el cielo por debajo del 85 % de la de entrada (se come la nebulosa). Lo normal es NO pasar cielos ni ceros_max. Cometas: tipo='cometa' deja el cielo en ~0,10 por defecto (Rafael, 28-nov), para la cola débil y el polvo de fondo. Un cielo en 0,10–0,13 deja la imagen gris y plana. Descarta (no_cumple) la variante que tiñe el fondo débil: color de la franja de luminancia p10–p30 sobre el cielo que cambia más de un 3 % frente a la entrada (tinte_franja_pct; tinte_max). La vista NO cambia (aplicarCandidato). Acepta mascara (vista o {tipo, …}) para comparar el efecto solo donde la máscara es blanca.",
    "resumen": "NL5: fondo más oscuro y neutro (punto negro a 0,08–0,035, con medios o rango); no cambia la vista.",
    "params": {
     "type": "object",
@@ -1255,6 +1270,14 @@
      "mascara_invertir": {
       "type": "boolean",
       "description": "Invertir la máscara (proteger lo blanco)."
+     },
+     "tipo": {
+      "type": "string",
+      "description": "Tipo de objeto. Con 'cometa', el punto negro de cada canal no recorta más de recorte_canal_max (0,01 %)."
+     },
+     "recorte_canal_max": {
+      "type": "number",
+      "description": "% máximo de píxeles nuevos a 0 en CADA canal (con tipo 'cometa', 0,01 por defecto). El cielo puede quedar por encima del nivel pedido."
      }
     }
    }
@@ -2445,6 +2468,232 @@
     "required": [
      "url"
     ]
+   }
+  },
+  {
+   "nombre": "apilarCometa",
+   "fichero": "cometas.py",
+   "nivel": "disco",
+   "timeout_s": 7200,
+   "paso": "anexos/I-siril.md",
+   "descripcion": "Cometa: apila las tomas de una carpeta dos veces, en las estrellas (winsorized 3/3) y en el cometa, sin el Stacking Suite. Calibra con master_dark/master_flat si se dan, hace el debayer de RAW/OSC, alinea por estrellas (astroalign), sigue el núcleo toma a toma y lo ajusta a una recta en el tiempo (DATE-OBS + EXPTIME/2), y saca candidatos del cometa con varios rechazos y las estrellas fuera con máscara. Comprueba que se alinean N de N tomas. Abre <nombre>_estrellas y <nombre>_cometa (el recomendado: menos restos de estrellas sin perder cola), con previas con el mismo estirado, y guarda FITS en <carpeta>/apilado_cometa. planSolo enseña el plan (tomas, horas, disco, tiempo) sin apilar: úsalo primero. No quites verde en la coma.",
+   "resumen": "Cometa: apilado en estrellas y en el cometa con candidatos.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta con las tomas (FITS, XISF, TIFF o RAW)."
+     },
+     "planSolo": {
+      "type": "boolean",
+      "description": "Solo el plan (lee primera, central y última). Por defecto false."
+     },
+     "max_tomas": {
+      "type": "integer",
+      "description": "Usar solo N tomas repartidas por la serie (prueba rápida)."
+     },
+     "estrellas_pesos": {
+      "type": "boolean",
+      "description": "Mide cada toma (estrellas desdobladas por saltos de montura o viento) y, si hay desdobladas, añade a la capa de estrellas los candidatos 'pesos' (peso 0,3-1 según el desdoblamiento) y 'limpias' (solo las limpias), y 'alineada' si el canal azul se desplaza más de 0,25 px. Recomienda por excentricidad y FWHM sin pasar de 1,35 veces el ruido. Guarda un mosaico de recortes al 100 % (previas/estrellas_candidatos_100.jpg). El cometa siempre usa todas. Por defecto true."
+     },
+     "nucleo": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "[x, y] del núcleo en la imagen de estrellas (referencia). Sin él, automático."
+     },
+     "radio_nucleo": {
+      "type": "number",
+      "description": "Radio de la coma en px (por defecto, estimado)."
+     },
+     "referencia": {
+      "type": "string",
+      "description": "Toma de referencia (fichero); por defecto la central en el tiempo."
+     },
+     "rechazos": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Rechazos de los candidatos: w33, w11, mad11, mediana, media… Por defecto w33, w11, mad11, mediana."
+     },
+     "mascara_estrellas": {
+      "type": "boolean",
+      "description": "Tapar las estrellas de cada toma en el apilado del cometa (por defecto true)."
+     },
+     "quitar_restos": {
+      "type": "boolean",
+      "description": "Método A: StarX sobre el mejor apilado del cometa con el núcleo protegido (candidato extra)."
+     },
+     "metodo_b": {
+      "type": "boolean",
+      "description": "Método B: StarX en cada toma antes del apilado del cometa (lento)."
+     },
+     "master_dark": {
+      "type": "string"
+     },
+     "master_flat": {
+      "type": "string"
+     },
+     "patron": {
+      "type": "string",
+      "description": "Patrón Bayer si la cabecera no lo dice (RGGB, BGGR, GRBG, GBRG)."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Prefijo de las vistas y ficheros."
+     },
+     "quitar_bandas": {"type": "boolean", "description": "Resta a cada toma el patrón de filas y columnas (bandas de la réflex) a escala fina; el gradiente y la cola no cambian. Por defecto true."},
+     "corregir_motas": {"type": "boolean", "description": "Sin flats: busca motas de polvo (manchas oscuras pequeñas y redondas, lejos del cometa y los bordes) en el apilado de estrellas y divide cada toma por ese mapa antes de apilar el cometa (allí salen corridas). Por defecto true."},
+     "recortar_bordes": {"type": "boolean", "description": "Recorta los dos apilados a la zona con datos en todas las tomas, alineadas a las estrellas y movidas con el núcleo; núcleo y trayectoria se guardan ya recortados. Por defecto true."},
+     "salida": {
+      "type": "string",
+      "description": "Carpeta de los FITS (por defecto <carpeta>/apilado_cometa)."
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
+   "nombre": "combinarCometaEstrellas",
+   "fichero": "cometas.py",
+   "nivel": "vista",
+   "timeout_s": 1800,
+   "paso": "anexos/I-siril.md",
+   "descripcion": "Cometa: une el apilado del cometa con las estrellas del apilado de estrellas en una vista nueva. modo pantalla (los dos con el mismo estirado, A + B − A·B; por defecto), suma (lineal) o pantalla_sas (blend_screen_stretched de SASpro). Las estrellas salen con StarX (original − starless) salvo estrellas_solo. Mide la cola tapada por estrellas y los recortes. Alrededor del núcleo no pega estrellas (en el apilado de estrellas el núcleo sale repetido).",
+   "resumen": "Cometa: une cometa y estrellas (pantalla o suma).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "cometa": {
+      "type": "string",
+      "description": "Vista del apilado del cometa."
+     },
+     "estrellas": {
+      "type": "string",
+      "description": "Vista del apilado de estrellas (o ya solo estrellas con estrellas_solo)."
+     },
+     "modo": {
+      "type": "string",
+      "enum": [
+       "mascara",
+       "suma",
+       "pantalla",
+       "pantalla_sas"
+      ],
+      "description": "mascara (por defecto, lineal): el cometa solo dentro de una máscara suave de coma y cola, con el apilado de estrellas fuera (sin trazos de estrellas en el cielo); se estira una vez después. suma (lineal) o pantalla (mismo estirado y A + B − A·B)."
+     },
+     "estrellas_solo": {
+      "type": "boolean"
+     },
+     "mezcla": {
+      "type": "number",
+      "description": "Peso de las estrellas, 0–1 (por defecto 1)."
+     },
+     "nombre": {
+      "type": "string"
+     },
+     "lineal": {
+      "type": "boolean",
+      "description": "Forzar si las vistas son lineales (por defecto se mide)."
+     },
+     "radio_nucleo": {
+      "type": "number",
+      "description": "Radio (px) alrededor del núcleo donde no se ponen estrellas: las copias del núcleo del apilado de estrellas (por defecto, estimado)."
+     },
+     "umbral_cola": {
+      "type": "number",
+      "description": "Modo mascara: umbral de la cola en σ del cielo (por defecto 2,5; más bajo = máscara más grande)."
+     }
+    },
+    "required": [
+     "cometa",
+     "estrellas"
+    ]
+   }
+  },
+  {
+   "nombre": "transferirColorCometa",
+   "fichero": "cometas.py",
+   "nivel": "vista",
+   "timeout_s": 600,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "Cometa: lleva al apilado del cometa la calibración de color hecha en el de estrellas. Ajusta por canal después = a·antes + b (robusto, sin saturadas) entre la copia sin calibrar y la calibrada del apilado de estrellas y lo aplica a la vista con deshacer. Se niega si el ajuste no es lineal (R² < 0,98) salvo forzar.",
+   "resumen": "Cometa: color de las estrellas al cometa.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Vista del cometa."
+     },
+     "estrellas_antes": {
+      "type": "string",
+      "description": "Copia del apilado de estrellas antes de calibrarColor."
+     },
+     "estrellas_despues": {
+      "type": "string",
+      "description": "Apilado de estrellas ya calibrado."
+     },
+     "forzar": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "vista",
+     "estrellas_antes",
+     "estrellas_despues"
+    ]
+   }
+  },
+  {
+   "nombre": "larsonSekanina",
+   "fichero": "cometas.py",
+   "nivel": "lectura",
+   "timeout_s": 900,
+   "paso": "anexos/I-siril.md",
+   "descripcion": "Cometa, solo análisis: filtro de Larson-Sekanina (gradiente rotacional alrededor del núcleo) para ver chorros, envolturas y la estructura de la cola. Una previa por ángulo (y el recorte del núcleo); no toca la vista. No es para la imagen final. Usa convo.larson_sekanina de SASpro (o uno propio si falla).",
+   "resumen": "Cometa: Larson-Sekanina (solo análisis).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string"
+     },
+     "centro": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "[x, y] del núcleo (si no, automático)."
+     },
+     "angulos": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "description": "Ángulos en grados (por defecto 5, 10, 20)."
+     },
+     "paso_radial": {
+      "type": "number",
+      "description": "Paso radial en px (0 = solo rotacional)."
+     },
+     "operador": {
+      "type": "string",
+      "enum": [
+       "Subtract",
+       "Divide"
+      ]
+     },
+     "abrir": {
+      "type": "boolean",
+      "description": "Abrir cada resultado como vista (por defecto no)."
+     }
+    }
    }
   }
  ]

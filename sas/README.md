@@ -52,6 +52,7 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 | NL Halos | `halosCandidatos` → `aplicarCandidato` | Halo-B-Gon (comando en 1.24.5; antes, su función interna) |
 | NL4 Máscaras | `crearMascara`, `aplicarConMascara`, `pixelMath` | máscara de luminancia, cielo, estrellas, color o estructura difusa de SASpro; aplicar un candidato u otra vista a través de ella (efecto, fuga, bordes); PixelMath de SASpro (`img` o `$T`) |
 | Utilidades | `alinearPorEstrellas`, `correccionCosmetica`, `quitarPedestal`, `medirEstrellas` | astroalign de SASpro (sin astrometría), Cosmetic Correction, pedestal por canal, FWHM y excentricidad con SEP |
+| Cometas | `apilarCometa` (con `planSolo`) → `aplicarCandidato`, `transferirColorCometa`, `combinarCometaEstrellas`, `larsonSekanina` | apilado propio por franjas en estrellas y en el cometa (núcleo seguido y ajustado en el tiempo, estrellas fuera con máscara, varios rechazos), piezas de `comet_stacking` de SASpro (núcleo, máscara del núcleo, pantalla) y `convo.larson_sekanina` (solo análisis), con alternativa propia |
 | NL1 Estirado | `estirarCandidatos` → `aplicarCandidato` | estirado estadístico enlazado y por canal, GHS con pivote en el cielo y un estirado MTF propio; descarta los que no llegan a su mediana |
 | NL3 SCNR | `quitarVerde` | Remove Green conservando la luminosidad |
 | Núcleo (galaxias) | `nucleoCandidatos` → `aplicarCandidato` | compresor del bulbo propio (como en Siril); WaveScale HDR solo si se pide; meseta, anillos, brillo y estructura del bulbo |
@@ -66,7 +67,7 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 | L7 Dual band | `desmezclarDualBand` | Hα y OIII en vistas nuevas |
 | L10 Combinación | `combinarCandidatos` → `aplicarCandidato`, `combinarRGB` | exceso de Hα / OIII sobre el RGB (criterios de Siril) |
 | NL2 Paletas | `paletasCandidatos` → `aplicarCandidato` | HOO (4 variantes), SHO y Foraxx con capas estiradas |
-| NL10 Exportación | `exportarFinal` | TIFF 16 bits + JPG 95 como `<nombre>_final`, sin sobrescribir |
+| NL10 Exportación | `exportarFinal` | TIFF 16 bits + JPG 95 como `<nombre>_final`, sin sobrescribir; cielo 0,01–0,10, con un cometa hasta 0,13 (objetivo ~0,10) |
 
 Los candidatos pueden ser procesos de SASpro o cálculos propios en numpy (el cuarto elemento de la lista de `_comparar`); los dos se miden igual y se aplican con `aplicarCandidato`.
 

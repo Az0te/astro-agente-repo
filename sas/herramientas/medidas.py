@@ -181,6 +181,24 @@ def rango_rejilla(Z, cie):
     return (max(m) - min(m)) if len(m) >= 2 else float("nan")
 
 
+
+def esquinas(Z, valido, obj):
+    """Cuatro esquinas frente al centro (27 nov 2026, Lemmon: esquinas de abajo negras por un viñeteo mal corregido):
+    mediana de una caja de 1/10 del lado en cada esquina (sin objeto) menos la del centro, en σ del ruido fino del
+    cielo (paso alto de la imagen binada). Devuelve ([si, sd, ii, id], σ)."""
+    h, w = Z.shape
+    k = max(4, min(h, w) // 10)
+    ok = valido & ~obj
+    def med(ys, xs):
+        a, m = Z[ys, xs], ok[ys, xs]
+        return float(np.median(a[m])) if m.sum() >= 8 else float(np.median(a))
+    c = med(slice(h // 2 - k, h // 2 + k), slice(w // 2 - k, w // 2 + k))
+    hp = (Z - _caja(Z, 2))[ok]
+    s = 1.4826 * float(np.median(np.abs(hp - np.median(hp)))) if hp.size else 0.0
+    e = [med(slice(0, k), slice(0, k)) - c, med(slice(0, k), slice(w - k, w)) - c,
+         med(slice(h - k, h), slice(0, k)) - c, med(slice(h - k, h), slice(w - k, w)) - c]
+    return e, s
+
 def amplitud_plano(Z, cie, valido):
     P = ajuste_poli(Z, cie, 1)[valido]
     return float(np.percentile(P, 98) - np.percentile(P, 2))
@@ -218,7 +236,7 @@ def preparar_gradiente(p, b=8):
         s_q = 1.4826 * float(np.median(np.abs(q - np.median(q))))
         lleno = 100.0 * float((medc[vc] > float(np.max(q)) + 5 * max(s_q, 1e-9)).mean())
     O2 = ajuste_poli(L, cie, 2)
-    return {"L": L, "valido": valido, "obj": o, "cielo": cie, "rango0": rango_rejilla(L, cie),
+    return {"L": L, "valido": valido, "obj": o, "cielo": cie, "rango0": rango_rejilla(L, cie), "esq0": esquinas(L, valido, o),
             "plano0": amplitud_plano(L, cie, valido),
             "objeto_campo_pct": lleno if lleno is not None else 100.0 * float(o.sum()) / max(int(valido.sum()), 1),
             "senal_obj": float((L - O2)[o].sum()), "O_hp": L - O2, "b": b}
@@ -249,7 +267,19 @@ def medir_gradiente(base, pc):
     est = 1.4826 * float(np.median(np.abs(rc[v] - np.median(rc[v])))) if v.any() else float("nan")
     return {"copia_objeto": _r(corr, 3), "objeto_quitado_pct": _r(come, 1), "gradiente_restante": _r(resid, 3),
             "irregularidad_cielo": _r(irreg, 3), "negativos_pct": _r(100.0 * float((pc < 0).mean()), 3),
-            "escala_pct": _r(100.0 * alfa, 2), "estructura_grande": _r(est, 8)}
+            "escala_pct": _r(100.0 * alfa, 2), "estructura_grande": _r(est, 8), **medir_esquinas(base, C)}
+
+
+def medir_esquinas(base, C):
+    """esquinas_sigma: las cuatro esquinas menos el centro (σ del ruido fino; sup. izq., sup. dcha., inf. izq., inf.
+    dcha.); esquinas_restante: la peor esquina frente a la de la imagen sin tocar (menor = mejor; > 1, peor que antes)."""
+    if "esq0" not in base:
+        return {}
+    e, s = esquinas(C, base["valido"], base["obj"])
+    e0, s0 = base["esq0"]
+    peor0 = max(abs(x) for x in e0)
+    return {"esquinas_sigma": [_r(x / max(s0, 1e-12), 1) for x in e],
+            "esquinas_restante": _r(max(abs(x) for x in e) / peor0, 3) if peor0 > 0 else None}
 
 
 def aplanado_gradiente(c, extenso, umbral=5.0):
@@ -305,7 +335,16 @@ def elegir_gradiente(c, objeto_campo_pct, tipo=None):
 
     def absc(x): return abs(x["metricas"]["copia_objeto"] or 0)
     def resid(x): v = x["metricas"]["gradiente_restante"]; return v if v is not None else 9
-    def eat(x): v = x["metricas"]["objeto_quitado_pct"]; return abs(v) if v is not None else 100
+    def eat(x):
+        v = x["metricas"]["objeto_quitado_pct"]
+        if v is None:
+            return 100
+        # Con zona excluida (cometa) lo que dice si el modelo toca la cola es cola_en_modelo_pct. Un negativo aquí solo
+        # significa que el modelo no es un polinomio 2 (la membrana sigue el viñeteo): pasa por DEBAJO del objeto, no se
+        # lo lleva. Lemmon SAS 27-nov: polinomio 2 + membrana (cola 0,13 %, esquinas 0,065) descartado por un −7,8 %.
+        if v < 0 and x["metricas"].get("cola_en_modelo_pct") is not None:
+            return 0.0
+        return abs(v)
 
     import re as _re
     extenso, tope = tope_gradiente(objeto_campo_pct, tipo)
@@ -564,6 +603,19 @@ def comprimir_nucleo(p, n, k):
         q = np.where(mx > 1, q / np.maximum(mx, 1e-6), q)
     else:
         q = Lo[None]
+    return np.clip(q, 0, 1).astype(np.float32)
+
+
+def comprimir_luces(p, u, tope=0.95):
+    """Rodilla de luces sobre el MÁXIMO de los canales (no la luminancia): por encima de u, V' = u + (tope − u)·(1 −
+    e^(−(V − u)/(tope − u))), pendiente 1 en u y nunca llega a tope; el color sale por el cociente V'/V (mismo tono y
+    saturación). Para la coma de un cometa (Lemmon SAS, 27-nov): comprimir_nucleo resta la base y devuelve el detalle
+    (L − B), y en una coma de perfil empinado ese detalle la volvía a quemar (13 % → 18–20 % con k 0,7–0,95); y en
+    luminancia el verde de la coma pasaba de 0,98 aunque L no llegara."""
+    V = np.max(p, axis=0) if p.shape[0] > 1 else p[0]
+    d = max(float(tope) - float(u), 1e-3)
+    f = np.where(V > u, u + d * (1 - np.exp(-(V - u) / d)), V)
+    q = p * (f / np.maximum(V, 1e-6))[None]
     return np.clip(q, 0, 1).astype(np.float32)
 
 
