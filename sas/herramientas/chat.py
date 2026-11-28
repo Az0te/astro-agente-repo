@@ -1425,8 +1425,13 @@ def _n(x):
 
 
 class Ventana(QMainWindow):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, padre=None):
+        # Con padre (la ventana principal de SASpro) es una ventana propia de SASpro: Windows la mantiene siempre por
+        # encima de SASpro, aunque SASpro se active al abrir o cambiar una vista mientras procesa, pero no por encima
+        # de los demás programas (28 nov 2026: el chat se iba al fondo a mitad de cada turno).
+        super().__init__(padre)
+        if padre is not None:
+            self.setWindowFlag(Qt.WindowType.Window, True)
         self.ajustes = leer_ajustes()
         self.lang = self.ajustes.get("idioma", "es") if self.ajustes.get("idioma") in TEXTOS else "es"
         self.resize(760, 900)

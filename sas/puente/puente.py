@@ -365,7 +365,9 @@ def abrir_chat(ctx, forzar=False):
                 return v
         except RuntimeError:                       # la ventana de Qt ya no existe
             v = None
-        v = chat.Ventana()
+        # Encima de SASpro salvo que se quite en ~/.setiastropilot/chat.json ("encima_de_sas": false)
+        padre = app if chat.leer_ajustes().get("encima_de_sas", True) else None
+        v = chat.Ventana(padre)
         setattr(app, "_setiastropilot_chat", v)    # que no la recoja el recolector
         v.show()
         return v
