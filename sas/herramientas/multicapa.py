@@ -1029,7 +1029,14 @@ def _igualar(o, ha, cielo_px=None):
     mo, mh = float(np.median(o[m])), float(np.median(ha[m]))
     so = float(np.percentile(o[::4, ::4], 99)) - mo
     sh = float(np.percentile(ha[::4, ::4], 99)) - mh
-    return np.clip(mh + (o - mo) * (sh / max(so, 1e-6)), 0, 1)
+    f = sh / max(so, 1e-6)
+    # IC 1805 (28 nov 2026): OIII débil (×5) con el fondo más oscuro que el cielo del Hα en el polvo; el OIII realzado
+    # salía a 0 en el 32 % de la imagen. Por debajo del cielo, tramo más suave (continuo y monótono): el p1 de la raya
+    # no baja de la mitad del cielo del Hα; por encima, el factor entero (con un tope único el OIII quedaba sin realce).
+    p1 = float(np.percentile(o[::4, ::4], 1))
+    fb = min(f, 0.5 * mh / (mo - p1)) if p1 < mo else f
+    d = o - mo
+    return np.clip(mh + np.where(d >= 0, d * f, d * fb), 0, 1)
 
 
 def _igualar_difusa(o, ha, cielo_px=None):
