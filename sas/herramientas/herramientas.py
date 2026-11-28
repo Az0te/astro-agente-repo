@@ -3970,6 +3970,16 @@ import cometas as _cometas  # noqa: E402
 
 LISTA.update(_cometas.LISTA_COMETAS)
 
+# Apilado (28 nov 2026): inventario y apilado de subs con candidatos de rechazo, sin el Stacking Suite.
+import apilado as _apilado  # noqa: E402
+
+LISTA.update(_apilado.LISTA_APILADO)
+
+# Color espectrofotométrico propio (28 nov 2026): SFCC/SSSC de SASpro 2.0.1 solo tienen ventana.
+import color_espectral as _color_esp  # noqa: E402
+
+LISTA.update(_color_esp.LISTA_COLOR)
+
 
 # --- Máscara en las comparaciones (25 nov 2026) ----------------------------------------------------------------------
 # Las comparaciones no lineales y la deconvolución aceptan 'mascara' (vista o {tipo, ...}), 'mascara_fuerza' (0–1) y

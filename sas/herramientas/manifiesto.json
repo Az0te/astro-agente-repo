@@ -2545,9 +2545,18 @@
       "type": "string",
       "description": "Prefijo de las vistas y ficheros."
      },
-     "quitar_bandas": {"type": "boolean", "description": "Resta a cada toma el patrón de filas y columnas (bandas de la réflex) a escala fina; el gradiente y la cola no cambian. Por defecto true."},
-     "corregir_motas": {"type": "boolean", "description": "Sin flats: busca motas de polvo (manchas oscuras pequeñas y redondas, lejos del cometa y los bordes) en el apilado de estrellas y divide cada toma por ese mapa antes de apilar el cometa (allí salen corridas). Por defecto true."},
-     "recortar_bordes": {"type": "boolean", "description": "Recorta los dos apilados a la zona con datos en todas las tomas, alineadas a las estrellas y movidas con el núcleo; núcleo y trayectoria se guardan ya recortados. Por defecto true."},
+     "quitar_bandas": {
+      "type": "boolean",
+      "description": "Resta a cada toma el patrón de filas y columnas (bandas de la réflex) a escala fina; el gradiente y la cola no cambian. Por defecto true."
+     },
+     "corregir_motas": {
+      "type": "boolean",
+      "description": "Sin flats: busca motas de polvo (manchas oscuras pequeñas y redondas, lejos del cometa y los bordes) en el apilado de estrellas y divide cada toma por ese mapa antes de apilar el cometa (allí salen corridas). Por defecto true."
+     },
+     "recortar_bordes": {
+      "type": "boolean",
+      "description": "Recorta los dos apilados a la zona con datos en todas las tomas, alineadas a las estrellas y movidas con el núcleo; núcleo y trayectoria se guardan ya recortados. Por defecto true."
+     },
      "salida": {
       "type": "string",
       "description": "Carpeta de los FITS (por defecto <carpeta>/apilado_cometa)."
@@ -2692,6 +2701,195 @@
      "abrir": {
       "type": "boolean",
       "description": "Abrir cada resultado como vista (por defecto no)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "inventarioSubs",
+   "fichero": "apilado.py",
+   "nivel": "lectura",
+   "timeout_s": 300,
+   "paso": "lineal/02-inventario.md",
+   "descripcion": "L2: lee las cabeceras de una carpeta de subs (FITS/XISF, sin abrir imágenes) y agrupa los lights por filtro, exposición, gain, offset y tamaño, y dentro de cada grupo por noche (carpeta AAAA-MM-DD o DATE-OBS − 12 h). Para cada grupo busca el master dark (en el árbol o en la biblioteca D:\\Astronomia\\Master\\MASTER DARKS) y para cada noche su master flat (raíz de la noche, por filtro) o flats brutos. 'aprobados': txt con una ruta por línea; en las noches de la lista solo entran esos lights. Devuelve no_cumple si falta calibración.",
+   "resumen": "Inventario de subs: grupos, noches y calibración.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta del objeto (con las noches dentro)."
+     },
+     "aprobados": {
+      "type": "string",
+      "description": "Txt con los lights aprobados (opcional)."
+     },
+     "biblioteca_darks": {
+      "type": "string",
+      "description": "Carpeta de master darks (opcional)."
+     }
+    },
+    "required": [
+     "carpeta"
+    ]
+   }
+  },
+  {
+   "nombre": "apilarCandidatos",
+   "fichero": "apilado.py",
+   "nivel": "disco",
+   "timeout_s": 7200,
+   "paso": "lineal/04-preprocesado.md",
+   "descripcion": "L3–L4 sin el Stacking Suite: apila UN grupo de lights (el de 'filtro') de varias noches. Calibra (master dark, master flat de cada noche, píxeles calientes del dark y fríos del flat), mide estrellas, FWHM, excentricidad y cielo, descarta por noche los que se salen k MAD (máx. 30 %; en las noches de la lista de aprobados solo la lista), alinea por estrellas con astroalign contra la mejor toma o contra 'referencia' (un master ya hecho: así todos los filtros salen en la misma rejilla), normaliza y apila por franjas con winsorized 3/3 y MAD 3/3, con y sin pesos 1/σ². Recomienda el de menos ruido con FWHM ≤ 1,03 × la mejor; lo guarda en <salida>/<objeto>_<filtro>_<N>x<exp>s.fits (los demás en candidatos_apilado/), con previa, y lo abre. Usar antes planSolo=true para ver grupos, flats elegidos y niveles en ADU.",
+   "resumen": "Apilado de un filtro con candidatos de rechazo y pesos.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "carpeta": {
+      "type": "string",
+      "description": "Carpeta del objeto."
+     },
+     "salida": {
+      "type": "string",
+      "description": "Carpeta de los masters."
+     },
+     "filtro": {
+      "type": "string",
+      "description": "Filtro del grupo (FILTER de la cabecera; 'Ha' vale para 'Ha 3nm')."
+     },
+     "aprobados": {
+      "type": "string",
+      "description": "Txt con los lights aprobados (opcional)."
+     },
+     "referencia": {
+      "type": "string",
+      "description": "Master o light al que alinear (opcional)."
+     },
+     "planSolo": {
+      "type": "boolean",
+      "description": "Solo el plan y los niveles, sin apilar."
+     },
+     "metodos": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "w33",
+        "mad33"
+       ]
+      },
+      "description": "Rechazos (por defecto los dos)."
+     },
+     "pesos": {
+      "type": "boolean",
+      "description": "Añadir las variantes con pesos 1/σ² (por defecto sí)."
+     },
+     "seleccion": {
+      "type": "boolean",
+      "description": "Descartar tomas por noche (por defecto sí)."
+     },
+     "k_seleccion": {
+      "type": "number",
+      "description": "k MAD de la selección (2,5)."
+     },
+     "max_descartes": {
+      "type": "number",
+      "description": "Fracción máxima descartada por noche (0,3)."
+     },
+     "max_tomas": {
+      "type": "integer",
+      "description": "Prueba rápida con N tomas por noche."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "Nombre del objeto en los ficheros (por defecto OBJECT o la carpeta)."
+     },
+     "biblioteca_darks": {
+      "type": "string",
+      "description": "Carpeta de master darks."
+     },
+     "abrir": {
+      "type": "boolean",
+      "description": "Abrir el recomendado como vista (por defecto sí)."
+     }
+    },
+    "required": [
+     "carpeta",
+     "salida"
+    ]
+   }
+  },
+  {
+   "nombre": "calibrarColorEspectral",
+   "fichero": "color_espectral.py",
+   "nivel": "vista",
+   "timeout_s": 900,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "L12 sin ventana (SFCC/SSSC de SASpro solo tienen diálogo): calibración espectrofotométrica de una RGB LINEAL con astrometría. Detecta estrellas aisladas sin saturar, fotometría de apertura, cruza con Gaia DR3 (ESA TAP o VizieR) por la WCS, elige la plantilla Pickles de enana por BP−RP y calcula el flujo esperado con las curvas de filtros y sensor de SASP_data.fits (las mismas del SFCC). Ganancias R/G y B/G robustas (log-MAD 3σ), aplica (p − cielo)·k + cielo de G y neutraliza el cielo. no_cumple con < 50 estrellas o dispersión > 25 %. Necesita Internet.",
+   "resumen": "Calibración de color espectrofotométrica con Gaia y curvas reales, sin ventana.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "vista": {
+      "type": "string",
+      "description": "Vista RGB lineal (por defecto la activa)."
+     },
+     "filtros": {
+      "type": "string",
+      "description": "Juego de filtros R/G/B de SASP_data (p. ej. astrodon_e); ver listaCurvas."
+     },
+     "sensor": {
+      "type": "string",
+      "description": "Curva QE del sensor (p. ej. IMX571)."
+     },
+     "lp": {
+      "type": "string",
+      "description": "Filtro LP adicional (opcional)."
+     },
+     "blanco": {
+      "type": "string",
+      "description": "SED de referencia del blanco (G2V por defecto)."
+     },
+     "aplicar": {
+      "type": "boolean",
+      "description": "Aplicar las ganancias (por defecto sí)."
+     },
+     "g_max": {
+      "type": "number",
+      "description": "G de Gaia más débil (14,5)."
+     },
+     "g_min": {
+      "type": "number",
+      "description": "G de Gaia más brillante (7,0)."
+     },
+     "neutralizar_cielo": {
+      "type": "boolean",
+      "description": "Igualar el cielo de R y B al de G (por defecto sí)."
+     }
+    }
+   }
+  },
+  {
+   "nombre": "listaCurvas",
+   "fichero": "color_espectral.py",
+   "nivel": "disco",
+   "timeout_s": 60,
+   "paso": "lineal/12-spcc.md",
+   "descripcion": "Lista las curvas de SASP_data.fits (filtros, sensores, SED) que acepta calibrarColorEspectral.",
+   "resumen": "Curvas de filtros, sensores y SED disponibles.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "FILTER",
+       "SENSOR",
+       "SED"
+      ]
+     },
+     "buscar": {
+      "type": "string"
      }
     }
    }

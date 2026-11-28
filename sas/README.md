@@ -43,9 +43,10 @@ SASpro tiene **varias vistas abiertas**, como PixInsight. Casi todas las herrami
 
 | Paso | Herramienta | Con qué |
 |---|---|---|
+| L2–L4 Apilado | `inventarioSubs`, `apilarCandidatos` (con `planSolo`) | apilado propio (no el Stacking Suite): master dark del árbol o de la biblioteca, master flat por noche y filtro, píxeles calientes del dark, selección por noche (k MAD), astroalign de SASpro, winsorized 3/3 y MAD 3/3 con y sin pesos 1/σ² por franjas; `referencia` para alinear todos los filtros al mismo master |
 | L8 Astrometría | `resolverAstrometria` | plate_solve (ASTAP / astrometry.net según SASpro) |
 | L9 Gradiente | `gradienteCandidatos` → `aplicarCandidato` | ABE polinomio 1 y 2, ABE con RBF, GraXpert IA |
-| L12 Color | `neutralizarFondo`, `calibrarColor` | Background Neutralization, White Balance (estrellas); devuelven cielo por canal y dominante antes y después |
+| L12 Color | `calibrarColorEspectral`, `listaCurvas`, `neutralizarFondo`, `calibrarColor` | color espectrofotométrico propio (Gaia DR3 local: espectros XP de `gaia_library` de SASpro y catálogo `siril_cat_healpix8_astro.dat` de Siril; si no, ESA/VizieR) con las curvas de SASP_data; Background Neutralization, White Balance (estrellas); devuelven cielo por canal y dominante antes y después |
 | L11 / L13 Deconvolución | `deconvolucionCandidatos` → `aplicarCandidato` | BlurXTerminator (RC Astro): solo corrección y nonstellar por tipo de campo; FWHM, ringing, gusanos ≤ 1,3 |
 | L15 Estrellas | `separarEstrellas` | StarNet o DarkStar (remove_stars), SyQon, StarXTerminator (`motor: starx`); deja activa la starless (SASpro activaba la de estrellas) |
 | L16 Continuo | `medirContinuo`, `restarContinuo` | k por fotometría de estrellas (capas con estrellas); resta en las starless, negativos ≤ 0,5 % y emisión ≥ 80 % |
@@ -122,7 +123,7 @@ Sin SASpro (solo para desarrollo): `python sas/pruebas/puente_falso.py` lanza el
 ## Pendiente
 
 - Fallos de SASpro 1.24.2 encontrados, con borradores para su autor en `notas/bugs_saspro.md` (no publicados): `base_document`, `stat_stretch` sin ventana (en M31 deja negro a 0,2–0,3; en IC 1396 se pasa: 0,15 → 0,245), WaveScale HDR sin ventana, Cosmic Clarity sin PyTorch, guardar XISF sin WCS. Las herramientas los esquivan.
-- SFCC (color por espectros Gaia): sólo tiene ventana; `sfcc.py` tiene funciones sueltas (fotometría, curvas) pero no una entrada sin ventana. Mientras, `calibrarColor` (White Balance con estrellas).
+- SFCC/SSSC (color por espectros Gaia): sólo tienen ventana. Desde el 28 nov 2026 lo hace `calibrarColorEspectral` (color_espectral.py) sin ventana; `calibrarColor` (White Balance) queda para cuando no hay catálogo.
 - Halo-B-Gon: no existe en la rama main de GitHub ni hay comando; sin herramienta.
 - Apilado (Stacking Suite): SASpro no tiene comando sin ventana para apilar ni para registrar por estrellas (`star_align` sólo aparece como alias). Se apila con WBPP en PixInsight o con `apilarCandidatos` de SirilAstroPilot; aquí se empieza desde el master. `alinearMasters` alinea por astrometría.
 - Probar `componerHDR` con una toma corta de verdad corta (30 s frente a 120–300 s, p. ej. IC 63): en M31 120/60 s la larga apenas satura (sustituido < 0,01 %).

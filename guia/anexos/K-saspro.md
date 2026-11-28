@@ -16,13 +16,14 @@ Bajo demanda: sólo hace falta con el servidor **setiastropilot** conectado (SAS
 | Paso | Herramientas |
 |---|---|
 | L1 Análisis | `analizarMaster`, `cabecera`, `estadisticas`, `previa`; con internet `documentarObjeto`, `simbad`, `wikipedia`, `leerWeb` |
+| L2–L4 Inventario, selección y apilado | `inventarioSubs` (grupos por filtro, exposición y noche; master dark del árbol o de la biblioteca, master flat de cada noche) → **`apilarCandidatos`** (un filtro por llamada; primero `planSolo`; calibra, mide, descarta por noche, alinea por estrellas y apila winsorized 3/3 y MAD 3/3 con y sin pesos 1/σ²; recomienda como Siril). Apilado propio, no el Stacking Suite; para que todos los filtros salgan en la misma rejilla, `referencia` = el master del primer filtro |
 | L5 Alineado | `alinearMasters` (por astrometría; recorte común) |
 | L6 HDR | `componerHDR` (larga + corta, en lineal) |
 | L7 Dual band | `desmezclarDualBand` de cada dual band; `unirCapas` para las capas de la misma raya (OIII de HaO3 + SO3, SII de SHb + SO3) |
 | L8 Astrometría | `resolverAstrometria` (resolvedor de SASpro con su índice Gaia; ASTAP o astrometry.net si están configurados) |
 | L9 Gradiente | **`gradienteCandidatos`** (ABE polinomio 1 y 2, ABE con RBF, GraXpert IA, SyQon DeepGradient) → `aplicarCandidato` |
 | L10 Combinación | `combinarRGB` (mono con rueda) en su sitio; la inyección, **`combinarCandidatos`** → `aplicarCandidato`, con la RGB ya calibrada (tras L12) y antes de separar estrellas: como en Siril, la herramienta mide el continuo en las estrellas y las deja fuera ([Anexo I](I-siril.md)) **Ruta de paleta** (24 nov 2026, igual que en PixInsight): `alinearMasters` lee el tiempo total y el filtro de cada master (PCL:TotalExposureTime, LIVETIME o EXPTIME × NCOMBINE) y devuelve `ruta_paso10`; con la banda estrecha ≥ 4 veces la RGB, `combinarCandidatos` se niega en nebulosas salvo `motivo` (emisión y reflexión, o el usuario pide color RGB), `paletasCandidatos` deja de negarse y `exportarFinal` pide la paleta aplicada. |
-| L12 Color | `neutralizarFondo` → `calibrarColor` (White Balance con las estrellas); devuelven el cielo por canal antes y después |
+| L12 Color | **`calibrarColorEspectral`** (espectrofotométrica sin ventana, el cálculo del SFCC: Gaia DR3 local, espectros XP de la biblioteca de SASpro hasta G 11,5 y, si no bastan, el catálogo de Siril con plantilla por Teff, que no lleva el enrojecimiento; curvas de filtros y sensor de SASP_data; `no_cumple` con pocas estrellas o dispersión > 25 %). Sin catálogo: `neutralizarFondo` → `calibrarColor` (White Balance con las estrellas). Todas devuelven el cielo por canal antes y después |
 | L15 Estrellas | `separarEstrellas` (StarNet, DarkStar o SyQon; `syqon_cli` = SyQon Axiom Mini de SyQon Studio, solo estirada) |
 | NL1 Estirado | **`estirarCandidatos`** (estadístico, GHS y MTF propio) → `aplicarCandidato` |
 | NL2 Paletas | **`paletasCandidatos`** (capas estiradas; pasa ha, oiii, sii y hb: la Natural usa las cuatro) → `aplicarCandidato` |
@@ -65,7 +66,7 @@ con los rodeos de arriba.
 - Herramienta nueva `halosCandidatos`: Halo-B-Gon a varias reducciones, con el halo medido alrededor de las estrellas
   brillantes y control de anillos oscuros.
 - Se quedan sin herramienta, por decisión del autor: SFCC (el usuario debe revisar el emparejado de estrellas) y el
-  apilado (Stacking Suite).
+  Stacking Suite. Desde el 28 nov 2026 hay apilado propio (`apilarCandidatos`, ver la tabla del arranque).
 - Los FITS que guarda SASpro van de arriba abajo con `ROWORDER = 'TOP-DOWN'` y el WCS volteado: son coherentes. Un
   programa que no lea ROWORDER los verá volteados.
 
